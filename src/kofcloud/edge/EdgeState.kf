@@ -1,0 +1,69 @@
+package kofcloud.edge
+
+import kofcloud.control.Registry
+import kofcloud.model.Service
+import kofcloud.protocol.Session
+import kofcloud.util.Text
+
+// Estado do Edge: registro de rotas (control plane) + sessoes de tunel vivas.
+
+class EdgeState {
+    Registry registry
+    Map<String, TunnelSession> sessions
+    Int sessionCounter
+
+    constructor(registry: Registry) {
+        this.registry = registry
+        this.sessions = mapOf()
+        this.sessionCounter = 0
+    }
+
+    String newSessionId() {
+        this.sessionCounter = this.sessionCounter + 1
+        return "sess-" + intToString(this.sessionCounter) + "-" + crypto.randomHex(4)
+    }
+
+    void bind(String deviceId, TunnelSession session) {
+        this.sessions.put(deviceId, session)
+    }
+
+    void unbind(String deviceId, String sessionId) {
+        var current = this.sessions.get(deviceId)
+        if (current != null) {
+            if (current.sessionId == sessionId) {
+                this.sessions.remove(deviceId)
+            }
+        }
+    }
+
+    TunnelSession? sessionFor(String deviceId) {
+        return this.sessions.get(deviceId)
+    }
+
+    Bool isOnline(String deviceId) {
+        return this.sessions.get(deviceId) != null
+    }
+
+    Int onlineCount() {
+        return this.sessions.size
+    }
+
+    // Resolve uma rota publica pelo hostname. Devolve null para host
+    // desconhecido OU servico nao roteavel (PRIVATE nunca revela existencia).
+    Service? route(String hostname) {
+        return this.registry.resolveRoute(hostname)
+    }
+
+    // Autorizacao de servico AUTHENTICATED: o token apresentado precisa
+    // pertencer a conta dona do servico.
+    Bool authorize(Service service, String token) {
+        if (token.length == 0) {
+            return false
+        }
+        var account = this.registry.accountByToken(token)
+        if (account == null) {
+            return false
+        }
+        return account.id == service.accountId
+    }
+}

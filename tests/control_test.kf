@@ -1,0 +1,64 @@
+
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.store.Store
+import testkit.Support
+
+// Integracao: Agent <-> Control Plane (HTTP real sobre socket).
+// Porta dedicada 18080 para nao colidir com outros suites.
+
+test "control plane: ciclo conta -> device -> publish -> list -> revoke" {
+    var path = "/tmp/kofcloud-cp-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    var control = ControlPlane(registry, 18080, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(18080, 60), "control plane no ar")
+
+    var health = httpGetRaw(18080, "/v1/health", "127.0.0.1")
+    assert(statusOf(health) == 200, "health 200")
+
+    var created = httpPostJson(18080, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"mel@example.com\",\"password\":\"segredo\"}", "")
+    assert(statusOf(created) == 200, "conta criada")
+    var createdBody = json.decode<Map<String, String>>(bodyOf(created))
+    var token = mapField(createdBody, "token")
+    assert(token.startsWith("kfc_"), "token emitido")
+
+    var deviceBody = "{\"name\":\"notebook\",\"publicKey\":\"pubkey-abc\"}"
+    var device = httpPostJson(18080, "/v1/devices", deviceBody, token)
+    assert(statusOf(device) == 200, "device registrado")
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(device)), "deviceId")
+    assert(deviceId.length > 0, "deviceId presente")
+
+    var publishBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    var published = httpPostJson(18080, "/v1/services", publishBody, token)
+    assert(statusOf(published) == 200, "servico publicado")
+    assert(bodyOf(published).indexOf("site.mel.kofcloud.io") >= 0, "hostname no corpo")
+
+    var listed = httpGetRaw(18080, "/v1/services", "127.0.0.1")
+    // a rota exige token; sem ele responde 401 (prova a autorizacao)
+    assert(statusOf(listed) == 401, "listagem sem token e recusada")
+
+    var connectBody = "{\"deviceId\":\"" + deviceId + "\"}"
+    var connect = httpPostJson(18080, "/v1/connect", connectBody, token)
+    assert(statusOf(connect) == 200, "connect 200")
+    assert(bodyOf(connect).indexOf("edgePort") >= 0, "edge informado")
+
+    var revokeBody = "{\"deviceId\":\"" + deviceId + "\"}"
+    var revoked = httpPostJson(18080, "/v1/devices/revoke", revokeBody, token)
+    assert(statusOf(revoked) == 200, "revogado")
+    var revokedDevice = registry.deviceById(deviceId)
+    assert(revokedDevice != null, "device existe")
+    if (revokedDevice != null) {
+        assert(revokedDevice.status == "REVOKED", "status no registry")
+    }
+}
+
+test "control plane: token invalido e recusado" {
+    var path = "/tmp/kofcloud-cp2-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    var control = ControlPlane(registry, 18081, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(18081, 60), "control plane no ar")
+    var denied = httpPostJson(18081, "/v1/devices", "{\"name\":\"x\",\"publicKey\":\"y\"}", "kfc_falso")
+    assert(statusOf(denied) == 401, "401 sem token valido")
+}

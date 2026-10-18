@@ -1,0 +1,113 @@
+package kofcloud.cli
+
+import kofcloud.cli.Commands
+import kofcloud.cli.Local
+import kofcloud.cli.Usage
+import kofcloud.util.Text
+
+// Dispatcher de subcomandos. `kof cloud <comando> [args...]`.
+//
+// O comando principal e `connect` (o agente); `serve` sobe a plataforma
+// (control plane + edge) para operacao local/teste.
+
+Int runCli(List<String> args) {
+    if (args.size == 0) {
+        print(usageText())
+        return 1
+    }
+    var first = args.get(0)
+    if (first == "help" || first == "--help" || first == "-h") {
+        print(usageText())
+        return 0
+    }
+    var rest = args.subList(1, args.size)
+
+    if (first == "login") {
+        return cmdLogin(rest)
+    }
+    if (first == "logout") {
+        return cmdLogout(rest)
+    }
+    if (first == "connect") {
+        return cmdConnect(rest)
+    }
+    if (first == "disconnect") {
+        return cmdDisconnect(rest)
+    }
+    if (first == "status") {
+        return cmdStatus(rest)
+    }
+    if (first == "device") {
+        return runDevice(rest)
+    }
+    if (first == "publish") {
+        return cmdPublish(rest)
+    }
+    if (first == "unpublish") {
+        return cmdUnpublish(rest)
+    }
+    if (first == "service") {
+        return runService(rest)
+    }
+    if (first == "domain") {
+        return runDomain(rest)
+    }
+    if (first == "logs") {
+        return cmdLogs(rest)
+    }
+    if (first == "serve") {
+        return cmdServe(rest)
+    }
+
+    println("comando desconhecido: " + first)
+    print(usageText())
+    return 1
+}
+
+Int runDevice(List<String> args) {
+    if (args.size == 0) {
+        println("uso: kof cloud device list|revoke <id>")
+        return 1
+    }
+    var sub = args.get(0)
+    var rest = args.subList(1, args.size)
+    if (sub == "list") {
+        return cmdDeviceList(rest)
+    }
+    if (sub == "revoke") {
+        return cmdDeviceRevoke(rest)
+    }
+    println("subcomando desconhecido: device " + sub)
+    return 1
+}
+
+Int runService(List<String> args) {
+    if (args.size == 0) {
+        println("uso: kof cloud service list|status <nome>")
+        return 1
+    }
+    var sub = args.get(0)
+    var rest = args.subList(1, args.size)
+    if (sub == "list") {
+        return cmdServiceList(rest)
+    }
+    if (sub == "status") {
+        return cmdServiceStatus(rest)
+    }
+    println("subcomando desconhecido: service " + sub)
+    return 1
+}
+
+Int runDomain(List<String> args) {
+    if (args.size == 0) {
+        println("uso: kof cloud domain list")
+        return 1
+    }
+    var sub = args.get(0)
+    var rest = args.subList(1, args.size)
+    if (sub == "list") {
+        return cmdDomainList(rest)
+    }
+    println("subcomando desconhecido: domain " + sub)
+    return 1
+}

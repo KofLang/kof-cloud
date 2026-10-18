@@ -1,0 +1,67 @@
+package kofcloud.agent
+
+import kofcloud.model.Service
+import kofcloud.protocol.Bytes
+import kofcloud.protocol.Payload
+import kofcloud.protocol.Session
+import kofcloud.protocol.Tunnel
+import kofcloud.util.Text
+
+// Relay local de um stream: le a requisicao do tunel, conecta em
+// localhost:<port>, envia, le ate EOF e devolve a resposta.
+//
+// O Edge forca Connection: close, entao o servico local fecha a conexao ao
+// terminar e "ler ate EOF" delimita a resposta sem precisar parsear.
+
+void agentStream(TunnelSession session, Service service, String streamId) {
+    var requestBytes = bytesEmpty()
+    var open = true
+    while (open) {
+        var item = session.nextFromStream(streamId)
+        if (item == streamEndMarker()) {
+            open = false
+        } else if (item == streamResetMarker()) {
+            session.closeStream(streamId)
+            return
+        } else {
+            requestBytes = bytesConcat(requestBytes, decodePayload(item, session.sessionKey))
+        }
+    }
+
+    var responseBytes = bytesEmpty()
+    try {
+        var local = net.connect(service.localAddress, service.localPort)
+        local.send(requestBytes)
+        var response = bytesEmpty()
+        var reading = true
+        while (reading) {
+            var chunk = local.receive(16384)
+            if (chunk.length == 0) {
+                reading = false
+            } else {
+                response = bytesConcat(response, chunk)
+            }
+        }
+        local.close()
+        responseBytes = response
+    } catch (String e) {
+        responseBytes = localErrorResponse("local service " + service.name + " error: " + e)
+    }
+
+    if (responseBytes.length > 0) {
+        session.send(dataFrame(streamId, encodePayload(responseBytes, session.sessionKey)))
+    }
+    session.send(endFrame(streamId))
+    session.closeStream(streamId)
+}
+
+Byte[] localErrorResponse(String message) {
+    var body = message + "\n"
+    var out = "HTTP/1.1 502 Bad Gateway\r\n"
+    out = out + "Content-Type: text/plain; charset=utf-8\r\n"
+    out = out + "Content-Length: " + intToString(body.length) + "\r\n"
+    out = out + "Connection: close\r\n"
+    out = out + "\r\n"
+    out = out + body
+    return bytesFromString(out)
+}

@@ -1,0 +1,27 @@
+package kofcloud.model
+
+// Nivel de exposicao de um servico.
+enum Exposure { PUBLIC, AUTHENTICATED, PRIVATE }
+
+Exposure exposureFrom(String name) {
+    if (name == "AUTHENTICATED") {
+        return Exposure.AUTHENTICATED
+    }
+    if (name == "PRIVATE") {
+        return Exposure.PRIVATE
+    }
+    return Exposure.PUBLIC
+}
+
+String exposureName(Exposure exposure) {
+    return switch (exposure) {
+        case Exposure.PUBLIC -> "PUBLIC"
+        case Exposure.AUTHENTICATED -> "AUTHENTICATED"
+        case Exposure.PRIVATE -> "PRIVATE"
+    }
+}
+
+// PRIVATE nao tem rota publica: o Edge nem sabe que ele existe.
+Bool exposureIsRoutable(Exposure exposure) {
+    return exposure != Exposure.PRIVATE
+}

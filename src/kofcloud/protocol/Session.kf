@@ -1,0 +1,87 @@
+package kofcloud.protocol
+
+// Estado de uma sessao de tunel: multiplexacao de streams sobre uma conexao.
+//
+// IMPORTANTE: esta classe NAO guarda o Conn. Em Kof, Conn nao e uma classe
+// emitida — usar Conn como campo de classe ou como tipo de retorno de spawn
+// quebra em runtime (NoClassDefFoundError: KofRuntime$NetConn). O Conn vive
+// como parametro/captura de closure em quem faz o I/O; o estado compartilhado
+// entre tasks vive aqui, em canais e mapas (tipos reais).
+
+class TunnelSession {
+    String sessionId
+    String deviceId
+    String accountId
+    String sessionKey
+    Map<String, Channel<String>> inboxes
+    Channel<String> outbox
+    Int nextStreamId
+    Bool open
+
+    constructor(sessionId: String, deviceId: String, accountId: String, sessionKey: String) {
+        this.sessionId = sessionId
+        this.deviceId = deviceId
+        this.accountId = accountId
+        this.sessionKey = sessionKey
+        this.inboxes = mapOf()
+        this.outbox = channel<String>()
+        this.nextStreamId = 1
+        this.open = true
+    }
+
+    // Abre um stream e devolve seu id opaco.
+    String openStream() {
+        var id = "" + this.nextStreamId
+        this.nextStreamId = this.nextStreamId + 1
+        this.inboxes.put(id, channel<String>())
+        return id
+    }
+
+    // Registra um stream com id atribuido pelo peer (lado que recebe OPEN).
+    void registerStream(String streamId) {
+        this.inboxes.put(streamId, channel<String>())
+    }
+
+    void closeStream(String streamId) {
+        this.inboxes.remove(streamId)
+    }
+
+    Bool hasStream(String streamId) {
+        return this.inboxes.get(streamId) != null
+    }
+
+    Int streamCount() {
+        return this.inboxes.size
+    }
+
+    // Entrega um item (payload base64 ou marcador) ao stream.
+    void deliver(String streamId, String item) {
+        var inbox = this.inboxes.get(streamId)
+        if (inbox != null) {
+            inbox.send(item)
+        }
+    }
+
+    // Proximo item da inbox do stream; bloqueia ate haver um.
+    String nextFromStream(String streamId) {
+        var inbox = this.inboxes.get(streamId)
+        if (inbox == null) {
+            return streamResetMarker()
+        }
+        return inbox.receive()
+    }
+
+    // Enfileira um frame para o escritor do tunel drenar.
+    void send(Map<String, String> frame) {
+        this.outbox.send(encodeFrame(frame))
+    }
+
+    void sendRaw(String encodedFrameLine) {
+        this.outbox.send(encodedFrameLine)
+    }
+
+    void close() {
+        this.open = false
+        this.outbox.send(streamCloseMarker())
+    }
+}

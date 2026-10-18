@@ -1,0 +1,17 @@
+package kofcloud.model
+
+// Dispositivo: uma instalacao do Agent, com identidade criptografica propria.
+// `publicKey` e a chave publica X25519; a privada nunca sai da maquina.
+record Device(String id, String accountId, String name, String publicKey, String status, Long lastSeenAt, Long createdAt)
+
+String deviceActive() {
+    return "ACTIVE"
+}
+
+String deviceRevoked() {
+    return "REVOKED"
+}
+
+Bool deviceIsActive(Device device) {
+    return device.status == "ACTIVE"
+}

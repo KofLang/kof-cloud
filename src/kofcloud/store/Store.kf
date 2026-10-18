@@ -1,0 +1,38 @@
+package kofcloud.store
+
+// Persistencia em arquivo JSON. Sem banco: o MVP guarda estado em disco com
+// File/Directory do kof.io. Escrita nao e atomica (o Kof nao expoe rename
+// atomico) — documentado em docs/17-limitations.md.
+
+String readTextOr(String path, String fallback) {
+    var text = File(path).readText()
+    if (text == null) {
+        return fallback
+    }
+    return text
+}
+
+Bool writeTextTo(String path, String text) {
+    var dir = parentDir(path)
+    if (dir.length > 0) {
+        Directory(dir).createDirectories()
+    }
+    return File(path).writeText(text)
+}
+
+Bool fileExists(String path) {
+    return File(path).exists()
+}
+
+String parentDir(String path) {
+    var index = -1
+    for (var i = 0; i < path.length; i++) {
+        if (path.charAt(i) == 47) {
+            index = i
+        }
+    }
+    if (index <= 0) {
+        return ""
+    }
+    return path.substring(0, index)
+}

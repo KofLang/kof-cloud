@@ -1,0 +1,68 @@
+package kofcloud.util
+
+// Hostnames e validacao de nomes que viram rotulo DNS.
+
+String kofcloudDomain() {
+    return "kofcloud.io"
+}
+
+String serviceHostname(String serviceName, String handle) {
+    return serviceName + "." + handle + "." + kofcloudDomain()
+}
+
+String accountZone(String handle) {
+    return handle + "." + kofcloudDomain()
+}
+
+// Rotulo DNS valido: [a-z0-9-]{3,32}, sem hifen nas pontas.
+Bool validHandle(String handle) {
+    return validLabel(handle, 3, 32)
+}
+
+Bool validServiceName(String name) {
+    return validLabel(name, 1, 32)
+}
+
+Bool validLabel(String text, Int min, Int max) {
+    if (text.length < min || text.length > max) {
+        return false
+    }
+    if (text.startsWith("-") || text.endsWith("-")) {
+        return false
+    }
+    for (var i = 0; i < text.length; i++) {
+        var c = text.charAt(i) as Int
+        var lower = c >= 97 && c <= 122
+        var digit = c >= 48 && c <= 57
+        var dash = c == 45
+        if (lower || digit || dash) {
+            // valido
+        } else {
+            return false
+        }
+    }
+    return true
+}
+
+// Remove a porta de um header Host ("site.mel.kofcloud.io:8080").
+String hostOnly(String hostHeader) {
+    var index = hostHeader.indexOf(":")
+    if (index >= 0) {
+        return hostHeader.substring(0, index)
+    }
+    return hostHeader
+}
+
+// Extrai o rotulo do servico de um hostname de conta.
+// "site.mel.kofcloud.io" com handle "mel" -> "site"; senao "".
+String serviceFromHost(String host, String handle) {
+    var suffix = "." + accountZone(handle)
+    if (host.endsWith(suffix) == false) {
+        return ""
+    }
+    var head = host.substring(0, host.length - suffix.length)
+    if (head.indexOf(".") >= 0) {
+        return ""
+    }
+    return head
+}

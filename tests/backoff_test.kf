@@ -1,0 +1,25 @@
+
+import kofcloud.agent.Backoff
+
+test "backoff: cresce com tentativas e respeita o teto" {
+    var base = 500
+    var maxDelay = 30000
+    var d0 = backoffDelay(0, base, maxDelay)
+    assert(d0 >= 0, "nao negativo")
+    assert(d0 <= base + base / 5 + 2, "primeiro delay perto da base")
+    var d10 = backoffDelay(10, base, maxDelay)
+    assert(d10 <= maxDelay + maxDelay / 5 + 2, "limitado pelo teto")
+}
+
+test "backoff: tentativas maiores nao diminuem o teto" {
+    var maxDelay = 10000
+    var low = backoffDelay(3, 500, maxDelay)
+    var high = backoffDelay(20, 500, maxDelay)
+    assert(high >= 0, "alto nao negativo")
+    assert(low <= maxDelay + maxDelay / 5 + 2, "baixo dentro do teto")
+}
+
+test "backoff: defaults coerentes" {
+    assert(defaultBackoffBase() > 0, "base positiva")
+    assert(defaultBackoffMax() > defaultBackoffBase(), "teto maior que base")
+}

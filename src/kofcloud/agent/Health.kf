@@ -1,0 +1,32 @@
+package kofcloud.agent
+
+import kofcloud.model.Service
+
+import kofcloud.protocol.Session
+import kofcloud.protocol.Tunnel
+
+// Health check local. O Agent verifica se o servico responde e reporta o
+// estado ao Edge, que para de encaminhar quando o servico esta OFFLINE.
+//
+// MVP: uma conexao TCP bem-sucedida => ONLINE; recusa/timeout => OFFLINE.
+// DEGRADED fica reservado para quando houver checagem HTTP de status.
+
+String checkService(Service service) {
+    try {
+        var conn = net.connect(service.localAddress, service.localPort)
+        conn.close()
+        return statusOnline()
+    } catch (String e) {
+        return statusOffline()
+    }
+}
+
+void reportStatus(TunnelSession session, Service service) {
+    session.send(statusFrame(service.name, checkService(service)))
+}
+
+void reportAllStatuses(TunnelSession session, List<Service> services) {
+    for (var service in services) {
+        reportStatus(session, service)
+    }
+}

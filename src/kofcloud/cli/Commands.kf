@@ -1,0 +1,460 @@
+package kofcloud.cli
+
+import kofcloud.agent.Agent
+
+import kofcloud.cli.Local
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.identity.Keys
+import kofcloud.model.Device
+import kofcloud.model.Service
+import kofcloud.util.Text
+import kofcloud.store.Store
+
+// Implementacao dos subcomandos. Cada um devolve o exit code.
+
+record DomainEntry(String hostname, String kind, String service)
+
+String flagValue(List<String> args, String flag) {
+    var i = 0
+    while (i < args.size) {
+        if (args.get(i) == flag && i + 1 < args.size) {
+            return args.get(i + 1)
+        }
+        i = i + 1
+    }
+    return ""
+}
+
+Bool hasFlag(List<String> args, String flag) {
+    for (var arg in args) {
+        if (arg == flag) {
+            return true
+        }
+    }
+    return false
+}
+
+String firstPositional(List<String> args) {
+    for (var arg in args) {
+        if (arg.startsWith("--") == false) {
+            return arg
+        }
+    }
+    return ""
+}
+
+// ---- login / logout ----
+
+Int cmdLogin(List<String> args) {
+    var handle = firstPositional(args)
+    var password = flagValue(args, "--password")
+    var control = flagValue(args, "--control")
+    if (control.length == 0) {
+        control = defaultControlUrl()
+    }
+    var deviceName = flagValue(args, "--device")
+    if (deviceName.length == 0) {
+        deviceName = "default"
+    }
+    if (handle.length == 0 || password.length == 0) {
+        println("uso: kof cloud login <handle> --password <senha>")
+        return 1
+    }
+
+    var token = ""
+    try {
+        token = loginOrCreate(control, handle, password)
+    } catch (String e) {
+        println("falha no login: " + e)
+        return 1
+    }
+
+    var pair = generateKeyPair()
+    var deviceId = ""
+    try {
+        deviceId = registerDevice(control, token, deviceName, pair.publicKey)
+    } catch (String e) {
+        println("falha ao registrar dispositivo: " + e)
+        return 1
+    }
+
+    saveSession(LocalSession("", handle, token, control))
+    saveIdentity(LocalIdentity(deviceId, "", handle, deviceName, pair.privateKey, pair.publicKey))
+    println("Logado como " + handle)
+    println("Dispositivo: " + deviceName + " (" + deviceId + ")")
+    println("Control plane: " + control)
+    return 0
+}
+
+String loginOrCreate(String control, String handle, String password) {
+    var loginBody = mapOf()
+    loginBody.put("handle", handle)
+    loginBody.put("password", password)
+    try {
+        var raw = requireOk(http.post(control + "/v1/login", json.encode(loginBody), "Content-Type: application/json"))
+        return mapField(json.decode<Map<String, String>>(raw), "token")
+    } catch (String e) {
+        var createBody = mapOf()
+        createBody.put("handle", handle)
+        createBody.put("email", handle + "@kofcloud.local")
+        createBody.put("password", password)
+        var raw = requireOk(http.post(control + "/v1/accounts", json.encode(createBody), "Content-Type: application/json"))
+        return mapField(json.decode<Map<String, String>>(raw), "token")
+    }
+}
+
+String registerDevice(String control, String token, String name, String publicKey) {
+    var body = mapOf()
+    body.put("name", name)
+    body.put("publicKey", publicKey)
+    var raw = requireOk(http.post(control + "/v1/devices", json.encode(body), jsonHeader(token)))
+    return mapField(json.decode<Map<String, String>>(raw), "deviceId")
+}
+
+Int cmdLogout(List<String> args) {
+    File(identityPath()).delete()
+    File(sessionPath()).delete()
+    File(stopPath()).delete()
+    println("Sessao encerrada.")
+    return 0
+}
+
+// ---- connect / disconnect ----
+
+Int cmdConnect(List<String> args) {
+    var identity = loadIdentity()
+    var session = loadSession()
+    if (identity == null) {
+        println("nao logado — rode: kof cloud login <handle> --password <senha>")
+        return 1
+    }
+    if (session == null) {
+        println("nao logado — rode: kof cloud login <handle> --password <senha>")
+        return 1
+    }
+    File(stopPath()).delete()
+    appendLog("connecting as " + identity.deviceName + " (" + identity.deviceId + ")")
+    var config = AgentConfig(session.controlUrl, identity.deviceId, session.accountId, session.token, identity.privateKey, stopPath(), "", 0, 0)
+    runAgent(config, false)
+    appendLog("agent stopped")
+    return 0
+}
+
+Int cmdDisconnect(List<String> args) {
+    writeTextTo(stopPath(), longToString(time.now()))
+    println("Desconexao solicitada — o agente encerra no proximo heartbeat.")
+    return 0
+}
+
+// ---- status ----
+
+Int cmdStatus(List<String> args) {
+    var identity = loadIdentity()
+    var session = loadSession()
+    if (identity == null) {
+        println("Estado: DESCONECTADO (nao logado)")
+        return 0
+    }
+    if (session == null) {
+        println("Estado: DESCONECTADO (nao logado)")
+        return 0
+    }
+    println("Conta:        " + identity.handle)
+    println("Dispositivo:  " + identity.deviceName + " (" + identity.deviceId + ")")
+    println("Control:      " + session.controlUrl)
+    if (fileExists(stopPath())) {
+        println("Agente:       PARADO")
+    } else {
+        println("Agente:       ATIVO")
+    }
+    try {
+        var services = fetchServices(session.controlUrl, session.token)
+        println("Servicos:     " + intToString(services.size))
+        for (var service in services) {
+            println("  " + service.name + "  ->  https://" + service.hostname + "  [" + service.status + "]")
+        }
+    } catch (String e) {
+        println("Servicos:     indisponivel (" + e + ")")
+    }
+    return 0
+}
+
+// ---- dispositivos ----
+
+Int cmdDeviceList(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    try {
+        var devices = fetchDevices(session.controlUrl, session.token)
+        if (devices.size == 0) {
+            println("nenhum dispositivo registrado")
+            return 0
+        }
+        for (var device in devices) {
+            println(device.name + "  " + device.id + "  " + device.status)
+        }
+        return 0
+    } catch (String e) {
+        println("falha: " + e)
+        return 1
+    }
+}
+
+Int cmdDeviceRevoke(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    var deviceId = firstPositional(args)
+    if (deviceId.length == 0) {
+        println("uso: kof cloud device revoke <deviceId>")
+        return 1
+    }
+    var body = mapOf()
+    body.put("deviceId", deviceId)
+    try {
+        requireOk(http.post(session.controlUrl + "/v1/devices/revoke", json.encode(body), jsonHeader(session.token)))
+        println("Dispositivo revogado: " + deviceId)
+        return 0
+    } catch (String e) {
+        println("falha: " + e)
+        return 1
+    }
+}
+
+// ---- servicos ----
+
+Int cmdPublish(List<String> args) {
+    var identity = loadIdentity()
+    var session = loadSession()
+    if (identity == null) {
+        println("nao logado — rode: kof cloud login <handle> --password <senha>")
+        return 1
+    }
+    if (session == null) {
+        println("nao logado — rode: kof cloud login <handle> --password <senha>")
+        return 1
+    }
+    var name = firstPositional(args)
+    var port = parseIntSafe(flagValue(args, "--port"), 0)
+    var address = flagValue(args, "--address")
+    if (address.length == 0) {
+        address = "127.0.0.1"
+    }
+    var exposure = flagValue(args, "--exposure")
+    if (exposure.length == 0) {
+        exposure = "PUBLIC"
+    }
+    var deviceId = identity.deviceId
+    var overrideDevice = flagValue(args, "--device")
+    if (overrideDevice.length > 0) {
+        deviceId = overrideDevice
+    }
+    if (name.length == 0 || port <= 0) {
+        println("uso: kof cloud publish <nome> --port <porta>")
+        return 1
+    }
+    var body = mapOf()
+    body.put("deviceId", deviceId)
+    body.put("name", name)
+    body.put("localAddress", address)
+    body.put("localPort", intToString(port))
+    body.put("protocol", "http")
+    body.put("exposure", exposure)
+    try {
+        var raw = requireOk(http.post(session.controlUrl + "/v1/services", json.encode(body), jsonHeader(session.token)))
+        var service = json.decode<Service>(raw)
+        println("Servico publicado.")
+        println("")
+        println("Nome:   " + service.name)
+        println("Local:  " + service.localAddress + ":" + intToString(service.localPort))
+        println("Publico: https://" + service.hostname)
+        println("Status: " + service.status)
+        return 0
+    } catch (String e) {
+        println("falha ao publicar: " + e)
+        return 1
+    }
+}
+
+Int cmdUnpublish(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    var name = firstPositional(args)
+    if (name.length == 0) {
+        println("uso: kof cloud unpublish <nome>")
+        return 1
+    }
+    try {
+        var services = fetchServices(session.controlUrl, session.token)
+        var target = ""
+        for (var service in services) {
+            if (service.name == name) {
+                target = service.id
+            }
+        }
+        if (target.length == 0) {
+            println("servico nao encontrado: " + name)
+            return 1
+        }
+        var body = mapOf()
+        body.put("serviceId", target)
+        requireOk(http.post(session.controlUrl + "/v1/services/remove", json.encode(body), jsonHeader(session.token)))
+        println("Servico removido: " + name)
+        return 0
+    } catch (String e) {
+        println("falha: " + e)
+        return 1
+    }
+}
+
+Int cmdServiceList(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    try {
+        var services = fetchServices(session.controlUrl, session.token)
+        if (services.size == 0) {
+            println("nenhum servico publicado")
+            return 0
+        }
+        for (var service in services) {
+            println(service.name + "  https://" + service.hostname + "  " + service.exposure + "  " + service.status)
+        }
+        return 0
+    } catch (String e) {
+        println("falha: " + e)
+        return 1
+    }
+}
+
+Int cmdServiceStatus(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    var name = firstPositional(args)
+    if (name.length == 0) {
+        println("uso: kof cloud service status <nome>")
+        return 1
+    }
+    try {
+        var services = fetchServices(session.controlUrl, session.token)
+        for (var service in services) {
+            if (service.name == name) {
+                println("Servico: " + service.name)
+                println("Host:    https://" + service.hostname)
+                println("Local:   " + service.localAddress + ":" + intToString(service.localPort))
+                println("Exposicao: " + service.exposure)
+                println("Status:  " + service.status)
+                return 0
+            }
+        }
+        println("servico nao encontrado: " + name)
+        return 1
+    } catch (String e) {
+        println("falha: " + e)
+        return 1
+    }
+}
+
+Int cmdDomainList(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    try {
+        var raw = requireOk(http.get(session.controlUrl + "/v1/domains", authHeader(session.token)))
+        var domains = json.decode<List<DomainEntry>>(raw)
+        for (var domain in domains) {
+            println(domain.kind + "  " + domain.hostname)
+        }
+        return 0
+    } catch (String e) {
+        println("falha: " + e)
+        return 1
+    }
+}
+
+Int cmdLogs(List<String> args) {
+    var text = readTextOr(logPath(), "")
+    if (text.length == 0) {
+        println("sem logs")
+        return 0
+    }
+    println(text)
+    return 0
+}
+
+// ---- helpers de control plane ----
+
+List<Service> fetchServices(String control, String token) {
+    var raw = requireOk(http.get(control + "/v1/services", authHeader(token)))
+    return json.decode<List<Service>>(raw)
+}
+
+List<Device> fetchDevices(String control, String token) {
+    var raw = requireOk(http.get(control + "/v1/devices", authHeader(token)))
+    return json.decode<List<Device>>(raw)
+}
+
+String logPath() {
+    return kofcloudHome() + "/agent.log"
+}
+
+// Sobe a plataforma: control plane + edge no MESMO processo, compartilhando
+// uma unica instancia de Registry (sem corrida de arquivo entre processos).
+// Portas: control HTTP, tunel e HTTP publico do edge.
+Int cmdServe(List<String> args) {
+    var controlPort = parseIntSafe(flagValue(args, "--control-port"), 8080)
+    var tunnelPort = parseIntSafe(flagValue(args, "--tunnel-port"), 7000)
+    var httpPort = parseIntSafe(flagValue(args, "--http-port"), 8081)
+    var statePath = flagValue(args, "--state")
+    if (statePath.length == 0) {
+        statePath = kofcloudHome() + "/control-state.json"
+    }
+    var tunnelSecret = config.str("kofcloud.tunnelSecret", "")
+    var maxBytes = parseIntSafe(config.str("kofcloud.maxBodyBytes", "16777216"), 16777216)
+
+    var registry = Registry(statePath)
+    var edgeState = EdgeState(registry)
+
+    println("kofcloud control plane  -> http://127.0.0.1:" + intToString(controlPort))
+    println("kofcloud edge tunnel    -> 127.0.0.1:" + intToString(tunnelPort))
+    println("kofcloud edge public    -> http://127.0.0.1:" + intToString(httpPort))
+    println("estado: " + statePath)
+
+    var platformStop = kofcloudHome() + "/platform-stop"
+    File(platformStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, tunnelSecret, platformStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, maxBytes, platformStop) }
+    await controlTask
+    return 0
+}
+
+void appendLog(String message) {
+    var line = longToString(time.now()) + " " + message + "\n"
+    var file = File(logPath())
+    if (file.exists()) {
+        file.appendText(line)
+    } else {
+        writeTextTo(logPath(), line)
+    }
+}

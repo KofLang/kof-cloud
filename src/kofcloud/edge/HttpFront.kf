@@ -1,0 +1,93 @@
+package kofcloud.edge
+
+import kofcloud.edge.Http
+import kofcloud.edge.Relay
+import kofcloud.model.Service
+
+import kofcloud.util.Hosts
+import kofcloud.util.Text
+
+// Listener publico HTTP/1.1 do Edge.
+//
+// Aceita a conexao, le a requisicao inteira, resolve a rota pelo Host,
+// repassa pelo tunel e escreve a resposta. Sem keep-alive no MVP: cada
+// requisicao e uma conexao (determinismo do "fim da resposta").
+
+void serveHttp(EdgeState state, Int port, Int maxBytes, String stopFile) {
+    var listener = net.listen(port)
+    if (stopFile.length > 0) {
+        var watcher = spawn { listenerWatcher(listener, stopFile) }
+    }
+    var open = true
+    while (open) {
+        try {
+            var conn = listener.accept()
+            var worker = spawn { handlePublicConnection(state, conn, maxBytes) }
+        } catch (String e) {
+            open = false
+        }
+    }
+}
+
+void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
+    var raw = readRequestBytes(conn, maxBytes)
+    if (raw.length == 0) {
+        conn.close()
+        return
+    }
+    var request = parseRequest(raw)
+    var host = hostOnly(headerValue(request.headers, "host"))
+    var service = state.route(host)
+    if (service == null) {
+        conn.send(errorResponse(404, "no route for " + host))
+        conn.close()
+        return
+    }
+    if (service.exposure == "AUTHENTICATED") {
+        var provided = bearerFrom(headerValue(request.headers, "authorization"))
+        if (state.authorize(service, provided) == false) {
+            var deny = errorResponse(401, "authentication required")
+            conn.send(deny)
+            conn.close()
+            return
+        }
+    }
+    var session = state.sessionFor(service.deviceId)
+    if (session == null) {
+        conn.send(errorResponse(503, "device not connected"))
+        conn.close()
+        return
+    }
+    if (statusIsRoutable(service.status) == false) {
+        conn.send(errorResponse(503, "service " + service.name + " is " + service.status))
+        conn.close()
+        return
+    }
+    var forwarded = serializeRequest(request, "edge")
+    var responseBytes = bytesEmpty()
+    try {
+        responseBytes = relayThroughTunnel(session, service.name, forwarded, maxBytes)
+    } catch (String e) {
+        conn.send(errorResponse(502, "tunnel error: " + e))
+        conn.close()
+        return
+    }
+    if (responseBytes.length == 0) {
+        conn.send(errorResponse(502, "empty response from service"))
+        conn.close()
+        return
+    }
+    conn.send(responseBytes)
+    conn.close()
+}
+
+String bearerFrom(String authorization) {
+    if (authorization.length == 0) {
+        return ""
+    }
+    var lower = authorization.toLowerCase()
+    if (lower.startsWith("bearer ")) {
+        return authorization.substring(7).trim()
+    }
+    return authorization.trim()
+}

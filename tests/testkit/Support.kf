@@ -1,0 +1,94 @@
+package testkit
+
+
+import kofcloud.protocol.Bytes
+import kofcloud.protocol.Frame
+import kofcloud.protocol.LineCodec
+import kofcloud.protocol.Session
+import kofcloud.protocol.Tunnel
+import kofcloud.protocol.Version
+
+// Helpers compartilhados pelos testes.
+
+String httpGetRaw(Int port, String path, String host) {
+    var conn = net.connect("127.0.0.1", port)
+    var req = "GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n"
+    conn.send(bytesFromString(req))
+    var acc = bytesEmpty()
+    var reading = true
+    while (reading) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            reading = false
+        } else {
+            acc = bytesConcat(acc, chunk)
+        }
+    }
+    conn.close()
+    return bytesToString(acc)
+}
+
+String httpPostJson(Int port, String path, String body, String token) {
+    var conn = net.connect("127.0.0.1", port)
+    var req = "POST " + path + " HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+    req = req + "Content-Type: application/json\r\n"
+    if (token.length > 0) {
+        // Header proprio: o runtime do Kof reserva `Authorization` para JWT
+        // no web.app() e devolveria 401 antes do handler (ver Local.kf).
+        req = req + "X-KofCloud-Token: " + token + "\r\n"
+    }
+    req = req + "Content-Length: " + intToString(body.length) + "\r\n"
+    req = req + "Connection: close\r\n\r\n"
+    req = req + body
+    conn.send(bytesFromString(req))
+    var acc = bytesEmpty()
+    var reading = true
+    while (reading) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            reading = false
+        } else {
+            acc = bytesConcat(acc, chunk)
+        }
+    }
+    conn.close()
+    return bytesToString(acc)
+}
+
+String bodyOf(String response) {
+    var index = response.indexOf("\r\n\r\n")
+    if (index < 0) {
+        return ""
+    }
+    return response.substring(index + 4)
+}
+
+Int statusOf(String response) {
+    var line = response
+    var nl = response.indexOf("\r\n")
+    if (nl >= 0) {
+        line = response.substring(0, nl)
+    }
+    var parts = line.split(" ")
+    if (parts.length >= 2) {
+        return parseIntSafe(parts[1], 0)
+    }
+    return 0
+}
+
+// Espera uma porta TCP aceitar conexoes (readiness de servidor em task).
+Bool waitForPort(Int port, Int attempts) {
+    var up = false
+    var remaining = attempts
+    while (remaining > 0 && up == false) {
+        try {
+            var probe = net.connect("127.0.0.1", port)
+            probe.close()
+            up = true
+        } catch (String e) {
+            time.sleep(50)
+            remaining = remaining - 1
+        }
+    }
+    return up
+}

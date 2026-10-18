@@ -1,0 +1,6 @@
+# artefatos de build/execução
+/build/
+/.build-out/
+/.accept-out/
+/.accept-log
+*.class

@@ -1,0 +1,95 @@
+
+import kofcloud.control.Registry
+import kofcloud.model.Account
+import kofcloud.model.Device
+import kofcloud.model.Service
+import kofcloud.store.Store
+
+String tempStatePath(String name) {
+    return "/tmp/kofcloud-test-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "registry: cria conta e recusa handle duplicado" {
+    var registry = Registry(tempStatePath("account"))
+    var account = registry.createAccount("mel", "mel@example.com", "segredo")
+    assert(account.handle == "mel", "handle")
+    assert(registry.accountByHandle("mel") != null, "encontrada")
+    var duplicated = false
+    try {
+        registry.createAccount("mel", "outro@example.com", "x")
+    } catch (String e) {
+        duplicated = true
+    }
+    assert(duplicated, "handle duplicado recusado")
+}
+
+test "registry: token autentica a conta" {
+    var registry = Registry(tempStatePath("token"))
+    var account = registry.createAccount("mel", "mel@example.com", "segredo")
+    var token = registry.issueToken(account.id)
+    var resolved = registry.accountByToken(token)
+    assert(resolved != null, "token resolve")
+    if (resolved != null) {
+        assert(resolved.id == account.id, "conta certa")
+    }
+    assert(registry.accountByToken("kfc_invalido") == null, "token invalido recusado")
+}
+
+test "registry: login exige a senha correta" {
+    var registry = Registry(tempStatePath("login"))
+    registry.createAccount("mel", "mel@example.com", "segredo")
+    var token = registry.login("mel", "segredo")
+    assert(token.startsWith("kfc_"), "token emitido")
+    var rejected = false
+    try {
+        registry.login("mel", "errada")
+    } catch (String e) {
+        rejected = true
+    }
+    assert(rejected, "senha errada recusada")
+}
+
+test "registry: registra dispositivo e publica servico com hostname" {
+    var registry = Registry(tempStatePath("publish"))
+    var account = registry.createAccount("mel", "mel@example.com", "segredo")
+    var device = registry.registerDevice(account, "notebook", "pubkey")
+    assert(device.status == "ACTIVE", "ativo")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    assert(service.hostname == "site.mel.kofcloud.io", "hostname")
+    assert(service.exposure == "PUBLIC", "exposicao")
+    assert(service.status == "UNKNOWN", "status inicial")
+}
+
+test "registry: PRIVATE nao aparece como rota publica" {
+    var registry = Registry(tempStatePath("private"))
+    var account = registry.createAccount("mel", "mel@example.com", "segredo")
+    var device = registry.registerDevice(account, "notebook", "pubkey")
+    var service = registry.publishService(account, device.id, "db", "127.0.0.1", 5432, "http", "PRIVATE")
+    assert(registry.resolveRoute(service.hostname) == null, "sem rota")
+    assert(registry.serviceById(service.id) != null, "mas o servico existe")
+}
+
+test "registry: revogar dispositivo remove os servicos dele" {
+    var registry = Registry(tempStatePath("revoke"))
+    var account = registry.createAccount("mel", "mel@example.com", "segredo")
+    var device = registry.registerDevice(account, "notebook", "pubkey")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    assert(registry.resolveRoute(service.hostname) != null, "rota antes")
+    assert(registry.revokeDevice(account.id, device.id) == true, "revogado")
+    var after = registry.deviceById(device.id)
+    assert(after != null, "device ainda existe")
+    if (after != null) {
+        assert(after.status == "REVOKED", "status revogado")
+    }
+    assert(registry.resolveRoute(service.hostname) == null, "rota removida")
+}
+
+test "registry: estado persiste em disco e recarrega" {
+    var path = tempStatePath("persist")
+    var registry = Registry(path)
+    var account = registry.createAccount("mel", "mel@example.com", "segredo")
+    registry.registerDevice(account, "notebook", "pubkey")
+    var reloaded = Registry(path)
+    assert(reloaded.accountByHandle("mel") != null, "conta recarregada")
+    assert(reloaded.devicesForAccount(account.id).size == 1, "dispositivo recarregado")
+}

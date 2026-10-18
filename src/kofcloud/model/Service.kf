@@ -1,0 +1,38 @@
+package kofcloud.model
+
+// Servico publicado. `exposure` e `status` viajam como string (enum em JSON
+// adiciona risco de decode sem ganho); a conversao para Exposure acontece
+// nas bordas via exposureFrom/exposureName.
+record Service(
+    String id,
+    String accountId,
+    String deviceId,
+    String name,
+    String localAddress,
+    Int localPort,
+    String protocol,
+    String hostname,
+    String exposure,
+    String status,
+    Long createdAt
+)
+
+String statusOnline() {
+    return "ONLINE"
+}
+
+String statusOffline() {
+    return "OFFLINE"
+}
+
+String statusDegraded() {
+    return "DEGRADED"
+}
+
+String statusUnknown() {
+    return "UNKNOWN"
+}
+
+Bool statusIsRoutable(String status) {
+    return status == "ONLINE" || status == "DEGRADED" || status == "UNKNOWN"
+}

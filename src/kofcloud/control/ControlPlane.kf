@@ -1,0 +1,451 @@
+package kofcloud.control
+
+import kofcloud.control.Registry
+import kofcloud.model.Account
+import kofcloud.model.Device
+import kofcloud.model.Service
+import kofcloud.util.Text
+import kofcloud.util.Hosts
+import kofcloud.protocol.Version
+
+// Control Plane: HTTP/JSON sobre web.app(). O handler-scoped `status()` so
+// existe dentro do lambda de rota, entao os handlers devolvem HttpResult e o
+// lambda aplica o codigo.
+
+record HttpResult(Int code, String body)
+
+String errorJson(String message) {
+    var out = mapOf()
+    out.put("error", message)
+    return json.encode(out)
+}
+
+Map<String, String> decodeBody(String bodyText) {
+    if (bodyText.length == 0) {
+        return mapOf()
+    }
+    return json.decode<Map<String, String>>(bodyText)
+}
+
+String bearerToken(String? authHeader) {
+    if (authHeader == null) {
+        return ""
+    }
+    var lower = authHeader.toLowerCase()
+    if (lower.startsWith("bearer ")) {
+        return authHeader.substring(7).trim()
+    }
+    return authHeader.trim()
+}
+
+String accountJson(Account account) {
+    var out = mapOf()
+    out.put("accountId", account.id)
+    out.put("handle", account.handle)
+    out.put("email", account.email)
+    return json.encode(out)
+}
+
+// As chaves precisam casar com os campos dos records `Device`/`Service`:
+// json.decode exige TODO campo presente (JSN004) e o Agent/CLI decodificam
+// essas respostas de volta para os tipos. Chaves extras sao ignoradas, entao
+// `deviceId` viaja junto de `id` para conveniencia dos handlers.
+String deviceJson(Device device) {
+    var out = mapOf()
+    out.put("id", device.id)
+    out.put("deviceId", device.id)
+    out.put("accountId", device.accountId)
+    out.put("name", device.name)
+    out.put("status", device.status)
+    out.put("publicKey", device.publicKey)
+    out.put("lastSeenAt", longToString(device.lastSeenAt))
+    out.put("createdAt", longToString(device.createdAt))
+    return json.encode(out)
+}
+
+String serviceJson(Service service) {
+    var out = mapOf()
+    out.put("id", service.id)
+    out.put("accountId", service.accountId)
+    out.put("deviceId", service.deviceId)
+    out.put("name", service.name)
+    out.put("localAddress", service.localAddress)
+    out.put("localPort", intToString(service.localPort))
+    out.put("protocol", service.protocol)
+    out.put("hostname", service.hostname)
+    out.put("exposure", service.exposure)
+    out.put("status", service.status)
+    out.put("createdAt", longToString(service.createdAt))
+    return json.encode(out)
+}
+
+String serviceListJson(List<Service> services) {
+    var parts = listOf<String>()
+    for (var service in services) {
+        parts.add(serviceJson(service))
+    }
+    return "[" + joinStrings(parts, ",") + "]"
+}
+
+String deviceListJson(List<Device> devices) {
+    var parts = listOf<String>()
+    for (var device in devices) {
+        parts.add(deviceJson(device))
+    }
+    return "[" + joinStrings(parts, ",") + "]"
+}
+
+String joinStrings(List<String> parts, String separator) {
+    var out = ""
+    var first = true
+    for (var part in parts) {
+        if (first) {
+            out = part
+            first = false
+        } else {
+            out = out + separator + part
+        }
+    }
+    return out
+}
+
+// ---- handlers ----
+
+HttpResult handleHealth() {
+    var out = mapOf()
+    out.put("ok", "true")
+    out.put("service", "kofcloud-control")
+    out.put("version", intToString(protocolVersion()))
+    return HttpResult(200, json.encode(out))
+}
+
+HttpResult handleCreateAccount(Registry registry, String bodyText) {
+    var body = decodeBody(bodyText)
+    var handle = mapField(body, "handle")
+    var email = mapField(body, "email")
+    var password = mapField(body, "password")
+    if (validHandle(handle) == false) {
+        return HttpResult(400, errorJson("invalid handle"))
+    }
+    if (password.length < 4) {
+        return HttpResult(400, errorJson("password too short"))
+    }
+    if (registry.accountByHandle(handle) != null) {
+        return HttpResult(409, errorJson("handle taken"))
+    }
+    var account = registry.createAccount(handle, email, password)
+    var token = registry.issueToken(account.id)
+    var out = mapOf()
+    out.put("accountId", account.id)
+    out.put("handle", account.handle)
+    out.put("token", token)
+    return HttpResult(200, json.encode(out))
+}
+
+HttpResult handleLogin(Registry registry, String bodyText) {
+    var body = decodeBody(bodyText)
+    var handle = mapField(body, "handle")
+    var password = mapField(body, "password")
+    var account = registry.accountByHandle(handle)
+    if (account == null) {
+        return HttpResult(401, errorJson("invalid credentials"))
+    }
+    if (passwords.verify(password, account.passwordHash) == false) {
+        return HttpResult(401, errorJson("invalid credentials"))
+    }
+    var token = registry.issueToken(account.id)
+    var out = mapOf()
+    out.put("accountId", account.id)
+    out.put("handle", account.handle)
+    out.put("token", token)
+    return HttpResult(200, json.encode(out))
+}
+
+HttpResult handleRegisterDevice(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson("unauthorized"))
+    }
+    var body = decodeBody(bodyText)
+    var name = mapField(body, "name")
+    var publicKey = mapField(body, "publicKey")
+    if (name.length == 0 || publicKey.length == 0) {
+        return HttpResult(400, errorJson("name and publicKey required"))
+    }
+    var device = registry.registerDevice(account, name, publicKey)
+    return HttpResult(200, deviceJson(device))
+}
+
+HttpResult handleListDevices(Registry registry, String? authHeader) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson("unauthorized"))
+    }
+    return HttpResult(200, deviceListJson(registry.devicesForAccount(account.id)))
+}
+
+HttpResult handleRevokeDevice(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson("unauthorized"))
+    }
+    var body = decodeBody(bodyText)
+    var deviceId = mapField(body, "deviceId")
+    if (registry.revokeDevice(account.id, deviceId) == false) {
+        return HttpResult(404, errorJson("device not found"))
+    }
+    var out = mapOf()
+    out.put("revoked", "true")
+    return HttpResult(200, json.encode(out))
+}
+
+HttpResult handlePublishService(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson("unauthorized"))
+    }
+    var body = decodeBody(bodyText)
+    var name = mapField(body, "name")
+    var deviceId = mapField(body, "deviceId")
+    var localAddress = mapField(body, "localAddress")
+    if (localAddress.length == 0) {
+        localAddress = "127.0.0.1"
+    }
+    var localPort = parseIntSafe(mapField(body, "localPort"), 0)
+    var protocol = mapField(body, "protocol")
+    if (protocol.length == 0) {
+        protocol = "http"
+    }
+    var exposure = mapField(body, "exposure")
+    if (exposure.length == 0) {
+        exposure = "PUBLIC"
+    }
+    if (localPort <= 0) {
+        return HttpResult(400, errorJson("localPort required"))
+    }
+    var device = registry.deviceById(deviceId)
+    if (device == null) {
+        return HttpResult(404, errorJson("device not found"))
+    }
+    if (device.accountId != account.id) {
+        return HttpResult(404, errorJson("device not found"))
+    }
+    var service = registry.publishService(account, deviceId, name, localAddress, localPort, protocol, exposure)
+    return HttpResult(200, serviceJson(service))
+}
+
+HttpResult handleListServices(Registry registry, String? authHeader) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson("unauthorized"))
+    }
+    return HttpResult(200, serviceListJson(registry.servicesForAccount(account.id)))
+}
+
+HttpResult handleRemoveService(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson("unauthorized"))
+    }
+    var body = decodeBody(bodyText)
+    var serviceId = mapField(body, "serviceId")
+    if (registry.removeService(account.id, serviceId) == false) {
+        return HttpResult(404, errorJson("service not found"))
+    }
+    var out = mapOf()
+    out.put("removed", "true")
+    return HttpResult(200, json.encode(out))
+}
+
+HttpResult handleReportStatus(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson("unauthorized"))
+    }
+    var body = decodeBody(bodyText)
+    var serviceId = mapField(body, "serviceId")
+    var status = mapField(body, "status")
+    if (registry.setServiceStatus(serviceId, status) == false) {
+        return HttpResult(404, errorJson("service not found"))
+    }
+    var out = mapOf()
+    out.put("ok", "true")
+    return HttpResult(200, json.encode(out))
+}
+
+HttpResult handleHeartbeat(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson("unauthorized"))
+    }
+    var body = decodeBody(bodyText)
+    var deviceId = mapField(body, "deviceId")
+    var device = registry.deviceById(deviceId)
+    if (device == null) {
+        return HttpResult(404, errorJson("device not found"))
+    }
+    if (device.accountId != account.id) {
+        return HttpResult(404, errorJson("device not found"))
+    }
+    registry.touchDevice(deviceId)
+    var out = mapOf()
+    out.put("ok", "true")
+    out.put("serverTime", longToString(time.now()))
+    return HttpResult(200, json.encode(out))
+}
+
+HttpResult handleConnect(Registry registry, String? authHeader, String bodyText, String edgeHost, Int edgePort) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson("unauthorized"))
+    }
+    var body = decodeBody(bodyText)
+    var deviceId = mapField(body, "deviceId")
+    var device = registry.deviceById(deviceId)
+    if (device == null) {
+        return HttpResult(404, errorJson("device not found"))
+    }
+    if (device.accountId != account.id) {
+        return HttpResult(404, errorJson("device not found"))
+    }
+    var out = mapOf()
+    out.put("edgeHost", edgeHost)
+    out.put("edgePort", intToString(edgePort))
+    out.put("heartbeatMs", config.str("kofcloud.heartbeatMs", "15000"))
+    out.put("services", serviceListJson(registry.servicesForDevice(deviceId)))
+    return HttpResult(200, json.encode(out))
+}
+
+HttpResult handleListDomains(Registry registry, String? authHeader) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson("unauthorized"))
+    }
+    var parts = listOf<String>()
+    var zone = mapOf()
+    zone.put("hostname", accountZone(account.handle))
+    zone.put("kind", "wildcard")
+    zone.put("service", "")
+    parts.add(json.encode(zone))
+    for (var service in registry.servicesForAccount(account.id)) {
+        var entry = mapOf()
+        entry.put("hostname", service.hostname)
+        entry.put("kind", "service")
+        entry.put("service", service.name)
+        parts.add(json.encode(entry))
+    }
+    return HttpResult(200, "[" + joinStrings(parts, ",") + "]")
+}
+
+// ---- servidor ----
+
+class ControlPlane {
+    Registry registry
+    Int port
+    String edgeHost
+    Int edgePort
+
+    constructor(registry: Registry, port: Int, edgeHost: String, edgePort: Int) {
+        this.registry = registry
+        this.port = port
+        this.edgeHost = edgeHost
+        this.edgePort = edgePort
+    }
+
+    void start() {
+        var reg = this.registry
+        var self = this
+        var app = web.app()
+
+        app.get("/v1/health") {
+            var result = handleHealth()
+            return result.body
+        }
+        app.post("/v1/accounts") {
+            var result = handleCreateAccount(reg, body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/login") {
+            var result = handleLogin(reg, body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/devices") {
+            var result = handleRegisterDevice(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.get("/v1/devices") {
+            var result = handleListDevices(reg, header("x-kofcloud-token"))
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/devices/revoke") {
+            var result = handleRevokeDevice(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/services") {
+            var result = handlePublishService(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.get("/v1/services") {
+            var result = handleListServices(reg, header("x-kofcloud-token"))
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/services/remove") {
+            var result = handleRemoveService(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/services/status") {
+            var result = handleReportStatus(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/heartbeat") {
+            var result = handleHeartbeat(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/connect") {
+            var result = handleConnect(reg, header("x-kofcloud-token"), body(), self.edgeHost, self.edgePort)
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.get("/v1/domains") {
+            var result = handleListDomains(reg, header("x-kofcloud-token"))
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+
+        app.listen(this.port)
+    }
+}

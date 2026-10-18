@@ -1,0 +1,11 @@
+package kofcloud.protocol
+
+// Versao do protocolo. Um handshake declara `v`; major diferente e recusado.
+Int protocolVersion() {
+    return 1
+}
+
+// Delimitador de frame: um objeto JSON por linha.
+String frameTerminator() {
+    return "\n"
+}

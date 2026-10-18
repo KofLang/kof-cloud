@@ -1,0 +1,92 @@
+package kofcloud.protocol
+
+// Conversao entre Byte[] e String sem depender de String.getBytes()
+// (STR003: getBytes e JVM-only). O mapeamento e byte-preserving: cada Byte
+// vira um Char de mesmo valor 0..255 e volta.
+//
+// Byte em Kof e assinado: valores 128..255 chegam como -128..-1 e precisam
+// da correcao +256 antes de virar Char.
+
+Byte[] bytesFromString(String text) {
+    var out = new Byte[text.length]
+    for (var i = 0; i < text.length; i++) {
+        out[i] = text.charAt(i) as Byte
+    }
+    return out
+}
+
+String bytesToString(Byte[] data) {
+    var out = ""
+    for (var i = 0; i < data.length; i++) {
+        var v = data[i] as Int
+        if (v < 0) {
+            v = v + 256
+        }
+        out = out + (v as Char)
+    }
+    return out
+}
+
+String bytesToBase64(Byte[] data) {
+    return encoding.base64Encode(bytesToString(data))
+}
+
+Byte[] bytesFromBase64(String text) {
+    return bytesFromString(encoding.base64Decode(text))
+}
+
+Byte[] bytesEmpty() {
+    return new Byte[0]
+}
+
+Byte[] bytesConcat(Byte[] a, Byte[] b) {
+    var out = new Byte[a.length + b.length]
+    for (var i = 0; i < a.length; i++) {
+        out[i] = a[i]
+    }
+    for (var i = 0; i < b.length; i++) {
+        out[a.length + i] = b[i]
+    }
+    return out
+}
+
+Byte[] bytesSlice(Byte[] data, Int start, Int end) {
+    if (start < 0) {
+        start = 0
+    }
+    if (end > data.length) {
+        end = data.length
+    }
+    var out = new Byte[end - start]
+    for (var i = start; i < end; i++) {
+        out[i - start] = data[i]
+    }
+    return out
+}
+
+// Primeira ocorrencia de `needle` a partir de `from`; -1 se ausente.
+Int bytesIndexOf(Byte[] data, String needle, Int from) {
+    var n = bytesFromString(needle)
+    if (n.length == 0 || data.length < n.length) {
+        return -1
+    }
+    var limit = data.length - n.length
+    var i = from
+    while (i <= limit) {
+        var match = true
+        var j = 0
+        while (j < n.length) {
+            if (data[i + j] != n[j]) {
+                match = false
+                j = n.length
+            } else {
+                j = j + 1
+            }
+        }
+        if (match) {
+            return i
+        }
+        i = i + 1
+    }
+    return -1
+}

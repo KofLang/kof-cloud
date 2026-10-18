@@ -1,0 +1,105 @@
+
+import kofcloud.protocol.Bytes
+import kofcloud.protocol.Frame
+import kofcloud.protocol.LineCodec
+import kofcloud.protocol.Session
+import kofcloud.protocol.Tunnel
+import kofcloud.protocol.Version
+
+test "framing: linha completa e resto parcial" {
+    var codec = LineCodec()
+    codec.feed(bytesFromString("{\"t\":\"PING\"}\n{\"t\":\"P"))
+    var first = codec.nextLine()
+    assert(first == "{\"t\":\"PING\"}", "primeira linha")
+    assert(codec.nextLine() == "", "segunda incompleta")
+    assert(codec.remainder() == "{\"t\":\"P", "resto guardado")
+}
+
+test "framing: linha partida em dois feeds" {
+    var codec = LineCodec()
+    codec.feed(bytesFromString("{\"t\":\"DA"))
+    assert(codec.hasLine() == false, "sem linha ainda")
+    codec.feed(bytesFromString("TA\"}\n"))
+    assert(codec.nextLine() == "{\"t\":\"DATA\"}", "remontada")
+}
+
+test "bytes: base64 preserva bytes altos" {
+    var data = new Byte[4]
+    data[0] = 0
+    data[1] = 200
+    data[2] = 255
+    data[3] = 10
+    var back = bytesFromBase64(bytesToBase64(data))
+    assert(back.length == 4, "tamanho")
+    var ok = true
+    for (var i = 0; i < data.length; i++) {
+        if (data[i] != back[i]) {
+            ok = false
+        }
+    }
+    assert(ok, "byte preserving")
+}
+
+test "bytes: concat e slice" {
+    var a = bytesFromString("abc")
+    var b = bytesFromString("de")
+    var joined = bytesConcat(a, b)
+    assert(joined.length == 5, "concatenado")
+    assert(bytesToString(bytesSlice(joined, 1, 4)) == "bcd", "slice")
+}
+
+test "bytes: indice de substring" {
+    var data = bytesFromString("GET / HTTP/1.1\r\n\r\nbody")
+    assert(bytesIndexOf(data, "\r\n\r\n", 0) == 14, "fim dos headers")
+    assert(bytesIndexOf(data, "zzz", 0) == -1, "ausente")
+}
+
+test "frame: encode tem terminador e decode volta" {
+    var frame = newFrame("DATA")
+    frame.put("s", "7")
+    frame.put("d", "aGk=")
+    var line = encodeFrame(frame)
+    assert(line.endsWith("\n"), "terminador")
+    var back = decodeFrame(line.substring(0, line.length - 1))
+    assert(frameKind(back) == "DATA", "kind")
+    assert(frameInt(back, "s") == 7, "stream id")
+    assert(frameField(back, "d") == "aGk=", "payload")
+}
+
+test "tunnel: hello carrega versao e identidade" {
+    var frame = helloFrame("dev-1", "tok-1", "pub-1")
+    assert(frameKind(frame) == "HELLO", "kind")
+    assert(frameInt(frame, "v") == protocolVersion(), "versao")
+    assert(frameField(frame, "deviceId") == "dev-1", "device")
+    assert(frameField(frame, "token") == "tok-1", "token")
+}
+
+test "tunnel: welcome distingue aceito de recusado" {
+    var ok = welcomeFrame(true, "", "sess-1", "srv-pub", 15000)
+    assert(frameBool(ok, "ok") == true, "aceito")
+    assert(frameField(ok, "sessionId") == "sess-1", "sessao")
+    var no = welcomeFrame(false, "DEVICE_REVOKED", "", "", 0)
+    assert(frameBool(no, "ok") == false, "recusado")
+    assert(frameField(no, "reason") == "DEVICE_REVOKED", "motivo")
+}
+
+test "session: abre stream e roteia payload" {
+    var session = TunnelSession("s1", "d1", "a1", "")
+    var streamId = session.openStream()
+    assert(session.streamCount() == 1, "um stream")
+    session.deliver(streamId, "payload-a")
+    assert(session.nextFromStream(streamId) == "payload-a", "entregue")
+    session.closeStream(streamId)
+    assert(session.streamCount() == 0, "fechado")
+}
+
+test "session: streams sao independentes" {
+    var session = TunnelSession("s1", "d1", "a1", "")
+    var a = session.openStream()
+    var b = session.openStream()
+    assert(a != b, "ids distintos")
+    session.deliver(b, "para-b")
+    session.deliver(a, "para-a")
+    assert(session.nextFromStream(a) == "para-a", "a recebe o seu")
+    assert(session.nextFromStream(b) == "para-b", "b recebe o seu")
+}

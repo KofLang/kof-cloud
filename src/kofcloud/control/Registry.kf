@@ -1,0 +1,330 @@
+package kofcloud.control
+
+import kofcloud.model.Account
+import kofcloud.model.Device
+import kofcloud.model.Service
+import kofcloud.model.Exposure
+
+import kofcloud.identity.Tokens
+import kofcloud.util.Hosts
+import kofcloud.util.Text
+import kofcloud.store.Store
+
+// Estado do control plane. Persistido como JSON unico; sem banco no MVP.
+// Tokens sao guardados como hash (nunca em claro).
+record TokenEntry(String accountId, String tokenHash, Long createdAt)
+
+record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens)
+
+class Registry {
+    List<Account> accounts
+    List<Device> devices
+    List<Service> services
+    List<TokenEntry> tokens
+    String path
+
+    constructor(path: String) {
+        this.path = path
+        this.accounts = listOf<Account>()
+        this.devices = listOf<Device>()
+        this.services = listOf<Service>()
+        this.tokens = listOf<TokenEntry>()
+        this.load()
+    }
+
+    void load() {
+        var raw = readTextOr(this.path, "")
+        if (raw.length == 0) {
+            return
+        }
+        try {
+            var state = json.decode<ControlState>(raw)
+            this.accounts = state.accounts
+            this.devices = state.devices
+            this.services = state.services
+            this.tokens = state.tokens
+        } catch (String e) {
+            // Estado corrompido: recomeca vazio em vez de derrubar o control
+            // plane. O operador ve os dados ausentes e decide.
+        }
+    }
+
+    void save() {
+        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens)))
+    }
+
+    // ---- contas ----
+
+    Account createAccount(String handle, String email, String password) {
+        if (validHandle(handle) == false) {
+            throw "invalid handle"
+        }
+        if (this.accountByHandle(handle) != null) {
+            throw "handle taken"
+        }
+        var account = Account(uuid.v4(), handle, email, passwords.hash(password), time.now())
+        this.accounts.add(account)
+        this.save()
+        return account
+    }
+
+    Account? accountByHandle(String handle) {
+        for (var account in this.accounts) {
+            if (account.handle == handle) {
+                return account
+            }
+        }
+        return null
+    }
+
+    Account? accountById(String id) {
+        for (var account in this.accounts) {
+            if (account.id == id) {
+                return account
+            }
+        }
+        return null
+    }
+
+    Account? accountByToken(String token) {
+        if (token.length == 0) {
+            return null
+        }
+        for (var entry in this.tokens) {
+            if (tokenMatches(entry.tokenHash, token)) {
+                return this.accountById(entry.accountId)
+            }
+        }
+        return null
+    }
+
+    String issueToken(String accountId) {
+        var token = newAccountToken()
+        this.tokens.add(TokenEntry(accountId, tokenHash(token), time.now()))
+        this.save()
+        return token
+    }
+
+    String login(String handle, String password) {
+        var account = this.accountByHandle(handle)
+        if (account == null) {
+            throw "invalid credentials"
+        }
+        if (passwords.verify(password, account.passwordHash) == false) {
+            throw "invalid credentials"
+        }
+        return this.issueToken(account.id)
+    }
+
+    // ---- dispositivos ----
+
+    Device registerDevice(Account account, String name, String publicKey) {
+        var existing = this.deviceByName(account.id, name)
+        if (existing != null) {
+            return existing
+        }
+        var device = Device(uuid.v4(), account.id, name, publicKey, deviceActive(), time.now(), time.now())
+        this.devices.add(device)
+        this.save()
+        return device
+    }
+
+    Device? deviceById(String id) {
+        for (var device in this.devices) {
+            if (device.id == id) {
+                return device
+            }
+        }
+        return null
+    }
+
+    Device? deviceByName(String accountId, String name) {
+        for (var device in this.devices) {
+            if (device.accountId == accountId && device.name == name) {
+                return device
+            }
+        }
+        return null
+    }
+
+    List<Device> devicesForAccount(String accountId) {
+        var out = listOf<Device>()
+        for (var device in this.devices) {
+            if (device.accountId == accountId) {
+                out.add(device)
+            }
+        }
+        return out
+    }
+
+    Bool revokeDevice(String accountId, String deviceId) {
+        var found = false
+        var updated = listOf<Device>()
+        for (var device in this.devices) {
+            if (device.id == deviceId && device.accountId == accountId) {
+                updated.add(Device(device.id, device.accountId, device.name, device.publicKey, deviceRevoked(), device.lastSeenAt, device.createdAt))
+                found = true
+            } else {
+                updated.add(device)
+            }
+        }
+        if (found) {
+            this.devices = updated
+            this.removeServicesOfDevice(deviceId)
+            this.save()
+        }
+        return found
+    }
+
+    void touchDevice(String deviceId) {
+        var updated = listOf<Device>()
+        for (var device in this.devices) {
+            if (device.id == deviceId) {
+                updated.add(Device(device.id, device.accountId, device.name, device.publicKey, device.status, time.now(), device.createdAt))
+            } else {
+                updated.add(device)
+            }
+        }
+        this.devices = updated
+        this.save()
+    }
+
+    // ---- servicos ----
+
+    Service publishService(Account account, String deviceId, String name, String localAddress, Int localPort, String protocol, String exposure) {
+        if (validServiceName(name) == false) {
+            throw "invalid service name"
+        }
+        var device = this.deviceById(deviceId)
+        if (device == null) {
+            throw "device not found"
+        }
+        if (device.accountId != account.id) {
+            throw "device not yours"
+        }
+        var existing = this.serviceByName(account.id, name)
+        if (existing != null) {
+            return existing
+        }
+        var service = Service(
+            uuid.v4(), account.id, deviceId, name, localAddress, localPort, protocol,
+            serviceHostname(name, account.handle), exposureName(exposureFrom(exposure)),
+            statusUnknown(), time.now()
+        )
+        this.services.add(service)
+        this.save()
+        return service
+    }
+
+    Service? serviceById(String id) {
+        for (var service in this.services) {
+            if (service.id == id) {
+                return service
+            }
+        }
+        return null
+    }
+
+    Service? serviceByName(String accountId, String name) {
+        for (var service in this.services) {
+            if (service.accountId == accountId && service.name == name) {
+                return service
+            }
+        }
+        return null
+    }
+
+    List<Service> servicesForAccount(String accountId) {
+        var out = listOf<Service>()
+        for (var service in this.services) {
+            if (service.accountId == accountId) {
+                out.add(service)
+            }
+        }
+        return out
+    }
+
+    List<Service> servicesForDevice(String deviceId) {
+        var out = listOf<Service>()
+        for (var service in this.services) {
+            if (service.deviceId == deviceId) {
+                out.add(service)
+            }
+        }
+        return out
+    }
+
+    Bool removeService(String accountId, String serviceId) {
+        var out = listOf<Service>()
+        var found = false
+        for (var service in this.services) {
+            if (service.id == serviceId && service.accountId == accountId) {
+                found = true
+            } else {
+                out.add(service)
+            }
+        }
+        if (found) {
+            this.services = out
+            this.save()
+        }
+        return found
+    }
+
+    void removeServicesOfDevice(String deviceId) {
+        var out = listOf<Service>()
+        for (var service in this.services) {
+            if (service.deviceId != deviceId) {
+                out.add(service)
+            }
+        }
+        this.services = out
+    }
+
+    Bool setServiceStatus(String serviceId, String status) {
+        var found = false
+        var updated = listOf<Service>()
+        for (var service in this.services) {
+            if (service.id == serviceId) {
+                updated.add(Service(
+                    service.id, service.accountId, service.deviceId, service.name,
+                    service.localAddress, service.localPort, service.protocol,
+                    service.hostname, service.exposure, status, service.createdAt
+                ))
+                found = true
+            } else {
+                updated.add(service)
+            }
+        }
+        if (found) {
+            this.services = updated
+            this.save()
+        }
+        return found
+    }
+
+    Bool setServiceStatusByName(String deviceId, String name, String status) {
+        var target = ""
+        for (var service in this.services) {
+            if (service.deviceId == deviceId && service.name == name) {
+                target = service.id
+            }
+        }
+        if (target.length == 0) {
+            return false
+        }
+        return this.setServiceStatus(target, status)
+    }
+
+    // Rota publica: so servicos com exposicao roteavel.
+    Service? resolveRoute(String hostname) {
+        for (var service in this.services) {
+            if (service.hostname == hostname) {
+                if (exposureIsRoutable(exposureFrom(service.exposure))) {
+                    return service
+                }
+            }
+        }
+        return null
+    }
+}

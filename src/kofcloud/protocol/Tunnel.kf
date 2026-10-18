@@ -1,0 +1,103 @@
+package kofcloud.protocol
+
+import kofcloud.util.Text
+
+// Construtores dos frames do Tunnel Protocol (Agent <-> Edge).
+// Ver docs/07-tunnel-protocol.md.
+
+Map<String, String> helloFrame(String deviceId, String token, String clientPub) {
+    var frame = newFrame("HELLO")
+    frame.put("v", intToString(protocolVersion()))
+    frame.put("deviceId", deviceId)
+    frame.put("token", token)
+    frame.put("clientPub", clientPub)
+    frame.put("caps", "http")
+    return frame
+}
+
+Map<String, String> welcomeFrame(Bool ok, String reason, String sessionId, String serverPub, Int heartbeatMs) {
+    var frame = newFrame("WELCOME")
+    frame.put("v", intToString(protocolVersion()))
+    frame.put("ok", boolToString(ok))
+    frame.put("reason", reason)
+    frame.put("sessionId", sessionId)
+    frame.put("serverPub", serverPub)
+    frame.put("heartbeatMs", intToString(heartbeatMs))
+    return frame
+}
+
+Map<String, String> openFrame(String streamId, String service) {
+    var frame = newFrame("OPEN")
+    frame.put("s", streamId)
+    frame.put("service", service)
+    return frame
+}
+
+Map<String, String> openedFrame(String streamId, Bool ok, String reason) {
+    var frame = newFrame("OPENED")
+    frame.put("s", streamId)
+    frame.put("ok", boolToString(ok))
+    frame.put("reason", reason)
+    return frame
+}
+
+Map<String, String> dataFrame(String streamId, String payloadBase64) {
+    var frame = newFrame("DATA")
+    frame.put("s", streamId)
+    frame.put("d", payloadBase64)
+    return frame
+}
+
+Map<String, String> endFrame(String streamId) {
+    var frame = newFrame("END")
+    frame.put("s", streamId)
+    return frame
+}
+
+Map<String, String> resetFrame(String streamId, String code) {
+    var frame = newFrame("RESET")
+    frame.put("s", streamId)
+    frame.put("code", code)
+    return frame
+}
+
+Map<String, String> pingFrame() {
+    return newFrame("PING")
+}
+
+Map<String, String> pongFrame() {
+    return newFrame("PONG")
+}
+
+Map<String, String> statusFrame(String service, String status) {
+    var frame = newFrame("STATUS")
+    frame.put("service", service)
+    frame.put("status", status)
+    return frame
+}
+
+Map<String, String> servicesFrame(String servicesJson) {
+    var frame = newFrame("SERVICES")
+    frame.put("services", servicesJson)
+    return frame
+}
+
+Map<String, String> goawayFrame(String code) {
+    var frame = newFrame("GOAWAY")
+    frame.put("code", code)
+    return frame
+}
+
+// Sentinela interno das filas por stream (nao vai ao fio). Base64 nunca
+// produz '!', entao o marcador nao colide com payload.
+String streamEndMarker() {
+    return "!END!"
+}
+
+String streamResetMarker() {
+    return "!RESET!"
+}
+
+String streamCloseMarker() {
+    return "!CLOSE!"
+}

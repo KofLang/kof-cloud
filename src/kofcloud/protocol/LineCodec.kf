@@ -1,0 +1,40 @@
+package kofcloud.protocol
+
+// Acumula bytes e extrai frames delimitados por \n.
+//
+// Conn.receive() devolve "o que chegou", sem respeitar fronteiras de frame.
+// O LineCodec guarda o resto parcial entre chamadas, de modo que um frame
+// partido em dois receives e remontado corretamente.
+
+class LineCodec {
+    String pending
+
+    constructor() {
+        this.pending = ""
+    }
+
+    void feed(Byte[] chunk) {
+        this.pending = this.pending + bytesToString(chunk)
+    }
+
+    // Proximo frame completo, ou "" quando ainda nao ha um.
+    // Um frame valido nunca e vazio (todo frame e um objeto JSON), entao ""
+    // significa "sem linha completa".
+    String nextLine() {
+        var index = this.pending.indexOf("\n")
+        if (index < 0) {
+            return ""
+        }
+        var line = this.pending.substring(0, index)
+        this.pending = this.pending.substring(index + 1)
+        return line
+    }
+
+    Bool hasLine() {
+        return this.pending.indexOf("\n") >= 0
+    }
+
+    String remainder() {
+        return this.pending
+    }
+}

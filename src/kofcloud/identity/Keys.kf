@@ -1,0 +1,32 @@
+package kofcloud.identity
+
+// Identidade criptografica do dispositivo.
+//
+// O par X25519 e gerado localmente; a privada nunca sai da maquina. O Edge
+// e o Agent usam ECDH efemero + HKDF para derivar a chave de sessao do tunel.
+
+record KeyPair(String privateKey, String publicKey)
+
+KeyPair generateKeyPair() {
+    var priv = keyExchange.privateKey()
+    return KeyPair(priv.reveal(), keyExchange.publicKey(priv))
+}
+
+// HKDF-SHA256 sobre o segredo compartilhado. `salt` e `info` chegam como
+// texto e sao hex-encoded aqui (a API do Kof espera hex nos dois).
+String deriveSessionKey(String myPrivateHex, String peerPublicHex, String salt, String info) {
+    var shared = keyExchange.shared(secrets.of(myPrivateHex), secrets.of(peerPublicHex))
+    return keyExchange.hkdfSha256(shared, encoding.hexEncode(salt), encoding.hexEncode(info), 32)
+}
+
+String tunnelInfo() {
+    return "kofcloud-tunnel-v1"
+}
+
+String encryptPayload(String plain, String sessionKeyHex) {
+    return crypto.encryptAesGcm(plain, sessionKeyHex)
+}
+
+String decryptPayload(String cipher, String sessionKeyHex) {
+    return crypto.decryptAesGcm(cipher, sessionKeyHex)
+}

@@ -1,0 +1,37 @@
+package kofcloud.edge
+
+import kofcloud.protocol.Bytes
+import kofcloud.protocol.Payload
+import kofcloud.protocol.Session
+import kofcloud.protocol.Tunnel
+
+// Relay de uma requisicao publica por um stream do tunel.
+//
+// O Edge abre um stream, envia OPEN + DATA(req) + END, e acumula os DATA de
+// volta ate END. A resposta e devolvida como bytes.
+
+Byte[] relayThroughTunnel(TunnelSession session, String serviceName, Byte[] requestBytes, Int maxBytes) {
+    var streamId = session.openStream()
+    session.send(openFrame(streamId, serviceName))
+    session.send(dataFrame(streamId, encodePayload(requestBytes, session.sessionKey)))
+    session.send(endFrame(streamId))
+
+    var acc = bytesEmpty()
+    var open = true
+    while (open) {
+        var item = session.nextFromStream(streamId)
+        if (item == streamEndMarker()) {
+            open = false
+        } else if (item == streamResetMarker()) {
+            session.closeStream(streamId)
+            throw "stream reset by agent"
+        } else {
+            acc = bytesConcat(acc, decodePayload(item, session.sessionKey))
+            if (acc.length > maxBytes) {
+                open = false
+            }
+        }
+    }
+    session.closeStream(streamId)
+    return acc
+}

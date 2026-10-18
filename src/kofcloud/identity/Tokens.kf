@@ -1,0 +1,26 @@
+package kofcloud.identity
+
+// Tokens opacos. O valor e devolvido uma unica vez ao cliente; o control plane
+// guarda apenas o hash SHA-256.
+//
+// Comparacao sempre por security.constantTimeEquals — nunca `==` — para nao
+// vazar informacao por tempo.
+
+String newAccountToken() {
+    return "kfc_" + crypto.randomHex(32)
+}
+
+String newTunnelToken() {
+    return "kft_" + crypto.randomHex(32)
+}
+
+String tokenHash(String token) {
+    return crypto.sha256(token)
+}
+
+Bool tokenMatches(String expectedHash, String providedToken) {
+    if (expectedHash.length == 0) {
+        return false
+    }
+    return security.constantTimeEquals(expectedHash, tokenHash(providedToken))
+}

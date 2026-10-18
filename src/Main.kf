@@ -1,0 +1,18 @@
+import kofcloud.cli.Cli
+
+// Entrada do KofCloud.
+//
+//   kof cloud <comando> ...     operacao normal (login, connect, publish…)
+//   kof run Main.kf <comando>   forma direta
+//
+// O prefixo opcional `cloud` e aceito para casar com a interface pedida:
+// `kof cloud login`, `kof cloud connect`, `kof cloud publish site --port 8080`.
+
+main(args: List<String>) {
+    var argv = args
+    if (argv.size > 0 && argv.get(0) == "cloud") {
+        argv = argv.subList(1, argv.size)
+    }
+    var code = runCli(argv)
+    process.exit(code)
+}

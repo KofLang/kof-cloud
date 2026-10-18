@@ -1,0 +1,11 @@
+[project]
+name = "kof-cloud"
+
+[backend]
+target = "jvm"
+
+# #708 (D-CLI-SOURCE-ROOTS): raizes separadas de app e teste. A raiz de teste
+# resolve `import kofcloud.*` contra a raiz de app, sem copias.
+[sources]
+app = "src"
+test = "tests"

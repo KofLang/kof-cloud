@@ -1,0 +1,35 @@
+package kofcloud.agent
+
+// Backoff exponencial com jitter, para reconexao do tunel.
+//   delay = min(base * 2^attempt, max) com jitter de +-20%.
+// Evita loop agressivo de reconexao (docs/09-flows.md §5).
+
+Int backoffDelay(Int attempt, Int base, Int maxDelay) {
+    var delay = base
+    var i = 0
+    while (i < attempt && delay < maxDelay) {
+        delay = delay * 2
+        i = i + 1
+    }
+    if (delay > maxDelay) {
+        delay = maxDelay
+    }
+    var spread = delay / 5
+    if (spread < 1) {
+        spread = 1
+    }
+    var jitter = security.randomInt(spread * 2 + 1) - spread
+    var result = delay + jitter
+    if (result < 0) {
+        result = 0
+    }
+    return result
+}
+
+Int defaultBackoffBase() {
+    return 500
+}
+
+Int defaultBackoffMax() {
+    return 30000
+}

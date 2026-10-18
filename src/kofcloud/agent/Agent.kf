@@ -1,0 +1,264 @@
+package kofcloud.agent
+
+import kofcloud.agent.Backoff
+import kofcloud.agent.Health
+import kofcloud.agent.Relay
+import kofcloud.identity.Keys
+import kofcloud.model.Service
+import kofcloud.protocol.Bytes
+import kofcloud.protocol.Frame
+import kofcloud.protocol.LineCodec
+import kofcloud.protocol.Session
+import kofcloud.protocol.Tunnel
+import kofcloud.protocol.Version
+import kofcloud.util.Hosts
+import kofcloud.util.Text
+
+// Agent: mantem o tunel reverso com o Edge, faz health check e relay dos
+// servicos publicados. O processo roda enquanto a maquina estiver disponivel.
+//
+// O Conn do tunel nunca e campo de classe (L1): vive como parametro e
+// captura de closure nas tasks filhas.
+
+record AgentConfig(String controlUrl, String deviceId, String accountId, String token, String privateKey, String stopFile, String edgeHost, Int edgePort, Int healthMs)
+
+record EdgeEndpoint(String host, Int port, Int heartbeatMs, List<Service> services)
+
+// Pede ao control plane o ponto de entrada do Edge e os servicos efetivos.
+// `edgeHost`/`edgePort` na config sobrescrevem o retorno do control plane
+// (usado pelos testes para rodar em portas arbitrarias).
+EdgeEndpoint fetchEdge(AgentConfig config) {
+    var body = mapOf()
+    body.put("deviceId", config.deviceId)
+    var headers = "Content-Type: application/json\nX-KofCloud-Token: " + config.token
+    var raw = requireOk(http.post(config.controlUrl + "/v1/connect", json.encode(body), headers))
+    var map = json.decode<Map<String, String>>(raw)
+    var services = json.decode<List<Service>>(mapField(map, "services"))
+    var host = mapField(map, "edgeHost")
+    var port = parseIntSafe(mapField(map, "edgePort"), 7000)
+    if (config.edgeHost.length > 0) {
+        host = config.edgeHost
+    }
+    if (config.edgePort > 0) {
+        port = config.edgePort
+    }
+    return EdgeEndpoint(
+        host,
+        port,
+        parseIntSafe(mapField(map, "heartbeatMs"), 15000),
+        services
+    )
+}
+
+// Loop de conexao com backoff. `once` = uma tentativa (usado em testes);
+// senao reconecta indefinidamente, exceto em recusa definitiva.
+void runAgent(AgentConfig config, Bool once) {
+    var attempt = 0
+    var running = true
+    while (running) {
+        try {
+            connectAndServe(config)
+            running = false
+        } catch (String e) {
+            if (isFatal(e) || once) {
+                log.error("agent: " + e)
+                running = false
+            } else {
+                var delay = backoffDelay(attempt, defaultBackoffBase(), defaultBackoffMax())
+                log.warn("agent: " + e + " — reconnecting in " + intToString(delay) + "ms")
+                time.sleep(delay)
+                attempt = attempt + 1
+            }
+        }
+    }
+}
+
+// Recusa definitiva: nao adianta reconectar.
+Bool isFatal(String reason) {
+    return reason == "DEVICE_REVOKED" || reason == "AUTH_FAILED" || reason == "DEVICE_UNKNOWN" || reason == "VERSION_UNSUPPORTED"
+}
+
+void connectAndServe(AgentConfig config) {
+    var endpoint = fetchEdge(config)
+    log.info("agent: edge " + endpoint.host + ":" + intToString(endpoint.port) + " with " + intToString(endpoint.services.size) + " service(s)")
+
+    var conn = net.connect(endpoint.host, endpoint.port)
+    var pair = generateKeyPair()
+
+    var servicesByName = mapOf()
+    for (var service in endpoint.services) {
+        servicesByName.put(service.name, service)
+    }
+
+    var session = TunnelSession("agent", config.deviceId, config.accountId, "")
+    conn.send(bytesFromString(encodeFrame(helloFrame(config.deviceId, config.token, pair.publicKey))))
+
+    var codec = LineCodec()
+    var welcomeLine = ""
+    while (welcomeLine == "") {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            conn.close()
+            throw "edge closed during handshake"
+        }
+        codec.feed(chunk)
+        welcomeLine = codec.nextLine()
+    }
+    var welcome = decodeFrame(welcomeLine)
+    if (frameBool(welcome, "ok") == false) {
+        var reason = frameField(welcome, "reason")
+        conn.close()
+        throw reason
+    }
+    var serverPub = frameField(welcome, "serverPub")
+    if (serverPub.length > 0) {
+        session.sessionKey = deriveSessionKey(pair.privateKey, serverPub, frameField(welcome, "sessionId"), tunnelInfo())
+    }
+    var heartbeatMs = frameInt(welcome, "heartbeatMs")
+    if (heartbeatMs <= 0) {
+        heartbeatMs = 15000
+    }
+
+    var writer = spawn { agentWriter(conn, session) }
+    var pinger = spawn { agentPinger(session, heartbeatMs) }
+    var watchdog = spawn { agentWatchdog(session, config.stopFile) }
+    var healthMs = config.healthMs
+    if (healthMs <= 0) {
+        healthMs = 5000
+    }
+    var health = spawn { agentHealth(session, endpoint.services, healthMs) }
+
+    reportAllStatuses(session, endpoint.services)
+
+    var open = true
+    while (open) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            open = false
+        } else {
+            codec.feed(chunk)
+            while (codec.hasLine()) {
+                var line = codec.nextLine()
+                if (line.length > 0) {
+                    open = handleAgentFrame(session, servicesByName, line)
+                }
+            }
+        }
+    }
+
+    session.close()
+    conn.close()
+    log.warn("agent: tunnel closed")
+}
+
+Bool handleAgentFrame(TunnelSession session, Map<String, Service> servicesByName, String line) {
+    var frame = decodeFrame(line)
+    var kind = frameKind(frame)
+    if (kind == "PING") {
+        session.send(pongFrame())
+        return true
+    }
+    if (kind == "OPEN") {
+        var streamId = frameField(frame, "s")
+        var name = frameField(frame, "service")
+        var service = servicesByName.get(name)
+        if (service == null) {
+            session.send(openedFrame(streamId, false, "SERVICE_UNKNOWN"))
+        } else {
+            session.registerStream(streamId)
+            var task = spawn { agentStream(session, service, streamId) }
+            session.send(openedFrame(streamId, true, ""))
+        }
+        return true
+    }
+    if (kind == "DATA") {
+        session.deliver(frameField(frame, "s"), frameField(frame, "d"))
+        return true
+    }
+    if (kind == "END") {
+        session.deliver(frameField(frame, "s"), streamEndMarker())
+        return true
+    }
+    if (kind == "RESET") {
+        session.deliver(frameField(frame, "s"), streamResetMarker())
+        return true
+    }
+    if (kind == "GOAWAY") {
+        return false
+    }
+    // PONG, SERVICES e desconhecidos: ignorados.
+    return true
+}
+
+void agentWriter(Conn conn, TunnelSession session) {
+    var open = true
+    while (open) {
+        var item = session.outbox.receive()
+        if (item == streamCloseMarker()) {
+            open = false
+        } else {
+            conn.send(bytesFromString(item))
+        }
+    }
+    conn.close()
+}
+
+void agentPinger(TunnelSession session, Int heartbeatMs) {
+    var open = true
+    while (open) {
+        time.sleep(heartbeatMs)
+        if (session.open == false) {
+            open = false
+        } else {
+            session.send(pingFrame())
+        }
+    }
+}
+
+// Parada pedida por `kof cloud disconnect` (arquivo-sentinela). O Kof nao
+// expoe sinais nem watch de arquivo (docs/17-limitations.md L3), entao a
+// parada e por polling curto — deterministica e independente do heartbeat.
+void agentWatchdog(TunnelSession session, String stopFile) {
+    if (stopFile.length == 0) {
+        return
+    }
+    var open = true
+    while (open) {
+        time.sleep(250)
+        if (session.open == false) {
+            open = false
+        } else if (File(stopFile).exists()) {
+            session.close()
+            open = false
+        }
+    }
+}
+
+// Reavalia o health dos servicos periodicamente e reporta SO quando o estado
+// muda. Sem isso, um servico que cai depois da conexao continuaria marcado
+// ONLINE no Edge (docs/09-flows.md §6).
+void agentHealth(TunnelSession session, List<Service> services, Int healthMs) {
+    var last = mapOf()
+    var open = true
+    while (open) {
+        time.sleep(healthMs)
+        if (session.open == false) {
+            open = false
+        } else {
+            for (var service in services) {
+                var status = checkService(service)
+                var previous = last.get(service.name)
+                var changed = false
+                if (previous == null) {
+                    changed = true
+                } else {
+                    changed = previous != status
+                }
+                if (changed) {
+                    last.put(service.name, status)
+                    session.send(statusFrame(service.name, status))
+                }
+            }
+        }
+    }
+}

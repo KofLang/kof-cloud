@@ -1,0 +1,37 @@
+package kofcloud.protocol
+
+import kofcloud.util.Text
+
+// Um frame e um Map<String,String>: todo valor viaja como string no JSON.
+// Isso mantem o decode previsivel (json.decode<Map<String,String>> nao exige
+// campos ausentes, ao contrario de record — JSN004).
+
+Map<String, String> newFrame(String kind) {
+    var frame = mapOf()
+    frame.put("t", kind)
+    return frame
+}
+
+String frameKind(Map<String, String> frame) {
+    return mapField(frame, "t")
+}
+
+String frameField(Map<String, String> frame, String key) {
+    return mapField(frame, key)
+}
+
+Int frameInt(Map<String, String> frame, String key) {
+    return parseIntSafe(mapField(frame, key), 0)
+}
+
+Bool frameBool(Map<String, String> frame, String key) {
+    return mapField(frame, key) == "true"
+}
+
+String encodeFrame(Map<String, String> frame) {
+    return json.encode(frame) + frameTerminator()
+}
+
+Map<String, String> decodeFrame(String line) {
+    return json.decode<Map<String, String>>(line)
+}

@@ -1,0 +1,4 @@
+package kofcloud.model
+
+// Conta: dona do namespace de subdominios. `handle` vira rotulo DNS.
+record Account(String id, String handle, String email, String passwordHash, Long createdAt)

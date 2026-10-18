@@ -1,0 +1,198 @@
+package kofcloud.edge
+
+import kofcloud.protocol.Bytes
+import kofcloud.util.Text
+
+// Parsing/serializacao minima de HTTP/1.1. O Edge precisa repassar bytes com
+// controle fino (reescrever Connection, saber quando a requisicao/resposta
+// terminou) — coisa que web.app() nao expoe. Ver docs/10-edge.md.
+
+record HttpRequest(String method, String path, String version, List<String> headers, Byte[] body)
+
+record HttpResponse(Int status, List<String> headers, Byte[] body)
+
+String headerValue(List<String> headers, String name) {
+    var needle = name.toLowerCase() + ":"
+    for (var line in headers) {
+        var lower = line.toLowerCase()
+        if (lower.startsWith(needle)) {
+            return line.substring(needle.length).trim()
+        }
+    }
+    return ""
+}
+
+Int contentLengthOf(List<String> headers) {
+    var value = headerValue(headers, "content-length")
+    return parseIntSafe(value, 0)
+}
+
+// Le a requisicao inteira: headers ate \r\n\r\n + corpo por Content-Length.
+Byte[] readRequestBytes(Conn conn, Int maxBytes) {
+    var acc = bytesEmpty()
+    var headEnd = -1
+    while (headEnd < 0) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            return acc
+        }
+        acc = bytesConcat(acc, chunk)
+        headEnd = bytesIndexOf(acc, "\r\n\r\n", 0)
+        if (acc.length > maxBytes) {
+            return acc
+        }
+    }
+    var head = bytesToString(bytesSlice(acc, 0, headEnd))
+    var headers = splitLines(head)
+    var total = headEnd + 4 + contentLengthOf(headers)
+    while (acc.length < total) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            break
+        }
+        acc = bytesConcat(acc, chunk)
+    }
+    return acc
+}
+
+List<String> splitLines(String text) {
+    var out = listOf<String>()
+    var current = ""
+    for (var i = 0; i < text.length; i++) {
+        var c = text.charAt(i) as Int
+        if (c == 10) {
+            if (current.endsWith("\r")) {
+                current = current.substring(0, current.length - 1)
+            }
+            out.add(current)
+            current = ""
+        } else {
+            current = current + (c as Char)
+        }
+    }
+    if (current.length > 0) {
+        out.add(current)
+    }
+    return out
+}
+
+HttpRequest parseRequest(Byte[] raw) {
+    var headEnd = bytesIndexOf(raw, "\r\n\r\n", 0)
+    var head = ""
+    var body = bytesEmpty()
+    if (headEnd < 0) {
+        head = bytesToString(raw)
+    } else {
+        head = bytesToString(bytesSlice(raw, 0, headEnd))
+        body = bytesSlice(raw, headEnd + 4, raw.length)
+    }
+    var lines = splitLines(head)
+    var method = ""
+    var path = "/"
+    var version = "HTTP/1.1"
+    if (lines.size > 0) {
+        var requestLine = lines.get(0)
+        var parts = requestLine.split(" ")
+        if (parts.length >= 3) {
+            method = parts[0]
+            path = parts[1]
+            version = parts[2]
+        }
+    }
+    var headers = listOf<String>()
+    var i = 1
+    while (i < lines.size) {
+        headers.add(lines.get(i))
+        i = i + 1
+    }
+    return HttpRequest(method, path, version, headers, body)
+}
+
+// Reconstroi a requisicao para o servico local, forçando Connection: close
+// (determinismo: o servico fecha ao terminar, e o Agent le ate EOF) e
+// anexando X-Forwarded-For.
+Byte[] serializeRequest(HttpRequest request, String clientIp) {
+    var out = request.method + " " + request.path + " " + request.version + "\r\n"
+    for (var line in request.headers) {
+        var lower = line.toLowerCase()
+        if (lower.startsWith("connection:") || lower.startsWith("proxy-connection:") || lower.startsWith("x-forwarded-for:")) {
+            // reescrito abaixo
+        } else {
+            out = out + line + "\r\n"
+        }
+    }
+    out = out + "Connection: close\r\n"
+    out = out + "X-Forwarded-For: " + clientIp + "\r\n"
+    out = out + "\r\n"
+    return bytesConcat(bytesFromString(out), request.body)
+}
+
+HttpResponse parseResponse(Byte[] raw) {
+    var headEnd = bytesIndexOf(raw, "\r\n\r\n", 0)
+    var head = ""
+    var body = bytesEmpty()
+    if (headEnd < 0) {
+        head = bytesToString(raw)
+    } else {
+        head = bytesToString(bytesSlice(raw, 0, headEnd))
+        body = bytesSlice(raw, headEnd + 4, raw.length)
+    }
+    var lines = splitLines(head)
+    var status = 502
+    if (lines.size > 0) {
+        var parts = lines.get(0).split(" ")
+        if (parts.length >= 2) {
+            status = parseIntSafe(parts[1], 502)
+        }
+    }
+    var headers = listOf<String>()
+    var i = 1
+    while (i < lines.size) {
+        headers.add(lines.get(i))
+        i = i + 1
+    }
+    return HttpResponse(status, headers, body)
+}
+
+Byte[] errorResponse(Int status, String message) {
+    var reason = statusReason(status)
+    var body = message + "\n"
+    var out = "HTTP/1.1 " + intToString(status) + " " + reason + "\r\n"
+    out = out + "Content-Type: text/plain; charset=utf-8\r\n"
+    out = out + "Content-Length: " + intToString(body.length) + "\r\n"
+    out = out + "Connection: close\r\n"
+    out = out + "\r\n"
+    out = out + body
+    return bytesFromString(out)
+}
+
+String statusReason(Int status) {
+    if (status == 400) {
+        return "Bad Request"
+    }
+    if (status == 401) {
+        return "Unauthorized"
+    }
+    if (status == 404) {
+        return "Not Found"
+    }
+    if (status == 413) {
+        return "Payload Too Large"
+    }
+    if (status == 429) {
+        return "Too Many Requests"
+    }
+    if (status == 431) {
+        return "Request Header Fields Too Large"
+    }
+    if (status == 502) {
+        return "Bad Gateway"
+    }
+    if (status == 503) {
+        return "Service Unavailable"
+    }
+    if (status == 504) {
+        return "Gateway Timeout"
+    }
+    return "Error"
+}

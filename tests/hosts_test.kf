@@ -1,0 +1,55 @@
+
+import kofcloud.model.Exposure
+import kofcloud.model.Service
+import kofcloud.util.Hosts
+import kofcloud.util.Text
+
+test "hostname: monta e valida" {
+    assert(serviceHostname("site", "mel") == "site.mel.kofcloud.io", "hostname")
+    assert(accountZone("mel") == "mel.kofcloud.io", "zona")
+}
+
+test "handle: aceita apenas rotulo DNS valido" {
+    assert(validHandle("mel") == true, "valido")
+    assert(validHandle("ab") == false, "curto demais")
+    assert(validHandle("Mel") == false, "maiuscula")
+    assert(validHandle("-mel") == false, "hifen no inicio")
+    assert(validHandle("mel-") == false, "hifen no fim")
+    assert(validHandle("me l") == false, "espaco")
+    assert(validHandle("mel_1") == false, "underscore")
+}
+
+test "host only: remove a porta" {
+    assert(hostOnly("site.mel.kofcloud.io:8080") == "site.mel.kofcloud.io", "com porta")
+    assert(hostOnly("site.mel.kofcloud.io") == "site.mel.kofcloud.io", "sem porta")
+}
+
+test "host: extrai o servico do hostname da conta" {
+    assert(serviceFromHost("site.mel.kofcloud.io", "mel") == "site", "servico")
+    assert(serviceFromHost("api.mel.kofcloud.io", "mel") == "api", "api")
+    assert(serviceFromHost("mel.kofcloud.io", "mel") == "", "sem servico")
+    assert(serviceFromHost("site.outra.kofcloud.io", "mel") == "", "outra conta")
+    assert(serviceFromHost("a.b.mel.kofcloud.io", "mel") == "", "dois rotulos")
+}
+
+test "exposicao: PRIVATE nao e roteavel" {
+    assert(exposureIsRoutable(Exposure.PUBLIC) == true, "public")
+    assert(exposureIsRoutable(Exposure.AUTHENTICATED) == true, "authenticated")
+    assert(exposureIsRoutable(Exposure.PRIVATE) == false, "private")
+    assert(exposureName(exposureFrom("PRIVATE")) == "PRIVATE", "round trip")
+    assert(exposureName(exposureFrom("qualquer")) == "PUBLIC", "default public")
+}
+
+test "status: OFFLINE nao roteia, ONLINE e UNKNOWN roteiam" {
+    assert(statusIsRoutable("ONLINE") == true, "online")
+    assert(statusIsRoutable("UNKNOWN") == true, "unknown ainda tenta")
+    assert(statusIsRoutable("DEGRADED") == true, "degraded")
+    assert(statusIsRoutable("OFFLINE") == false, "offline")
+}
+
+test "text: parseIntSafe aceita digito e recusa lixo" {
+    assert(parseIntSafe("8080", 0) == 8080, "numero")
+    assert(parseIntSafe("", 7) == 7, "vazio usa default")
+    assert(parseIntSafe("80a", 7) == 7, "lixo usa default")
+    assert(parseIntSafe("-5", 0) == -5, "negativo")
+}

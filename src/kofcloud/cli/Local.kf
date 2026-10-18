@@ -1,0 +1,99 @@
+package kofcloud.cli
+
+import kofcloud.util.Text
+import kofcloud.store.Store
+
+// Estado local do Agent: identidade do dispositivo e sessao da conta.
+// A chave privada fica apenas aqui (nunca vai ao control plane nem ao Edge).
+
+record LocalIdentity(String deviceId, String accountId, String handle, String deviceName, String privateKey, String publicKey)
+
+record LocalSession(String accountId, String handle, String token, String controlUrl)
+
+String kofcloudHome() {
+    var home = config.env("HOME")
+    if (home == null) {
+        return ".kofcloud"
+    }
+    if (home.length == 0) {
+        return ".kofcloud"
+    }
+    return home + "/.kofcloud"
+}
+
+String identityPath() {
+    return kofcloudHome() + "/identity.json"
+}
+
+String sessionPath() {
+    return kofcloudHome() + "/session.json"
+}
+
+String servicesPath() {
+    return kofcloudHome() + "/services.json"
+}
+
+// O Kof nao expoe sinais nem watch de arquivo (docs/17-limitations.md L3).
+// `disconnect` escreve este arquivo e o agente o observa por polling no
+// heartbeat — o mecanismo honesto disponivel para pedir parada.
+String stopPath() {
+    return kofcloudHome() + "/stop"
+}
+
+String defaultControlUrl() {
+    return config.str("kofcloud.controlUrl", "http://127.0.0.1:8080")
+}
+
+LocalIdentity? loadIdentity() {
+    var raw = readTextOr(identityPath(), "")
+    if (raw.length == 0) {
+        return null
+    }
+    try {
+        return json.decode<LocalIdentity>(raw)
+    } catch (String e) {
+        return null
+    }
+}
+
+LocalSession? loadSession() {
+    var raw = readTextOr(sessionPath(), "")
+    if (raw.length == 0) {
+        return null
+    }
+    try {
+        return json.decode<LocalSession>(raw)
+    } catch (String e) {
+        return null
+    }
+}
+
+void saveIdentity(LocalIdentity identity) {
+    writeTextTo(identityPath(), json.encode(identity))
+}
+
+void saveSession(LocalSession session) {
+    writeTextTo(sessionPath(), json.encode(session))
+}
+
+Bool loggedIn() {
+    return loadIdentity() != null && loadSession() != null
+}
+
+// O control plane roda sobre `web.app()`, e o runtime do Kof reserva o header
+// `Authorization` para Bearer JWT: qualquer Authorization presente e validado
+// como JWT e devolve 401 ANTES do handler, mesmo para um token opaco valido
+// (medido em JvmRuntimeWebDispatch). Por isso o control plane usa um header
+// proprio. O Edge publico, que tem parser proprio, aceita `Authorization:
+// Bearer` normalmente para servicos AUTHENTICATED.
+String tokenHeader() {
+    return "X-KofCloud-Token";
+}
+
+String authHeader(String token) {
+    return tokenHeader() + ": " + token
+}
+
+String jsonHeader(String token) {
+    return "Content-Type: application/json\n" + authHeader(token)
+}

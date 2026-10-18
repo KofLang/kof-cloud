@@ -1,0 +1,110 @@
+
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.store.Store
+import testkit.Support
+
+// E2E: conta -> device -> connect -> publish -> HTTP publico -> tunel ->
+// localhost -> resposta. Portas dedicadas 19080-19083.
+
+test "e2e: publicar um servico local e alcancar pela borda" {
+    var controlPort = 19081
+    var tunnelPort = 19082
+    var httpPort = 19083
+    var localPort = 19080
+
+    // 1. servico local do usuario (a "aplicacao" que sera publicada)
+    var app = web.app()
+    app.get("/") {
+        return "hello from localhost"
+    }
+    app.get("/echo") {
+        return "method=" + method()
+    }
+    var localServer = spawn { app.listen(localPort) }
+    assert(waitForPort(localPort, 60), "servico local no ar")
+
+    // 2. plataforma: control plane + edge, compartilhando um Registry
+    var registry = Registry("/tmp/kofcloud-e2e-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var edgeStop = "/tmp/kofcloud-e2e-edge-stop-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http publico no ar")
+
+    // 3. conta + dispositivo
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"mel@example.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var token = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+
+    // 4. publica o servico
+    var publishBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localPort) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    var published = httpPostJson(controlPort, "/v1/services", publishBody, token)
+    assert(statusOf(published) == 200, "servico publicado")
+
+    // 5. host desconhecido antes de conectar: 404
+    var beforeConnect = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
+    assert(statusOf(beforeConnect) == 503, "servico publicado mas sem tunel -> 503")
+    var unknownHost = httpGetRaw(httpPort, "/", "naoexiste.mel.kofcloud.io")
+    assert(statusOf(unknownHost) == 404, "host desconhecido -> 404")
+
+    // 6. agent conecta e serve
+    var stopFile = "/tmp/kofcloud-e2e-stop-" + crypto.randomHex(4) + ".txt"
+    File(stopFile).delete()
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, token, "", stopFile, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+
+    // 7. requisicao publica atravessa o tunel ate localhost
+    var response = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
+    assert(statusOf(response) == 200, "200 pela borda")
+    assert(bodyOf(response) == "hello from localhost", "corpo veio do servico local")
+
+
+    // 9. segunda requisicao no mesmo tunel (multiplexacao por requisicao)
+    var second = httpGetRaw(httpPort, "/echo", "site.mel.kofcloud.io")
+    assert(statusOf(second) == 200, "200 na segunda")
+    assert(bodyOf(second) == "method=GET", "rota /echo")
+
+    // encerra o servico local: o Agent deve reportar OFFLINE e a borda 503
+    app.close()
+    time.sleep(300)
+    var offline = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
+    assert(statusOf(offline) == 503, "servico local fora -> 503")
+
+    // Encerra o agente de forma limpa: o watchdog ve o arquivo-sentinela,
+    // fecha a sessao e todas as tasks do Agent terminam — o runner retorna
+    // sozinho, sem timeout.
+    writeTextTo(stopFile, "stop")
+    time.sleep(1500)
+    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+
+    // Encerra os listeners do Edge (accept bloqueado so cede ao close).
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(stopFile).delete()
+    File(edgeStop).delete()
+}

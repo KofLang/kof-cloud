@@ -1,0 +1,24 @@
+package kofcloud.protocol
+
+import kofcloud.identity.Keys
+
+// Codificacao do campo `d` de um frame DATA.
+//
+// Sem chave de sessao: base64 puro (byte-preserving).
+// Com chave de sessao: AES-GCM sobre a representacao em String do payload.
+// O String round-trips identicamente (UTF-8 ida e volta), entao bytesToString
+// apos o decrypt recupera os bytes originais.
+
+String encodePayload(Byte[] payload, String sessionKeyHex) {
+    if (sessionKeyHex.length == 0) {
+        return bytesToBase64(payload)
+    }
+    return encryptPayload(bytesToString(payload), sessionKeyHex)
+}
+
+Byte[] decodePayload(String encoded, String sessionKeyHex) {
+    if (sessionKeyHex.length == 0) {
+        return bytesFromBase64(encoded)
+    }
+    return bytesFromString(decryptPayload(encoded, sessionKeyHex))
+}

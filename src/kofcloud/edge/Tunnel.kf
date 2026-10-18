@@ -1,0 +1,182 @@
+package kofcloud.edge
+
+import kofcloud.control.Registry
+import kofcloud.control.ControlPlane
+import kofcloud.identity.Keys
+import kofcloud.protocol.Bytes
+import kofcloud.protocol.Frame
+import kofcloud.protocol.LineCodec
+import kofcloud.protocol.Session
+import kofcloud.protocol.Tunnel
+import kofcloud.protocol.Version
+import kofcloud.util.Text
+
+// Listener de tuneis: aceita Agents. Cada conexao vira uma TunnelSession.
+//
+// O Conn nunca e guardado numa classe (L1): vive como parametro de funcao e
+// captura de closure; o estado compartilhado fica na TunnelSession.
+
+// O accept bloqueia; a unica forma de interromper e fechar o Listener. Com um
+// arquivo-sentinela, um watcher fecha o listener e o accept lanca, encerrando
+// o loop — parada limpa, sem depender de sinais (Kof nao os expoe).
+void serveTunnel(EdgeState state, Int port, String tunnelSecret, String stopFile) {
+    var listener = net.listen(port)
+    if (stopFile.length > 0) {
+        var watcher = spawn { listenerWatcher(listener, stopFile) }
+    }
+    var open = true
+    while (open) {
+        try {
+            var conn = listener.accept()
+            var worker = spawn { handleTunnelConnection(state, conn, tunnelSecret) }
+        } catch (String e) {
+            open = false
+        }
+    }
+}
+
+void listenerWatcher(Listener listener, String stopFile) {
+    var open = true
+    while (open) {
+        time.sleep(100)
+        if (File(stopFile).exists()) {
+            listener.close()
+            open = false
+        }
+    }
+}
+
+void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
+    var codec = LineCodec()
+    var helloLine = ""
+    var alive = true
+    while (helloLine == "" && alive) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            alive = false
+        } else {
+            codec.feed(chunk)
+            helloLine = codec.nextLine()
+        }
+    }
+    if (alive == false) {
+        conn.close()
+        return
+    }
+
+    var hello = decodeFrame(helloLine)
+    var deviceId = frameField(hello, "deviceId")
+    var token = frameField(hello, "token")
+    var clientPub = frameField(hello, "clientPub")
+
+    if (frameInt(hello, "v") != protocolVersion()) {
+        refuseTunnel(conn, "VERSION_UNSUPPORTED")
+        return
+    }
+    var device = state.registry.deviceById(deviceId)
+    if (device == null) {
+        refuseTunnel(conn, "DEVICE_UNKNOWN")
+        return
+    }
+    if (device.status != "ACTIVE") {
+        refuseTunnel(conn, "DEVICE_REVOKED")
+        return
+    }
+    var account = state.registry.accountByToken(token)
+    if (account == null) {
+        refuseTunnel(conn, "AUTH_FAILED")
+        return
+    }
+    if (account.id != device.accountId) {
+        refuseTunnel(conn, "AUTH_FAILED")
+        return
+    }
+
+    var sessionId = state.newSessionId()
+    var sessionKey = ""
+    var serverPub = ""
+    if (tunnelSecret.length > 0 && clientPub.length > 0) {
+        var pair = generateKeyPair()
+        serverPub = pair.publicKey
+        sessionKey = deriveSessionKey(pair.privateKey, clientPub, sessionId, tunnelInfo())
+    }
+
+    var session = TunnelSession(sessionId, deviceId, account.id, sessionKey)
+    state.bind(deviceId, session)
+    state.registry.touchDevice(deviceId)
+
+    conn.send(bytesFromString(encodeFrame(welcomeFrame(true, "", sessionId, serverPub, 15000))))
+    session.send(servicesFrame(serviceListJson(state.registry.servicesForDevice(deviceId))))
+
+    var writer = spawn { tunnelWriter(conn, session) }
+
+    var reader = LineCodec()
+    var open = true
+    while (open) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            open = false
+        } else {
+            reader.feed(chunk)
+            while (reader.hasLine()) {
+                var line = reader.nextLine()
+                if (line.length > 0) {
+                    open = handleTunnelFrame(state, session, line)
+                }
+            }
+        }
+    }
+
+    state.unbind(deviceId, sessionId)
+    session.close()
+    conn.close()
+    await writer
+}
+
+Bool handleTunnelFrame(EdgeState state, TunnelSession session, String line) {
+    var frame = decodeFrame(line)
+    var kind = frameKind(frame)
+    if (kind == "PING") {
+        session.send(pongFrame())
+        return true
+    }
+    if (kind == "STATUS") {
+        state.registry.setServiceStatusByName(session.deviceId, frameField(frame, "service"), frameField(frame, "status"))
+        return true
+    }
+    if (kind == "DATA") {
+        session.deliver(frameField(frame, "s"), frameField(frame, "d"))
+        return true
+    }
+    if (kind == "END") {
+        session.deliver(frameField(frame, "s"), streamEndMarker())
+        return true
+    }
+    if (kind == "RESET") {
+        session.deliver(frameField(frame, "s"), streamResetMarker())
+        return true
+    }
+    if (kind == "GOAWAY") {
+        return false
+    }
+    // OPENED e desconhecidos: ignorados (forward-compat).
+    return true
+}
+
+void tunnelWriter(Conn conn, TunnelSession session) {
+    var open = true
+    while (open) {
+        var item = session.outbox.receive()
+        if (item == streamCloseMarker()) {
+            open = false
+        } else {
+            conn.send(bytesFromString(item))
+        }
+    }
+    conn.close()
+}
+
+void refuseTunnel(Conn conn, String reason) {
+    conn.send(bytesFromString(encodeFrame(welcomeFrame(false, reason, "", "", 0))))
+    conn.close()
+}

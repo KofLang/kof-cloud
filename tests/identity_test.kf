@@ -1,0 +1,61 @@
+
+import kofcloud.identity.Keys
+import kofcloud.identity.Tokens
+import kofcloud.protocol.Bytes
+import kofcloud.protocol.Payload
+
+test "identidade: par X25519 tem chave publica exportavel" {
+    var pair = generateKeyPair()
+    assert(pair.publicKey.length > 0, "publica presente")
+    assert(pair.privateKey.length > 0, "privada presente")
+    assert(pair.privateKey != pair.publicKey, "par distinto")
+}
+
+test "identidade: os dois lados derivam a mesma chave de sessao" {
+    var a = generateKeyPair()
+    var b = generateKeyPair()
+    var keyA = deriveSessionKey(a.privateKey, b.publicKey, "sess-1", tunnelInfo())
+    var keyB = deriveSessionKey(b.privateKey, a.publicKey, "sess-1", tunnelInfo())
+    assert(keyA == keyB, "ECDH + HKDF simetrico")
+    assert(keyA.length == 64, "32 bytes em hex")
+}
+
+test "identidade: salt diferente produz chave diferente" {
+    var a = generateKeyPair()
+    var b = generateKeyPair()
+    var k1 = deriveSessionKey(a.privateKey, b.publicKey, "sess-1", tunnelInfo())
+    var k2 = deriveSessionKey(a.privateKey, b.publicKey, "sess-2", tunnelInfo())
+    assert(k1 != k2, "salt participa da derivacao")
+}
+
+test "payload: cifrado com a chave de sessao e decifrado do outro lado" {
+    var a = generateKeyPair()
+    var b = generateKeyPair()
+    var keyA = deriveSessionKey(a.privateKey, b.publicKey, "s", tunnelInfo())
+    var keyB = deriveSessionKey(b.privateKey, a.publicKey, "s", tunnelInfo())
+    var original = bytesFromString("GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+    var wire = encodePayload(original, keyA)
+    assert(wire != bytesToBase64(original), "nao viaja em claro")
+    var recovered = decodePayload(wire, keyB)
+    assert(bytesToString(recovered) == bytesToString(original), "ida e volta")
+}
+
+test "payload: sem chave usa base64 puro" {
+    var original = bytesFromString("hello")
+    var wire = encodePayload(original, "")
+    assert(wire == bytesToBase64(original), "base64")
+    assert(bytesToString(decodePayload(wire, "")) == "hello", "volta")
+}
+
+test "tokens: comparacao e por hash, nao por igualdade de string" {
+    var token = newAccountToken()
+    assert(token.startsWith("kfc_"), "prefixo")
+    var hash = tokenHash(token)
+    assert(tokenMatches(hash, token) == true, "confere")
+    assert(tokenMatches(hash, token + "x") == false, "nao confere")
+    assert(tokenMatches("", token) == false, "hash vazio recusa")
+}
+
+test "tokens: tunnel token tem prefixo proprio" {
+    assert(newTunnelToken().startsWith("kft_"), "prefixo kft_")
+}

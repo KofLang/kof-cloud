@@ -1,0 +1,27 @@
+package kofcloud.cli
+
+// Texto de ajuda da CLI.
+
+String usageText() {
+    var out = "kof cloud — conecte sua maquina a internet\n"
+    out = out + "\n"
+    out = out + "uso: kof cloud <comando> [opcoes]\n"
+    out = out + "\n"
+    out = out + "  login <handle> --password <p> [--control <url>] [--device <nome>]\n"
+    out = out + "  logout\n"
+    out = out + "  connect\n"
+    out = out + "  disconnect\n"
+    out = out + "  status\n"
+    out = out + "  device list\n"
+    out = out + "  device revoke <deviceId>\n"
+    out = out + "  publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]\n"
+    out = out + "  unpublish <nome>\n"
+    out = out + "  service list\n"
+    out = out + "  service status <nome>\n"
+    out = out + "  domain list\n"
+    out = out + "  logs\n"
+    out = out + "\n"
+    out = out + "  serve [--control-port 8080] [--tunnel-port 7000] [--http-port 8081]\n"
+    out = out + "        sobe a plataforma (control plane + edge) localmente\n"
+    return out
+}
