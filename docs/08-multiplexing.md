@@ -56,9 +56,12 @@ writer — ver `01-architecture.md` e `12-kof-apis.md`.
 
 ## Limites
 
-| Limite | Default |
-|---|---|
-| streams simultâneos por túnel | 128 |
-| profundidade de fila por stream | 64 |
-| bytes por frame | 1 MiB |
-| idle timeout do stream | 30 s |
+| Limite | Default | Aplicado? |
+|---|---|---|
+| streams simultâneos por túnel | 128 (`kofcloud.limits.streams`) | ✅ — `openStream` recusa; o Edge devolve `429`, o Agent responde `OPENED{ok:false}` + `RESET LIMIT_EXCEEDED` |
+| profundidade de fila por stream | 64 | ⏳ |
+| bytes por frame | 1 MiB | ⏳ |
+| idle timeout do stream | 30 s | ⏳ |
+
+O limite de streams é por sessão: fechar um stream libera a vaga imediatamente
+(ver `tests/limits_test.kf`).

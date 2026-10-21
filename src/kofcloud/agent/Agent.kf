@@ -164,6 +164,9 @@ Bool handleAgentFrame(TunnelSession session, Map<String, Service> servicesByName
         var service = servicesByName.get(name)
         if (service == null) {
             session.send(openedFrame(streamId, false, "SERVICE_UNKNOWN"))
+        } else if (session.atCapacity()) {
+            session.send(openedFrame(streamId, false, "LIMIT_EXCEEDED"))
+            session.send(resetFrame(streamId, "LIMIT_EXCEEDED"))
         } else {
             session.registerStream(streamId)
             var task = spawn { agentStream(session, service, streamId) }

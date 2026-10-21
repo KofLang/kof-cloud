@@ -70,3 +70,13 @@ Host: api.mel.kofcloud.io
 
 Sem correspondência → `404`. Serviço `PRIVATE` → `404` (não revela existência).
 Serviço `OFFLINE` → `503`.
+
+## Limites por dispositivo (Fase 4)
+
+Um mesmo Agent pode servir vários serviços: cada hostname roteia para a sua
+porta local, no mesmo túnel. O control plane aplica, na publicação,
+`kofcloud.limits.services` por dispositivo (default 10) e
+`kofcloud.limits.devices` dispositivos ativos por conta (default 5); ao
+exceder, responde `429` com `{"error":"limit:services"}` /
+`{"error":"limit:devices"}`. Derrubar um serviço local não afeta os outros
+(provado em `tests/e2e_multiservice_test.kf`).

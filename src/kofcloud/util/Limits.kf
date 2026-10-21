@@ -1,0 +1,22 @@
+package kofcloud.util
+
+// Limites do KofCloud. Configuraveis por kof.config/env
+// (KOF_KOFCLOUD_LIMITS_DEVICES, KOF_KOFCLOUD_LIMITS_SERVICES,
+//  KOF_KOFCLOUD_LIMITS_STREAMS).
+//
+// Protegem as duas pontas: a infraestrutura KofCloud e a maquina do usuario.
+// O que e aplicado hoje: dispositivos ativos por conta, servicos por
+// dispositivo e streams simultaneos por tunel. Limite de conexoes por servico e
+// de tamanho de frame ainda NAO sao aplicados (docs/17-limitations.md).
+
+Int limitDevices() {
+    return config.int("kofcloud.limits.devices", 5)
+}
+
+Int limitServices() {
+    return config.int("kofcloud.limits.services", 10)
+}
+
+Int limitStreams() {
+    return config.int("kofcloud.limits.streams", 128)
+}

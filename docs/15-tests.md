@@ -23,7 +23,8 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U9 | modelo de serviço | `tests/service_test.kf` | estado de health, transições |
 | U10 | backoff | `tests/backoff_test.kf` | crescimento, teto, jitter no intervalo |
 | U11 | store | `tests/store_test.kf` | round-trip JSON em disco, arquivo ausente |
-| U12 | cifra do túnel | `tests/tunnel_crypto_test.kf` | AES-GCM com a chave derivada, payload adulterado falha |
+| U12 | cifra do túnel | `tests/identity_test.kf` | AES-GCM com a chave derivada, payload adulterado falha |
+| U13 | limites | `tests/limits_test.kf` | dispositivos ativos, serviços por dispositivo, streams por túnel, liberação de vaga |
 
 ## Integração
 
@@ -38,7 +39,8 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 
 | # | Fluxo | Arquivo | O que prova |
 |---|---|---|---|
-| E1 | ponta a ponta | `tests/e2e_publish_test.kf` | conta → device → connect → publish → HTTP → túnel → localhost → resposta |
+| E1 | ponta a ponta | `tests/e2e_test.kf` | conta → device → connect → publish → HTTP → túnel → localhost → resposta |
+| E2 | múltiplos serviços | `tests/e2e_multiservice_test.kf` | 3 hostnames no mesmo túnel, cada um na sua porta; derrubar um não afeta os outros |
 
 O E2E sobe, em processos/tasks separados: control plane, edge, um serviço local
 (`web.app()`), e o agent. Faz uma requisição HTTP real pelo Edge e confere o

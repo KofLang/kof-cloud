@@ -1,5 +1,7 @@
 package kofcloud.protocol
 
+import kofcloud.protocol.Bytes
+
 // Acumula bytes e extrai frames delimitados por \n.
 //
 // Conn.receive() devolve "o que chegou", sem respeitar fronteiras de frame.

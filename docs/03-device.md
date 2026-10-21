@@ -67,11 +67,15 @@ A conta e os demais dispositivos permanecem válidos.
 
 ## Limites
 
-| Limite | Default | Config |
-|---|---|---|
-| dispositivos por conta | 5 | `limits.devices` |
-| serviços por dispositivo | 10 | `limits.services` |
-| conexões simultâneas por serviço | 64 | `limits.connections` |
-| streams simultâneos por túnel | 128 | `limits.streams` |
-| tamanho de frame | 1 MiB | `limits.frameBytes` |
-| idle timeout do túnel | 60 s | `limits.idleTimeoutMs` |
+| Limite | Default | Config | Aplicado? |
+|---|---|---|---|
+| dispositivos ativos por conta | 5 | `kofcloud.limits.devices` | ✅ (429 `limit:devices`) |
+| serviços por dispositivo | 10 | `kofcloud.limits.services` | ✅ (429 `limit:services`) |
+| streams simultâneos por túnel | 128 | `kofcloud.limits.streams` | ✅ (429 / `RESET LIMIT_EXCEEDED`) |
+| conexões simultâneas por serviço | 64 | `limits.connections` | ⏳ ainda não |
+| tamanho de frame | 1 MiB | `limits.frameBytes` | ⏳ ainda não |
+| idle timeout do túnel | 60 s | `limits.idleTimeoutMs` | ⏳ ainda não |
+
+Limites são lidos de `kof.config`/env (`KOF_KOFCLOUD_LIMITS_*`). Revogar um
+dispositivo libera a vaga; re-registrar o mesmo nome é idempotente e não
+consome vaga. O limite de serviços é por **dispositivo**, não por conta.

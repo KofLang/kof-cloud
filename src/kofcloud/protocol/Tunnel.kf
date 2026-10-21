@@ -1,5 +1,9 @@
 package kofcloud.protocol
 
+import kofcloud.protocol.Version
+
+import kofcloud.protocol.Frame
+
 import kofcloud.util.Text
 
 // Construtores dos frames do Tunnel Protocol (Agent <-> Edge).

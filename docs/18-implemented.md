@@ -32,6 +32,8 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | `edge/` | listener de túnel, router por `Host`, HTTP front, relay, parada limpa | `e2e_test.kf` |
 | `agent/` | connect, reconexão com backoff, heartbeat, health, relay, parada | `e2e_test.kf`, `backoff_test.kf` |
 | `cli/` | dispatcher + comandos (`login`, `connect`, `publish`, …) | aceitação manual |
+| limites | `util/Limits.kf` + enforcement no registry/sessão | `limits_test.kf` |
+| múltiplos serviços | roteamento por `Host` no mesmo túnel | `e2e_multiservice_test.kf` |
 
 ## Comportamentos provados
 
@@ -39,6 +41,12 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   (conexão de saída).
 * **Multiplexação**: vários streams (requisições) sobre uma conexão, com filas
   por stream (canais), sem um serviço monopolizar os outros.
+* **Vários serviços no mesmo túnel (Fase 4)**: um Agent serve N hostnames em N
+  portas locais; cada host chega na sua porta e derrubar um serviço local não
+  afeta os outros (`e2e_multiservice_test.kf`).
+* **Limites aplicados**: dispositivos ativos por conta, serviços por
+  dispositivo e streams simultâneos por túnel — 429 no control plane e
+  429/`RESET LIMIT_EXCEEDED` no Edge (`limits_test.kf`).
 * **Reconexão com backoff exponencial + jitter** (observável no log do agente
   quando o Edge não está no ar).
 * **Health check**: o agente reavalia os serviços periodicamente e reporta só na

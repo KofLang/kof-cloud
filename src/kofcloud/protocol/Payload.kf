@@ -1,5 +1,7 @@
 package kofcloud.protocol
 
+import kofcloud.protocol.Bytes
+
 import kofcloud.identity.Keys
 
 // Codificacao do campo `d` de um frame DATA.

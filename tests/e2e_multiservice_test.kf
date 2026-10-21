@@ -1,0 +1,103 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.store.Store
+import testkit.Support
+
+// Fase 4 — varios servicos no MESMO tunel (um Agent, um dispositivo):
+//   site.mel  -> localhost:19380
+//   api.mel   -> localhost:19381
+//   files.mel -> localhost:19382
+// Prova isolamento: cada host chega na sua porta e derrubar um servico local
+// nao afeta os outros.
+
+test "e2e: tres servicos no mesmo tunel com isolamento de falha" {
+    var localOne = 19380
+    var localTwo = 19381
+    var localThree = 19382
+    var controlPort = 19383
+    var tunnelPort = 19384
+    var httpPort = 19385
+
+    var appOne = web.app()
+    appOne.get("/") { return "svc-one" }
+    var appTwo = web.app()
+    appTwo.get("/") { return "svc-two" }
+    var appThree = web.app()
+    appThree.get("/") { return "svc-three" }
+    var serverOne = spawn { appOne.listen(localOne) }
+    var serverTwo = spawn { appTwo.listen(localTwo) }
+    var serverThree = spawn { appThree.listen(localThree) }
+    assert(waitForPort(localOne, 60), "servico 1 no ar")
+    assert(waitForPort(localTwo, 60), "servico 2 no ar")
+    assert(waitForPort(localThree, 60), "servico 3 no ar")
+
+    var registry = Registry("/tmp/kofcloud-multi-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-multi-edge-stop-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http publico no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"mel@example.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var token = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+
+    publishViaApi(controlPort, token, deviceId, "site", localOne)
+    publishViaApi(controlPort, token, deviceId, "api", localTwo)
+    publishViaApi(controlPort, token, deviceId, "files", localThree)
+
+    var stopFile = "/tmp/kofcloud-multi-agent-stop-" + crypto.randomHex(4) + ".txt"
+    File(stopFile).delete()
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, token, "", stopFile, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+
+    // Cada hostname chega na SUA porta, nao em outra.
+    assert(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-one", "site -> servico 1")
+    assert(bodyOf(httpGetRaw(httpPort, "/", "api.mel.kofcloud.io")) == "svc-two", "api -> servico 2")
+    assert(bodyOf(httpGetRaw(httpPort, "/", "files.mel.kofcloud.io")) == "svc-three", "files -> servico 3")
+
+    // Derruba apenas o servico 2: ele vira 503 e os outros seguem ONLINE.
+    appTwo.close()
+    time.sleep(500)
+    assert(statusOf(httpGetRaw(httpPort, "/", "api.mel.kofcloud.io")) == 503, "servico 2 offline -> 503")
+    assert(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-one", "servico 1 nao foi afetado")
+    assert(bodyOf(httpGetRaw(httpPort, "/", "files.mel.kofcloud.io")) == "svc-three", "servico 3 nao foi afetado")
+
+    // Parada limpa: agente e listeners.
+    writeTextTo(stopFile, "stop")
+    time.sleep(1500)
+    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(stopFile).delete()
+    File(edgeStop).delete()
+}
+
+void publishViaApi(Int controlPort, String token, String deviceId, String name, Int localPort) {
+    var body = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"" + name + "\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localPort) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    var response = httpPostJson(controlPort, "/v1/services", body, token)
+    assert(statusOf(response) == 200, "publicado: " + name)
+}

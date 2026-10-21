@@ -68,7 +68,11 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     try {
         responseBytes = relayThroughTunnel(session, service.name, forwarded, maxBytes)
     } catch (String e) {
-        conn.send(errorResponse(502, "tunnel error: " + e))
+        if (e == "LIMIT_EXCEEDED") {
+            conn.send(errorResponse(429, "too many concurrent streams"))
+        } else {
+            conn.send(errorResponse(502, "tunnel error: " + e))
+        }
         conn.close()
         return
     }

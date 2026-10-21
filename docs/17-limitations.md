@@ -42,6 +42,11 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 * **O Edge fala HTTP/1.1.** Sem pipelining avançado, sem trailers.
 * **Sem half-close no protocolo.** Um stream termina com `END`/`RESET`; não há
   sinal de "não vou mais escrever, mas ainda leio".
+* **Limites parcialmente aplicados.** Já valem dispositivos ativos por conta,
+  serviços por dispositivo e streams por túnel. **Ainda não** são aplicados:
+  conexões simultâneas por serviço, tamanho máximo de frame e idle timeout do
+  túnel/stream — estão especificados e configuráveis, mas sem enforcement.
+  Ver `03-device.md` e `08-multiplexing.md`.
 
 ## O que o KofCloud deliberadamente NÃO é
 

@@ -12,6 +12,9 @@ import kofcloud.protocol.Tunnel
 
 Byte[] relayThroughTunnel(TunnelSession session, String serviceName, Byte[] requestBytes, Int maxBytes) {
     var streamId = session.openStream()
+    if (streamId.length == 0) {
+        throw "LIMIT_EXCEEDED"
+    }
     session.send(openFrame(streamId, serviceName))
     session.send(dataFrame(streamId, encodePayload(requestBytes, session.sessionKey)))
     session.send(endFrame(streamId))

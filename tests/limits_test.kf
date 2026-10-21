@@ -1,0 +1,95 @@
+import kofcloud.control.Registry
+import kofcloud.protocol.Session
+
+// Limites por dispositivo: dispositivos ativos por conta, servicos por
+// dispositivo e streams simultaneos por tunel (Fase 4).
+
+String limitTestPath(String name) {
+    return "/tmp/kofcloud-limits-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "registry: limite de dispositivos ativos por conta" {
+    var registry = Registry(limitTestPath("devices"))
+    registry.setLimits(2, 10)
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    registry.registerDevice(account, "d1", "pk1")
+    registry.registerDevice(account, "d2", "pk2")
+    var blocked = false
+    var reason = ""
+    try {
+        registry.registerDevice(account, "d3", "pk3")
+    } catch (String e) {
+        blocked = true
+        reason = e
+    }
+    assert(blocked, "terceiro dispositivo recusado")
+    assert(reason == "limit:devices", "motivo do limite")
+    assert(registry.activeDeviceCount(account.id) == 2, "nada foi criado")
+}
+
+test "registry: re-registrar o mesmo dispositivo e idempotente (nao consome vaga)" {
+    var registry = Registry(limitTestPath("idem"))
+    registry.setLimits(1, 10)
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var first = registry.registerDevice(account, "nb", "pk")
+    var again = registry.registerDevice(account, "nb", "pk")
+    assert(first.id == again.id, "mesmo dispositivo")
+    assert(registry.activeDeviceCount(account.id) == 1, "uma vaga apenas")
+}
+
+test "registry: revogar dispositivo libera vaga" {
+    var registry = Registry(limitTestPath("revoke"))
+    registry.setLimits(2, 10)
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var d1 = registry.registerDevice(account, "d1", "pk1")
+    registry.registerDevice(account, "d2", "pk2")
+    assert(registry.revokeDevice(account.id, d1.id) == true, "revogado")
+    var created = registry.registerDevice(account, "d3", "pk3")
+    assert(created.name == "d3", "vaga liberada")
+}
+
+test "registry: limite de servicos por dispositivo" {
+    var registry = Registry(limitTestPath("services"))
+    registry.setLimits(10, 2)
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    registry.publishService(account, device.id, "api", "127.0.0.1", 3000, "http", "PUBLIC")
+    var blocked = false
+    var reason = ""
+    try {
+        registry.publishService(account, device.id, "files", "127.0.0.1", 9000, "http", "PUBLIC")
+    } catch (String e) {
+        blocked = true
+        reason = e
+    }
+    assert(blocked, "terceiro servico recusado")
+    assert(reason == "limit:services", "motivo do limite")
+    assert(registry.servicesForDevice(device.id).size == 2, "nada foi criado")
+}
+
+test "registry: limite de servicos e por dispositivo, nao por conta" {
+    var registry = Registry(limitTestPath("perdevice"))
+    registry.setLimits(10, 1)
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var d1 = registry.registerDevice(account, "d1", "pk1")
+    var d2 = registry.registerDevice(account, "d2", "pk2")
+    registry.publishService(account, d1.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    var other = registry.publishService(account, d2.id, "api", "127.0.0.1", 3000, "http", "PUBLIC")
+    assert(other.name == "api", "cada dispositivo tem sua cota")
+}
+
+test "session: limite de streams simultaneos e libera ao fechar" {
+    var session = TunnelSession("s1", "d1", "a1", "")
+    session.setMaxStreams(2)
+    var a = session.openStream()
+    var b = session.openStream()
+    var c = session.openStream()
+    assert(a.length > 0, "primeiro abre")
+    assert(b.length > 0, "segundo abre")
+    assert(c == "", "terceiro recusado")
+    assert(session.atCapacity(), "sessao no limite")
+    session.closeStream(a)
+    assert(session.atCapacity() == false, "vaga liberada")
+    assert(session.openStream().length > 0, "abre apos liberar")
+}

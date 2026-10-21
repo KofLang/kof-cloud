@@ -7,6 +7,7 @@ import kofcloud.model.Exposure
 
 import kofcloud.identity.Tokens
 import kofcloud.util.Hosts
+import kofcloud.util.Limits
 import kofcloud.util.Text
 import kofcloud.store.Store
 
@@ -22,6 +23,8 @@ class Registry {
     List<Service> services
     List<TokenEntry> tokens
     String path
+    Int maxDevices
+    Int maxServices
 
     constructor(path: String) {
         this.path = path
@@ -29,7 +32,26 @@ class Registry {
         this.devices = listOf<Device>()
         this.services = listOf<Service>()
         this.tokens = listOf<TokenEntry>()
+        this.maxDevices = limitDevices()
+        this.maxServices = limitServices()
         this.load()
+    }
+
+    // Permite aos testes exercitarem o limite sem depender de env/config do
+    // processo (config e lido uma vez, no start).
+    void setLimits(Int devices, Int services) {
+        this.maxDevices = devices
+        this.maxServices = services
+    }
+
+    Int activeDeviceCount(String accountId) {
+        var count = 0
+        for (var device in this.devices) {
+            if (device.accountId == accountId && device.status == "ACTIVE") {
+                count = count + 1
+            }
+        }
+        return count
     }
 
     void load() {
@@ -123,6 +145,9 @@ class Registry {
         if (existing != null) {
             return existing
         }
+        if (this.activeDeviceCount(account.id) >= this.maxDevices) {
+            throw "limit:devices"
+        }
         var device = Device(uuid.v4(), account.id, name, publicKey, deviceActive(), time.now(), time.now())
         this.devices.add(device)
         this.save()
@@ -205,6 +230,9 @@ class Registry {
         var existing = this.serviceByName(account.id, name)
         if (existing != null) {
             return existing
+        }
+        if (this.servicesForDevice(deviceId).size >= this.maxServices) {
+            throw "limit:services"
         }
         var service = Service(
             uuid.v4(), account.id, deviceId, name, localAddress, localPort, protocol,

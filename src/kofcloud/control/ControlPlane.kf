@@ -172,8 +172,12 @@ HttpResult handleRegisterDevice(Registry registry, String? authHeader, String bo
     if (name.length == 0 || publicKey.length == 0) {
         return HttpResult(400, errorJson("name and publicKey required"))
     }
-    var device = registry.registerDevice(account, name, publicKey)
-    return HttpResult(200, deviceJson(device))
+    try {
+        var device = registry.registerDevice(account, name, publicKey)
+        return HttpResult(200, deviceJson(device))
+    } catch (String e) {
+        return HttpResult(429, errorJson(e))
+    }
 }
 
 HttpResult handleListDevices(Registry registry, String? authHeader) {
@@ -230,8 +234,12 @@ HttpResult handlePublishService(Registry registry, String? authHeader, String bo
     if (device.accountId != account.id) {
         return HttpResult(404, errorJson("device not found"))
     }
-    var service = registry.publishService(account, deviceId, name, localAddress, localPort, protocol, exposure)
-    return HttpResult(200, serviceJson(service))
+    try {
+        var service = registry.publishService(account, deviceId, name, localAddress, localPort, protocol, exposure)
+        return HttpResult(200, serviceJson(service))
+    } catch (String e) {
+        return HttpResult(429, errorJson(e))
+    }
 }
 
 HttpResult handleListServices(Registry registry, String? authHeader) {

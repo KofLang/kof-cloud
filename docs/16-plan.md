@@ -50,6 +50,12 @@ Resultado: HTTPS por hostname, sem certificado manual do usuário.
 Um Agent, N hostnames, N portas locais, todos no mesmo túnel. Já coberto por
 I4/F8 na Fase 2–3; a fase formaliza os limites por dispositivo.
 
+**Estado: ✅ implementado.** Limites aplicados: `kofcloud.limits.devices`
+(dispositivos ativos por conta), `kofcloud.limits.services` (por dispositivo) e
+`kofcloud.limits.streams` (por túnel, com `429`/`RESET LIMIT_EXCEEDED`).
+Prova: `tests/limits_test.kf` (6 testes) + `tests/e2e_multiservice_test.kf`
+(3 serviços no mesmo túnel, com isolamento de falha).
+
 ## Fase 5 — autenticação
 
 `PUBLIC` / `AUTHENTICATED` / `PRIVATE` no modelo e no Edge. `PRIVATE` já existe

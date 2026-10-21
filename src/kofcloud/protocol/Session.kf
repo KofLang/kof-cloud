@@ -1,5 +1,9 @@
 package kofcloud.protocol
 
+import kofcloud.protocol.Frame
+import kofcloud.protocol.Tunnel
+import kofcloud.util.Limits
+
 // Estado de uma sessao de tunel: multiplexacao de streams sobre uma conexao.
 //
 // IMPORTANTE: esta classe NAO guarda o Conn. Em Kof, Conn nao e uma classe
@@ -16,6 +20,7 @@ class TunnelSession {
     Map<String, Channel<String>> inboxes
     Channel<String> outbox
     Int nextStreamId
+    Int maxStreams
     Bool open
 
     constructor(sessionId: String, deviceId: String, accountId: String, sessionKey: String) {
@@ -26,11 +31,24 @@ class TunnelSession {
         this.inboxes = mapOf()
         this.outbox = channel<String>()
         this.nextStreamId = 1
+        this.maxStreams = limitStreams()
         this.open = true
     }
 
-    // Abre um stream e devolve seu id opaco.
+    void setMaxStreams(Int limit) {
+        this.maxStreams = limit
+    }
+
+    // Sem vaga: o chamador devolve 429 (Edge) ou RESET LIMIT_EXCEEDED (Agent).
+    Bool atCapacity() {
+        return this.inboxes.size >= this.maxStreams
+    }
+
+    // Abre um stream e devolve seu id opaco; "" quando a sessao esta no limite.
     String openStream() {
+        if (this.atCapacity()) {
+            return ""
+        }
         var id = "" + this.nextStreamId
         this.nextStreamId = this.nextStreamId + 1
         this.inboxes.put(id, channel<String>())

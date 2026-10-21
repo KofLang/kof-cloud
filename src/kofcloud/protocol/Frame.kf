@@ -1,5 +1,7 @@
 package kofcloud.protocol
 
+import kofcloud.protocol.Version
+
 import kofcloud.util.Text
 
 // Um frame e um Map<String,String>: todo valor viaja como string no JSON.
