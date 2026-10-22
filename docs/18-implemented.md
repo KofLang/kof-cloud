@@ -34,6 +34,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | `cli/` | dispatcher + comandos (`login`, `connect`, `publish`, …) | aceitação manual |
 | limites | `util/Limits.kf` + enforcement no registry/sessão | `limits_test.kf` |
 | múltiplos serviços | roteamento por `Host` no mesmo túnel | `e2e_multiservice_test.kf` |
+| credencial de serviço | `kfs_` emitido no control plane, validado no Edge | `service_token_test.kf`, `e2e_authenticated_test.kf` |
 
 ## Comportamentos provados
 
@@ -54,8 +55,9 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 * **Cifra do túnel** (opcional, `KOFCLOUD_TUNNEL_SECRET`): X25519 efêmero +
   HKDF por sessão + AES-GCM nos payloads — dois lados derivam a mesma chave
   (testado).
-* **Exposição**: `PRIVATE` não gera rota; `AUTHENTICATED` exige token antes do
-  túnel.
+* **Exposição**: `PRIVATE` não gera rota; `AUTHENTICATED` exige credencial de
+  serviço `kfs_` **antes** do túnel (`e2e_authenticated_test.kf`), com o token
+  da conta recusado e a credencial removida antes de chegar ao serviço local.
 * **Revogação de dispositivo** derruba a sessão e remove as rotas dele.
 * **Parada limpa** do agente (`disconnect` via arquivo-sentinela) e da
   plataforma (`serve`, via fechamento do `Listener`).

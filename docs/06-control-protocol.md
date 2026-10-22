@@ -24,6 +24,7 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/devices/revoke` | conta | `{deviceId}` → `{revoked:true}` |
 | `POST` | `/v1/services` | conta | publica `{deviceId,name,localAddress,localPort,protocol,exposure}` → `{service}` |
 | `GET` | `/v1/services` | conta | lista serviços |
+| `POST` | `/v1/services/token` | conta | emite credencial `kfs_` do serviço `{serviceId}` → `{token,serviceId}` |
 | `POST` | `/v1/services/remove` | conta | `{serviceId}` |
 | `POST` | `/v1/services/status` | dispositivo | `{serviceId,status}` (health reportado pelo Agent) |
 | `POST` | `/v1/heartbeat` | dispositivo | `{deviceId}` → `{ok:true, serverTime}` |
@@ -51,6 +52,16 @@ X-KofCloud-Token: kfc_...
  "localPort":8080,"protocol":"http","exposure":"PUBLIC"}
 
 201 {"id":"...","hostname":"site.mel.kofcloud.io","status":"UNKNOWN", ...}
+```
+
+Emitir credencial de serviço (AUTHENTICATED):
+
+```
+POST /v1/services/token
+X-KofCloud-Token: kfc_...
+{"serviceId":"..."}
+
+200 {"token":"kfs_...","serviceId":"..."}
 ```
 
 `connect` (o Agent pede o ponto de entrada do Edge):

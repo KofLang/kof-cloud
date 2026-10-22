@@ -83,7 +83,7 @@ Int runDevice(List<String> args) {
 
 Int runService(List<String> args) {
     if (args.size == 0) {
-        println("uso: kof cloud service list|status <nome>")
+        println("uso: kof cloud service list|status <nome>|token <nome>")
         return 1
     }
     var sub = args.get(0)
@@ -93,6 +93,9 @@ Int runService(List<String> args) {
     }
     if (sub == "status") {
         return cmdServiceStatus(rest)
+    }
+    if (sub == "token") {
+        return cmdServiceToken(rest)
     }
     println("subcomando desconhecido: service " + sub)
     return 1

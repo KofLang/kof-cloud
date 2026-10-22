@@ -81,9 +81,32 @@ momento do `device register`.
 | `createdAt` | Long | |
 | `expiresAt` | Long | 0 = sem expiração |
 
-O token é apresentado no header `Authorization: Bearer <value>` para o control
-plane e no frame `HELLO` para o Edge. Comparação **sempre** com
+### Service Token (`kfs_`)
+
+Credencial de acesso a **um** serviço `AUTHENTICATED`, separada do token da
+conta de propósito: o token da conta administra (publica, revoga, emite) e
+**nunca** deve ir para o navegador de terceiros. O token de serviço é emitido
+pelo control plane (`POST /v1/services/token`, autenticado pela conta) e
+validado pelo Edge antes de abrir o túnel.
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `serviceId` | String | vale **apenas** para este serviço |
+| `accountId` | String | dono |
+| `tokenHash` | String | SHA-256; o valor em claro aparece uma vez |
+| `createdAt` | Long | |
+
+Várias credenciais podem coexistir (rotação sem downtime). Ao remover o serviço
+ou revogar o dispositivo, as credenciais correspondentes são **podadas**.
+
+O token da conta é apresentado no header `X-KofCloud-Token` para o control
+plane e no frame `HELLO` para o Edge; o token de serviço, no header
+`Authorization: Bearer` do lado público. Comparação **sempre** com
 `security.constantTimeEquals` (nunca `==`), para não vazar por tempo.
+
+> O control plane usa `X-KofCloud-Token` (e não `Authorization`) porque o
+> runtime do Kof reserva `Authorization` para Bearer JWT no `web.app()` —
+> ver `13-kof-apis.md` L8.
 
 ## Separação de poderes
 

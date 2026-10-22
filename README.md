@@ -23,7 +23,9 @@ completa e os protocolos.
 | 1 — túnel reverso persistente, heartbeat, reconexão com backoff | ✅ implementado e testado |
 | 2 — publicação HTTP (`publish` → `curl` pela borda) | ✅ implementado e testado ponta a ponta |
 | 3 — hostname automático + DNS (`*.handle.kofcloud.io`) | ✅ hostname/roteamento implementados; **DNS e TLS são externos** (o Kof não tem ACME nem TLS em socket cru — ver `docs/12-tls.md`) |
-| 4+ — múltiplos serviços, autenticação, domínio próprio, deploy | parcial / planejado (`docs/16-plan.md`) |
+| 4 — múltiplos serviços no mesmo túnel + limites por dispositivo | ✅ implementado e testado |
+| 5 — `AUTHENTICATED` com credencial de serviço (`kfs_`) | ✅ implementado e testado |
+| 6+ — domínio próprio, observabilidade, deploy | parcial / planejado (`docs/16-plan.md`) |
 
 O critério de sucesso do pedido foi atingido com o CLI real, em processos
 separados: `login` → `publish site --port 29010` → `connect`, e
@@ -85,6 +87,7 @@ publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--addre
 unpublish <nome>
 service list
 service status <nome>
+service token <nome>        (credencial kfs_ para servico AUTHENTICATED)
 domain list
 logs
 serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>]

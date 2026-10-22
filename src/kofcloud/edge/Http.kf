@@ -111,12 +111,20 @@ HttpRequest parseRequest(Byte[] raw) {
 // Reconstroi a requisicao para o servico local, forçando Connection: close
 // (determinismo: o servico fecha ao terminar, e o Agent le ate EOF) e
 // anexando X-Forwarded-For.
-Byte[] serializeRequest(HttpRequest request, String clientIp) {
+// `dropCredential` = true em servico AUTHENTICATED: o Edge ja consumiu o
+// `Authorization`, entao ele NAO vai ao servico local. Isso evita vazar a
+// credencial da plataforma para a aplicacao e evita que um web.app() local
+// (que reserva Authorization para JWT) recuse a requisicao.
+Byte[] serializeRequest(HttpRequest request, String clientIp, Bool dropCredential) {
     var out = request.method + " " + request.path + " " + request.version + "\r\n"
     for (var line in request.headers) {
         var lower = line.toLowerCase()
         if (lower.startsWith("connection:") || lower.startsWith("proxy-connection:") || lower.startsWith("x-forwarded-for:")) {
             // reescrito abaixo
+        } else if (dropCredential && lower.startsWith("authorization:")) {
+            // credencial consumida pelo Edge
+        } else if (dropCredential && lower.startsWith("x-kofcloud-token:")) {
+            // credencial administrativa nunca vai ao servico
         } else {
             out = out + line + "\r\n"
         }
@@ -152,6 +160,19 @@ HttpResponse parseResponse(Byte[] raw) {
         i = i + 1
     }
     return HttpResponse(status, headers, body)
+}
+
+// 401 de servico AUTHENTICATED: anuncia o esquema para o cliente.
+Byte[] unauthorizedResponse(String message) {
+    var body = message + "\n"
+    var out = "HTTP/1.1 401 Unauthorized\r\n"
+    out = out + "WWW-Authenticate: Bearer\r\n"
+    out = out + "Content-Type: text/plain; charset=utf-8\r\n"
+    out = out + "Content-Length: " + intToString(body.length) + "\r\n"
+    out = out + "Connection: close\r\n"
+    out = out + "\r\n"
+    out = out + body
+    return bytesFromString(out)
 }
 
 Byte[] errorResponse(Int status, String message) {

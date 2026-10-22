@@ -25,6 +25,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U11 | store | `tests/store_test.kf` | round-trip JSON em disco, arquivo ausente |
 | U12 | cifra do túnel | `tests/identity_test.kf` | AES-GCM com a chave derivada, payload adulterado falha |
 | U13 | limites | `tests/limits_test.kf` | dispositivos ativos, serviços por dispositivo, streams por túnel, liberação de vaga |
+| U14 | credencial de serviço | `tests/service_token_test.kf` | emissão só pela conta dona, token vale apenas para o próprio serviço, poda ao remover serviço/revogar dispositivo, persistência |
 
 ## Integração
 
@@ -41,6 +42,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 |---|---|---|---|
 | E1 | ponta a ponta | `tests/e2e_test.kf` | conta → device → connect → publish → HTTP → túnel → localhost → resposta |
 | E2 | múltiplos serviços | `tests/e2e_multiservice_test.kf` | 3 hostnames no mesmo túnel, cada um na sua porta; derrubar um não afeta os outros |
+| E3 | AUTHENTICATED | `tests/e2e_authenticated_test.kf` | 401 sem credencial (com `WWW-Authenticate`), 401 com token inválido, 401 com token da conta, 200 com `kfs_` do serviço; PUBLIC segue livre |
 
 O E2E sobe, em processos/tasks separados: control plane, edge, um serviço local
 (`web.app()`), e o agent. Faz uma requisição HTTP real pelo Edge e confere o

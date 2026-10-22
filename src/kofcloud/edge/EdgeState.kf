@@ -54,16 +54,17 @@ class EdgeState {
         return this.registry.resolveRoute(hostname)
     }
 
-    // Autorizacao de servico AUTHENTICATED: o token apresentado precisa
-    // pertencer a conta dona do servico.
+    // Autorizacao de servico AUTHENTICATED: o token apresentado e um token de
+    // SERVICO (kfs_) e precisa pertencer exatamente a este servico. O token da
+    // conta NAO vale aqui — ele autoriza administracao, nao acesso publico.
     Bool authorize(Service service, String token) {
         if (token.length == 0) {
             return false
         }
-        var account = this.registry.accountByToken(token)
-        if (account == null) {
+        var owner = this.registry.serviceByServiceToken(token)
+        if (owner == null) {
             return false
         }
-        return account.id == service.accountId
+        return owner.id == service.id
     }
 }

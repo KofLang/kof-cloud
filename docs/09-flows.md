@@ -122,6 +122,25 @@ Agent health check: connect 127.0.0.1:8080  → recusa
   → quando o serviço volta, STATUS{...:"ONLINE"} reativa a rota
 ```
 
+## 6.1 Acesso a serviço AUTHENTICATED
+
+```
+kof cloud service token secret        (conta emite kfs_ no control plane)
+        │
+        ▼
+curl -H 'Authorization: Bearer kfs_…' https://secret.mel.kofcloud.io/
+        │
+        ▼  Edge
+   authorize(serviço, kfs_)
+     ├── inválido/ausente/outro serviço → 401 + WWW-Authenticate: Bearer
+     └── válido → remove o Authorization e segue para o túnel
+        │
+        ▼  Agent → localhost:<porta>  (app já não vê a credencial)
+```
+
+O token da conta (`kfc_`) não passa nessa checagem: administração e acesso
+público são credenciais distintas.
+
 ## 7. Revogação de dispositivo
 
 ```

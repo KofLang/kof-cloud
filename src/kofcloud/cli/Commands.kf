@@ -372,6 +372,54 @@ Int cmdServiceStatus(List<String> args) {
     }
 }
 
+// Emite uma credencial kfs_ para um servico AUTHENTICATED. O token da conta
+// autoriza a emissao; o token devolvido e o que o cliente final usa.
+Int cmdServiceToken(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    var name = firstPositional(args)
+    if (name.length == 0) {
+        println("uso: kof cloud service token <nome>")
+        return 1
+    }
+    try {
+        var services = fetchServices(session.controlUrl, session.token)
+        var target = ""
+        var exposure = ""
+        var hostname = ""
+        for (var service in services) {
+            if (service.name == name) {
+                target = service.id
+                exposure = service.exposure
+                hostname = service.hostname
+            }
+        }
+        if (target.length == 0) {
+            println("servico nao encontrado: " + name)
+            return 1
+        }
+        if (exposure != "AUTHENTICATED") {
+            println("aviso: " + name + " esta " + exposure + " — o token so e exigido em AUTHENTICATED")
+        }
+        var body = mapOf()
+        body.put("serviceId", target)
+        var raw = requireOk(http.post(session.controlUrl + "/v1/services/token", json.encode(body), jsonHeader(session.token)))
+        var token = mapField(json.decode<Map<String, String>>(raw), "token")
+        println("Token de acesso (" + name + "):")
+        println(token)
+        println("")
+        println("Uso:")
+        println("  curl -H 'Authorization: Bearer " + token + "' https://" + hostname + "/")
+        return 0
+    } catch (String e) {
+        println("falha: " + e)
+        return 1
+    }
+}
+
 Int cmdDomainList(List<String> args) {
     var session = loadSession()
     if (session == null) {

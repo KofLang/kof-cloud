@@ -265,6 +265,29 @@ HttpResult handleRemoveService(Registry registry, String? authHeader, String bod
     return HttpResult(200, json.encode(out))
 }
 
+// Emite uma credencial de acesso para um servico AUTHENTICATED. O token da
+// conta autoriza a EMISSAO; o token emitido (kfs_) e o que vai ao cliente.
+HttpResult handleIssueServiceToken(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson("unauthorized"))
+    }
+    var body = decodeBody(bodyText)
+    var serviceId = mapField(body, "serviceId")
+    if (serviceId.length == 0) {
+        return HttpResult(400, errorJson("serviceId required"))
+    }
+    try {
+        var token = registry.issueServiceToken(account.id, serviceId)
+        var out = mapOf()
+        out.put("token", token)
+        out.put("serviceId", serviceId)
+        return HttpResult(200, json.encode(out))
+    } catch (String e) {
+        return HttpResult(404, errorJson(e))
+    }
+}
+
 HttpResult handleReportStatus(Registry registry, String? authHeader, String bodyText) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
@@ -420,6 +443,13 @@ class ControlPlane {
         }
         app.post("/v1/services/remove") {
             var result = handleRemoveService(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/services/token") {
+            var result = handleIssueServiceToken(reg, header("x-kofcloud-token"), body())
             if (result.code == 200) {
                 return result.body
             }

@@ -15,13 +15,16 @@ import kofcloud.store.Store
 // Tokens sao guardados como hash (nunca em claro).
 record TokenEntry(String accountId, String tokenHash, Long createdAt)
 
-record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens)
+record ServiceToken(String serviceId, String accountId, String tokenHash, Long createdAt)
+
+record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens)
 
 class Registry {
     List<Account> accounts
     List<Device> devices
     List<Service> services
     List<TokenEntry> tokens
+    List<ServiceToken> serviceTokens
     String path
     Int maxDevices
     Int maxServices
@@ -32,6 +35,7 @@ class Registry {
         this.devices = listOf<Device>()
         this.services = listOf<Service>()
         this.tokens = listOf<TokenEntry>()
+        this.serviceTokens = listOf<ServiceToken>()
         this.maxDevices = limitDevices()
         this.maxServices = limitServices()
         this.load()
@@ -65,6 +69,7 @@ class Registry {
             this.devices = state.devices
             this.services = state.services
             this.tokens = state.tokens
+            this.serviceTokens = state.serviceTokens
         } catch (String e) {
             // Estado corrompido: recomeca vazio em vez de derrubar o control
             // plane. O operador ve os dados ausentes e decide.
@@ -72,7 +77,7 @@ class Registry {
     }
 
     void save() {
-        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens)))
+        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens, this.serviceTokens)))
     }
 
     // ---- contas ----
@@ -196,6 +201,7 @@ class Registry {
         if (found) {
             this.devices = updated
             this.removeServicesOfDevice(deviceId)
+            this.pruneServiceTokens()
             this.save()
         }
         return found
@@ -212,6 +218,48 @@ class Registry {
         }
         this.devices = updated
         this.save()
+    }
+
+    // ---- tokens de servico (AUTHENTICATED) ----
+
+    // Emite uma credencial nova para o servico. Varias podem existir (rotacao
+    // sem downtime); cada uma e guardada apenas como hash.
+    String issueServiceToken(String accountId, String serviceId) {
+        var service = this.serviceById(serviceId)
+        if (service == null) {
+            throw "service not found"
+        }
+        if (service.accountId != accountId) {
+            throw "service not yours"
+        }
+        var token = newServiceToken()
+        this.serviceTokens.add(ServiceToken(serviceId, accountId, tokenHash(token), time.now()))
+        this.save()
+        return token
+    }
+
+    // Resolve o servico dono de um token de servico; null se invalido.
+    Service? serviceByServiceToken(String token) {
+        if (token.length == 0) {
+            return null
+        }
+        for (var entry in this.serviceTokens) {
+            if (tokenMatches(entry.tokenHash, token)) {
+                return this.serviceById(entry.serviceId)
+            }
+        }
+        return null
+    }
+
+    // Remove credenciais orfas (servico removido ou dispositivo revogado).
+    void pruneServiceTokens() {
+        var alive = listOf<ServiceToken>()
+        for (var entry in this.serviceTokens) {
+            if (this.serviceById(entry.serviceId) != null) {
+                alive.add(entry)
+            }
+        }
+        this.serviceTokens = alive
     }
 
     // ---- servicos ----
@@ -294,6 +342,7 @@ class Registry {
         }
         if (found) {
             this.services = out
+            this.pruneServiceTokens()
             this.save()
         }
         return found

@@ -92,3 +92,45 @@ Bool waitForPort(Int port, Int attempts) {
     }
     return up
 }
+
+// GET com `Authorization: Bearer <token>` (usado por servicos AUTHENTICATED).
+// Aqui o header e mesmo Authorization: quem responde e o parser proprio do
+// Edge, nao o web.app() (que reservaria o header para JWT).
+String httpGetRawAuth(Int port, String path, String host, String token) {
+    var conn = net.connect("127.0.0.1", port)
+    var req = "GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\n"
+    if (token.length > 0) {
+        req = req + "Authorization: Bearer " + token + "\r\n"
+    }
+    req = req + "Connection: close\r\n\r\n"
+    conn.send(bytesFromString(req))
+    var acc = bytesEmpty()
+    var reading = true
+    while (reading) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            reading = false
+        } else {
+            acc = bytesConcat(acc, chunk)
+        }
+    }
+    conn.close()
+    return bytesToString(acc)
+}
+
+// Valor de um header da resposta crua; "" quando ausente.
+String responseHeader(String response, String name) {
+    var headEnd = response.indexOf("\r\n\r\n")
+    var head = response
+    if (headEnd >= 0) {
+        head = response.substring(0, headEnd)
+    }
+    var needle = name.toLowerCase() + ":"
+    for (var line in head.split("\n")) {
+        var trimmed = line.trim()
+        if (trimmed.toLowerCase().startsWith(needle)) {
+            return trimmed.substring(needle.length).trim()
+        }
+    }
+    return ""
+}

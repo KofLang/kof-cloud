@@ -38,10 +38,24 @@ localmente. `kof cloud publish` é a única forma de criar rota.
 
 ### `AUTHENTICATED`
 
-O Edge exige um token de sessão antes de encaminhar. Sem token válido devolve
-`401` com `WWW-Authenticate`. A autenticação acontece **no Edge**, antes de o
-tráfego tocar o túnel — a máquina do usuário nunca vê requisição não
-autenticada.
+O Edge exige uma **credencial de serviço** (`kfs_`) antes de encaminhar:
+
+```
+kof cloud service token secret      # emite (autenticado pela conta)
+curl -H 'Authorization: Bearer kfs_…' https://secret.mel.kofcloud.io/
+```
+
+Sem credencial, ou com credencial de outro serviço, devolve `401` com
+`WWW-Authenticate: Bearer` — e **não** vaza o conteúdo. O token da conta
+(`kfc_`) **não** autoriza acesso público: as credenciais são separadas.
+
+A autenticação acontece **no Edge**, antes de o tráfego tocar o túnel, e o Edge
+**consome** a credencial: ela é removida da requisição repassada ao serviço
+local (assim a plataforma não vaza o próprio segredo para a aplicação). Em
+serviços `PUBLIC` o `Authorization` é repassado como proxy transparente —
+atenção: um serviço local feito com `web.app()` recusa qualquer `Authorization`
+antes do handler (lacuna L8 do Kof), então apps Kof não podem usar esse header
+para autenticação própria hoje.
 
 ## Health check
 

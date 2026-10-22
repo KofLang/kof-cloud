@@ -18,6 +18,7 @@ String usageText() {
     out = out + "  unpublish <nome>\n"
     out = out + "  service list\n"
     out = out + "  service status <nome>\n"
+    out = out + "  service token <nome>        (credencial kfs_ para AUTHENTICATED)\n"
     out = out + "  domain list\n"
     out = out + "  logs\n"
     out = out + "\n"

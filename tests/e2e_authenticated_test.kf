@@ -1,0 +1,120 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.store.Store
+import testkit.Support
+
+// Fase 5 — AUTHENTICATED ponta a ponta:
+//   pub.mel    (PUBLIC)        -> 200 sem credencial
+//   secret.mel (AUTHENTICATED) -> 401 sem credencial / 401 com token errado
+//                                / 401 com o token da CONTA (separacao de
+//                                credenciais) / 200 com o token do SERVICO
+// O 401 anuncia WWW-Authenticate: Bearer.
+
+test "e2e: servico AUTHENTICATED exige credencial de servico", "auth" {
+    var localPub = 19480
+    var localSecret = 19481
+    var controlPort = 19482
+    var tunnelPort = 19483
+    var httpPort = 19484
+
+    var appPub = web.app()
+    appPub.get("/") { return "svc-pub" }
+    var appSecret = web.app()
+    appSecret.get("/") { return "svc-secret" }
+    var serverPub = spawn { appPub.listen(localPub) }
+    var serverSecret = spawn { appSecret.listen(localSecret) }
+    assert(waitForPort(localPub, 60), "servico publico no ar")
+    assert(waitForPort(localSecret, 60), "servico autenticado no ar")
+
+    var registry = Registry("/tmp/kofcloud-auth-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-auth-edge-stop-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-auth-agent-stop-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http publico no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"mel@example.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+
+    publishExposed(controlPort, accountToken, deviceId, "pub", localPub, "PUBLIC")
+    var secretResponse = publishExposed(controlPort, accountToken, deviceId, "secret", localSecret, "AUTHENTICATED")
+    var secretId = mapField(json.decode<Map<String, String>>(bodyOf(secretResponse)), "id")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+
+    // PUBLIC continua livre
+    assert(statusOf(httpGetRaw(httpPort, "/", "pub.mel.kofcloud.io")) == 200, "PUBLIC sem credencial")
+    assert(bodyOf(httpGetRaw(httpPort, "/", "pub.mel.kofcloud.io")) == "svc-pub", "corpo do PUBLIC")
+
+    // AUTHENTICATED sem credencial -> 401 + WWW-Authenticate
+    var noCredential = httpGetRaw(httpPort, "/", "secret.mel.kofcloud.io")
+    assert(statusOf(noCredential) == 401, "sem credencial -> 401")
+    assert(responseHeader(noCredential, "www-authenticate") == "Bearer", "anuncia o esquema")
+    assert(bodyOf(httpGetRaw(httpPort, "/", "secret.mel.kofcloud.io")) != "svc-secret", "nao vaza o conteudo")
+
+    // credencial invalida -> 401
+    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", "kfs_naoexiste")) == 401, "token invalido -> 401")
+
+    // o token da CONTA nao serve para acesso publico (credenciais separadas)
+    var accountAttempt = httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", accountToken)
+    assert(statusOf(accountAttempt) == 401, "token da conta nao autoriza acesso")
+
+    // emite a credencial do servico e usa
+    var mintBody = "{\"serviceId\":\"" + secretId + "\"}"
+    var minted = httpPostJson(controlPort, "/v1/services/token", mintBody, accountToken)
+    assert(statusOf(minted) == 200, "emissao ok")
+    var serviceToken = mapField(json.decode<Map<String, String>>(bodyOf(minted)), "token")
+    assert(serviceToken.startsWith("kfs_"), "prefixo kfs_")
+
+    var allowed = httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", serviceToken)
+    assert(statusOf(allowed) == 200, "com a credencial do servico -> 200")
+    assert(bodyOf(allowed) == "svc-secret", "corpo do servico")
+
+    // Nota: nao testamos "PUBLIC com Authorization" porque um servico local
+    // Kof (web.app) recusa QUALQUER Authorization antes do handler (L8). Em
+    // PUBLIC o Edge repassa o header como proxy transparente; em AUTHENTICATED
+    // o Edge consome e remove (ver edge/Http.kf).
+
+    // parada limpa
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}
+
+String publishExposed(Int controlPort, String token, String deviceId, String name, Int localPort, String exposure) {
+    var body = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"" + name + "\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localPort) + "\",\"protocol\":\"http\",\"exposure\":\"" + exposure + "\"}"
+    var response = httpPostJson(controlPort, "/v1/services", body, token)
+    assert(statusOf(response) == 200, "publicado: " + name)
+    assert(bodyOf(response).indexOf("\"" + exposure + "\"") >= 0, "exposicao registrada: " + name)
+    return response
+}

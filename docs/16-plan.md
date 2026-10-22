@@ -62,6 +62,13 @@ Prova: `tests/limits_test.kf` (6 testes) + `tests/e2e_multiservice_test.kf`
 desde a Fase 2 (sem rota); `AUTHENTICATED` adiciona a checagem de token antes do
 túnel.
 
+**Estado: ✅ implementado.** Credencial de serviço `kfs_` emitida pelo control
+plane (`POST /v1/services/token`) e validada no Edge; o token da conta não
+autoriza acesso público; o Edge remove a credencial antes de repassar ao
+serviço local; `401` com `WWW-Authenticate: Bearer`. CLI: `kof cloud service
+token <nome>`. Prova: `tests/service_token_test.kf` (7 testes) +
+`tests/e2e_authenticated_test.kf`.
+
 ## Fase 6 — domínio próprio
 
 CNAME + validação por `net.resolve` + ativação da rota. Depende de TLS por SNI,

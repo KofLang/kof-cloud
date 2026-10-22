@@ -1,0 +1,97 @@
+import kofcloud.control.Registry
+
+// Fase 5 — credencial de servico (kfs_) para servicos AUTHENTICATED.
+// O token da conta autoriza a EMISSAO; o token emitido autoriza o ACESSO e
+// vale apenas para o servico que o originou.
+
+String serviceTokenPath(String name) {
+    return "/tmp/kofcloud-stoken-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "token de servico: resolve o servico que o originou" {
+    var registry = Registry(serviceTokenPath("resolve"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED")
+    var token = registry.issueServiceToken(account.id, service.id)
+    assert(token.startsWith("kfs_"), "prefixo kfs_")
+    var resolved = registry.serviceByServiceToken(token)
+    assert(resolved != null, "token resolve")
+    if (resolved != null) {
+        assert(resolved.id == service.id, "servico certo")
+    }
+}
+
+test "token de servico: nao vale para outro servico" {
+    var registry = Registry(serviceTokenPath("cross"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var site = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED")
+    var api = registry.publishService(account, device.id, "api", "127.0.0.1", 3000, "http", "AUTHENTICATED")
+    var siteToken = registry.issueServiceToken(account.id, site.id)
+    var owner = registry.serviceByServiceToken(siteToken)
+    assert(owner != null, "resolve")
+    if (owner != null) {
+        assert(owner.id != api.id, "nao autoriza o outro servico")
+    }
+}
+
+test "token de servico: token invalido ou vazio nao resolve" {
+    var registry = Registry(serviceTokenPath("invalid"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED")
+    registry.issueServiceToken(account.id, service.id)
+    assert(registry.serviceByServiceToken("kfs_naoexiste") == null, "token desconhecido recusado")
+    assert(registry.serviceByServiceToken("") == null, "vazio recusado")
+}
+
+test "token de servico: so a conta dona emite" {
+    var registry = Registry(serviceTokenPath("owner"))
+    var mel = registry.createAccount("mel", "mel@e.com", "segredo")
+    var ana = registry.createAccount("ana", "ana@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED")
+    var blocked = false
+    try {
+        registry.issueServiceToken(ana.id, service.id)
+    } catch (String e) {
+        blocked = true
+    }
+    assert(blocked, "outra conta nao emite para o meu servico")
+}
+
+test "token de servico: remover o servico poda as credenciais" {
+    var path = serviceTokenPath("prune")
+    var registry = Registry(path)
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED")
+    var token = registry.issueServiceToken(account.id, service.id)
+    assert(registry.serviceByServiceToken(token) != null, "vale antes")
+    assert(registry.removeService(account.id, service.id) == true, "servico removido")
+    assert(registry.serviceByServiceToken(token) == null, "token orfao nao vale mais")
+    var reloaded = Registry(path)
+    assert(reloaded.serviceByServiceToken(token) == null, "e continua invalido apos recarregar")
+}
+
+test "token de servico: revogar o dispositivo poda as credenciais dos servicos" {
+    var registry = Registry(serviceTokenPath("revoke"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED")
+    var token = registry.issueServiceToken(account.id, service.id)
+    assert(registry.revokeDevice(account.id, device.id) == true, "dispositivo revogado")
+    assert(registry.serviceByServiceToken(token) == null, "credencial podada junto")
+}
+
+test "token de servico: persiste entre recargas do registry" {
+    var path = serviceTokenPath("persist")
+    var registry = Registry(path)
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED")
+    var token = registry.issueServiceToken(account.id, service.id)
+    var reloaded = Registry(path)
+    assert(reloaded.serviceByServiceToken(token) != null, "token sobrevive ao restart")
+}
