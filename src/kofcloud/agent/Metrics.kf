@@ -1,0 +1,72 @@
+package kofcloud.agent
+
+// Metricas operacionais do Agent (observabilidade minima, slice 3 — fecha).
+//
+// O que conta: tentativas de conexao, reconexoes com backoff, recusas fatais
+// por motivo, health reports enviados, streams servidos localmente e falhas
+// no servico local. O que NUNCA conta: nomes de servico, enderecos, portas,
+// conteudo, tokens, chaves. So agregados monotonicos.
+//
+// Implementacao: `observability.*` do stdlib (mesmo export Prometheus do
+// Edge/control via `observability.metrics()`). O Agent roda em processo
+// separado, entao seus contadores vivem no proprio processo — o operador os
+// le via log local ou agrega fora (sem protocolo novo no MVP).
+
+String metricAgentConnects() {
+    return "kofcloud_agent_connects_total"
+}
+
+String metricAgentReconnects() {
+    return "kofcloud_agent_reconnects_total"
+}
+
+String metricAgentFatalRefusals() {
+    return "kofcloud_agent_fatal_refusals_total"
+}
+
+String metricAgentHealthReports() {
+    return "kofcloud_agent_health_reports_total"
+}
+
+String metricAgentStreamsServed() {
+    return "kofcloud_agent_streams_served_total"
+}
+
+String metricAgentLocalErrors() {
+    return "kofcloud_agent_local_errors_total"
+}
+
+void noteAgentConnect() {
+    observability.counter(metricAgentConnects())
+}
+
+void noteAgentReconnect() {
+    observability.counter(metricAgentReconnects())
+}
+
+// Recusa definitiva do Edge (DEVICE_REVOKED, AUTH_FAILED, ...): motivos sao
+// do protocolo, nunca do cliente.
+void noteAgentFatal(String reason) {
+    observability.counter(metricAgentFatalRefusals())
+    if (reason == "DEVICE_REVOKED") {
+        observability.counter(metricAgentFatalRefusals() + "_revoked")
+    } else if (reason == "AUTH_FAILED") {
+        observability.counter(metricAgentFatalRefusals() + "_auth")
+    } else if (reason == "DEVICE_UNKNOWN") {
+        observability.counter(metricAgentFatalRefusals() + "_unknown")
+    } else {
+        observability.counter(metricAgentFatalRefusals() + "_other")
+    }
+}
+
+void noteHealthReport() {
+    observability.counter(metricAgentHealthReports())
+}
+
+void noteStreamServed() {
+    observability.counter(metricAgentStreamsServed())
+}
+
+void noteLocalError() {
+    observability.counter(metricAgentLocalErrors())
+}

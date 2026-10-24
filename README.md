@@ -123,8 +123,9 @@ Ver `docs/15-tests.md` para a matriz.
 * Observabilidade mínima: o Edge conta túneis/recusas, requisições
   ok/negadas, bytes e latência; o control plane conta lifecycle (contas,
   logins, devices, serviços, tokens, domínios) — tudo via `observability.*`,
-  servido sem auth em `GET /v1/metrics`; nenhuma métrica carrega hostname,
-  corpo, credencial ou chave.
+  servido sem auth em `GET /v1/metrics`; o Agent conta connects,
+  reconnects, health e streams no próprio processo; nenhuma métrica carrega
+  hostname, corpo, credencial ou chave.
 * Abuse prevention: rate limit por hostname no Edge (100 req/60 s,
   configurável) — excedeu, `429 KCF107` + `Retry-After` antes de rotear,
   sem revelar se o host existe e sem consumir o túnel.

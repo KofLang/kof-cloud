@@ -2,6 +2,7 @@ package kofcloud.agent
 
 import kofcloud.agent.Backoff
 import kofcloud.agent.Health
+import kofcloud.agent.Metrics
 import kofcloud.agent.Relay
 import kofcloud.identity.Keys
 import kofcloud.model.Service
@@ -57,13 +58,18 @@ void runAgent(AgentConfig config, Bool once) {
     var running = true
     while (running) {
         try {
+            noteAgentConnect()
             connectAndServe(config)
             running = false
         } catch (String e) {
             if (isFatal(e) || once) {
+                if (isFatal(e)) {
+                    noteAgentFatal(e)
+                }
                 log.error("agent: " + e)
                 running = false
             } else {
+                noteAgentReconnect()
                 var delay = backoffDelay(attempt, defaultBackoffBase(), defaultBackoffMax())
                 log.warn("agent: " + e + " — reconnecting in " + intToString(delay) + "ms")
                 time.sleep(delay)
@@ -260,6 +266,7 @@ void agentHealth(TunnelSession session, List<Service> services, Int healthMs) {
                 if (changed) {
                     last.put(service.name, status)
                     session.send(statusFrame(service.name, status))
+                    noteHealthReport()
                 }
             }
         }

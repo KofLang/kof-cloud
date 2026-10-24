@@ -1,5 +1,6 @@
 package kofcloud.agent
 
+import kofcloud.agent.Metrics
 import kofcloud.model.Service
 import kofcloud.protocol.Bytes
 import kofcloud.protocol.Payload
@@ -44,7 +45,9 @@ void agentStream(TunnelSession session, Service service, String streamId) {
         }
         local.close()
         responseBytes = response
+        noteStreamServed()
     } catch (String e) {
+        noteLocalError()
         responseBytes = localErrorResponse("local service " + service.name + " error: " + e)
     }
 

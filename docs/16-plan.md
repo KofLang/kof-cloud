@@ -129,7 +129,14 @@ no Registry (contas, logins, devices, serviços, tokens, domínios) e
 `GET /v1/metrics` serve o export Prometheus sem auth (igual ao `/v1/health`).
 Prova: `tests/metrics_test.kf` (6 testes: formato, recusa por motivo, Edge
 fim a fim, privacidade, endpoint + contadores via HTTP e via registry).
-Falta fatiado: contadores no Agent.
+
+**Estado (slice 3 — fecha): ✅ implementado.** `agent/Metrics.kf` conta
+connects, reconnects (backoff), recusas fatais por motivo, health reports,
+streams servidos e erros locais — agregados, sem nome de serviço, endereço,
+porta, conteúdo, token ou chave. O Agent roda em processo separado, então
+seus contadores vivem no próprio processo (sem protocolo novo no MVP).
+Prova: `tests/agent_metrics_test.kf` (3 testes: contadores puros, fluxo
+real via túnel, recusa fatal por motivo).
 
 ## Fase 8 — produto multiplataforma
 
