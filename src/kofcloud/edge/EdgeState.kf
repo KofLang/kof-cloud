@@ -16,6 +16,8 @@ class EdgeState {
     Int httpWindowMs
     Long tunnelIdleMs
     Long streamIdleMs
+    Map<String, String> serviceConns
+    Int serviceConnLimit
 
     constructor(registry: Registry) {
         this.registry = registry
@@ -25,6 +27,41 @@ class EdgeState {
         this.httpWindowMs = limitHttpWindowMs()
         this.tunnelIdleMs = limitTunnelIdleMs()
         this.streamIdleMs = limitStreamIdleMs()
+        this.serviceConns = mapOf()
+        this.serviceConnLimit = limitServiceConns()
+    }
+
+    // Permite aos testes fixarem o limite sem config de processo.
+    void setServiceConnLimit(Int limit) {
+        this.serviceConnLimit = limit
+    }
+
+    Int serviceConnOpen(String serviceId) {
+        var current = this.serviceConns.get(serviceId)
+        if (current == null) {
+            return 0
+        }
+        return parseIntSafe(current, 0)
+    }
+
+    // Tenta reservar uma vaga de relay para o servico. False = cheio (429).
+    Bool tryAcquireServiceConn(String serviceId) {
+        if (this.serviceConnOpen(serviceId) >= this.serviceConnLimit) {
+            return false
+        }
+        var opened = this.serviceConnOpen(serviceId)
+        this.serviceConns.put(serviceId, intToString(opened + 1))
+        return true
+    }
+
+    void releaseServiceConn(String serviceId) {
+        var current = this.serviceConnOpen(serviceId)
+        if (current > 1) {
+            this.serviceConns.put(serviceId, intToString(current - 1))
+        } else {
+            this.serviceConns.remove(serviceId)
+        }
+
     }
 
     // Permite aos testes fixarem o limite sem config de processo.
@@ -38,6 +75,10 @@ class EdgeState {
         this.tunnelIdleMs = tunnelMs
         this.streamIdleMs = streamMs
     }
+
+    // Conexoes em relay por servico (serviceId -> abertas). Contagem
+    // aproximada sob corrida (ver Limits.limitServiceConns): o pior caso e
+    // estourar em poucas unidades, nunca recusar a menos nem travar.
 
     // Rate limit por hostname solicitado (fixed-window do stdlib). Recusar
     // cedo: antes de rotear, autorizar ou tocar no tunel — o 429 nao revela

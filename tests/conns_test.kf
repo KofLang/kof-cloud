@@ -1,0 +1,185 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.model.Errors
+import kofcloud.protocol.Bytes
+import kofcloud.store.Store
+import testkit.Support
+
+// Ultimo debito de limites: conexoes simultaneas EM RELAY por servico.
+// Contagem aproximada sob corrida (check-then-act sem lock — ver Limits):
+// o pior caso estoura em poucas unidades, nunca recusa a menos. O teste
+// serializa apertado (limite 1) para provar o mecanismo sem flake.
+
+test "conexoes: limite por servico recusa com 429 KCF108", "conns" {
+    var localSvc = 19701
+    var controlPort = 19702
+    var tunnelPort = 19703
+    var httpPort = 19704
+
+    // Servico local LENTO (2 s por resposta): a primeira requisicao ocupa a
+    // vaga enquanto a segunda chega — sem timing fragil.
+    var slowListener = net.listen(localSvc)
+    var slowServer = spawn {
+        var serving = true
+        while (serving) {
+            try {
+                var peer = slowListener.accept()
+                var worker = spawn { serveSlowPeer(peer) }
+            } catch (String e) {
+                serving = false
+            }
+        }
+    }
+    assert(waitForPort(localSvc, 60), "servico lento no ar")
+
+    var registry = Registry("/tmp/kofcloud-conn-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    edgeState.setServiceConnLimit(1)
+    var edgeStop = "/tmp/kofcloud-conn-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-conn-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
+    assert(statusOf(published) == 200, "PUBLIC publicado")
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
+    // Os DOIS servicos antes do connect: o Agent aprende a lista no fetchEdge
+    // (hot-reload de servico novo e outro debito, fora deste slice).
+    var pubApi = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"api\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    var apiPublished = httpPostJson(controlPort, "/v1/services", pubApi, accountToken)
+    assert(statusOf(apiPublished) == 200, "segundo PUBLIC publicado")
+    var apiServiceId = mapField(json.decode<Map<String, String>>(bodyOf(apiPublished)), "id")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 1000)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+
+    // Primeira requisicao ocupa a unica vaga (servidor demora 2 s)...
+    // Conexao crua manual (sem spawn/await com retorno): envia e NAO le.
+    var firstConn = net.connect("127.0.0.1", httpPort)
+    firstConn.send(bytesFromString("GET /slow HTTP/1.1\r\nHost: site.mel.kofcloud.io\r\nConnection: close\r\n\r\n"))
+    time.sleep(1000)
+    // ...a segunda, concorrente, e recusada sem tocar no tunel.
+    var busy = httpGetRaw(httpPort, "/slow", "site.mel.kofcloud.io")
+    assert(statusOf(busy) == 429, "segunda concorrente -> 429")
+    assert(bodyOf(busy).indexOf("KCF108") >= 0, "KCF108 no corpo")
+    assert(responseHeader(busy, "retry-after").length > 0, "Retry-After presente")
+
+    // A primeira completa: a vaga libera (prova que era ocupacao real).
+    // Poll com teto — nunca bloqueia para sempre (readAll poderia).
+    assert(serviceGoneIdle(edgeState, serviceId), "vaga liberada apos resposta lenta")
+    firstConn.close()
+
+    // Vaga liberada: o proximo passa com corpo integro.
+    assert(bodyOf(httpGetRaw(httpPort, "/slow", "site.mel.kofcloud.io")) == "svc-slow", "vaga liberada")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_http_denied_total_service_overloaded") >= 1, "recusa contada")
+
+    // Outro servico tem cota propria (isolamento por serviceId).
+    var apiConn = net.connect("127.0.0.1", httpPort)
+    apiConn.send(bytesFromString("GET /slow HTTP/1.1\r\nHost: api.mel.kofcloud.io\r\nConnection: close\r\n\r\n"))
+    time.sleep(1000)
+    var busyApi = httpGetRaw(httpPort, "/slow", "api.mel.kofcloud.io")
+    assert(statusOf(busyApi) == 429, "api tambem limita a 1")
+    assert(serviceGoneIdle(edgeState, apiServiceId), "vaga da api liberada")
+    apiConn.close()
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+    slowListener.close()
+}
+
+test "conexoes: contador libera e Hint orienta", "conns-unit" {
+    var registry = Registry("/tmp/kofcloud-connu-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    edgeState.setServiceConnLimit(2)
+    assert(edgeState.tryAcquireServiceConn("s1") == true, "vaga 1")
+    assert(edgeState.tryAcquireServiceConn("s1") == true, "vaga 2")
+    assert(edgeState.tryAcquireServiceConn("s1") == false, "cheio recusa")
+    assert(edgeState.serviceConnOpen("s1") == 2, "duas abertas")
+    assert(edgeState.tryAcquireServiceConn("s2") == true, "outro servico isolado")
+    edgeState.releaseServiceConn("s1")
+    assert(edgeState.tryAcquireServiceConn("s1") == true, "vaga libera")
+    edgeState.releaseServiceConn("s1")
+    edgeState.releaseServiceConn("s1")
+    assert(edgeState.serviceConnOpen("s1") == 0, "nunca negativo (remove a chave)")
+    assert(errHint("KCF108: too many connections for this service").indexOf("instantes") >= 0, "Hint sem dado de servico")
+}
+
+// Servidor lento deterministico: dorme 2 s, responde corpo fixo.
+void serveSlowPeer(Conn peer) {
+    var req = ""
+    var reading = true
+    while (reading) {
+        var chunk = peer.receive(4096)
+        if (chunk.length == 0) {
+            reading = false
+        } else {
+            req = req + bytesToString(chunk)
+            if (req.indexOf("\r\n\r\n") >= 0) {
+                reading = false
+            }
+        }
+    }
+    if (req.startsWith("GET /slow ")) {
+        time.sleep(2000)
+        var body = "svc-slow"
+        peer.send(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n" + body))
+    }
+    peer.close()
+}
+
+// Espera a vaga do servico liberar (resposta lenta concluida no relay).
+// Poll com teto: prova conclusao sem receive bloqueante infinito.
+Bool serviceGoneIdle(EdgeState state, String serviceId) {
+    var waits = 60
+    while (waits > 0) {
+        if (state.serviceConnOpen(serviceId) == 0) {
+            return true
+        }
+        time.sleep(250)
+        waits = waits - 1
+    }
+    return state.serviceConnOpen(serviceId) == 0
+}
+
+Int metricValue(String exposition, String name) {
+    for (var line in exposition.split("\n")) {
+        var trimmed = line.trim()
+        if (trimmed.startsWith(name + " ")) {
+            return parseIntSafe(trimmed.substring(name.length + 1).trim(), -1)
+        }
+    }
+    return -1
+}

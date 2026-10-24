@@ -81,3 +81,13 @@ Int limitHttpRequests() {
 Int limitHttpWindowMs() {
     return config.int("kofcloud.limits.httpWindowMs", 60000)
 }
+
+// Conexoes publicas simultaneas EM RELAY por servico (o recurso caro: tunel
+// + servico local). Excedeu -> 429 KCF108 com Retry-After, ANTES de abrir
+// stream. Contagem aproximada sob corrida extrema (check-then-act sem lock;
+// o Kof nao expoe mutex — ver 17-limitations.md L3): pode estourar em poucas
+// unidades, nunca falhar fechado nem travar. O rate limit (atomico) segura
+// o volume; este segura a profundidade.
+Int limitServiceConns() {
+    return config.int("kofcloud.limits.serviceConns", 64)
+}

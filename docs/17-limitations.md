@@ -43,12 +43,16 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 * **O Edge fala HTTP/1.1.** Sem pipelining avançado, sem trailers.
 * **Sem half-close no protocolo.** Um stream termina com `END`/`RESET`; não há
   sinal de "não vou mais escrever, mas ainda leio".
-* **Limites parcialmente aplicados.** Já valem dispositivos ativos por conta,
-  serviços por dispositivo, streams por túnel, rate limit por hostname, frame
-  DATA fatiado (blocos de 16 KiB), teto de linha do túnel (fail-closed) e idle
-  timeout (túnel cai sem frames úteis, stream preso leva RESET). **Ainda não**
-  é aplicado: limite de conexões simultâneas por serviço. Ver `03-device.md`
-  e `08-multiplexing.md`.
+* **Limites aplicados.** Dispositivos ativos por conta, serviços por
+  dispositivo, streams por túnel, rate limit por hostname, frame DATA fatiado
+  (blocos de 16 KiB), teto de linha do túnel (fail-closed), idle timeout e
+  conexões simultâneas por serviço — todos configuráveis e com enforcement.
+  Ver `03-device.md` e `08-multiplexing.md`.
+* **Contador por serviço é aproximado sob corrida** (check-then-act sem lock;
+  o Kof não expõe mutex, L3): pode estourar em poucas unidades, nunca recusa
+  a menos. Contadores internos usam `Map<String, String>` porque
+  `Map<String, Int>` como campo de classe quebra o verificador JVM
+  (VerifyError medido; sem issue aberta no Kof ainda).
 * **Throughput de payloads grandes é limitado por `bytesToString` O(n²).**
   Medido: ~1 s para 100 KiB em `bytesToBase64`; 1 MiB levaria ~100 s. Por isso
   o envio é fatiado em blocos de 16 KiB (custo total linear no tamanho do

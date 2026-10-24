@@ -119,6 +119,10 @@ String errRateLimited() {
     return "KCF107: too many requests"
 }
 
+String errServiceOverloaded() {
+    return "KCF108: too many connections for this service"
+}
+
 // ---- dominio proprio (Fase 6) ----
 
 String errInvalidCustomHostname() {
@@ -199,6 +203,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF107") >= 0) {
         return "Muitas requisicoes em pouco tempo — aguarde um instante e tente de novo."
+    }
+    if (raw.indexOf("KCF108") >= 0) {
+        return "Servico ocupado agora — tente de novo em instantes."
     }
     if (raw.indexOf("KCF120") >= 0) {
         return "O dominio precisa ser um hostname externo valido (ex: api.example.com) — sem IP e fora de *.kofcloud.io."

@@ -121,7 +121,15 @@ nos dois lados: túnel ocioso cai (`kofcloud.limits.tunnelIdleMs`, default
 IDLE_TIMEOUT` (`kofcloud.limits.streamIdleMs`, default 30 s) sem derrubar a
 sessão. EOF limpo virou throw (reconecta com backoff), exceto com stopFile
 ou GOAWAY — antes, queda silenciosa parava o Agent. Prova:
-`tests/idle_test.kf` (4 testes). Resta: conexões simultâneas por serviço.
+`tests/idle_test.kf` (4 testes).
+
+**Estado (conexões simultâneas por serviço — fecha os débitos): ✅
+implementado.** Contador por `serviceId` no Edge
+(`kofcloud.limits.serviceConns`, default 64); excedeu → `429 KCF108` +
+`Retry-After` antes do OPEN (sem consumir stream nem tocar no Agent).
+Aproximado sob corrida (documentado); métrica `_service_overloaded`.
+Prova: `tests/conns_test.kf` (2 testes: concorrência real com servidor
+lento, liberação, isolamento, métrica, Hint).
 
 ## Abuse prevention (parcial, antes do deploy)
 

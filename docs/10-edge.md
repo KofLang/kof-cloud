@@ -50,14 +50,17 @@ encaminha pelo túnel. **A aplicação do usuário nunca fica exposta diretament
 | Limite | Default | Efeito ao exceder |
 |---|---|---|
 | conexões públicas simultâneas | 1024 | `503` + fecha |
-| conexões por serviço | 64 | `429` |
+| conexões simultaneas por servico | 64 (`kofcloud.limits.serviceConns`) | `429 KCF108` + `Retry-After` (antes do OPEN; aproximado sob corrida, ver abaixo) |
 | requisições por hostname e janela | 100 / 60 s | `429 KCF107` + `Retry-After` |
 | header total | 16 KiB | `431` |
 | corpo | 16 MiB | `413` |
 | streams por túnel | 128 | `RESET{LIMIT_EXCEEDED}` |
 
 Os limites existem para proteger **as duas pontas**: a infraestrutura KofCloud e
-a máquina do usuário. O rate limit é por **hostname solicitado**
+a máquina do usuário. A contagem por serviço é aproximada sob corrida extrema
+(check-then-act sem lock — o Kof nao expoe mutex, L3): o pior caso estoura em
+poucas unidades, nunca recusa a menos nem trava; o rate limit (atomico)
+segura o volume. O rate limit é por **hostname solicitado**
 (`kofcloud.limits.httpRequests` / `kofcloud.limits.httpWindowMs`, fixed-window
 do `security.rateLimit`): o Edge TCP não expõe IP de origem, e o hostname é o
 que varredura e força bruta rotacionam menos. Recusado **antes** de rotear —
@@ -97,6 +100,7 @@ O corpo das respostas de erro do Edge também viaja como `KCFnnn`:
 | `502` | `KCF105` empty response | serviço local devolveu resposta vazia |
 | `429` | `KCF106` too many concurrent streams | limite `kofcloud.limits.streams` por túnel |
 | `429` | `KCF107` too many requests | rate limit por hostname (+ `Retry-After`); antes de rotear, sem revelar nada |
+| `429` | `KCF108` too many connections for this service | limite por serviço (+ `Retry-After`); antes do OPEN, aproximado sob corrida |
 
 ## Observabilidade mínima
 
@@ -110,7 +114,7 @@ export Prometheus em `observability.metrics()`, servido sem auth em
 | `kofcloud_edge_tunnel_refused_total{,_motivo}` | counter | recusas (`_version`, `_unknown_device`, `_revoked_device`, `_auth`) |
 | `kofcloud_edge_tunnel_sessions_open` | gauge | sessões de túnel vivas |
 | `kofcloud_edge_http_requests_total` | counter | requisições públicas terminadas |
-| `kofcloud_edge_http_denied_total{,_motivo}` | counter | negadas (`_no_route`, `_auth_required`, `_device_offline`, `_service_down`, `_rate_limited`, `_other`) |
+| `kofcloud_edge_http_denied_total{,_motivo}` | counter | negadas (`_no_route`, `_auth_required`, `_device_offline`, `_service_down`, `_rate_limited`, `_service_overloaded`, `_other`) |
 | `kofcloud_edge_http_upstream_errors_total` | counter | falhas de relay (502) |
 | `kofcloud_edge_http_request_bytes_total` | counter | bytes de pedido somados |
 | `kofcloud_edge_http_response_bytes_total` | counter | bytes de resposta somados |

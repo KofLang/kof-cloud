@@ -110,11 +110,21 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     }
     var dropCredential = service.exposure == "AUTHENTICATED"
     var forwarded = serializeRequest(request, "edge", dropCredential)
+    // Vaga de relay por servico: o recurso caro (tunel + servico local).
+    // Recusar AQUI (antes do OPEN) nao consome stream nem toca no Agent.
+    if (state.tryAcquireServiceConn(service.id) == false) {
+        var busy = rateLimitedResponse(errServiceOverloaded(), state.httpRetryAfterSec())
+        conn.send(busy)
+        conn.close()
+        noteHttpFinished("denied", "KCF108", raw.length, busy.length, time.now() - started)
+        return
+    }
     var responseBytes = bytesEmpty()
     try {
         noteStreamOpened()
         responseBytes = relayThroughTunnel(session, service.name, forwarded, maxBytes)
     } catch (String e) {
+        state.releaseServiceConn(service.id)
         if (e == "LIMIT_EXCEEDED") {
             var limited = errorResponse(429, errTooManyStreams())
             conn.send(limited)
@@ -128,6 +138,7 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         }
         return
     }
+    state.releaseServiceConn(service.id)
     if (responseBytes.length == 0) {
         var empty = errorResponse(502, errEmptyUpstream())
         conn.send(empty)
