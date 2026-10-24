@@ -10,6 +10,7 @@ import kofcloud.protocol.LineCodec
 import kofcloud.protocol.Session
 import kofcloud.protocol.Tunnel
 import kofcloud.protocol.Version
+import kofcloud.util.Limits
 import kofcloud.util.Text
 
 // Listener de tuneis: aceita Agents. Cada conexao vira uma TunnelSession.
@@ -121,6 +122,7 @@ void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
     noteTunnelAccepted(state.onlineCount())
 
     var writer = spawn { tunnelWriter(conn, session) }
+    var idleSweeper = spawn { tunnelIdleSweeper(state, session, deviceId, sessionId) }
 
     var reader = LineCodec()
     var open = true
@@ -148,6 +150,36 @@ void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
     conn.close()
     noteTunnelClosed(state.onlineCount())
     await writer
+    // Sem await no sweeper: fire-and-forget como as demais tasks auxiliares
+    // (ele termina sozinho quando session.open cai).
+}
+
+// Varredura de ociosidade: a cada ~heartbeat, derruba a sessao se passar do
+// idle SEM frames uteis (PING nao conta — ver session.touch) e encerra com
+// RESET os streams presos sem END. Fail-closed sem thread exclusiva por
+// sessao: polling curto na mesma task do tunel, sem relogio por stream.
+// O Agent reconecta sozinho; o Edge limpa a rota via unbind.
+void tunnelIdleSweeper(EdgeState state, TunnelSession session, String deviceId, String sessionId) {
+    var open = true
+    while (open) {
+        time.sleep(5000)
+
+        if (session.open == false) {
+            open = false
+        } else {
+            if (session.idleMs() > state.tunnelIdleMs) {
+                state.unbind(deviceId, sessionId)
+                session.close()
+                noteTunnelRefused("IDLE_TIMEOUT")
+                open = false
+            } else {
+                for (var streamId in session.idleStreams(state.streamIdleMs)) {
+                    session.send(resetFrame(streamId, "IDLE_TIMEOUT"))
+                    session.closeStream(streamId)
+                }
+            }
+        }
+    }
 }
 
 Bool handleTunnelFrame(EdgeState state, TunnelSession session, String line) {
@@ -169,6 +201,11 @@ Bool handleTunnelFrame(EdgeState state, TunnelSession session, String line) {
         session.send(pongFrame())
         return true
     }
+    if (kind == "GOAWAY") {
+        return false
+    }
+    // Atividade util: qualquer frame nao-PING renova o idle da sessao.
+    session.touch()
     if (kind == "STATUS") {
         state.registry.setServiceStatusByName(session.deviceId, frameField(frame, "service"), frameField(frame, "status"))
         return true
@@ -184,9 +221,6 @@ Bool handleTunnelFrame(EdgeState state, TunnelSession session, String line) {
     if (kind == "RESET") {
         session.deliver(frameField(frame, "s"), streamResetMarker())
         return true
-    }
-    if (kind == "GOAWAY") {
-        return false
     }
     // OPENED e desconhecidos: ignorados (forward-compat).
     return true

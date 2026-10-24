@@ -36,6 +36,19 @@ Int limitFrameBytes() {
 // sobre tudo, evitam o custo O(n^2) de `bytesToString` em blocos grandes
 // (medido: ~1 s para 100 KiB em bytesToBase64; o custo total e n*tamanho —
 // ver 17-limitations). O teto (limitFrameBytes) continua valendo na recepcao.
+// Ociosidade maxima sem frames uteis (nao-PING) antes de derrubar a sessao
+// (ms). Heartbeat sozinho nao renova: tunel parado e tunel morto para fins
+// de roteamento — o Agent reconecta sozinho e o Edge limpa a rota.
+Int limitTunnelIdleMs() {
+    return config.int("kofcloud.limits.tunnelIdleMs", 120000)
+}
+
+// Vida maxima de um stream sem END (ms): stream preso (peer que abre e some
+// no meio do DATA) e encerrado com RESET sem derrubar a sessao.
+Int limitStreamIdleMs() {
+    return config.int("kofcloud.limits.streamIdleMs", 30000)
+}
+
 Int sendChunkBytes() {
     var size = config.int("kofcloud.limits.sendChunkBytes", 16384)
     if (size <= 0) {

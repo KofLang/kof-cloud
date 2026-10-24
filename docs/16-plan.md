@@ -112,8 +112,16 @@ DATA por bloco; recepção recusa linha acima de `maxTunnelLineBytes()`
 adaptativo (encolhe até caber — o base64 do stdlib passa por UTF-8 e expande
 bytes altos). Prova: `tests/frames_test.kf` (4 testes: fatiamento +
 recomposição byte-idêntica, codec fail-closed, HELLO gigante fecha sem
-WELCOME, 1.5 MiB fim a fim). Resta: conexões simultâneas por serviço e idle
-timeout.
+WELCOME, 1.5 MiB fim a fim).
+
+**Estado (idle timeout): ✅ implementado.** `lastActivityMs` por sessão
+(renovado só por frame útil — PING/PONG não contam) + varredura a cada 5 s
+nos dois lados: túnel ocioso cai (`kofcloud.limits.tunnelIdleMs`, default
+120 s; métrica `_idle_timeout` no Edge) e stream preso leva `RESET
+IDLE_TIMEOUT` (`kofcloud.limits.streamIdleMs`, default 30 s) sem derrubar a
+sessão. EOF limpo virou throw (reconecta com backoff), exceto com stopFile
+ou GOAWAY — antes, queda silenciosa parava o Agent. Prova:
+`tests/idle_test.kf` (4 testes). Resta: conexões simultâneas por serviço.
 
 ## Abuse prevention (parcial, antes do deploy)
 

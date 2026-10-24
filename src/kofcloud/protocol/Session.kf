@@ -22,6 +22,13 @@ class TunnelSession {
     Int nextStreamId
     Int maxStreams
     Bool open
+    // Ultima atividade util (ms): qualquer frame nao-PING recebido. O PING
+    // de heartbeat nao conta — senao o tunel nunca seria ocioso por definicao
+    // (ver handleTunnelFrame: so DATA/END/RESET/OPEN/STATUS atualizam).
+    Long lastActivityMs
+    // Streams com primeiro byte ha mais de idleStreamMs sem END sao
+    // encerrados com RESET (nao derrubam a sessao).
+    Map<String, Long> streamStartedMs
 
     constructor(sessionId: String, deviceId: String, accountId: String, sessionKey: String) {
         this.sessionId = sessionId
@@ -33,6 +40,8 @@ class TunnelSession {
         this.nextStreamId = 1
         this.maxStreams = limitStreams()
         this.open = true
+        this.lastActivityMs = time.now()
+        this.streamStartedMs = mapOf()
     }
 
     void setMaxStreams(Int limit) {
@@ -52,16 +61,20 @@ class TunnelSession {
         var id = "" + this.nextStreamId
         this.nextStreamId = this.nextStreamId + 1
         this.inboxes.put(id, channel<String>())
+        this.streamStartedMs.put(id, time.now())
+        this.touch()
         return id
     }
 
     // Registra um stream com id atribuido pelo peer (lado que recebe OPEN).
     void registerStream(String streamId) {
         this.inboxes.put(streamId, channel<String>())
+        this.streamStartedMs.put(streamId, time.now())
     }
 
     void closeStream(String streamId) {
         this.inboxes.remove(streamId)
+        this.streamStartedMs.remove(streamId)
     }
 
     Bool hasStream(String streamId) {
@@ -70,6 +83,30 @@ class TunnelSession {
 
     Int streamCount() {
         return this.inboxes.size
+    }
+
+    // Marca atividade util. O PING/PONG de heartbeat NAO chama touch de
+    // proposito: heartbeat prova que o TCP esta vivo, nao que ha trabalho.
+    void touch() {
+        this.lastActivityMs = time.now()
+    }
+
+    Long idleMs() {
+        return time.now() - this.lastActivityMs
+    }
+
+    // Streams com primeiro byte ha mais de `idleMs` sem END: devolve os ids.
+    // O chamador envia RESET e fecha (nao derruba a sessao).
+    List<String> idleStreams(Long idleMs) {
+        var out = listOf<String>()
+        var now = time.now()
+        for (var streamId in this.streamStartedMs.keys()) {
+            var started = this.streamStartedMs.get(streamId)
+            if (started != null && now - started > idleMs) {
+                out.add(streamId)
+            }
+        }
+        return out
     }
 
     // Entrega um item (payload base64 ou marcador) ao stream.

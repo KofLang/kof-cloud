@@ -13,6 +13,7 @@ import kofcloud.protocol.Session
 import kofcloud.protocol.Tunnel
 import kofcloud.protocol.Version
 import kofcloud.util.Hosts
+import kofcloud.util.Limits
 import kofcloud.util.Text
 
 // Agent: mantem o tunel reverso com o Edge, faz health check e relay dos
@@ -62,7 +63,13 @@ void runAgent(AgentConfig config, Bool once) {
             connectAndServe(config)
             running = false
         } catch (String e) {
-            if (isFatal(e) || once) {
+            // Parada pedida vale em qualquer estado — inclusive dormindo em
+            // backoff, onde o watchdog (que so atua dentro de connectAndServe)
+            // nao alcanca. Sem isso, um disconnect durante o backoff
+            // reconectaria, e o processo nunca terminaria.
+            if (config.stopFile.length > 0 && File(config.stopFile).exists()) {
+                running = false
+            } else if (isFatal(e) || once) {
                 if (isFatal(e)) {
                     noteAgentFatal(e)
                 }
@@ -133,6 +140,7 @@ void connectAndServe(AgentConfig config) {
     var writer = spawn { agentWriter(conn, session) }
     var pinger = spawn { agentPinger(session, heartbeatMs) }
     var watchdog = spawn { agentWatchdog(session, config.stopFile) }
+    var sweeper = spawn { agentIdleSweeper(session) }
     var healthMs = config.healthMs
     if (healthMs <= 0) {
         healthMs = 5000
@@ -142,6 +150,7 @@ void connectAndServe(AgentConfig config) {
     reportAllStatuses(session, endpoint.services)
 
     var open = true
+    var goaway = false
     while (open) {
         var chunk = conn.receive(8192)
         if (chunk.length == 0) {
@@ -154,7 +163,13 @@ void connectAndServe(AgentConfig config) {
                 while (codec.hasLine()) {
                     var line = codec.nextLine()
                     if (line.length > 0) {
-                        open = handleAgentFrame(session, servicesByName, line)
+                        var frame = decodeFrame(line)
+                        if (frameKind(frame) == "GOAWAY") {
+                            goaway = true
+                            open = false
+                        } else {
+                            open = handleAgentFrame(session, servicesByName, line)
+                        }
                     }
                 }
             }
@@ -163,7 +178,19 @@ void connectAndServe(AgentConfig config) {
 
     session.close()
     conn.close()
-    log.warn("agent: tunnel closed")
+    // EOF limpo NAO e saida normal: so o watchdog (stopFile) ou um GOAWAY do
+    // Edge encerram sem reconectar. Queda no meio — inclusive a derrubada por
+    // idle do sweeper do Edge — vira throw e o runAgent reconecta com backoff
+    // (o HELLO seguinte decide: ACTIVE reconecta, SUSPENDED/REVOKED e fatal).
+    if (goaway) {
+        log.warn("agent: edge asked to go away")
+        return
+    }
+    if (config.stopFile.length > 0 && File(config.stopFile).exists()) {
+        log.warn("agent: tunnel closed")
+        return
+    }
+    throw "edge closed connection"
 }
 
 Bool handleAgentFrame(TunnelSession session, Map<String, Service> servicesByName, String line) {
@@ -172,6 +199,12 @@ Bool handleAgentFrame(TunnelSession session, Map<String, Service> servicesByName
     if (kind == "PING") {
         session.send(pongFrame())
         return true
+    }
+    // Mesma regra do Edge: so frame util renova o idle. PING nao conta, e
+    // PONG tampouco (resposta ao heartbeat prova que o peer esta vivo, nao
+    // que ha trabalho — senao o heartbeat renovaria o idle para sempre).
+    if (kind != "PONG") {
+        session.touch()
     }
     if (kind == "OPEN") {
         var streamId = frameField(frame, "s")
@@ -201,10 +234,8 @@ Bool handleAgentFrame(TunnelSession session, Map<String, Service> servicesByName
         session.deliver(frameField(frame, "s"), streamResetMarker())
         return true
     }
-    if (kind == "GOAWAY") {
-        return false
-    }
-    // PONG, SERVICES e desconhecidos: ignorados.
+    // PONG, SERVICES e desconhecidos: ignorados (PONG nem renovou o idle).
+    // GOAWAY nunca chega aqui (tratado no reader, que encerra sem throw).
     return true
 }
 
@@ -248,6 +279,29 @@ void agentWatchdog(TunnelSession session, String stopFile) {
         } else if (File(stopFile).exists()) {
             session.close()
             open = false
+        }
+    }
+}
+
+// Espelho do sweeper do Edge: derruba a sessao ociosa e reseta streams
+// presos. Sem isso, um tunel zumbi (peer mudo que responde PING) viveria
+// para sempre dos dois lados.
+void agentIdleSweeper(TunnelSession session) {
+    var open = true
+    while (open) {
+        time.sleep(5000)
+        if (session.open == false) {
+            open = false
+        } else {
+            if (session.idleMs() > limitTunnelIdleMs()) {
+                session.close()
+                open = false
+            } else {
+                for (var streamId in session.idleStreams(limitStreamIdleMs())) {
+                    session.send(resetFrame(streamId, "IDLE_TIMEOUT"))
+                    session.closeStream(streamId)
+                }
+            }
         }
     }
 }

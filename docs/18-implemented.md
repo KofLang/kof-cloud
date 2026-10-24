@@ -43,6 +43,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | rate limit por hostname (slice 1) | `security.rateLimit` no Edge público: 429 `KCF107` + `Retry-After` antes de rotear | `ratelimit_test.kf` |
 | suspensão + auditoria (slice 2) | `SUSPENDED` reversível (serviço/dispositivo), enforcement em request+PING, anel de auditoria + `GET /v1/audit` + `kof cloud audit` | `abuse_test.kf` |
 | frame DATA fatiado + teto de linha | `Payload.encodeChunks` (blocos de 16 KiB) + `LineCodec` fail-closed + `maxTunnelLineBytes` | `frames_test.kf` |
+| idle timeout (tunel + stream) | `lastActivityMs` + sweepers Edge/Agent, EOF limpo vira throw (reconecta) | `idle_test.kf` |
 
 ## Comportamentos provados
 
@@ -103,6 +104,11 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   recepção recusa linha gigante com fail-closed (`LINE_OVERFLOW` no Edge,
   throw de reconexão no Agent); 1.5 MiB atravessa fatiado fim a fim
   (`frames_test.kf`, 4 testes).
+* **Idle timeout (débito de limites)**: sessão sem frames úteis cai (PING/PONG
+  não renovam; varredura 5 s, default 120 s, métrica `_idle_timeout` no Edge)
+  e o Agent reconecta sozinho; stream preso leva `RESET IDLE_TIMEOUT`
+  (default 30 s) sem derrubar a sessão; EOF limpo agora reconecta (só
+  stopFile/GOAWAY param) (`idle_test.kf`, 4 testes).
 * **Parada limpa** do agente (`disconnect` via arquivo-sentinela) e da
   plataforma (`serve`, via fechamento do `Listener`).
 

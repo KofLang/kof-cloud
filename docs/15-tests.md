@@ -34,6 +34,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U20 | métricas do Agent | `tests/agent_metrics_test.kf` | contadores sem dado de cliente, fluxo real (connect/stream/health) via túnel, recusa fatal por motivo |
 | U21 | suspensão + auditoria | `tests/abuse_test.kf` | SUSPENDED sai da rota (opaco), health/API não dessuspendem, device recusado no túnel, enforcement em request+PING, auditoria filtrada por conta |
 | U22 | frame DATA fatiado + teto de linha | `tests/frames_test.kf` | chunk adaptativo (16 KiB), codec com fail-closed, HELLO gigante fecha sem WELCOME, 1.5 MiB fim a fim |
+| U23 | idle timeout | `tests/idle_test.kf` | PING nao renova, stream preso listado, Edge derruba e Agent reconecta sozinho, RESET sem matar sessao |
 
 ## Integração
 

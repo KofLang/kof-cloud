@@ -66,6 +66,8 @@ void noteTunnelRefused(String reason) {
         observability.counter(metricTunnelRefused() + "_suspended_device")
     } else if (reason == "LINE_OVERFLOW") {
         observability.counter(metricTunnelRefused() + "_line_overflow")
+    } else if (reason == "IDLE_TIMEOUT") {
+        observability.counter(metricTunnelRefused() + "_idle_timeout")
     } else {
         observability.counter(metricTunnelRefused() + "_auth")
     }

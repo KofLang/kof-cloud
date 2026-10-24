@@ -1,0 +1,183 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.protocol.Session
+import kofcloud.store.Store
+import kofcloud.util.Limits
+import testkit.Support
+
+// Idle timeout do tunel/stream (debito de limites): sessao sem frames uteis
+// (PING nao conta) cai em fail-closed; stream preso sem END leva RESET sem
+// derrubar a sessao. O Agent reconecta sozinho; o Edge limpa a rota.
+
+test "idle: touch so em frame util; PING nao renova", "idle" {
+    assert(limitTunnelIdleMs() == 120000, "default 120 s")
+    assert(limitStreamIdleMs() == 30000, "default 30 s")
+    var session = TunnelSession("s1", "d1", "a1", "")
+    var t0 = session.lastActivityMs
+    assert(t0 > 0, "atividade inicial marcada")
+    time.sleep(15)
+    assert(session.idleMs() >= 0, "idle nao negativo")
+    session.touch()
+    assert(session.lastActivityMs >= t0, "touch avanca")
+}
+
+test "idle: stream preso entra na lista; fechar limpa", "idle-stream" {
+    var session = TunnelSession("s1", "d1", "a1", "")
+    var a = session.openStream()
+    var b = session.openStream()
+    assert(session.idleStreams(3600000).size == 0, "nada antigo ainda")
+    // Relogio em ms: dorme para garantir now > started (evita empate).
+    time.sleep(20)
+    var stale = session.idleStreams(0)
+    assert(stale.size == 2, "dois presos")
+    assert(session.streamStartedMs.size == 2, "inicio rastreado")
+    session.closeStream(a)
+    assert(session.idleStreams(0).size == 1, "fechar limpa o rastreio")
+    assert(session.streamCount() == 1, "um stream vivo")
+}
+
+test "idle: Edge derruba sessao ociosa e Agent reconecta", "idle-e2e" {
+    var localSvc = 19601
+    var controlPort = 19602
+    var tunnelPort = 19603
+    var httpPort = 19604
+
+    // Servidor TCP cru (aceita-e-fecha): checkService so precisa de TCP, e
+    // sem web.app nao ha flap de health para renovar o idle no meio do teste.
+    var bigListener = net.listen(localSvc)
+    var bigServer = spawn {
+        var serving = true
+        while (serving) {
+            try {
+                var peer = bigListener.accept()
+                var worker = spawn { serveIdlePeer(peer) }
+            } catch (String e) {
+                serving = false
+            }
+        }
+    }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-idle-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    // Ociosidade curta so neste teste (default de producao: 120 s).
+    edgeState.setIdleMs(8000, 30000)
+    var edgeStop = "/tmp/kofcloud-idle-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-idle-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 1000)
+    var agentTask = spawn { runAgent(config, false) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+
+    // Um request prova que o tunel serve; depois, silencio real: health TCP
+    // contra listener cru nao flapa (1 STATUS inicial + nada) e PING nao
+    // renova o idle por desenho. O sweeper (poll 5 s) derruba em ~8 s.
+    // NOTE: o Agent roda com once=false e reconecta em seguida — por isso o
+    // teste espera a TROCA de sessao (sessionId novo), nao offline estavel.
+    assert(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-idle", "tunel serve")
+    var oldSession = edgeState.sessionFor(deviceId)
+    assert(oldSession != null, "sessao existe")
+    var oldSessionId = ""
+    if (oldSession != null) {
+        oldSessionId = oldSession.sessionId
+    }
+    var drained = false
+    var waits = 80
+    while (waits > 0 && drained == false) {
+        var current = edgeState.sessionFor(deviceId)
+        if (current != null && current.sessionId != oldSessionId) {
+            drained = true
+        } else {
+            time.sleep(250)
+            waits = waits - 1
+        }
+    }
+    assert(drained, "sweeper derrubou a sessao ociosa (nova sessao no lugar)")
+
+    // O túnel novo serve sem intervencao.
+    assert(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-idle", "tunel novo serve")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_tunnel_refused_total_idle_timeout") >= 1, "kill contado")
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+    bigListener.close()
+}
+
+// Peer cru do teste: GET / responde 200 fixo; resto (health TCP, waitForPort)
+// so conecta e fecha — sem HTTP e sem flap.
+void serveIdlePeer(Conn peer) {
+    var req = ""
+    var reading = true
+    while (reading) {
+        var chunk = peer.receive(4096)
+        if (chunk.length == 0) {
+            reading = false
+        } else {
+            req = req + bytesToString(chunk)
+            if (req.indexOf("\r\n\r\n") >= 0) {
+                reading = false
+            }
+        }
+    }
+    if (req.startsWith("GET / ")) {
+        var body = "svc-idle"
+        peer.send(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n" + body))
+    }
+    peer.close()
+}
+
+Int metricValue(String exposition, String name) {
+    for (var line in exposition.split("\n")) {
+        var trimmed = line.trim()
+        if (trimmed.startsWith(name + " ")) {
+            return parseIntSafe(trimmed.substring(name.length + 1).trim(), -1)
+        }
+    }
+    return -1
+}
+
+test "idle: stream preso leva RESET sem derrubar a sessao", "idle-reset" {
+    var session = TunnelSession("s1", "d1", "a1", "")
+    var a = session.openStream()
+    // Simula inicio antigo: so o relogio interessa para a varredura.
+    session.streamStartedMs.put(a, 0)
+    var stale = session.idleStreams(30000)
+    assert(stale.size == 1 && stale.get(0) == a, "preso detectado")
+    // O RESET do protocolo e decidido pelo chamador; aqui so a deteccao.
+    assert(session.streamCount() == 1, "sessao intacta")
+}

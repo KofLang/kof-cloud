@@ -70,7 +70,8 @@ writer — ver `01-architecture.md` e `12-kof-apis.md`.
 | bytes por frame | 1 MiB | ✅ — envio em blocos de 16 KiB (`sendChunkBytes`), recepção recusa acima de `maxTunnelLineBytes` (`frames_test.kf`) |
 | bloco de envio | 16 KiB | ✅ (`kofcloud.limits.sendChunkBytes`) |
 | linha maxima do tunel | 2 MiB + margem | ✅ — `LineCodec` trava em overflow e o leitor derruba a conexao |
-| idle timeout do stream | 30 s | ⏳ |
+| idle timeout do stream | 30 s | ✅ — stream preso leva `RESET IDLE_TIMEOUT` (`tunnelIdleSweeper`/`agentIdleSweeper`, `idle_test.kf`) |
+| idle timeout do tunel | 120 s | ✅ — sem frame util, a sessao cai e o Agent reconecta (`kofcloud.limits.tunnelIdleMs`, PING nao renova) |
 
 O limite de streams é por sessão: fechar um stream libera a vaga imediatamente
 (ver `tests/limits_test.kf`).

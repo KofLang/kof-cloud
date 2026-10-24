@@ -45,9 +45,10 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   sinal de "não vou mais escrever, mas ainda leio".
 * **Limites parcialmente aplicados.** Já valem dispositivos ativos por conta,
   serviços por dispositivo, streams por túnel, rate limit por hostname, frame
-  DATA fatiado (blocos de 16 KiB) e teto de linha do túnel (fail-closed).
-  **Ainda não** são aplicados: conexões simultâneas por serviço e idle timeout
-  do túnel/stream. Ver `03-device.md` e `08-multiplexing.md`.
+  DATA fatiado (blocos de 16 KiB), teto de linha do túnel (fail-closed) e idle
+  timeout (túnel cai sem frames úteis, stream preso leva RESET). **Ainda não**
+  é aplicado: limite de conexões simultâneas por serviço. Ver `03-device.md`
+  e `08-multiplexing.md`.
 * **Throughput de payloads grandes é limitado por `bytesToString` O(n²).**
   Medido: ~1 s para 100 KiB em `bytesToBase64`; 1 MiB levaria ~100 s. Por isso
   o envio é fatiado em blocos de 16 KiB (custo total linear no tamanho do

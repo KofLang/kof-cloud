@@ -14,6 +14,8 @@ class EdgeState {
     Int sessionCounter
     Int httpLimit
     Int httpWindowMs
+    Long tunnelIdleMs
+    Long streamIdleMs
 
     constructor(registry: Registry) {
         this.registry = registry
@@ -21,12 +23,20 @@ class EdgeState {
         this.sessionCounter = 0
         this.httpLimit = limitHttpRequests()
         this.httpWindowMs = limitHttpWindowMs()
+        this.tunnelIdleMs = limitTunnelIdleMs()
+        this.streamIdleMs = limitStreamIdleMs()
     }
 
     // Permite aos testes fixarem o limite sem config de processo.
     void setHttpLimits(Int requests, Int windowMs) {
         this.httpLimit = requests
         this.httpWindowMs = windowMs
+    }
+
+    // Permite aos testes forcarem ociosidade curta sem esperar o default.
+    void setIdleMs(Long tunnelMs, Long streamMs) {
+        this.tunnelIdleMs = tunnelMs
+        this.streamIdleMs = streamMs
     }
 
     // Rate limit por hostname solicitado (fixed-window do stdlib). Recusar
