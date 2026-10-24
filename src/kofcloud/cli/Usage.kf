@@ -29,6 +29,7 @@ String usageText() {
     out = out + "  domain remove <hostname>\n"
     out = out + "  deploy [--file kofcloud.json] [--check]   (publica os servicos do manifesto + verifica)\n"
     out = out + "  down [--file kofcloud.json]     (remove os servicos do manifesto)\n"
+    out = out + "  daemon install|status|uninstall   (systemd --user, sem root)\n"
     out = out + "  audit                     (trilha de auditoria da conta)\n"
     out = out + "  logs\n"
     out = out + "\n"

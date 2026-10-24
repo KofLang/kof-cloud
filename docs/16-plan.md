@@ -102,11 +102,17 @@ terminador externo.
 (`--file` para outro caminho) declara `services[]` (nome, porta numero ou
 string, address/exposure opcionais); `kof cloud deploy` publica em lote
 (idempotente, sem remover o que nao declarou) e `kof cloud down` remove so
-os do manifesto. Sem build, sem artefato, sem daemon — so `publish` em
-lote sobre as primitivas existentes. Parser manual com erro posicional
+os do manifesto. Sem build nem artefato — so `publish` em lote sobre as
+primitivas existentes. Parser manual com erro posicional
 (Map<String, String> nao aceita numero — ClassCast medido). Prova:
 `tests/deploy_test.kf` (5 testes). `deploy --check` verifica publicado +
-respondendo (sem rollback). Falta fatiado: build/artefato, daemon,
+respondendo (sem rollback).
+
+**Estado (slice 3 — daemon user-level): ✅ implementado.** `kof cloud daemon
+install|status|uninstall`: gera `kofcloud-agent.service` (mesmo `connect`,
+`Restart=always`, `NoNewPrivileges`, enable manual de proposito), erro
+honesto sem systemd. So Linux; Windows/macOS na Fase 8. Prova:
+`tests/daemon_test.kf` (3 testes). Falta fatiado: build/artefato,
 auto-update.
 
 ## Débitos de limites (antes do deploy)

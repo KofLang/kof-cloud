@@ -1,0 +1,29 @@
+import kofcloud.cli.Daemon
+
+// Daemon user-level (Fase 7, slice 3): unit systemd gerada localmente.
+// Tudo aqui e puro (texto + paths); systemctl real so no CLI do usuario.
+
+test "daemon: unit tem restart, sem privilegios e aponta o connect", "daemon" {
+    var text = daemonUnitText("/usr/local/bin/kof", "http://127.0.0.1:8080")
+    assert(text.indexOf("[Unit]") >= 0, "secao Unit")
+    assert(text.indexOf("[Service]") >= 0, "secao Service")
+    assert(text.indexOf("[Install]") >= 0, "secao Install")
+    assert(text.indexOf("ExecStart=/usr/local/bin/kof cloud connect --control http://127.0.0.1:8080") >= 0, "executa o connect")
+    assert(text.indexOf("Restart=always") >= 0, "restart automatico")
+    assert(text.indexOf("NoNewPrivileges=true") >= 0, "sem escalacao")
+    assert(text.indexOf("WantedBy=default.target") >= 0, "target de usuario (sem root)")
+    assert(text.indexOf("User=") < 0, "sem User= (roda como o proprio usuario)")
+}
+
+test "daemon: paths ficam no espaco do usuario", "daemon-paths" {
+    assert(daemonUnitName() == "kofcloud-agent.service", "nome da unit")
+    assert(daemonUnitPath().endsWith("/.config/systemd/user/kofcloud-agent.service"), "path user-level")
+    assert(daemonUnitDir().indexOf("/etc/systemd") < 0, "longe do sistema")
+}
+
+test "daemon: sem systemctl nao quebra (erro honesto)", "daemon-nosysd" {
+    // Em ambiente sem systemd (como este teste), daemonIsActive e
+    // daemonSystemctl devolvem false em vez de lancar.
+    assert(daemonIsActive() == false, "inativo sem systemd")
+    assert(daemonSystemctl("is-active " + daemonUnitName()) == false, "falha honesta")
+}

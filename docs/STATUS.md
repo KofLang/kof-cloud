@@ -14,8 +14,8 @@
 | Observabilidade (3 slices) | ✅ verde | `metrics_test.kf`, `agent_metrics_test.kf` |
 | Abuse prevention (2 slices) | ✅ verde | `ratelimit_test.kf`, `abuse_test.kf` |
 | Debitos de limites (frame, idle, conns) | ✅ verde | `frames_test.kf`, `idle_test.kf`, `conns_test.kf` |
-| Fase 7 slice 1 (deploy declarativo) | ✅ verde | `deploy_test.kf` |
-| Fase 7 slice 2+ (build/artefato/daemon) | ⏳ nao iniciado | — |
+| Fase 7 slices 1–3 (deploy, --check, daemon) | ✅ verde | `deploy_test.kf`, `daemon_test.kf` |
+| Fase 7 slice 4+ (build/artefato) | ⏳ nao iniciado | — |
 | TLS/SNI no Edge, ACME | ⏳ externo por desenho | `12-tls.md` |
 | Hot-reload de servico no Agent | ⏳ debito conhecido | — |
 
@@ -57,13 +57,14 @@ o run total imprime `21 passed, 0 failed`. Falha = nome do teste + assert
 | frames | `tests/frames_test.kf` | 4 |
 | idle | `tests/idle_test.kf` | 4 |
 | conexoes | `tests/conns_test.kf` | 2 |
-| deploy | `tests/deploy_test.kf` | 4 |
+| deploy | `tests/deploy_test.kf` | 5 |
+| daemon | `tests/daemon_test.kf` | 3 |
 | control plane | `tests/control_test.kf` | 2 |
 | e2e | `tests/e2e_test.kf` | 1 |
 | e2e multiservico | `tests/e2e_multiservice_test.kf` | 1 |
 | e2e autenticado | `tests/e2e_authenticated_test.kf` | 1 |
 
-Total: 92 testes. Ver `15-tests.md` para a matriz U+I+E+F.
+Total: 96 testes. Ver `15-tests.md` para a matriz U+I+E+F.
 
 ## Limites honestos (medidos, nao prometidos)
 

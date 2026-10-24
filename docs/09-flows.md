@@ -71,7 +71,22 @@ kofcloud.json:
     mesma regra do Agent) — sem rollback, só diagnóstico
 ```
 
-Sem build, sem artefato, sem daemon neste slice: só `publish` em lote.
+Sem build, sem artefato neste slice: só `publish` em lote.
+
+## 3.2 Daemon user-level (`kof cloud daemon`)
+
+```
+kof cloud daemon install   → grava ~/.config/systemd/user/kofcloud-agent.service
+                             (ExecStart = mesmo `connect`, Restart=always,
+                              NoNewPrivileges, WantedBy=default.target)
+                             + systemctl --user daemon-reload (se houver)
+kof cloud daemon status    → is-active (ou INATIVO + como subir)
+kof cloud daemon uninstall → stop + remove a unit + reload
+```
+
+Escopo: só Linux com systemd --user, sem root, enable manual de propósito
+(o Kof não mexe em serviços sem consentimento). Sem systemd: erro honesto
+(`connect` em tmux/screen). Windows/macOS: Fase 8.
 Nada fora do manifesto é tocado — deploy nunca remove.
 
 ## 4. Requisição pública (ponta a ponta)

@@ -27,7 +27,7 @@ completa e os protocolos.
 | 5 — `AUTHENTICATED` com credencial de serviço (`kfs_`) | ✅ implementado e testado |
 | 6 — domínio próprio (slice 1: registro + verificação DNS + rota) | ✅ implementado e testado; sem TLS/SNI (externo — ver `docs/12-tls.md`) |
 | 6+ — observabilidade, abuse prevention, limites | ✅ implementados e testados |
-| 7 — deploy (slice 1: declarativo via `kofcloud.json`) | ✅ implementado e testado; sem build/artefato/daemon |
+| 7 — deploy (slices 1–3: declarativo, --check, daemon user-level) | ✅ implementado e testado; sem build/artefato, sem daemon Windows/macOS |
 
 O critério de sucesso do pedido foi atingido com o CLI real, em processos
 separados: `login` → `publish site --port 29010` → `connect`, e
@@ -125,8 +125,8 @@ java -jar /home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar test --target jvm --t
 Suítes verdes: framing, bytes, protocolo de túnel, hostnames/exposição,
 identidade/cifra, registry, backoff, integração do control plane, E2E,
 domínio próprio, métricas, rate limit, suspensão/auditoria, frames
-fatiados, idle timeout, conexões por serviço e deploy (21 suites). Ver
-`docs/15-tests.md` para a matriz.
+fatiados, idle timeout, conexões por serviço, deploy e daemon (22 suites).
+Ver `docs/15-tests.md` para a matriz.
 
 ## Segurança
 
