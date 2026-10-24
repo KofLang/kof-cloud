@@ -122,7 +122,8 @@ espera OPENED antes de DATA, e OPEN recusado vira 502 em vez de travar o
 relay para sempre (buraco real: publicar-depois-do-connect pendurava a vaga).
 Prova: `tests/reload_test.kf` + OPENED em `tests/protocol_test.kf`.
 
-Falta fatiado (Fase 7): build/artefato, auto-update.
+Falta fatiado (Fase 7): build/artefato, auto-update. `kof cloud doctor` (somente-leitura: login, control plane,
+device, servicos do manifesto) responde "onde quebrou" sem alterar nada.
 
 ## Débitos de limites (antes do deploy)
 

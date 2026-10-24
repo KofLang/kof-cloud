@@ -1,0 +1,136 @@
+package kofcloud.cli
+
+import kofcloud.cli.Commands
+import kofcloud.cli.Deploy
+import kofcloud.cli.Local
+import kofcloud.model.Errors
+import kofcloud.model.Device
+import kofcloud.model.Service
+import kofcloud.util.Text
+import kofcloud.store.Store
+
+// Diagnostico somente-leitura (Fase 7, slice 4): responde "onde quebrou?"
+// sem alterar nada — nenhum publish, remove, revoke, token ou escrita.
+// Cada checagem retorna "" (ok) ou "motivo" (falha); o comando imprime uma
+// linha por checagem e sai 0 so se todas passarem.
+//
+// Ordem (da maquina para a internet): sessao local -> control plane ->
+// edge -> DNS do hostname -> porta local de cada servico do manifesto
+// (se houver `kofcloud.json`; sem manifesto, so identidade + plataforma).
+
+record DoctorReport(Bool ok, List<String> lines)
+
+String doctorOkLine(String label) {
+    return "ok   " + label
+}
+
+String doctorFailLine(String label, String why) {
+    return "FALHA " + label + ": " + why
+}
+
+DoctorReport doctorCheck(String manifestPath) {
+    var lines = listOf<String>()
+    var failed = false
+
+    // 1. Identidade/conta local.
+    var session = loadSession()
+    if (session == null) {
+        lines.add(doctorFailLine("login local", "nao logado — rode: kof cloud login <handle> --password <senha>"))
+        return DoctorReport(false, lines)
+    }
+    var identity = loadIdentity()
+    if (identity == null) {
+        lines.add(doctorFailLine("login local", "nao logado — rode: kof cloud login <handle> --password <senha>"))
+        return DoctorReport(false, lines)
+    }
+    lines.add(doctorOkLine("login local (" + identity.handle + "/" + identity.deviceName + ")"))
+
+    // 2. Control plane alcancavel e autenticado.
+    var health = ""
+    try {
+        health = requireOk(http.get(session.controlUrl + "/v1/health", authHeader(session.token)))
+    } catch (String e) {
+        lines.add(doctorFailLine("control plane", session.controlUrl + " inacessivel ou fora do ar (" + e + ")"))
+        return DoctorReport(false, lines)
+    }
+    if (health.indexOf("\"ok\"") < 0 && health.indexOf("ok") < 0) {
+        lines.add(doctorFailLine("control plane", "resposta inesperada de " + session.controlUrl + "/v1/health"))
+        return DoctorReport(false, lines)
+    }
+    lines.add(doctorOkLine("control plane (" + session.controlUrl + ")"))
+
+    // 3. Dispositivo conhecido pelo control plane.
+    var devices = listOf<Device>()
+    try {
+        devices = fetchDevices(session.controlUrl, session.token)
+    } catch (String e) {
+        lines.add(doctorFailLine("dispositivo", "nao foi possivel listar devices (" + e + ")"))
+        return DoctorReport(false, lines)
+    }
+    var known = false
+    for (var device in devices) {
+        if (device.id == identity.deviceId) {
+            known = true
+        }
+    }
+    if (known == false) {
+        lines.add(doctorFailLine("dispositivo", "este device nao esta registrado — rode: kof cloud login novamente"))
+        return DoctorReport(false, lines)
+    }
+    lines.add(doctorOkLine("dispositivo registrado (" + identity.deviceId + ")"))
+
+    // 4. Servicos publicados acessiveis + porta local respondendo.
+    if (manifestPath.length == 0) {
+        manifestPath = defaultManifestPath()
+    }
+    var raw = readTextOr(manifestPath, "")
+    if (raw.length == 0) {
+        lines.add(doctorOkLine("manifesto (ausente — pulando checagem de servicos)"))
+        return DoctorReport(failed == false, lines)
+    }
+    var wanted = listOf<ManifestService>()
+    try {
+        wanted = parseManifest(raw)
+    } catch (String e) {
+        lines.add(doctorFailLine("manifesto", manifestPath + " invalido (" + e + ")"))
+        return DoctorReport(false, lines)
+    }
+    var live = listOf<Service>()
+    try {
+        live = fetchServices(session.controlUrl, session.token)
+    } catch (String e) {
+        lines.add(doctorFailLine("servicos", "nao foi possivel listar (" + e + ")"))
+        return DoctorReport(false, lines)
+    }
+    for (var service in wanted) {
+        var found = false
+        for (var remote in live) {
+            if (remote.name == service.name) {
+                found = true
+            }
+        }
+        if (found == false) {
+            lines.add(doctorFailLine(service.name, "nao publicado — rode: kof cloud deploy"))
+            failed = true
+        } else if (checkLocalService(service.address, service.port) == false) {
+            lines.add(doctorFailLine(service.name, "publicado mas sem resposta em " + service.address + ":" + intToString(service.port)))
+            failed = true
+        } else {
+            lines.add(doctorOkLine(service.name + " publicado e respondendo em " + service.address + ":" + intToString(service.port)))
+        }
+    }
+    return DoctorReport(failed == false, lines)
+}
+
+Int cmdDoctor(List<String> args) {
+    var file = flagValue(args, "--file")
+    var report = doctorCheck(file)
+    for (var line in report.lines) {
+        println(line)
+    }
+    if (report.ok) {
+        return 0
+    }
+    println("Hint: corrija o primeiro FALHA acima e rode de novo")
+    return 1
+}

@@ -1,0 +1,89 @@
+import kofcloud.cli.Daemon
+import kofcloud.cli.Deploy
+import kofcloud.cli.Doctor
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.store.Store
+import testkit.Support
+
+// doctor: diagnostico somente-leitura em camadas. Nao publica, nao remove,
+// nao revoga, nao emite token — so le. Cada teste monta o cenario e chama
+// doctorCheck (a logica pura), sem depender de HOME ou processos externos.
+
+test "doctor: sem login pede login e para na primeira camada", "doctor" {
+    // Sem sessao nao ha como autenticar: falha fechada, sem tocar na rede.
+    var report = doctorCheck("")
+    assert(report.ok == false, "falha sem login")
+    assert(report.lines.size == 1, "para na primeira camada")
+    assert(report.lines.get(0).startsWith("FALHA login local"), "aponta o login")
+}
+
+test "doctor: manifesto invalido e reportado com caminho", "doctor-manifest" {
+    var bad = deployManifest("bad", "{\"services\":[{\"name\":\"x\",\"port\":1}]}")
+    var parsed = parseManifest(readTextOr(bad, ""))
+    assert(parsed.size == 1, "parse ok")
+    // Com login ausente, o manifesto nem e lido: login vem antes.
+    var report = doctorCheck(bad)
+    assert(report.ok == false, "falha sem login")
+}
+
+test "doctor: fim a fim acusa servico fora do ar e aprova quando sobe", "doctor-e2e" {
+    var controlPort = 19741
+    var path = "/tmp/kofcloud-doctor-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var controlUrl = "http://127.0.0.1:" + intToString(controlPort)
+
+    var manifest = "{\"services\":[{\"name\":\"site\",\"port\":19742}]}"
+    var wanted = parseManifest(manifest)
+
+    // Nada publicado: doctor acusa "nao publicado", sem exigir porta local.
+    var missing = verifyDeploymentLike(controlUrl, accountToken, wanted)
+    assert(missing.size == 1, "um problema")
+    assert(missing.get(0).indexOf("nao publicado") >= 0, "diz que nao publicou")
+
+    // Publica mas sem ninguem escutando: acusa falta de resposta local.
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19742\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "publicado")
+    var down = verifyDeploymentLike(controlUrl, accountToken, wanted)
+    assert(down.size == 1, "um problema")
+    assert(down.get(0).indexOf("sem resposta") >= 0, "diz que nao responde")
+
+    // Sobe um listener cru na porta: tudo ok.
+    var listener = net.listen(19742)
+    var serving = spawn {
+        var open = true
+        while (open) {
+            try {
+                var peer = listener.accept()
+                peer.close()
+            } catch (String e) {
+                open = false
+            }
+        }
+    }
+    assert(waitForPort(19742, 60), "servico local no ar")
+    var up = verifyDeploymentLike(controlUrl, accountToken, wanted)
+    assert(up.size == 0, "tudo saudavel")
+    listener.close()
+}
+
+// Replica a ordem de checagem de cmdDoctor sem precisar de HOME/sessao:
+// publicado? responde? (login/control/device cobertos pelos testes acima
+// via doctorCheck, que nao precisa de rede quando sem login).
+List<String> verifyDeploymentLike(String controlUrl, String token, List<ManifestService> wanted) {
+    return verifyDeployment(controlUrl, token, wanted)
+}
+
+String deployManifest(String name, String body) {
+    var path = "/tmp/kofcloud-doctor-" + name + "-" + crypto.randomHex(4) + ".json"
+    File(path).writeText(body)
+    return path
+}

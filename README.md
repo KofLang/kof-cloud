@@ -27,7 +27,7 @@ completa e os protocolos.
 | 5 — `AUTHENTICATED` com credencial de serviço (`kfs_`) | ✅ implementado e testado |
 | 6 — domínio próprio (slice 1: registro + verificação DNS + rota) | ✅ implementado e testado; sem TLS/SNI (externo — ver `docs/12-tls.md`) |
 | 6+ — observabilidade, abuse prevention, limites | ✅ implementados e testados |
-| 7 — deploy (slices 1–3: declarativo, --check, daemon user-level) | ✅ implementado e testado; sem build/artefato, sem daemon Windows/macOS |
+| 7 — deploy (slices 1–4: declarativo, --check, daemon, doctor) | ✅ implementado e testado; sem build/artefato, sem daemon Windows/macOS |
 
 O critério de sucesso do pedido foi atingido com o CLI real, em processos
 separados: `login` → `publish site --port 29010` → `connect`, e
@@ -108,6 +108,7 @@ domain verify <hostname>                 (confere o DNS e ativa a rota)
 domain remove <hostname>
 deploy [--file kofcloud.json] [--check]   (publica + verifica saude local)
 down [--file kofcloud.json]     (remove os servicos do manifesto)
+doctor [--file kofcloud.json]   (diagnostico: login, control, device, servicos)
 audit                        (trilha de auditoria da conta)
 logs
 serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>]
@@ -125,8 +126,8 @@ java -jar /home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar test --target jvm --t
 Suítes verdes: framing, bytes, protocolo de túnel, hostnames/exposição,
 identidade/cifra, registry, backoff, integração do control plane, E2E,
 domínio próprio, métricas, rate limit, suspensão/auditoria, frames
-fatiados, idle timeout, conexões por serviço, deploy, daemon e hot-reload
-(23 suites). Ver `docs/15-tests.md` para a matriz.
+fatiados, idle timeout, conexões por serviço, deploy, daemon, hot-reload
+e doctor (24 suites). Ver `docs/15-tests.md` para a matriz.
 
 ## Segurança
 

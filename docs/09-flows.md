@@ -73,6 +73,20 @@ kofcloud.json:
 
 Sem build, sem artefato neste slice: só `publish` em lote.
 
+## 3.3 Diagnostico (`kof cloud doctor`)
+
+```
+kof cloud doctor [--file kofcloud.json]
+  1. login local presente? (senao: FALHA e para)
+  2. GET /v1/health com o token? (control alcancavel + autenticado?)
+  3. device registrado no control plane?
+  4. para cada servico do manifesto (se houver kofcloud.json):
+     publicado? responde localmente?
+  ok em tudo -> exit 0; qualquer FALHA -> exit 1 + Hint do proximo passo
+```
+
+Somente leitura: nao publica, nao remove, nao revoga, nao emite token.
+
 ## 3.2 Daemon user-level (`kof cloud daemon`)
 
 ```
