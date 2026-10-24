@@ -147,6 +147,53 @@ test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {
     assert(bodyOf(afterRaw).indexOf("\"extra\"") >= 0, "extra intacto")
 }
 
+test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-check" {
+    var controlPort = 19721
+    var path = "/tmp/kofcloud-depchk-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var manifest = "{\"services\":[{\"name\":\"site\",\"port\":19729}]}"
+    var services = parseManifest(manifest)
+    var controlUrl = "http://127.0.0.1:" + intToString(controlPort)
+    for (var wanted in services) {
+        var body = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"" + wanted.name + "\",\"localAddress\":\"" + wanted.address + "\",\"localPort\":\"" + intToString(wanted.port) + "\",\"protocol\":\"http\",\"exposure\":\"" + wanted.exposure + "\"}"
+        assert(statusOf(httpPostJson(controlPort, "/v1/services", body, accountToken)) == 200, "publicado")
+    }
+
+    // Publicado mas sem ninguem escutando: check acusa, sem derrubar nada.
+    var down = verifyDeployment(controlUrl, accountToken, services)
+    assert(down.size == 1, "um problema")
+    assert(down.get(0).indexOf("site") >= 0, "nomeia o servico")
+    assert(down.get(0).indexOf("sem resposta") >= 0, "diz que nao responde")
+
+    // Sobe um listener cru na porta: check aprova.
+    var listener = net.listen(19729)
+    var slowServer = spawn {
+        var serving = true
+        while (serving) {
+            try {
+                var peer = listener.accept()
+                peer.close()
+            } catch (String e) {
+                serving = false
+            }
+        }
+    }
+    assert(waitForPort(19729, 60), "servico local no ar")
+    var up = verifyDeployment(controlUrl, accountToken, services)
+    assert(up.size == 0, "tudo saudavel")
+    assert(checkLocalService("127.0.0.1", 19729), "check unitario ok")
+    assert(checkLocalService("127.0.0.1", 19728) == false, "porta fechada recusa")
+    listener.close()
+}
+
 Int serviceCount(String controlUrl, String token, Int port) {
     return 0
 }

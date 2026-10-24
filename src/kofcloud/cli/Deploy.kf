@@ -25,6 +25,48 @@ String defaultManifestPath() {
     return "kofcloud.json"
 }
 
+// Health check local pos-deploy: o servico responde no endereco publicado?
+// Mesma regra do Agent (agent/Health.kf): TCP bem-sucedido = ok. Nao usa o
+// Agent nem o tunel — e uma verificacao da maquina do usuario contra ela
+// mesma, antes de declarar o deploy saudavel.
+Bool checkLocalService(String address, Int port) {
+    try {
+        var conn = net.connect(address, port)
+        conn.close()
+        return true
+    } catch (String e) {
+        return false
+    }
+}
+
+// Confere que cada servico do manifesto esta publicado (existe no control
+// plane para esta conta) e responde localmente. Devolve a lista de problemas
+// `nome: motivo`; vazia = tudo saudavel.
+List<String> verifyDeployment(String controlUrl, String token, List<ManifestService> wanted) {
+    var problems = listOf<String>()
+    var live = listOf<Service>()
+    try {
+        live = fetchServices(controlUrl, token)
+    } catch (String e) {
+        problems.add("control plane: " + e)
+        return problems
+    }
+    for (var service in wanted) {
+        var found = false
+        for (var remote in live) {
+            if (remote.name == service.name) {
+                found = true
+            }
+        }
+        if (found == false) {
+            problems.add(service.name + ": nao publicado")
+        } else if (checkLocalService(service.address, service.port) == false) {
+            problems.add(service.name + ": publicado mas sem resposta em " + service.address + ":" + intToString(service.port))
+        }
+    }
+    return problems
+}
+
 // Parse com erros honestos de CLI (mensagem + uso, sem codigo KCF — KCF e
 // para erros da plataforma via API, nao para manifesto local malformado).
 // `port` aceita numero ou string (o control plane usa strings, mas manifesto
@@ -288,7 +330,21 @@ Int cmdDeploy(List<String> args) {
         return 1
     }
     println("deploy ok: " + intToString(services.size) + " servico(s)")
-    return 0
+    // Verificacao pos-deploy (slice 2): confirma que cada servico esta
+    // publicado E responde localmente. Nao e rollback — so diagnostico.
+    if (hasFlag(args, "--check") == false) {
+        return 0
+    }
+    var problems = verifyDeployment(session.controlUrl, session.token, services)
+    if (problems.size == 0) {
+        println("check ok: " + intToString(services.size) + " servico(s) publicados e respondendo")
+        return 0
+    }
+    for (var problem in problems) {
+        println("check: " + problem)
+    }
+    println("Hint: suba o servico local na porta do manifesto e rode `kof cloud deploy` de novo")
+    return 1
 }
 
 Int cmdDown(List<String> args) {

@@ -119,7 +119,8 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   `services[]` (nome, porta numero ou string, address/exposure opcionais);
   `kof cloud deploy` publica em lote (idempotente) e `kof cloud down` remove
   só os listados — nada fora do manifesto é tocado; parser manual com erro
-  posicional (`deploy_test.kf`, 4 testes).
+  posicional (`deploy_test.kf`, 5 testes). `deploy --check` confirma publicado
+  + respondendo (mesma regra do Agent; sem rollback).
 * **Parada limpa** do agente (`disconnect` via arquivo-sentinela) e da
   plataforma (`serve`, via fechamento do `Listener`).
 

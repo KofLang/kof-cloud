@@ -62,11 +62,13 @@ kofcloud.json:
   {"services": [{"name": "site", "port": 8080},
                 {"name": "api", "port": 3000, "exposure": "AUTHENTICATED"}]}
 
- 1. usuário: kof cloud deploy [--file kofcloud.json]
+ 1. usuário: kof cloud deploy [--file kofcloud.json] [--check]
  2. carrega identity + token + manifesto (parse com erro posicional)
  3. para cada serviço: POST /v1/services (igual ao publish, idempotente)
  4. reporta publicados/mantidos/falhas (exit 1 se alguma falhar)
  5. usuário: kof cloud down → unpublish só dos listados (extra sobrevive)
+ 6. com `--check`: publicado E respondendo localmente? (`checkLocalService`,
+    mesma regra do Agent) — sem rollback, só diagnóstico
 ```
 
 Sem build, sem artefato, sem daemon neste slice: só `publish` em lote.

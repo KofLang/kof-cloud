@@ -105,7 +105,8 @@ string, address/exposure opcionais); `kof cloud deploy` publica em lote
 os do manifesto. Sem build, sem artefato, sem daemon — so `publish` em
 lote sobre as primitivas existentes. Parser manual com erro posicional
 (Map<String, String> nao aceita numero — ClassCast medido). Prova:
-`tests/deploy_test.kf` (4 testes). Falta fatiado: build/artefato, daemon,
+`tests/deploy_test.kf` (5 testes). `deploy --check` verifica publicado +
+respondendo (sem rollback). Falta fatiado: build/artefato, daemon,
 auto-update.
 
 ## Débitos de limites (antes do deploy)

@@ -38,7 +38,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U14 | frame DATA fatiado + teto de linha | `tests/frames_test.kf` (4 testes) | chunk adaptativo (16 KiB), codec com fail-closed, HELLO gigante fecha sem WELCOME, 1.5 MiB fim a fim |
 | U15 | idle timeout | `tests/idle_test.kf` (4 testes) | PING não renova, stream preso listado, Edge derruba e Agent reconecta sozinho, RESET sem matar sessão |
 | U16 | conexões simultâneas por serviço | `tests/conns_test.kf` (2 testes) | vaga por serviceId (limite 1 no teste), 429 `KCF108` + `Retry-After` com concorrência real, liberação, isolamento entre serviços, métrica `_service_overloaded` |
-| U17 | deploy declarativo | `tests/deploy_test.kf` (4 testes) | manifesto válido/inválido com erro posicional, port número/string, fim a fim (publica sem duplicar, down remove só o manifesto) |
+| U17 | deploy declarativo | `tests/deploy_test.kf` (5 testes) | manifesto válido/inválido com erro posicional, port número/string, fim a fim (publica sem duplicar, down remove só o manifesto), verify acusa/aprova |
 
 ## Integração
 
