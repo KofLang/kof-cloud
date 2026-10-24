@@ -17,6 +17,10 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 | L8 | `web.app()` reserva `Authorization` para JWT e 401s antes do handler | tokens opacos não podem viajar em `Authorization` no control plane | header próprio `X-KofCloud-Token` |
 | L9 | `http.*` devolve o corpo em 4xx (só lança em ≥500) | erro de API passa silencioso | `requireOk(raw)` transforma `{"error":…}` em exceção |
 | L10 | sem sinal nem timeout de `accept` | parada de servidor | fechar o `Listener` (sentinela + watcher) |
+| L11 | `Map<String, Int>` como campo de classe quebra o verificador JVM (`VerifyError`; `Long` passa) | contadores Int em mapas precisam de outro tipo | `Map<String, String>` + `parseIntSafe`/`intToString` (padrão batido do codebase) |
+| L12 | `await` com valor de retorno quebra o verificador JVM (`VerifyError`) | task com retorno não pode ser esperada com valor | `await` só em task sem retorno; passar resultado por canal/arquivo/socket |
+| L13 | `web.app()` fecha a conexão sem headers para corpo de ~1.5 MiB | handler com resposta grande não serve | testar payload grande com servidor TCP cru |
+| L14 | EOF remoto chega como exceção (`kof.net: ... Socket closed`), não como vazio | queda silenciosa não existe: todo fim de túnel vira throw | throw → backoff + reconexão; saída limpa só com stopFile/GOAWAY |
 
 ## Fora do MVP (por decisão)
 

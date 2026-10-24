@@ -13,9 +13,14 @@ Service
 ├── protocol       http (MVP)
 ├── hostname       <name>.<handle>.kofcloud.io
 ├── exposure       PUBLIC | AUTHENTICATED | PRIVATE
-├── status         ONLINE | OFFLINE | DEGRADED | UNKNOWN
+├── status         ONLINE | OFFLINE | DEGRADED | UNKNOWN | SUSPENDED
 └── createdAt
 ```
+
+`SUSPENDED` é administrativo (abuse prevention — `kof cloud service
+suspend`): sai da rota como `PRIVATE` (opaco), sem remover; health do Agent
+e status via API **não** dessuspendem, só `kof cloud service unsuspend`
+libera. Ver `16-plan.md` (abuse slice 2) e `abuse_test.kf`.
 
 Publicar:
 
@@ -83,6 +88,7 @@ Host: api.mel.kofcloud.io
 ```
 
 Sem correspondência → `404`. Serviço `PRIVATE` → `404` (não revela existência).
+Serviço `SUSPENDED` → `404` (indistinguível — suspensão não revela existência).
 Serviço `OFFLINE` → `503`.
 
 ## Limites por dispositivo (Fase 4)

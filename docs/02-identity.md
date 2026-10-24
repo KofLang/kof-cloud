@@ -45,8 +45,10 @@ momento do `device register`.
 
 * Revogar um dispositivo (`device revoke <id>`) marca `status = REVOKED` e
   **não** invalida a conta nem os demais dispositivos.
-* Um dispositivo revogado é recusado no handshake do túnel (`WELCOME` de erro
-  `DEVICE_REVOKED`).
+* Suspender (`device suspend <id>`) marca `SUSPENDED`: mesmo efeito de
+  bloqueio, mas reversível com `unsuspend` e sem remover nada.
+* Um dispositivo revogado/suspenso é recusado no handshake do túnel
+  (`WELCOME` de erro `DEVICE_REVOKED` / `DEVICE_SUSPENDED`).
 
 > **Nota honesta.** O MVP usa a chave X25519 para o *handshake de sessão*
 > (ECDH + HKDF) e o token de conta para *autorização*. A assinatura de

@@ -8,12 +8,12 @@ Objetivo: uma máquina estabelece um túnel persistente com o KofCloud.
 
 | Passo | Entrega | Prova |
 |---|---|---|
-| 1.1 | `protocol/` — enquadramento, frame, tunnel protocol | U1–U3 verdes |
-| 1.2 | `identity/` — par X25519, session key, tokens | U7–U8 verdes |
-| 1.3 | `model/` + `store/` | U9, U11 verdes |
-| 1.4 | `control/` — control plane mínimo (conta, device, connect) | I1 verde |
-| 1.5 | `edge/TunnelListener` + `TunnelSession` | I2 verde |
-| 1.6 | `agent/Agent` — connect, heartbeat, reconexão | F1, F2 verdes |
+| 1.1 | `protocol/` — enquadramento, frame, tunnel protocol | U1 verdes (`protocol_test.kf`) |
+| 1.2 | `identity/` — par X25519, session key, tokens | U3 verdes (`identity_test.kf`) |
+| 1.3 | `model/` + `store/` | U5 verdes (`registry_test.kf`) |
+| 1.4 | `control/` — control plane mínimo (conta, device, connect) | E4 verde (`control_test.kf`) |
+| 1.5 | `edge/TunnelListener` + `TunnelSession` | handshake em `protocol_test.kf` + E1 |
+| 1.6 | `agent/Agent` — connect, heartbeat, reconexão | F1, F2 verdes (backoff U4 + E11 `idle-e2e`) |
 
 Resultado: `HELLO`/`WELCOME` estabelecidos, `PING`/`PONG` mantendo a sessão,
 reconexão com backoff.
@@ -24,10 +24,10 @@ Objetivo: `kof cloud publish site --port 8080` → `http://site.<handle>.kofclou
 
 | Passo | Entrega | Prova |
 |---|---|---|
-| 2.1 | `edge/Router` + `Streams` | U5, U6, I4 verdes |
-| 2.2 | `edge/HttpFront` — listener HTTP/1.1 | I3 verde |
-| 2.3 | `agent/Relay` — stream ↔ localhost | I3 verde |
-| 2.4 | `agent/Health` + `STATUS` no Edge | F4 verde |
+| 2.1 | `edge/Router` + `Streams` | U2 verdes + E8/E12 (multiplexacao real) |
+| 2.2 | `edge/HttpFront` — listener HTTP/1.1 | E1 verde |
+| 2.3 | `agent/Relay` — stream ↔ localhost | E1 verde |
+| 2.4 | `agent/Health` + `STATUS` no Edge | F4 verde (E4 + `hosts_test.kf`) |
 | 2.5 | CLI: `login`, `connect`, `publish`, `unpublish`, `service list` | E1 verde |
 
 Resultado: aplicação local acessível publicamente pelo Edge.
@@ -38,8 +38,8 @@ Objetivo: `https://site.mel.kofcloud.io` sem configuração manual.
 
 | Passo | Entrega | Prova |
 |---|---|---|
-| 3.1 | hostname automático no `publish` | U5 verde |
-| 3.2 | roteamento por `Host` com wildcard por conta | I3, F8 verdes |
+| 3.1 | hostname automático no `publish` | U2 verdes (`hosts_test.kf`) |
+| 3.2 | roteamento por `Host` com wildcard por conta | E1, F8 verdes |
 | 3.3 | TLS do Edge via `web.app().listenSecure` (JVM) | teste manual documentado |
 | 3.4 | emissão/renovação externa de certificado (wildcard) | documentado em `12-tls.md` |
 
@@ -47,8 +47,8 @@ Resultado: HTTPS por hostname, sem certificado manual do usuário.
 
 ## Fase 4 — múltiplos serviços
 
-Um Agent, N hostnames, N portas locais, todos no mesmo túnel. Já coberto por
-I4/F8 na Fase 2–3; a fase formaliza os limites por dispositivo.
+Um Agent, N hostnames, N portas locais, todos no mesmo túnel. Ja coberto
+no E1/E2; a fase formaliza os limites por dispositivo.
 
 **Estado: ✅ implementado.** Limites aplicados: `kofcloud.limits.devices`
 (dispositivos ativos por conta), `kofcloud.limits.services` (por dispositivo) e

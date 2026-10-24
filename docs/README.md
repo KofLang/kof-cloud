@@ -20,14 +20,18 @@
 | 16 | [Plano](16-plan.md) | fases 1–8 |
 | 17 | [Limitações](17-limitations.md) | lacunas honestas |
 | 18 | [Implementado](18-implemented.md) | o que está pronto e verificado |
+| — | [STATUS](STATUS.md) | estado medido: verde/prova/gaps + como reproduzir |
 
 ## Como rodar
 
 ```bash
-# da raiz do repositório (kof.toml declara app=src, test=tests)
-kof build                    # compila o app (alvo JVM)
-kof test --target jvm --timeout 120   # suites unit + integração + e2e
-kof run src/Main.kf <comando>          # CLI
+# Toolchain: CLI Kof 0.6.3 + JDK 25 (ver 13-kof-apis.md e 15-tests.md)
+export PATH=/home/mel/tools/jdk-25/bin:$PATH
+KOF=/home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar
+# da raiz do repositório (kof.toml declara app=src, test=testes)
+java -jar $KOF build --output /tmp/kofcloud-check   # compila o app (alvo JVM)
+java -jar $KOF test --target jvm --timeout 150      # 21 suites, 0 falhas
+java -jar $KOF run src/Main.kf <comando>            # CLI
 ```
 
 Ver o [README](../README.md) para os comandos da CLI.

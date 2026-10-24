@@ -1,8 +1,10 @@
 # APIs Kof necessárias — e as que faltam
 
 Todas as linhas abaixo foram **medidas** compilando e executando sondas contra
-`kof` 0.6.4 (JVM), não inferidas da documentação. Onde a doc diverge do
-comportamento, vale o comportamento.
+o CLI **0.6.3** (`/home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar`, JVM com
+**JDK 25**) — não inferidas da documentação. Onde a doc diverge do
+comportamento, vale o comportamento. (O `kof` 0.5.0-beta do PATH não entende
+as duas raízes de `kof.toml`; ver `14-modules.md` #708 e `15-tests.md`.)
 
 ## Necessárias e disponíveis (verificadas em execução)
 
@@ -110,6 +112,37 @@ bloqueado lançar `"kof.net: accept failed: Socket closed"` (capturável). E um
 **Consequência:** os listeners do Edge são paráveis por um arquivo-sentinela
 observado por um watcher que chama `listener.close()`. É o mecanismo de parada
 limpa do `serve` e o que permite o E2E terminar sozinho.
+
+### L11 — `Map<String, Int>` como campo quebra o verificador JVM
+
+Medido: campo `Map<String, Int>` numa classe compila mas a classe falha ao
+carregar (`VerifyError: Bad type on operand stack`); `Map<String, Long>`
+com o mesmo uso passa (`Session.streamStartedMs`). Hipótese: erasure do
+`Int` boxed no descritor emitido. **Consequência:** contadores em mapas usam
+`Map<String, String>` com `parseIntSafe`/`intToString` (padrão batido de
+`protocol/Frame`); não assumir que outros generics numéricos funcionam como
+campo sem sondar.
+
+### L12 — `await` com valor de retorno quebra o verificador JVM
+
+Medido: `var x = await task` onde a task retorna valor falha ao carregar
+(`VerifyError`); `await` de task sem retorno (`void`) funciona.
+**Consequência:** passar resultado por canal, arquivo ou socket — nunca por
+retorno de `spawn`.
+
+### L13 — `web.app()` fecha a conexão para corpo grande (~1.5 MiB)
+
+Medido: handler que retorna string de ~1.5 MiB recebe `connection closed
+before headers` — nenhum byte chega ao cliente. **Consequência:** testes de
+payload grande usam servidor TCP cru, não `web.app()`.
+
+### L14 — EOF remoto chega como exceção, não como vazio
+
+Medido: fechar o socket no peer faz `conn.receive` lançar `"kof.net:
+... Socket closed"` em vez de devolver array vazio (o vazio aparece em
+outros caminhos, ex. fim de `web.app()` local). **Consequência:** queda de
+túnel sempre vira throw no Agent → backoff + reconexão; saída limpa só com
+stopFile/GOAWAY (ver `agent/Agent.kf`).
 
 ## APIs ausentes que seriam necessárias para o produto completo
 

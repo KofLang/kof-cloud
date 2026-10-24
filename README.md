@@ -63,6 +63,14 @@ kof run src/Main.kf publish site --port 8080
 kof run src/Main.kf connect
 ```
 
+Ou declarativo, com `kofcloud.json` na pasta (`{"services":[{"name":"site",
+"port":8080}]}` — ver `docs/09-flows.md` §3.1):
+
+```bash
+kof run src/Main.kf deploy [--file kofcloud.json]   # publica o manifesto
+kof run src/Main.kf down                            # remove os do manifesto
+```
+
 `connect` mantém o túnel e reconecta sozinho. Enquanto ele roda:
 
 ```bash
@@ -108,8 +116,11 @@ serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>]
 ## Testes
 
 ```bash
-kof test --target jvm --timeout 120
+export PATH=/home/mel/tools/jdk-25/bin:$PATH
+java -jar /home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar test --target jvm --timeout 150
 ```
+(CLI 0.6.3 + JDK 25; o `kof` 0.5.0-beta do PATH não entende `[sources]`. Ver
+`docs/15-tests.md` e `docs/STATUS.md`.)
 
 Suítes verdes: framing, bytes, protocolo de túnel, hostnames/exposição,
 identidade/cifra, registry, backoff, integração do control plane, E2E,
