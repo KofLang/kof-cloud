@@ -144,6 +144,14 @@ outros caminhos, ex. fim de `web.app()` local). **Consequência:** queda de
 túnel sempre vira throw no Agent → backoff + reconexão; saída limpa só com
 stopFile/GOAWAY (ver `agent/Agent.kf`).
 
+### L15 — argumento de task (`spawn`) é copiado por valor
+
+Medido: um `Map` passado como argumento de `spawn` chega como cópia — `put`
+dentro da task não aparece fora (o handler do OPEN nunca via o refresh).
+Objetos de classe (`TunnelSession`) são compartilhados de verdade.
+**Consequência:** estado compartilhado entre tasks vive em objeto (a tabela
+de serviços mora na sessão), nunca em Map solto passado por parâmetro.
+
 ## APIs ausentes que seriam necessárias para o produto completo
 
 | Necessidade | Estado | Contorno no MVP |

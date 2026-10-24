@@ -7,15 +7,26 @@ import kofcloud.protocol.Tunnel
 
 // Relay de uma requisicao publica por um stream do tunel.
 //
-// O Edge abre um stream, envia OPEN + DATA(req) + END, e acumula os DATA de
-// volta ate END. A resposta e devolvida como bytes.
-
+// O Edge abre um stream, espera o handshake (OPENED), envia DATA(req) + END,
+// e acumula os DATA de volta ate END. A resposta e devolvida como bytes.
+// Esperar o OPENED fecha um buraco real: antes, OPEN recusado (Agent sem o
+// servico — ex. publicado apos o connect) deixava o relay bloqueado para
+// sempre esperando resposta, prendendo a vaga de conexao junto.
 Byte[] relayThroughTunnel(TunnelSession session, String serviceName, Byte[] requestBytes, Int maxBytes) {
     var streamId = session.openStream()
     if (streamId.length == 0) {
         throw "LIMIT_EXCEEDED"
     }
     session.send(openFrame(streamId, serviceName))
+    var handshake = session.nextFromStream(streamId)
+    if (handshake == streamResetMarker()) {
+        session.closeStream(streamId)
+        throw "stream reset by agent"
+    }
+    if (handshake == streamEndMarker() || openedAccepted(handshake) == false) {
+        session.closeStream(streamId)
+        throw "OPEN_REJECTED:" + openedReason(handshake)
+    }
     for (var chunk in encodeChunks(requestBytes, session.sessionKey)) {
         session.send(dataFrame(streamId, chunk))
     }

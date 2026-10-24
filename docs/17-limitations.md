@@ -21,6 +21,7 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 | L12 | `await` com valor de retorno quebra o verificador JVM (`VerifyError`) | task com retorno não pode ser esperada com valor | `await` só em task sem retorno; passar resultado por canal/arquivo/socket |
 | L13 | `web.app()` fecha a conexão sem headers para corpo de ~1.5 MiB | handler com resposta grande não serve | testar payload grande com servidor TCP cru |
 | L14 | EOF remoto chega como exceção (`kof.net: ... Socket closed`), não como vazio | queda silenciosa não existe: todo fim de túnel vira throw | throw → backoff + reconexão; saída limpa só com stopFile/GOAWAY |
+| L15 | argumento de task (`spawn`) é copiado por valor | `Map` passado para task vira cópia: `put` dentro não aparece fora | estado compartilhado vive em objeto (classe), não em Map solto |
 
 ## Fora do MVP (por decisão)
 

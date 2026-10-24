@@ -1,0 +1,109 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.store.Store
+import testkit.Support
+
+// Hot-reload de servicos (Fase 8 parcial): publicar DEPOIS do connect nao
+// exige reconnect. O Agent re-busca a lista no control plane e mescla no
+// mapa vivo; streams em voo nao sao tocados.
+
+test "hot-reload: servico publicado depois do connect roteia sem reconnect", "reload" {
+    var localSvc = 19731
+    var controlPort = 19732
+    var tunnelPort = 19733
+    var httpPort = 19734
+
+    var app = web.app()
+    app.get("/") { return "svc-reload" }
+    var server = spawn { app.listen(localSvc) }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-reload-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-reload-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-reload-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+
+    // connect ANTES de publicar: o Agent aprende zero servicos.
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+
+    // Publica DEPOIS: sem reconnect, o proximo OPEN ja deve rotear.
+    // (healthMs=100 -> refresh a cada 600 ms; poll com teto.)
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"late\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "publicado depois")
+    var served = false
+    var waits = 60
+    while (waits > 0 && served == false) {
+        var probe = httpGetRaw(httpPort, "/", "late.mel.kofcloud.io")
+        if (statusOf(probe) == 200 && bodyOf(probe) == "svc-reload") {
+            served = true
+        } else {
+            time.sleep(250)
+            waits = waits - 1
+        }
+    }
+    assert(served, "novo servico roteia sem reconnect")
+
+    // Servico removido sai do mapa: OPEN vira 502 sem derrubar o tunel.
+    // (O Edge ainda tem a rota ate a poda? Nao — removeService poda na hora;
+    // aqui o 404 do Edge prova a remocao; o Agent aprende no proximo ciclo.)
+    var services = registry.servicesForAccount(accountId)
+    var target = ""
+    for (var service in services) {
+        if (service.name == "late") {
+            target = service.id
+        }
+    }
+    assert(target.length > 0, "alvo existe")
+    var removeBody = "{\"serviceId\":\"" + target + "\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", removeBody, accountToken)) == 200, "removido")
+    var gone = false
+    var waits2 = 40
+    while (waits2 > 0 && gone == false) {
+        if (statusOf(httpGetRaw(httpPort, "/", "late.mel.kofcloud.io")) == 404) {
+            gone = true
+        } else {
+            time.sleep(250)
+            waits2 = waits2 - 1
+        }
+    }
+    assert(gone, "rota removida")
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}

@@ -130,6 +130,14 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
             conn.send(limited)
             conn.close()
             noteHttpFinished("denied", "KCF106", raw.length, limited.length, time.now() - started)
+        } else if (e.indexOf("OPEN_REJECTED") == 0) {
+            // Agent nao conhece o servico (ex. publicado apos o connect, antes
+            // do refresh): 502 sem vazar nada alem do fato de que a rota existe
+            // (o hostname ja resolveu — opacidade mantida para inexistentes).
+            var rejected = errorResponse(502, errTunnel("agent does not serve this route yet"))
+            conn.send(rejected)
+            conn.close()
+            noteHttpFinished("upstream_error", "", raw.length, rejected.length, time.now() - started)
         } else {
             var failed = errorResponse(502, errTunnel(e))
             conn.send(failed)

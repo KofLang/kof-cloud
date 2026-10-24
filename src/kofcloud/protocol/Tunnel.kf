@@ -105,3 +105,26 @@ String streamResetMarker() {
 String streamCloseMarker() {
     return "!CLOSE!"
 }
+
+// Resultado do handshake por stream, transportado como item da inbox (nao
+// vai ao fio como DATA). "!OPEN:ok" = aceito; "!OPEN:nao" = recusado com o
+// motivo em seguida (ex: "!OPEN:nao:SERVICE_UNKNOWN"). Base64 nunca produz
+// '!', entao nao colide com payload.
+String openedMarker(Map<String, String> opened) {
+    if (frameBool(opened, "ok")) {
+        return "!OPEN:ok"
+    }
+    return "!OPEN:nao:" + frameField(opened, "reason")
+}
+
+Bool openedAccepted(String item) {
+    return item == "!OPEN:ok"
+}
+
+String openedReason(String item) {
+    var prefix = "!OPEN:nao:"
+    if (item.startsWith(prefix)) {
+        return item.substring(prefix.length)
+    }
+    return ""
+}

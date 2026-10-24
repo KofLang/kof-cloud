@@ -15,16 +15,16 @@
 | Abuse prevention (2 slices) | ✅ verde | `ratelimit_test.kf`, `abuse_test.kf` |
 | Debitos de limites (frame, idle, conns) | ✅ verde | `frames_test.kf`, `idle_test.kf`, `conns_test.kf` |
 | Fase 7 slices 1–3 (deploy, --check, daemon) | ✅ verde | `deploy_test.kf`, `daemon_test.kf` |
+| Hot-reload + handshake por stream | ✅ verde (debito quitado) | `reload_test.kf`, `protocol_test.kf` |
 | Fase 7 slice 4+ (build/artefato) | ⏳ nao iniciado | — |
 | TLS/SNI no Edge, ACME | ⏳ externo por desenho | `12-tls.md` |
-| Hot-reload de servico no Agent | ⏳ debito conhecido | — |
 
 ## Como provar (uma sessao)
 
 ```bash
 export PATH=/home/mel/tools/jdk-25/bin:$PATH
 KOF=/home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar
-java -jar $KOF test --target jvm --timeout 150   # 21 suites, 0 falhas
+java -jar $KOF test --target jvm --timeout 150   # 23 suites, 0 falhas
 java -jar $KOF build --output /tmp/kofcloud-check # compila sem erro
 ```
 
@@ -41,7 +41,7 @@ o run total imprime `21 passed, 0 failed`. Falha = nome do teste + assert
 
 | Suite | Arquivo | Testes |
 |---|---|---|
-| framing/bytes/protocolo/sessao | `tests/protocol_test.kf` | 10 |
+| framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 11 |
 | hostnames/exposicao/texto | `tests/hosts_test.kf` | 7 |
 | identidade/cifra/tokens | `tests/identity_test.kf` | 7 |
 | backoff | `tests/backoff_test.kf` | 3 |
@@ -59,12 +59,13 @@ o run total imprime `21 passed, 0 failed`. Falha = nome do teste + assert
 | conexoes | `tests/conns_test.kf` | 2 |
 | deploy | `tests/deploy_test.kf` | 5 |
 | daemon | `tests/daemon_test.kf` | 3 |
+| hot-reload | `tests/reload_test.kf` | 1 |
 | control plane | `tests/control_test.kf` | 2 |
 | e2e | `tests/e2e_test.kf` | 1 |
 | e2e multiservico | `tests/e2e_multiservice_test.kf` | 1 |
 | e2e autenticado | `tests/e2e_authenticated_test.kf` | 1 |
 
-Total: 96 testes. Ver `15-tests.md` para a matriz U+I+E+F.
+Total: 98 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 
@@ -73,7 +74,8 @@ Total: 96 testes. Ver `15-tests.md` para a matriz U+I+E+F.
 - `bytesToString` e O(n2): payloads grandes sao lentos (fatiado em 16 KiB).
 - `Map<String, Int>` como campo quebra o verificador JVM (usar String).
 - `await` com valor de retorno quebra o verificador JVM.
-- Servico publicado apos o connect nao chega ao Agent (sem hot-reload).
+- Map passado como argumento de `spawn` e copiado por valor: estado
+  compartilhado entre tasks vive em objeto (classe), nao em Map solto.
 - `web.app()` fecha conexao para corpo de ~1.5 MiB (testes usam TCP cru).
 - Processo fantasma de run travado prende portas (kill -9).
 

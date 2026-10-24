@@ -222,7 +222,15 @@ Bool handleTunnelFrame(EdgeState state, TunnelSession session, String line) {
         session.deliver(frameField(frame, "s"), streamResetMarker())
         return true
     }
-    // OPENED e desconhecidos: ignorados (forward-compat).
+    // OPENED nunca e ignorado: e o handshake por stream. O relay espera por
+    // ele antes de enviar DATA; sem isso, um OPEN recusado (Agent sem o
+    // servico, limite no Agent) deixaria o relay bloqueado para sempre
+    // esperando resposta que nunca vem.
+    if (kind == "OPENED") {
+        session.deliver(frameField(frame, "s"), openedMarker(frame))
+        return true
+    }
+    // Desconhecidos: ignorados (forward-compat).
     return true
 }
 

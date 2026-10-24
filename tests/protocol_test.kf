@@ -103,3 +103,13 @@ test "session: streams sao independentes" {
     assert(session.nextFromStream(a) == "para-a", "a recebe o seu")
     assert(session.nextFromStream(b) == "para-b", "b recebe o seu")
 }
+
+test "opened: handshake por stream distingue aceito de recusado" {
+    var ok = openedFrame("7", true, "")
+    assert(frameKind(ok) == "OPENED", "tipo")
+    assert(openedAccepted(openedMarker(ok)), "aceito")
+    var no = openedFrame("7", false, "SERVICE_UNKNOWN")
+    assert(openedAccepted(openedMarker(no)) == false, "recusado")
+    assert(openedReason(openedMarker(no)) == "SERVICE_UNKNOWN", "motivo preservado")
+    assert(openedReason("!OPEN:ok") == "", "aceito nao tem motivo")
+}

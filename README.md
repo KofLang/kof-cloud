@@ -125,8 +125,8 @@ java -jar /home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar test --target jvm --t
 Suítes verdes: framing, bytes, protocolo de túnel, hostnames/exposição,
 identidade/cifra, registry, backoff, integração do control plane, E2E,
 domínio próprio, métricas, rate limit, suspensão/auditoria, frames
-fatiados, idle timeout, conexões por serviço, deploy e daemon (22 suites).
-Ver `docs/15-tests.md` para a matriz.
+fatiados, idle timeout, conexões por serviço, deploy, daemon e hot-reload
+(23 suites). Ver `docs/15-tests.md` para a matriz.
 
 ## Segurança
 
@@ -152,6 +152,9 @@ Ver `docs/15-tests.md` para a matriz.
   sem revelar se o host existe e sem consumir o túnel; suspensão reversível
   de serviço/dispositivo (`SUSPENDED`, opaco) + trilha de auditoria
   (`kof cloud audit`, anel de 100 eventos só com metadados).
+* Hot-reload: publicar depois do `connect` não exige reconnect (o Agent
+  re-busca os serviços e o próximo OPEN já roteia); OPEN recusado responde
+  `502` em vez de travar o relay.
 
 ## Estrutura
 

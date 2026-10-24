@@ -112,8 +112,17 @@ respondendo (sem rollback).
 install|status|uninstall`: gera `kofcloud-agent.service` (mesmo `connect`,
 `Restart=always`, `NoNewPrivileges`, enable manual de proposito), erro
 honesto sem systemd. So Linux; Windows/macOS na Fase 8. Prova:
-`tests/daemon_test.kf` (3 testes). Falta fatiado: build/artefato,
-auto-update.
+`tests/daemon_test.kf` (3 testes).
+
+**Estado (hot-reload — debito quitado): ✅ implementado.** O Agent re-busca
+`services[]` via `/v1/connect` a cada `6×healthMs` e troca a tabela DA SESSAO
+(objeto compartilhado — Map nao atravessa `spawn` por valor); streams em voo
+nao sao tocados; remocao sai da tabela. Junto, handshake por stream: o Edge
+espera OPENED antes de DATA, e OPEN recusado vira 502 em vez de travar o
+relay para sempre (buraco real: publicar-depois-do-connect pendurava a vaga).
+Prova: `tests/reload_test.kf` + OPENED em `tests/protocol_test.kf`.
+
+Falta fatiado (Fase 7): build/artefato, auto-update.
 
 ## Débitos de limites (antes do deploy)
 
@@ -194,6 +203,12 @@ real via túnel, recusa fatal por motivo).
 Linux → Windows → macOS → Android. O core é compartilhado; só daemon,
 filesystem, processos e UI variam. Bloqueado por lacunas do Kof em
 native/JS (`13-kof-apis.md`).
+
+**Pagos fora de fase (débitos que viraram feature):** hot-reload de serviço
+(refresher via `/v1/connect` + handshake OPENED/502 — sem ele, publicar
+depois do `connect` pendurava o relay para sempre). Prova:
+`tests/reload_test.kf` + OPENED em `tests/protocol_test.kf`. Lição registrada:
+Map nao atravessa `spawn` (usar objeto compartilhado) — ver `STATUS.md`.
 
 ## Ordem de execução no MVP
 

@@ -99,12 +99,8 @@ void connectAndServe(AgentConfig config) {
     var conn = net.connect(endpoint.host, endpoint.port)
     var pair = generateKeyPair()
 
-    var servicesByName = mapOf()
-    for (var service in endpoint.services) {
-        servicesByName.put(service.name, service)
-    }
-
     var session = TunnelSession("agent", config.deviceId, config.accountId, "")
+    session.setServices(endpoint.services)
     conn.send(bytesFromString(encodeFrame(helloFrame(config.deviceId, config.token, pair.publicKey))))
 
     var codec = LineCodec()
@@ -146,6 +142,7 @@ void connectAndServe(AgentConfig config) {
         healthMs = 5000
     }
     var health = spawn { agentHealth(session, endpoint.services, healthMs) }
+    var refresher = spawn { agentRefresher(session, config, healthMs * 6) }
 
     reportAllStatuses(session, endpoint.services)
 
@@ -168,7 +165,7 @@ void connectAndServe(AgentConfig config) {
                             goaway = true
                             open = false
                         } else {
-                            open = handleAgentFrame(session, servicesByName, line)
+                            open = handleAgentFrame(session, line)
                         }
                     }
                 }
@@ -193,7 +190,7 @@ void connectAndServe(AgentConfig config) {
     throw "edge closed connection"
 }
 
-Bool handleAgentFrame(TunnelSession session, Map<String, Service> servicesByName, String line) {
+Bool handleAgentFrame(TunnelSession session, String line) {
     var frame = decodeFrame(line)
     var kind = frameKind(frame)
     if (kind == "PING") {
@@ -209,7 +206,7 @@ Bool handleAgentFrame(TunnelSession session, Map<String, Service> servicesByName
     if (kind == "OPEN") {
         var streamId = frameField(frame, "s")
         var name = frameField(frame, "service")
-        var service = servicesByName.get(name)
+        var service = session.serviceNamed(name)
         if (service == null) {
             session.send(openedFrame(streamId, false, "SERVICE_UNKNOWN"))
         } else if (session.atCapacity()) {
@@ -331,6 +328,35 @@ void agentHealth(TunnelSession session, List<Service> services, Int healthMs) {
                     session.send(statusFrame(service.name, status))
                     noteHealthReport()
                 }
+            }
+        }
+    }
+}
+
+// Hot-reload de servicos (Fase 8 parcial): republica nao exige reconnect.
+// A cada intervalo, busca a lista efetiva no control plane (`/v1/connect`,
+// mesmo endpoint do inicio) e troca a tabela DA SESSAO — o objeto que o
+// handler do OPEN ja consulta (argumento de task e copiado por valor, entao
+// o mapa nao pode viajar por `spawn`). Streams em voo usam inboxes proprias
+// e nao sao tocados. Servico removido sai (OPEN futuro = SERVICE_UNKNOWN);
+// servico novo entra e o proximo OPEN ja roteia. Falha de rede = ignora e
+// tenta no proximo ciclo (nunca derruba o tunel por causa do refresh).
+void agentRefresher(TunnelSession session, AgentConfig config, Int refreshMs) {
+    var gap = refreshMs
+    if (gap <= 0) {
+        gap = 30000
+    }
+    var open = true
+    while (open) {
+        time.sleep(gap)
+        if (session.open == false) {
+            open = false
+        } else {
+            try {
+                var endpoint = fetchEdge(config)
+                session.setServices(endpoint.services)
+            } catch (String e) {
+                // rede falhou: mantem a lista atual, tenta de novo depois
             }
         }
     }

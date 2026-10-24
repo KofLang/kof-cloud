@@ -128,6 +128,10 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   systemd; só Linux (`daemon_test.kf`, 3 testes).
 * **Parada limpa** do agente (`disconnect` via arquivo-sentinela) e da
   plataforma (`serve`, via fechamento do `Listener`).
+* **Hot-reload de serviço (debito quitado)**: refresher via `/v1/connect`
+  troca a tabela da sessão (objeto compartilhado — Map nao atravessa
+  `spawn`); handshake OPENED antes de DATA, OPEN recusado = 502 imediato
+  em vez de relay travado (`reload_test.kf`, OPENED em `protocol_test.kf`).
 
 ## Não implementado (honesto)
 

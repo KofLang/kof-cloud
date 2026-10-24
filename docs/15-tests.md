@@ -40,6 +40,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U16 | conexões simultâneas por serviço | `tests/conns_test.kf` (2 testes) | vaga por serviceId (limite 1 no teste), 429 `KCF108` + `Retry-After` com concorrência real, liberação, isolamento entre serviços, métrica `_service_overloaded` |
 | U17 | deploy declarativo | `tests/deploy_test.kf` (5 testes) | manifesto válido/inválido com erro posicional, port número/string, fim a fim (publica sem duplicar, down remove só o manifesto), verify acusa/aprova |
 | U18 | daemon user-level | `tests/daemon_test.kf` (3 testes) | unit com Restart/NoNewPrivileges/aponta connect, paths user-level, sem systemctl nao quebra |
+| U19 | hot-reload + handshake por stream | `tests/reload_test.kf` (1 teste) + `tests/protocol_test.kf` (OPENED aceito/recusado) | servico publicado depois do connect roteia sem reconnect; OPEN recusado responde 502 sem travar o relay |
 
 ## Integração
 

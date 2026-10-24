@@ -2,6 +2,7 @@ package kofcloud.protocol
 
 import kofcloud.protocol.Frame
 import kofcloud.protocol.Tunnel
+import kofcloud.model.Service
 import kofcloud.util.Limits
 
 // Estado de uma sessao de tunel: multiplexacao de streams sobre uma conexao.
@@ -30,6 +31,12 @@ class TunnelSession {
     // encerrados com RESET (nao derrubam a sessao).
     Map<String, Long> streamStartedMs
 
+    // Servicos que este Agent serve NESTA sessao, por nome. Vive aqui (e nao
+    // num Map capturado por spawn) porque Map passado como argumento de task
+    // e copiado por valor: o refresher atualiza e o handler do OPEN precisa
+    // ver a mesma tabela. Objeto compartilhado = visao unica.
+    Map<String, Service> servicesByName
+
     constructor(sessionId: String, deviceId: String, accountId: String, sessionKey: String) {
         this.sessionId = sessionId
         this.deviceId = deviceId
@@ -42,6 +49,21 @@ class TunnelSession {
         this.open = true
         this.lastActivityMs = time.now()
         this.streamStartedMs = mapOf()
+        this.servicesByName = mapOf()
+    }
+
+    // Troca atomica da tabela (hot-reload): limpa e preenche. Streams em voo
+    // usam inboxes proprias e nao sao afetados; o proximo OPEN ja ve o novo.
+    void setServices(List<Service> services) {
+        var fresh = mapOf()
+        for (var service in services) {
+            fresh.put(service.name, service)
+        }
+        this.servicesByName = fresh
+    }
+
+    Service? serviceNamed(String name) {
+        return this.servicesByName.get(name)
     }
 
     void setMaxStreams(Int limit) {

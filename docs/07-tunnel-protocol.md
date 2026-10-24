@@ -51,6 +51,15 @@ Agent ──── net.connect(edgeHost, edgePort) ────► Edge
    hostnames).
 5. Sessão ativa: `PING`/`PONG` a cada `heartbeatMs`.
 
+## Handshake por stream (OPEN → OPENED)
+
+O Edge **sempre** espera o `OPENED` antes de enviar `DATA`: sem ele, um OPEN
+recusado (`ok:false`, ex. serviço publicado depois do `connect`, antes do
+hot-reload) deixaria o relay bloqueado para sempre esperando resposta.
+`OPENED{ok:false}` → o Edge fecha o stream e responde `502` imediato, sem
+consumir a vaga de conexão (a vaga é liberada junto). O Agent reaprende a
+lista via refresher periódico (`/v1/connect`) e o próximo OPEN já passa.
+
 ## Cifra do túnel
 
 Quando `KOFCLOUD_TUNNEL_SECRET` está definido nos dois lados:
