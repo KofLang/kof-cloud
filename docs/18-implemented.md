@@ -39,6 +39,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | domínio próprio (slice 1) | `model/CustomDomain.kf` + registro/verificação/roda no registry, `POST /v1/domains[/verify][/remove]`, CLI `domain add/verify/remove` | `domains_test.kf` |
 | métricas do Edge (slice 1) | `edge/Metrics.kf`: túneis/recusas, sessões, ok/negadas por motivo, bytes, latência via `observability.*` | `metrics_test.kf` |
 | métricas do control plane (slice 2) | `control/Metrics.kf`: lifecycle no Registry + `GET /v1/metrics` sem auth | `metrics_test.kf` |
+| rate limit por hostname (slice 1) | `security.rateLimit` no Edge público: 429 `KCF107` + `Retry-After` antes de rotear | `ratelimit_test.kf` |
 
 ## Comportamentos provados
 
@@ -79,10 +80,14 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   `GET /v1/metrics` serve o export sem auth. Falta fatiado: contadores no
   Agent.
 * **Erros estáveis (R6, padrão kof-share)**: todo erro viaja como `KCFnnn`
-  (`KCF001` handle inválido … `KCF106` streams esgotados); recurso de outra
+  (`KCF001` handle inválido ... `KCF107` rate limited); recurso de outra
   conta responde o mesmo `404` opaco de inexistente; `POST /v1/services/status`
   tem owner-gate (só a conta dona altera); a CLI imprime `Hint:` humana sem
   vazar segredos (`errors_test.kf`).
+* **Rate limit por hostname (abuse prevention, slice 1)**: 100 req/60 s por
+  host (configurável), `429 KCF107` + `Retry-After` antes de rotear — não
+  revela existência nem consome túnel; cota isolada por hostname; métrica
+  `_rate_limited` (`ratelimit_test.kf`).
 * **Parada limpa** do agente (`disconnect` via arquivo-sentinela) e da
   plataforma (`serve`, via fechamento do `Listener`).
 

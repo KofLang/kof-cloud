@@ -3,6 +3,7 @@ package kofcloud.edge
 import kofcloud.control.Registry
 import kofcloud.model.Service
 import kofcloud.protocol.Session
+import kofcloud.util.Limits
 import kofcloud.util.Text
 
 // Estado do Edge: registro de rotas (control plane) + sessoes de tunel vivas.
@@ -11,11 +12,35 @@ class EdgeState {
     Registry registry
     Map<String, TunnelSession> sessions
     Int sessionCounter
+    Int httpLimit
+    Int httpWindowMs
 
     constructor(registry: Registry) {
         this.registry = registry
         this.sessions = mapOf()
         this.sessionCounter = 0
+        this.httpLimit = limitHttpRequests()
+        this.httpWindowMs = limitHttpWindowMs()
+    }
+
+    // Permite aos testes fixarem o limite sem config de processo.
+    void setHttpLimits(Int requests, Int windowMs) {
+        this.httpLimit = requests
+        this.httpWindowMs = windowMs
+    }
+
+    // Rate limit por hostname solicitado (fixed-window do stdlib). Recusar
+    // cedo: antes de rotear, autorizar ou tocar no tunel — o 429 nao revela
+    // nada sobre o servico e nao consome recurso downstream.
+    Bool checkHttpLimit(String host) {
+        return security.rateLimit("kofcloud-edge-host:" + host, this.httpLimit, this.httpWindowMs)
+    }
+
+    Int httpRetryAfterSec() {
+        if (this.httpWindowMs <= 0) {
+            return 60
+        }
+        return this.httpWindowMs / 1000 + 1
     }
 
     String newSessionId() {

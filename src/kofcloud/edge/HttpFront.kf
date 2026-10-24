@@ -40,6 +40,16 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     }
     var request = parseRequest(raw)
     var host = hostOnly(headerValue(request.headers, "host"))
+    // Rate limit ANTES de rotear/autorizar/tocar no tunel: o 429 nao revela
+    // nada sobre o servico (existe? qual exposicao?) e nao consome recurso
+    // downstream. Chave = hostname (o Edge TCP nao expoe IP de origem).
+    if (state.checkHttpLimit(host) == false) {
+        var limited = rateLimitedResponse(errRateLimited(), state.httpRetryAfterSec())
+        conn.send(limited)
+        conn.close()
+        noteHttpFinished("denied", "KCF107", raw.length, limited.length, time.now() - started)
+        return
+    }
     var service = state.route(host)
     if (service == null) {
         // Opaco: host desconhecido e servico nao roteavel (PRIVATE) respondem

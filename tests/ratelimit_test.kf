@@ -1,0 +1,118 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.model.Errors
+import kofcloud.store.Store
+import testkit.Support
+
+// Abuse prevention (Fase 8 parcial): rate limit por hostname no Edge publico.
+// O Edge TCP nao expoe IP de origem (sem `peer` em Conn), entao a chave e o
+// Host solicitado — que e exatamente o que varredura e forca bruta rotacionam
+// menos. Recusar cedo: antes de rotear, sem tocar em registry nem tunel.
+
+test "rate limit: quarto pedido rapido e 429 com Retry-After", "ratelimit" {
+    var localSvc = 19551
+    var controlPort = 19552
+    var tunnelPort = 19553
+    var httpPort = 19554
+
+    var app = web.app()
+    app.get("/") { return "svc-rl" }
+    var server = spawn { app.listen(localSvc) }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-rl-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    edgeState.setHttpLimits(3, 60000)
+    var edgeStop = "/tmp/kofcloud-rl-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-rl-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+    var apiBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"api\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", apiBody, accountToken)) == 200, "segundo PUBLIC publicado")
+    var filesBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"files\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", filesBody, accountToken)) == 200, "terceiro PUBLIC publicado")
+
+    var host = "site.mel.kofcloud.io"
+    var first = httpGetRaw(httpPort, "/", host)
+    assert(statusOf(first) == 503, "sem tunel ainda: 503 (conta no limite)")
+    assert(statusOf(httpGetRaw(httpPort, "/", host)) == 503, "segundo 503")
+    assert(statusOf(httpGetRaw(httpPort, "/", host)) == 503, "terceiro 503")
+
+    var limited = httpGetRaw(httpPort, "/", host)
+    assert(statusOf(limited) == 429, "quarto pedido rapido -> 429")
+    assert(bodyOf(limited).indexOf("KCF107") >= 0, "KCF107 no corpo")
+    assert(responseHeader(limited, "retry-after").length > 0, "Retry-After presente")
+
+    // Outro hostname tem cota propria: nao e afetado.
+    var other = httpGetRaw(httpPort, "/", "outro.mel.kofcloud.io")
+    assert(statusOf(other) == 404, "outro host tem cota propria (404, nao 429)")
+
+    var exposition = observability.metrics()
+    assert(metricValue(exposition, "kofcloud_edge_http_denied_total_rate_limited") >= 1, "recusa contada por motivo")
+
+    var host2 = "api.mel.kofcloud.io"
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+
+    // Com tunel e cota zerada no outro host, o limite tambem protege 200:
+    // os 3 primeiros passam, o quarto e 429 antes de tocar no tunel.
+    assert(statusOf(httpGetRaw(httpPort, "/", host2)) == 200, "primeiro 200")
+    assert(statusOf(httpGetRaw(httpPort, "/", host2)) == 200, "segundo 200")
+    assert(statusOf(httpGetRaw(httpPort, "/", host2)) == 200, "terceiro 200")
+    var capped = httpGetRaw(httpPort, "/", host2)
+    assert(statusOf(capped) == 429, "quarto -> 429 mesmo com servico saudavel")
+    assert(bodyOf(httpGetRaw(httpPort, "/", "files.mel.kofcloud.io")) == "svc-rl", "terceiro host com cota propria segue 200")
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}
+
+test "rate limit: Hint orienta sem revelar nada", "ratelimit-hint" {
+    assert(errHint("KCF107: too many requests").indexOf("instante") >= 0, "KCF107 sugere espera")
+    assert(errHint("KCF107: too many requests").indexOf("site") < 0, "sem dado de servico")
+}
+
+Int metricValue(String exposition, String name) {
+    for (var line in exposition.split("\n")) {
+        var trimmed = line.trim()
+        if (trimmed.startsWith(name + " ")) {
+            return parseIntSafe(trimmed.substring(name.length + 1).trim(), -1)
+        }
+    }
+    return -1
+}

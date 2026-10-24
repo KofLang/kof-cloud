@@ -115,6 +115,10 @@ String errTooManyStreams() {
     return "KCF106: too many concurrent streams"
 }
 
+String errRateLimited() {
+    return "KCF107: too many requests"
+}
+
 // ---- dominio proprio (Fase 6) ----
 
 String errInvalidCustomHostname() {
@@ -192,6 +196,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF106") >= 0) {
         return "Muitas conexoes simultaneas — tente de novo em instantes."
+    }
+    if (raw.indexOf("KCF107") >= 0) {
+        return "Muitas requisicoes em pouco tempo — aguarde um instante e tente de novo."
     }
     if (raw.indexOf("KCF120") >= 0) {
         return "O dominio precisa ser um hostname externo valido (ex: api.example.com) — sem IP e fora de *.kofcloud.io."

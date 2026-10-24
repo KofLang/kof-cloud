@@ -2,12 +2,14 @@ package kofcloud.util
 
 // Limites do KofCloud. Configuraveis por kof.config/env
 // (KOF_KOFCLOUD_LIMITS_DEVICES, KOF_KOFCLOUD_LIMITS_SERVICES,
-//  KOF_KOFCLOUD_LIMITS_STREAMS).
+//  KOF_KOFCLOUD_LIMITS_STREAMS, KOF_KOFCLOUD_LIMITS_HTTPREQUESTS,
+//  KOF_KOFCLOUD_LIMITS_HTTPWINDOWMS).
 //
 // Protegem as duas pontas: a infraestrutura KofCloud e a maquina do usuario.
 // O que e aplicado hoje: dispositivos ativos por conta, servicos por
-// dispositivo e streams simultaneos por tunel. Limite de conexoes por servico e
-// de tamanho de frame ainda NAO sao aplicados (docs/17-limitations.md).
+// dispositivo, streams simultaneos por tunel e requisicoes por hostname no
+// Edge. Limite de conexoes por servico e de tamanho de frame ainda NAO sao
+// aplicados (docs/17-limitations.md).
 
 Int limitDevices() {
     return config.int("kofcloud.limits.devices", 5)
@@ -19,4 +21,16 @@ Int limitServices() {
 
 Int limitStreams() {
     return config.int("kofcloud.limits.streams", 128)
+}
+
+// Requisicoes publicas por hostname e por janela no Edge (abuse prevention).
+// O Edge TCP nao expoe o IP de origem (sem `peer` em Conn), entao a chave e
+// o Host solicitado — que e exatamente o que o abuso (varredura de hostnames,
+// forca bruta em AUTHENTICATED) rotaciona menos.
+Int limitHttpRequests() {
+    return config.int("kofcloud.limits.httpRequests", 100)
+}
+
+Int limitHttpWindowMs() {
+    return config.int("kofcloud.limits.httpWindowMs", 60000)
 }

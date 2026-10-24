@@ -100,7 +100,21 @@ terminador externo.
 
 `kof cloud deploy` sobre as mesmas primitivas (identity + device + tunnel +
 service). Não cria infraestrutura paralela. Bloqueado até a Fase 6 estar
-estável (está: slice 1 verde) — mas observabilidade primeiro (ordem abaixo).
+estável (está: slice 1 verde) — mas observabilidade e abuse prevention
+primeiro (ordem abaixo).
+
+## Abuse prevention (parcial, antes do deploy)
+
+**Estado (slice 1 — rate limit por hostname): ✅ implementado.**
+`security.rateLimit` (fixed-window, medido) fiado no Edge público:
+`kofcloud.limits.httpRequests` por hostname e janela
+(`kofcloud.limits.httpWindowMs`, defaults 100/60 s); excedeu → `429 KCF107`
++ `Retry-After`, **antes** de rotear (não revela se o host existe, não
+consome túnel). Chave = hostname (o Edge TCP não expõe IP de origem).
+Métrica `_rate_limited`, `Hint:` sem dado de cliente. Prova:
+`tests/ratelimit_test.kf` (2 testes: 4º pedido → 429 com/sem túnel, cota
+isolada por hostname, Retry-After, métrica, Hint). Falta fatiado: suspensão
+de serviço/dispositivo por abuso, auditoria operacional.
 
 ## Observabilidade mínima (parcial, antes do deploy)
 

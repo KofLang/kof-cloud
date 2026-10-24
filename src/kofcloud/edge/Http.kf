@@ -175,6 +175,20 @@ Byte[] unauthorizedResponse(String message) {
     return bytesFromString(out)
 }
 
+// 429 de rate limit: anuncia em quanto tempo tentar de novo para o cliente
+// honesto nao ficar martelando (e o abusivo saber que esta contido).
+Byte[] rateLimitedResponse(String message, Int retryAfterSec) {
+    var body = message + "\n"
+    var out = "HTTP/1.1 429 Too Many Requests\r\n"
+    out = out + "Retry-After: " + intToString(retryAfterSec) + "\r\n"
+    out = out + "Content-Type: text/plain; charset=utf-8\r\n"
+    out = out + "Content-Length: " + intToString(body.length) + "\r\n"
+    out = out + "Connection: close\r\n"
+    out = out + "\r\n"
+    out = out + body
+    return bytesFromString(out)
+}
+
 Byte[] errorResponse(Int status, String message) {
     var reason = statusReason(status)
     var body = message + "\n"

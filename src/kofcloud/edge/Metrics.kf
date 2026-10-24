@@ -91,6 +91,8 @@ void noteHttpFinished(String outcome, String deniedDetail, Int requestBytes, Int
             observability.counter(metricHttpDenied() + "_device_offline")
         } else if (deniedDetail == "KCF103") {
             observability.counter(metricHttpDenied() + "_service_down")
+        } else if (deniedDetail == "KCF107") {
+            observability.counter(metricHttpDenied() + "_rate_limited")
         } else {
             observability.counter(metricHttpDenied() + "_other")
         }
