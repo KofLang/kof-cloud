@@ -10,6 +10,7 @@ import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
 import kofcloud.identity.Keys
 import kofcloud.model.Device
+import kofcloud.model.Errors
 import kofcloud.model.Service
 import kofcloud.util.Text
 import kofcloud.store.Store
@@ -17,6 +18,21 @@ import kofcloud.store.Store
 // Implementacao dos subcomandos. Cada um devolve o exit code.
 
 record DomainEntry(String hostname, String kind, String service)
+
+// Falha com dica humana (padrao kof-share `errText`): a primeira linha mantem
+// o codigo estavel da plataforma; a `Hint:` orienta o proximo passo sem
+// revelar segredos ou recursos alheios.
+void printFail(String context, String raw) {
+    if (context.length > 0) {
+        println(context + ": " + raw)
+    } else {
+        println(raw)
+    }
+    var hint = errHint(raw)
+    if (hint.length > 0) {
+        println("Hint: " + hint)
+    }
+}
 
 String flagValue(List<String> args, String flag) {
     var i = 0
@@ -69,7 +85,7 @@ Int cmdLogin(List<String> args) {
     try {
         token = loginOrCreate(control, handle, password)
     } catch (String e) {
-        println("falha no login: " + e)
+        printFail("falha no login", e)
         return 1
     }
 
@@ -78,7 +94,7 @@ Int cmdLogin(List<String> args) {
     try {
         deviceId = registerDevice(control, token, deviceName, pair.publicKey)
     } catch (String e) {
-        println("falha ao registrar dispositivo: " + e)
+        printFail("falha ao registrar dispositivo", e)
         return 1
     }
 
@@ -202,7 +218,7 @@ Int cmdDeviceList(List<String> args) {
         }
         return 0
     } catch (String e) {
-        println("falha: " + e)
+        printFail("falha", e)
         return 1
     }
 }
@@ -225,7 +241,7 @@ Int cmdDeviceRevoke(List<String> args) {
         println("Dispositivo revogado: " + deviceId)
         return 0
     } catch (String e) {
-        println("falha: " + e)
+        printFail("falha", e)
         return 1
     }
 }
@@ -280,7 +296,7 @@ Int cmdPublish(List<String> args) {
         println("Status: " + service.status)
         return 0
     } catch (String e) {
-        println("falha ao publicar: " + e)
+        printFail("falha ao publicar", e)
         return 1
     }
 }
@@ -314,7 +330,7 @@ Int cmdUnpublish(List<String> args) {
         println("Servico removido: " + name)
         return 0
     } catch (String e) {
-        println("falha: " + e)
+        printFail("falha", e)
         return 1
     }
 }
@@ -336,7 +352,7 @@ Int cmdServiceList(List<String> args) {
         }
         return 0
     } catch (String e) {
-        println("falha: " + e)
+        printFail("falha", e)
         return 1
     }
 }
@@ -367,7 +383,7 @@ Int cmdServiceStatus(List<String> args) {
         println("servico nao encontrado: " + name)
         return 1
     } catch (String e) {
-        println("falha: " + e)
+        printFail("falha", e)
         return 1
     }
 }
@@ -415,7 +431,7 @@ Int cmdServiceToken(List<String> args) {
         println("  curl -H 'Authorization: Bearer " + token + "' https://" + hostname + "/")
         return 0
     } catch (String e) {
-        println("falha: " + e)
+        printFail("falha", e)
         return 1
     }
 }
@@ -434,7 +450,7 @@ Int cmdDomainList(List<String> args) {
         }
         return 0
     } catch (String e) {
-        println("falha: " + e)
+        printFail("falha", e)
         return 1
     }
 }

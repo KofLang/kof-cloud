@@ -35,6 +35,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | limites | `util/Limits.kf` + enforcement no registry/sessão | `limits_test.kf` |
 | múltiplos serviços | roteamento por `Host` no mesmo túnel | `e2e_multiservice_test.kf` |
 | credencial de serviço | `kfs_` emitido no control plane, validado no Edge | `service_token_test.kf`, `e2e_authenticated_test.kf` |
+| erros estáveis (R6) | `model/Errors.kf`: `KCFnnn` no control plane e no Edge + `Hint:` na CLI | `errors_test.kf` |
 
 ## Comportamentos provados
 
@@ -59,6 +60,11 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   serviço `kfs_` **antes** do túnel (`e2e_authenticated_test.kf`), com o token
   da conta recusado e a credencial removida antes de chegar ao serviço local.
 * **Revogação de dispositivo** derruba a sessão e remove as rotas dele.
+* **Erros estáveis (R6, padrão kof-share)**: todo erro viaja como `KCFnnn`
+  (`KCF001` handle inválido … `KCF106` streams esgotados); recurso de outra
+  conta responde o mesmo `404` opaco de inexistente; `POST /v1/services/status`
+  tem owner-gate (só a conta dona altera); a CLI imprime `Hint:` humana sem
+  vazar segredos (`errors_test.kf`).
 * **Parada limpa** do agente (`disconnect` via arquivo-sentinela) e da
   plataforma (`serve`, via fechamento do `Listener`).
 

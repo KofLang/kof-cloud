@@ -23,7 +23,7 @@ test "registry: limite de dispositivos ativos por conta" {
         reason = e
     }
     assert(blocked, "terceiro dispositivo recusado")
-    assert(reason == "limit:devices", "motivo do limite")
+    assert(reason.indexOf("KCF080") >= 0, "motivo do limite")
     assert(registry.activeDeviceCount(account.id) == 2, "nada foi criado")
 }
 
@@ -64,7 +64,7 @@ test "registry: limite de servicos por dispositivo" {
         reason = e
     }
     assert(blocked, "terceiro servico recusado")
-    assert(reason == "limit:services", "motivo do limite")
+    assert(reason.indexOf("KCF081") >= 0, "motivo do limite")
     assert(registry.servicesForDevice(device.id).size == 2, "nada foi criado")
 }
 

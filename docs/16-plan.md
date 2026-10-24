@@ -69,6 +69,15 @@ serviço local; `401` com `WWW-Authenticate: Bearer`. CLI: `kof cloud service
 token <nome>`. Prova: `tests/service_token_test.kf` (7 testes) +
 `tests/e2e_authenticated_test.kf`.
 
+**Endurecimento (padrão kof-share R6): ✅ implementado.** Erros estáveis
+`KCF001`–`KCF106` (`model/Errors.kf`): nunca removidos nem renumerados; 404
+opaco entre contas (existente-alheio indistinguível de inexistente);
+owner-gate em `POST /v1/services/status` (só a conta dona altera); CLI com
+`Hint:` humana (`printFail`); validação de `publish` devolve o HTTP certo por
+família (400 validação, 404 dono/recurso, 429 limite). Prova:
+`tests/errors_test.kf` (5 testes: códigos do control plane, 404 opaco,
+limites/owner-gate no registry, códigos do Edge, Hint).
+
 ## Fase 6 — domínio próprio
 
 CNAME + validação por `net.resolve` + ativação da rota. Depende de TLS por SNI,

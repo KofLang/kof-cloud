@@ -69,8 +69,8 @@ A conta e os demais dispositivos permanecem válidos.
 
 | Limite | Default | Config | Aplicado? |
 |---|---|---|---|
-| dispositivos ativos por conta | 5 | `kofcloud.limits.devices` | ✅ (429 `limit:devices`) |
-| serviços por dispositivo | 10 | `kofcloud.limits.services` | ✅ (429 `limit:services`) |
+| dispositivos ativos por conta | 5 | `kofcloud.limits.devices` | ✅ (429 `KCF080`) |
+| serviços por dispositivo | 10 | `kofcloud.limits.services` | ✅ (429 `KCF081`) |
 | streams simultâneos por túnel | 128 | `kofcloud.limits.streams` | ✅ (429 / `RESET LIMIT_EXCEEDED`) |
 | conexões simultâneas por serviço | 64 | `limits.connections` | ⏳ ainda não |
 | tamanho de frame | 1 MiB | `limits.frameBytes` | ⏳ ainda não |

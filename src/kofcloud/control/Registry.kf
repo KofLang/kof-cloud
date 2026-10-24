@@ -2,6 +2,7 @@ package kofcloud.control
 
 import kofcloud.model.Account
 import kofcloud.model.Device
+import kofcloud.model.Errors
 import kofcloud.model.Service
 import kofcloud.model.Exposure
 
@@ -84,10 +85,10 @@ class Registry {
 
     Account createAccount(String handle, String email, String password) {
         if (validHandle(handle) == false) {
-            throw "invalid handle"
+            throw errInvalidHandle()
         }
         if (this.accountByHandle(handle) != null) {
-            throw "handle taken"
+            throw errHandleTaken()
         }
         var account = Account(uuid.v4(), handle, email, passwords.hash(password), time.now())
         this.accounts.add(account)
@@ -135,10 +136,10 @@ class Registry {
     String login(String handle, String password) {
         var account = this.accountByHandle(handle)
         if (account == null) {
-            throw "invalid credentials"
+            throw errInvalidCredentials()
         }
         if (passwords.verify(password, account.passwordHash) == false) {
-            throw "invalid credentials"
+            throw errInvalidCredentials()
         }
         return this.issueToken(account.id)
     }
@@ -151,7 +152,7 @@ class Registry {
             return existing
         }
         if (this.activeDeviceCount(account.id) >= this.maxDevices) {
-            throw "limit:devices"
+            throw errLimitDevices()
         }
         var device = Device(uuid.v4(), account.id, name, publicKey, deviceActive(), time.now(), time.now())
         this.devices.add(device)
@@ -227,10 +228,10 @@ class Registry {
     String issueServiceToken(String accountId, String serviceId) {
         var service = this.serviceById(serviceId)
         if (service == null) {
-            throw "service not found"
+            throw errServiceNotFound()
         }
         if (service.accountId != accountId) {
-            throw "service not yours"
+            throw errServiceTokenForbidden()
         }
         var token = newServiceToken()
         this.serviceTokens.add(ServiceToken(serviceId, accountId, tokenHash(token), time.now()))
@@ -266,21 +267,21 @@ class Registry {
 
     Service publishService(Account account, String deviceId, String name, String localAddress, Int localPort, String protocol, String exposure) {
         if (validServiceName(name) == false) {
-            throw "invalid service name"
+            throw errInvalidServiceName()
         }
         var device = this.deviceById(deviceId)
         if (device == null) {
-            throw "device not found"
+            throw errDeviceNotFound()
         }
         if (device.accountId != account.id) {
-            throw "device not yours"
+            throw errDeviceNotYours()
         }
         var existing = this.serviceByName(account.id, name)
         if (existing != null) {
             return existing
         }
         if (this.servicesForDevice(deviceId).size >= this.maxServices) {
-            throw "limit:services"
+            throw errLimitServices()
         }
         var service = Service(
             uuid.v4(), account.id, deviceId, name, localAddress, localPort, protocol,
@@ -391,6 +392,20 @@ class Registry {
             return false
         }
         return this.setServiceStatus(target, status)
+    }
+
+    // Status reportado pelo Agent com verificacao de dono: so a conta dona do
+    // servico pode alterar o status. Devolve "" em sucesso ou o codigo do erro.
+    String reportServiceStatus(String accountId, String serviceId, String status) {
+        var service = this.serviceById(serviceId)
+        if (service == null) {
+            return errServiceNotFound()
+        }
+        if (service.accountId != accountId) {
+            return errServiceNotYours()
+        }
+        this.setServiceStatus(serviceId, status)
+        return ""
     }
 
     // Rota publica: so servicos com exposicao roteavel.

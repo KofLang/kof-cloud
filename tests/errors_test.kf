@@ -1,0 +1,240 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.model.Errors
+import kofcloud.store.Store
+import testkit.Support
+
+// R6 — erros estaveis: todo erro da plataforma viaja como "KCFnnn: ...".
+// Codigos nunca sao removidos nem renumerados; a CLI traduz para Hint.
+// Aqui: control plane (HTTP real) e Edge (HTTP real pelo tunel).
+
+String errorCodeOf(String response) {
+    return mapField(json.decode<Map<String, String>>(bodyOf(response)), "error")
+}
+
+Bool codeIs(String body, String code) {
+    return body.indexOf(code) >= 0
+}
+
+test "erros: control plane devolve codigos estaveis", "errors" {
+    var path = "/tmp/kofcloud-err-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    var control = ControlPlane(registry, 19500, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(19500, 60), "control plane no ar")
+
+    var badHandle = httpPostJson(19500, "/v1/accounts", "{\"handle\":\"MEL\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    assert(statusOf(badHandle) == 400, "handle invalido -> 400")
+    assert(codeIs(errorCodeOf(badHandle), "KCF001"), "KCF001 invalid handle")
+
+    var created = httpPostJson(19500, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"mel@example.com\",\"password\":\"segredo\"}", "")
+    assert(statusOf(created) == 200, "conta criada")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var duplicate = httpPostJson(19500, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"outro@e.com\",\"password\":\"segredo\"}", "")
+    assert(statusOf(duplicate) == 409, "handle duplicado -> 409")
+    assert(codeIs(errorCodeOf(duplicate), "KCF002"), "KCF002 handle taken")
+
+    var wrongPass = httpPostJson(19500, "/v1/login", "{\"handle\":\"mel\",\"password\":\"errada\"}", "")
+    assert(statusOf(wrongPass) == 401, "senha errada -> 401")
+    assert(codeIs(errorCodeOf(wrongPass), "KCF003"), "KCF003 invalid credentials")
+    var unknownUser = httpPostJson(19500, "/v1/login", "{\"handle\":\"ninguem\",\"password\":\"x\"}", "")
+    assert(statusOf(unknownUser) == 401, "conta inexistente -> 401 opaco")
+    assert(codeIs(errorCodeOf(unknownUser), "KCF003"), "mesmo KCF003 (nao revela existencia)")
+
+    var noToken = httpGetRaw(19500, "/v1/devices", "127.0.0.1")
+    assert(statusOf(noToken) == 401, "sem token -> 401")
+    assert(codeIs(bodyOf(noToken), "KCF004"), "KCF004 unauthorized")
+
+    var badDevice = httpPostJson(19500, "/v1/devices", "{\"name\":\"\",\"publicKey\":\"\"}", accountToken)
+    assert(statusOf(badDevice) == 400, "campos vazios -> 400")
+    assert(codeIs(errorCodeOf(badDevice), "KCF020"), "KCF020 name/publicKey")
+
+    var device = httpPostJson(19500, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    assert(statusOf(device) == 200, "device registrado")
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(device)), "deviceId")
+
+    var badPort = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"0\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", accountToken)
+    assert(statusOf(badPort) == 400, "porta invalida -> 400")
+    assert(codeIs(errorCodeOf(badPort), "KCF043"), "KCF043 localPort")
+
+    var badName = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"SITE!\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", accountToken)
+    assert(statusOf(badName) == 400, "nome invalido -> 400")
+    assert(codeIs(errorCodeOf(badName), "KCF040"), "KCF040 invalid service name")
+}
+
+test "erros: conta nao dona recebe 404 opaco (nao revela recurso alheio)", "errors-xacct" {
+    var path = "/tmp/kofcloud-errx-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    var control = ControlPlane(registry, 19510, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(19510, 60), "control plane no ar")
+
+    var melCreated = httpPostJson(19510, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"mel@example.com\",\"password\":\"segredo\"}", "")
+    var mel = json.decode<Map<String, String>>(bodyOf(melCreated))
+    var anaCreated = httpPostJson(19510, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"ana@example.com\",\"password\":\"segredo\"}", "")
+    var ana = json.decode<Map<String, String>>(bodyOf(anaCreated))
+
+    var melDevice = httpPostJson(19510, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", mapField(mel, "token"))
+    var melDeviceId = mapField(json.decode<Map<String, String>>(bodyOf(melDevice)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + melDeviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    var published = httpPostJson(19510, "/v1/services", pubBody, mapField(mel, "token"))
+    assert(statusOf(published) == 200, "mel publica")
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
+
+    // ana tenta operar sobre o device/servico de mel: mesmo 404 de inexistente
+    var anaDevice = httpPostJson(19510, "/v1/services", pubBody, mapField(ana, "token"))
+    assert(statusOf(anaDevice) == 404, "device alheio -> 404")
+    assert(codeIs(errorCodeOf(anaDevice), "KCF021"), "KCF021 (nao revela que existe)")
+
+    var anaTokenBody = "{\"serviceId\":\"" + serviceId + "\"}"
+    var anaToken = httpPostJson(19510, "/v1/services/token", anaTokenBody, mapField(ana, "token"))
+    assert(statusOf(anaToken) == 404, "token sobre servico alheio -> 404")
+    assert(codeIs(errorCodeOf(anaToken), "KCF041"), "KCF041 opaco")
+
+    // owner-gate do status: ana nao altera o status do servico de mel
+    var anaStatus = httpPostJson(19510, "/v1/services/status", "{\"serviceId\":\"" + serviceId + "\",\"status\":\"OFFLINE\"}", mapField(ana, "token"))
+    assert(statusOf(anaStatus) == 404, "status alheio -> 404 opaco")
+    assert(codeIs(errorCodeOf(anaStatus), "KCF041"), "KCF041 (nao KCF042 na borda)")
+    var svcBefore = registry.serviceById(serviceId)
+    assert(svcBefore != null && svcBefore.status == "UNKNOWN", "status intacto")
+
+    // e o dono consegue
+    var melStatus = httpPostJson(19510, "/v1/services/status", "{\"serviceId\":\"" + serviceId + "\",\"status\":\"ONLINE\"}", mapField(mel, "token"))
+    assert(statusOf(melStatus) == 200, "dono altera")
+    var svcAfter = registry.serviceById(serviceId)
+    assert(svcAfter != null && svcAfter.status == "ONLINE", "status aplicado")
+}
+
+test "erros: limites e owner-gate no registry viajam como KCF080/KCF081/KCF022/KCF060", "errors-reg" {
+    var registry = Registry("/tmp/kofcloud-errr-" + crypto.randomHex(4) + ".json")
+    registry.setLimits(1, 1)
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var ana = registry.createAccount("ana", "a@e.com", "segredo")
+    var d1 = registry.registerDevice(mel, "d1", "pk1")
+    var blocked = ""
+    try {
+        registry.registerDevice(mel, "d2", "pk2")
+    } catch (String e) {
+        blocked = e
+    }
+    assert(codeIs(blocked, "KCF080"), "KCF080 limite de dispositivos")
+
+    registry.publishService(mel, d1.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    var blockedSvc = ""
+    try {
+        registry.publishService(mel, d1.id, "api", "127.0.0.1", 3000, "http", "PUBLIC")
+    } catch (String e) {
+        blockedSvc = e
+    }
+    assert(codeIs(blockedSvc, "KCF081"), "KCF081 limite de servicos")
+
+    var anaDevice = registry.registerDevice(ana, "nb", "pk")
+    var notYours = ""
+    try {
+        registry.publishService(ana, d1.id, "x", "127.0.0.1", 9000, "http", "PUBLIC")
+    } catch (String e) {
+        notYours = e
+    }
+    assert(codeIs(notYours, "KCF022"), "KCF022 device alheio")
+
+    var site = registry.serviceByName(mel.id, "site")
+    assert(site != null, "site publicado")
+    var tokenDenied = ""
+    if (site != null) {
+        try {
+            registry.issueServiceToken(ana.id, site.id)
+        } catch (String e) {
+            tokenDenied = e
+        }
+    }
+    assert(codeIs(tokenDenied, "KCF060"), "KCF060 emissao negada a nao dona")
+}
+
+test "erros: Edge devolve codigos estaveis (rota, auth, offline, conteudo)", "errors-edge" {
+    var localSvc = 19520
+    var controlPort = 19521
+    var tunnelPort = 19522
+    var httpPort = 19523
+
+    var app = web.app()
+    app.get("/") { return "svc-up" }
+    var server = spawn { app.listen(localSvc) }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-erre-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-erre-stop-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-erre-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"mel@example.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"pub\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+    var secBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"secret\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", secBody, accountToken)) == 200, "AUTHENTICATED publicado")
+
+    // sem tunel: device offline -> 503 KCF102
+    var offline = httpGetRaw(httpPort, "/", "pub.mel.kofcloud.io")
+    assert(statusOf(offline) == 503, "offline -> 503")
+    assert(codeIs(bodyOf(offline), "KCF102"), "KCF102 device offline")
+
+    // host desconhecido e PRIVATE respondem o mesmo 404 opaco
+    var unknown = httpGetRaw(httpPort, "/", "naoexiste.mel.kofcloud.io")
+    assert(statusOf(unknown) == 404, "host desconhecido -> 404")
+    assert(codeIs(bodyOf(unknown), "KCF100"), "KCF100 sem rota")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+
+    assert(statusOf(httpGetRaw(httpPort, "/", "pub.mel.kofcloud.io")) == 200, "PUBLIC roteia com tunel")
+
+    var noCred = httpGetRaw(httpPort, "/", "secret.mel.kofcloud.io")
+    assert(statusOf(noCred) == 401, "AUTHENTICATED sem credencial -> 401")
+    assert(codeIs(bodyOf(noCred), "KCF101"), "KCF101 auth required")
+    assert(responseHeader(noCred, "www-authenticate") == "Bearer", "anuncia o esquema")
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    assert(edgeState.isOnline(deviceId) == false, "agente encerrou")
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}
+
+test "erros: Hint orienta sem vazar segredo ou recurso alheio", "errors-hint" {
+    assert(errHint("KCF004: missing or invalid account token").indexOf("login") >= 0, "KCF004 sugere login")
+    assert(errHint("KCF022: not the owner of device").indexOf("outra conta") >= 0, "KCF022 sem revelar dono")
+    assert(errHint("KCF101: authentication required").indexOf("kfs_") >= 0, "KCF101 sugere service token")
+    assert(errHint("KCF102: device not connected").indexOf("connect") >= 0, "KCF102 sugere connect")
+    assert(errHint("KCF080: too many active devices").indexOf("revoke") >= 0, "KCF080 sugere revoke")
+    assert(errHint("KCF999: algo desconhecido") == "", "codigo desconhecido nao inventa dica")
+}

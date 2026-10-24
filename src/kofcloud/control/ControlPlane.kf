@@ -3,6 +3,7 @@ package kofcloud.control
 import kofcloud.control.Registry
 import kofcloud.model.Account
 import kofcloud.model.Device
+import kofcloud.model.Errors
 import kofcloud.model.Service
 import kofcloud.util.Text
 import kofcloud.util.Hosts
@@ -125,13 +126,13 @@ HttpResult handleCreateAccount(Registry registry, String bodyText) {
     var email = mapField(body, "email")
     var password = mapField(body, "password")
     if (validHandle(handle) == false) {
-        return HttpResult(400, errorJson("invalid handle"))
+        return HttpResult(400, errorJson(errInvalidHandle()))
     }
     if (password.length < 4) {
-        return HttpResult(400, errorJson("password too short"))
+        return HttpResult(400, errorJson("KCF005: password too short"))
     }
     if (registry.accountByHandle(handle) != null) {
-        return HttpResult(409, errorJson("handle taken"))
+        return HttpResult(409, errorJson(errHandleTaken()))
     }
     var account = registry.createAccount(handle, email, password)
     var token = registry.issueToken(account.id)
@@ -148,10 +149,10 @@ HttpResult handleLogin(Registry registry, String bodyText) {
     var password = mapField(body, "password")
     var account = registry.accountByHandle(handle)
     if (account == null) {
-        return HttpResult(401, errorJson("invalid credentials"))
+        return HttpResult(401, errorJson(errInvalidCredentials()))
     }
     if (passwords.verify(password, account.passwordHash) == false) {
-        return HttpResult(401, errorJson("invalid credentials"))
+        return HttpResult(401, errorJson(errInvalidCredentials()))
     }
     var token = registry.issueToken(account.id)
     var out = mapOf()
@@ -164,13 +165,13 @@ HttpResult handleLogin(Registry registry, String bodyText) {
 HttpResult handleRegisterDevice(Registry registry, String? authHeader, String bodyText) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
-        return HttpResult(401, errorJson("unauthorized"))
+        return HttpResult(401, errorJson(errUnauthorized()))
     }
     var body = decodeBody(bodyText)
     var name = mapField(body, "name")
     var publicKey = mapField(body, "publicKey")
     if (name.length == 0 || publicKey.length == 0) {
-        return HttpResult(400, errorJson("name and publicKey required"))
+        return HttpResult(400, errorJson(errDeviceFields()))
     }
     try {
         var device = registry.registerDevice(account, name, publicKey)
@@ -183,7 +184,7 @@ HttpResult handleRegisterDevice(Registry registry, String? authHeader, String bo
 HttpResult handleListDevices(Registry registry, String? authHeader) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
-        return HttpResult(401, errorJson("unauthorized"))
+        return HttpResult(401, errorJson(errUnauthorized()))
     }
     return HttpResult(200, deviceListJson(registry.devicesForAccount(account.id)))
 }
@@ -191,12 +192,12 @@ HttpResult handleListDevices(Registry registry, String? authHeader) {
 HttpResult handleRevokeDevice(Registry registry, String? authHeader, String bodyText) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
-        return HttpResult(401, errorJson("unauthorized"))
+        return HttpResult(401, errorJson(errUnauthorized()))
     }
     var body = decodeBody(bodyText)
     var deviceId = mapField(body, "deviceId")
     if (registry.revokeDevice(account.id, deviceId) == false) {
-        return HttpResult(404, errorJson("device not found"))
+        return HttpResult(404, errorJson(errDeviceNotFound()))
     }
     var out = mapOf()
     out.put("revoked", "true")
@@ -206,7 +207,7 @@ HttpResult handleRevokeDevice(Registry registry, String? authHeader, String body
 HttpResult handlePublishService(Registry registry, String? authHeader, String bodyText) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
-        return HttpResult(401, errorJson("unauthorized"))
+        return HttpResult(401, errorJson(errUnauthorized()))
     }
     var body = decodeBody(bodyText)
     var name = mapField(body, "name")
@@ -225,27 +226,39 @@ HttpResult handlePublishService(Registry registry, String? authHeader, String bo
         exposure = "PUBLIC"
     }
     if (localPort <= 0) {
-        return HttpResult(400, errorJson("localPort required"))
+        return HttpResult(400, errorJson(errLocalPort()))
     }
     var device = registry.deviceById(deviceId)
     if (device == null) {
-        return HttpResult(404, errorJson("device not found"))
+        return HttpResult(404, errorJson(errDeviceNotFound()))
     }
     if (device.accountId != account.id) {
-        return HttpResult(404, errorJson("device not found"))
+        return HttpResult(404, errorJson(errDeviceNotFound()))
     }
     try {
         var service = registry.publishService(account, deviceId, name, localAddress, localPort, protocol, exposure)
         return HttpResult(200, serviceJson(service))
     } catch (String e) {
+        return publishError(e)
+    }
+}
+
+// Erros do publish com o HTTP certo por familia: limite -> 429, nome -> 400,
+// dono/recurso -> 404 opaco (nao revela recurso alheio).
+HttpResult publishError(String e) {
+    if (e.indexOf("KCF080") >= 0 || e.indexOf("KCF081") >= 0) {
         return HttpResult(429, errorJson(e))
     }
+    if (e.indexOf("KCF040") >= 0 || e.indexOf("KCF043") >= 0) {
+        return HttpResult(400, errorJson(e))
+    }
+    return HttpResult(404, errorJson(errDeviceNotFound()))
 }
 
 HttpResult handleListServices(Registry registry, String? authHeader) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
-        return HttpResult(401, errorJson("unauthorized"))
+        return HttpResult(401, errorJson(errUnauthorized()))
     }
     return HttpResult(200, serviceListJson(registry.servicesForAccount(account.id)))
 }
@@ -253,12 +266,12 @@ HttpResult handleListServices(Registry registry, String? authHeader) {
 HttpResult handleRemoveService(Registry registry, String? authHeader, String bodyText) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
-        return HttpResult(401, errorJson("unauthorized"))
+        return HttpResult(401, errorJson(errUnauthorized()))
     }
     var body = decodeBody(bodyText)
     var serviceId = mapField(body, "serviceId")
     if (registry.removeService(account.id, serviceId) == false) {
-        return HttpResult(404, errorJson("service not found"))
+        return HttpResult(404, errorJson(errServiceNotFound()))
     }
     var out = mapOf()
     out.put("removed", "true")
@@ -270,12 +283,12 @@ HttpResult handleRemoveService(Registry registry, String? authHeader, String bod
 HttpResult handleIssueServiceToken(Registry registry, String? authHeader, String bodyText) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
-        return HttpResult(401, errorJson("unauthorized"))
+        return HttpResult(401, errorJson(errUnauthorized()))
     }
     var body = decodeBody(bodyText)
     var serviceId = mapField(body, "serviceId")
     if (serviceId.length == 0) {
-        return HttpResult(400, errorJson("serviceId required"))
+        return HttpResult(400, errorJson(errServiceIdRequired()))
     }
     try {
         var token = registry.issueServiceToken(account.id, serviceId)
@@ -284,20 +297,24 @@ HttpResult handleIssueServiceToken(Registry registry, String? authHeader, String
         out.put("serviceId", serviceId)
         return HttpResult(200, json.encode(out))
     } catch (String e) {
-        return HttpResult(404, errorJson(e))
+        // Opaco: conta nao dona recebe o mesmo 404 de servico inexistente.
+        return HttpResult(404, errorJson(errServiceNotFound()))
     }
 }
 
 HttpResult handleReportStatus(Registry registry, String? authHeader, String bodyText) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
-        return HttpResult(401, errorJson("unauthorized"))
+        return HttpResult(401, errorJson(errUnauthorized()))
     }
     var body = decodeBody(bodyText)
     var serviceId = mapField(body, "serviceId")
     var status = mapField(body, "status")
-    if (registry.setServiceStatus(serviceId, status) == false) {
-        return HttpResult(404, errorJson("service not found"))
+    // Owner-gate: so a conta dona altera o status. Inexistente e alheio
+    // respondem o mesmo 404 opaco.
+    var failure = registry.reportServiceStatus(account.id, serviceId, status)
+    if (failure.length > 0) {
+        return HttpResult(404, errorJson(errServiceNotFound()))
     }
     var out = mapOf()
     out.put("ok", "true")
@@ -307,16 +324,16 @@ HttpResult handleReportStatus(Registry registry, String? authHeader, String body
 HttpResult handleHeartbeat(Registry registry, String? authHeader, String bodyText) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
-        return HttpResult(401, errorJson("unauthorized"))
+        return HttpResult(401, errorJson(errUnauthorized()))
     }
     var body = decodeBody(bodyText)
     var deviceId = mapField(body, "deviceId")
     var device = registry.deviceById(deviceId)
     if (device == null) {
-        return HttpResult(404, errorJson("device not found"))
+        return HttpResult(404, errorJson(errDeviceNotFound()))
     }
     if (device.accountId != account.id) {
-        return HttpResult(404, errorJson("device not found"))
+        return HttpResult(404, errorJson(errDeviceNotFound()))
     }
     registry.touchDevice(deviceId)
     var out = mapOf()
@@ -328,16 +345,16 @@ HttpResult handleHeartbeat(Registry registry, String? authHeader, String bodyTex
 HttpResult handleConnect(Registry registry, String? authHeader, String bodyText, String edgeHost, Int edgePort) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
-        return HttpResult(401, errorJson("unauthorized"))
+        return HttpResult(401, errorJson(errUnauthorized()))
     }
     var body = decodeBody(bodyText)
     var deviceId = mapField(body, "deviceId")
     var device = registry.deviceById(deviceId)
     if (device == null) {
-        return HttpResult(404, errorJson("device not found"))
+        return HttpResult(404, errorJson(errDeviceNotFound()))
     }
     if (device.accountId != account.id) {
-        return HttpResult(404, errorJson("device not found"))
+        return HttpResult(404, errorJson(errDeviceNotFound()))
     }
     var out = mapOf()
     out.put("edgeHost", edgeHost)
@@ -350,7 +367,7 @@ HttpResult handleConnect(Registry registry, String? authHeader, String bodyText,
 HttpResult handleListDomains(Registry registry, String? authHeader) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
-        return HttpResult(401, errorJson("unauthorized"))
+        return HttpResult(401, errorJson(errUnauthorized()))
     }
     var parts = listOf<String>()
     var zone = mapOf()

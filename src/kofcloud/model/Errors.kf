@@ -1,0 +1,178 @@
+package kofcloud.model
+
+// Codigos de erro estaveis do KofCloud (padrao R6, como o kof-share).
+//
+// Regra: codigos nunca sao removidos nem renumerados — so adicionados. A CLI e
+// os testes identificam falhas pelo codigo, e `errHint` traduz para linguagem
+// humana. Formato fixo: "KCFnnn: texto curto em ingles".
+//
+// Familias:
+//   KCF001-KCF019  conta / autenticacao
+//   KCF020-KCF039  dispositivo
+//   KCF040-KCF059  servico / publicacao
+//   KCF060-KCF079  credenciais de servico (kfs_)
+//   KCF080-KCF099  limites
+//   KCF100-KCF119  Edge / roteamento / tunel
+
+// ---- conta / autenticacao ----
+
+String errInvalidHandle() {
+    return "KCF001: invalid handle"
+}
+
+String errHandleTaken() {
+    return "KCF002: handle taken"
+}
+
+String errInvalidCredentials() {
+    return "KCF003: invalid credentials"
+}
+
+String errUnauthorized() {
+    return "KCF004: missing or invalid account token"
+}
+
+// ---- dispositivo ----
+
+String errDeviceFields() {
+    return "KCF020: name and publicKey required"
+}
+
+String errDeviceNotFound() {
+    return "KCF021: device not found"
+}
+
+String errDeviceNotYours() {
+    return "KCF022: not the owner of device"
+}
+
+// ---- servico / publicacao ----
+
+String errInvalidServiceName() {
+    return "KCF040: invalid service name"
+}
+
+String errServiceNotFound() {
+    return "KCF041: service not found"
+}
+
+String errServiceNotYours() {
+    return "KCF042: not the owner of service"
+}
+
+String errLocalPort() {
+    return "KCF043: localPort required"
+}
+
+String errServiceIdRequired() {
+    return "KCF044: serviceId required"
+}
+
+// ---- credenciais de servico ----
+
+String errServiceTokenForbidden() {
+    return "KCF060: not the owner of service"
+}
+
+// ---- limites ----
+
+String errLimitDevices() {
+    return "KCF080: too many active devices"
+}
+
+String errLimitServices() {
+    return "KCF081: too many services on this device"
+}
+
+// ---- Edge / roteamento ----
+
+String errNoRoute() {
+    return "KCF100: no route for host"
+}
+
+String errAuthRequired() {
+    return "KCF101: authentication required"
+}
+
+String errDeviceOffline() {
+    return "KCF102: device not connected"
+}
+
+String errServiceDown(String name, String status) {
+    return "KCF103: service " + name + " is " + status
+}
+
+String errTunnel(String detail) {
+    return "KCF104: tunnel error: " + detail
+}
+
+String errEmptyUpstream() {
+    return "KCF105: empty response from service"
+}
+
+String errTooManyStreams() {
+    return "KCF106: too many concurrent streams"
+}
+
+// Dica humana para um erro da plataforma. Nunca revela segredos, conteudo de
+// servico ou existencia de recurso alheio — so orienta o proximo passo.
+String errHint(String raw) {
+    if (raw.indexOf("KCF001") >= 0) {
+        return "O identificador da conta usa letras minusculas, numeros e tracos (ex: mel)."
+    }
+    if (raw.indexOf("KCF002") >= 0) {
+        return "Esse identificador ja esta em uso — entre com a senha da conta ou escolha outro."
+    }
+    if (raw.indexOf("KCF003") >= 0) {
+        return "Conta ou senha nao conferem — rode `kof cloud login <handle> --password <senha>` de novo."
+    }
+    if (raw.indexOf("KCF004") >= 0) {
+        return "O control plane precisa de credencial — rode `kof cloud login` primeiro."
+    }
+    if (raw.indexOf("KCF020") >= 0) {
+        return "O registro do dispositivo precisa de nome e chave publica — rode `kof cloud login` de novo."
+    }
+    if (raw.indexOf("KCF021") >= 0) {
+        return "Esse dispositivo nao existe nesta conta — veja `kof cloud device list`."
+    }
+    if (raw.indexOf("KCF022") >= 0 || raw.indexOf("KCF042") >= 0 || raw.indexOf("KCF060") >= 0) {
+        return "Esse recurso pertence a outra conta — confira `kof cloud status` e use a conta dona."
+    }
+    if (raw.indexOf("KCF040") >= 0) {
+        return "O nome do servico usa letras minusculas, numeros e tracos (ex: site)."
+    }
+    if (raw.indexOf("KCF041") >= 0 || raw.indexOf("KCF044") >= 0) {
+        return "Esse servico nao existe nesta conta — veja `kof cloud service list`."
+    }
+    if (raw.indexOf("KCF043") >= 0) {
+        return "Informe a porta local: `kof cloud publish <nome> --port <porta>`."
+    }
+    if (raw.indexOf("KCF080") >= 0) {
+        return "Limite de dispositivos ativos atingido — revogue um com `kof cloud device revoke <id>`."
+    }
+    if (raw.indexOf("KCF081") >= 0) {
+        return "Limite de servicos neste dispositivo atingido — remova um com `kof cloud unpublish <nome>`."
+    }
+    if (raw.indexOf("KCF100") >= 0) {
+        return "Nenhum servico publicado com esse hostname — confira `kof cloud domain list`."
+    }
+    if (raw.indexOf("KCF101") >= 0) {
+        return "Esse servico exige credencial — emita uma com `kof cloud service token <nome>` e envie como `Authorization: Bearer <kfs_...>`."
+    }
+    if (raw.indexOf("KCF102") >= 0) {
+        return "O dispositivo dono esta offline — rode `kof cloud connect` na maquina dele."
+    }
+    if (raw.indexOf("KCF103") >= 0) {
+        return "O servico local nao esta respondendo — verifique a aplicacao na porta publicada e o `kof cloud logs`."
+    }
+    if (raw.indexOf("KCF104") >= 0) {
+        return "Falha no tunel entre Edge e Agent — aguarde a reconexao e tente de novo."
+    }
+    if (raw.indexOf("KCF105") >= 0) {
+        return "O servico local devolveu resposta vazia — verifique a aplicacao na porta publicada."
+    }
+    if (raw.indexOf("KCF106") >= 0) {
+        return "Muitas conexoes simultaneas — tente de novo em instantes."
+    }
+    return ""
+}

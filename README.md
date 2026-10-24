@@ -113,6 +113,9 @@ Ver `docs/15-tests.md` para a matriz.
   tem rota pública. Bancos de dados não são publicados por padrão.
 * O control plane guarda apenas hash dos tokens; comparações são
   constant-time (`security.constantTimeEquals`).
+* Erros estáveis `KCFnnn` (padrão kof-share R6): a CLI imprime `Hint:` humana
+  sem vazar segredos; recurso de outra conta responde o mesmo `404` opaco de
+  inexistente; só a conta dona altera o status do serviço.
 
 ## Estrutura
 

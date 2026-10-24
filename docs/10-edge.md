@@ -78,3 +78,17 @@ O Edge assume que **nem todo serviço publicado é confiável**:
 * revogação de dispositivo e de serviço propagada imediatamente;
 * auditoria operacional (conexão, desconexão, rota negada) **sem** conteúdo;
 * `503`/`429`/`404` distintos para não vazar a existência de rotas privadas.
+
+## Códigos de erro (R6)
+
+O corpo das respostas de erro do Edge também viaja como `KCFnnn`:
+
+| HTTP | Corpo | Quando |
+|---|---|---|
+| `404` | `KCF100` no route | host desconhecido **ou** serviço não roteável (PRIVATE) — opaco por desenho |
+| `401` | `KCF101` authentication required | AUTHENTICATED sem credencial válida (+ `WWW-Authenticate: Bearer`) |
+| `503` | `KCF102` device not connected | sem túnel vivo para o dispositivo dono |
+| `503` | `KCF103` service … is … | serviço fora de rota conforme health reportado |
+| `502` | `KCF104` tunnel error | falha no relay pelo túnel |
+| `502` | `KCF105` empty response | serviço local devolveu resposta vazia |
+| `429` | `KCF106` too many concurrent streams | limite `kofcloud.limits.streams` por túnel |

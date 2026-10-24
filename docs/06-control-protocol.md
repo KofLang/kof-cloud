@@ -77,11 +77,27 @@ X-KofCloud-Token: kfc_...
 
 ## Erros
 
+Todo erro viaja como `{"error":"KCFnnn: texto"}` — códigos estáveis (R6, como
+o kof-share): nunca são removidos nem renumerados, só adicionados. A CLI
+traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
+
 | HTTP | Corpo | Quando |
 |---|---|---|
-| `400` | `{"error":"..."}` | payload inválido |
-| `401` | `{"error":"unauthorized"}` | token ausente/inválido |
-| `403` | `{"error":"forbidden"}` | recurso de outra conta |
-| `404` | `{"error":"not_found"}` | id inexistente |
-| `409` | `{"error":"conflict"}` | handle já existe |
-| `429` | `{"error":"rate_limited"}` | rate limit |
+| `400` | `KCF001` invalid handle | handle fora do formato |
+| `400` | `KCF005` password too short | senha curta |
+| `400` | `KCF020` name/publicKey | registro de device sem campos |
+| `400` | `KCF040` invalid service name | nome de serviço fora do formato |
+| `400` | `KCF043` localPort required | publish sem porta |
+| `400` | `KCF044` serviceId required | endpoint sem serviceId |
+| `401` | `KCF003` invalid credentials | conta/senha não conferem (opaco: conta inexistente responde igual) |
+| `401` | `KCF004` unauthorized | token da conta ausente/inválido |
+| `404` | `KCF021` device not found | device inexistente **ou de outra conta** (opaco por desenho) |
+| `404` | `KCF041` service not found | serviço inexistente **ou de outra conta** (opaco por desenho) |
+| `409` | `KCF002` handle taken | handle já em uso |
+| `429` | `KCF080` too many active devices | limite `kofcloud.limits.devices` |
+| `429` | `KCF081` too many services | limite `kofcloud.limits.services` por dispositivo |
+
+Owner-gate: `POST /v1/services/status` só aceita a conta dona (`KCF042`
+interno vira o mesmo `404 KCF041` na borda, para não revelar recurso alheio).
+`handleRegisterDevice` responde `429` apenas para limite; erro de validação é
+`400`.
