@@ -25,7 +25,8 @@ completa e os protocolos.
 | 3 — hostname automático + DNS (`*.handle.kofcloud.io`) | ✅ hostname/roteamento implementados; **DNS e TLS são externos** (o Kof não tem ACME nem TLS em socket cru — ver `docs/12-tls.md`) |
 | 4 — múltiplos serviços no mesmo túnel + limites por dispositivo | ✅ implementado e testado |
 | 5 — `AUTHENTICATED` com credencial de serviço (`kfs_`) | ✅ implementado e testado |
-| 6+ — domínio próprio, observabilidade, deploy | parcial / planejado (`docs/16-plan.md`) |
+| 6 — domínio próprio (slice 1: registro + verificação DNS + rota) | ✅ implementado e testado; sem TLS/SNI (externo — ver `docs/12-tls.md`) |
+| 6+ — observabilidade, deploy | parcial / planejado (`docs/16-plan.md`) |
 
 O critério de sucesso do pedido foi atingido com o CLI real, em processos
 separados: `login` → `publish site --port 29010` → `connect`, e
@@ -89,6 +90,9 @@ service list
 service status <nome>
 service token <nome>        (credencial kfs_ para servico AUTHENTICATED)
 domain list
+domain add <hostname> --service <nome>   (dominio proprio, devolve a instrucao CNAME)
+domain verify <hostname>                 (confere o DNS e ativa a rota)
+domain remove <hostname>
 logs
 serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>]
 ```

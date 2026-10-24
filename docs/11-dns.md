@@ -21,22 +21,35 @@ serviços existem. Isso mantém o DNS estável e o roteamento dinâmico.
 O subdomínio da conta é criado quando o `handle` é reservado no control plane —
 não há passo manual de DNS para o usuário.
 
-## Fase futura — domínio próprio
+## Fase 6 (slice 1) — domínio próprio ✅ implementado
 
 ```
-api.example.com    CNAME   api.mel.kofcloud.io
-www.example.com    CNAME   www.mel.kofcloud.io
+api.example.com    CNAME   site.mel.kofcloud.io
 ```
 
-Fluxo:
+Fluxo real (CLI):
 
-1. usuário informa `example.com` no control plane;
-2. o control plane devolve o registro a criar (CNAME ou `A`);
-3. o usuário cria o registro no provedor dele;
-4. o control plane **valida** (resolve o nome e confere que aponta para o Edge);
-5. só então emite certificado e ativa a rota.
+```
+kof cloud domain add api.example.com --service site
+# → PENDING + instrucao: CNAME api.example.com -> site.mel.kofcloud.io
+# (operador cria o CNAME no provedor dele)
+kof cloud domain verify api.example.com
+# → resolve via net.resolve, confere contra kofcloud.edgeHosts, vira VERIFIED
+# → Edge roteia api.example.com para o servico
+```
 
-Validação usa `net.resolve(host)` (existe no Kof: devolve todos os endereços).
+Detalhes honestos do slice:
+
+* comparação **exata** contra `kofcloud.edgeHosts` (config, sem default —
+  vazio = verificação sempre recusa até o operador configurar);
+* NXDOMAIN/falha de rede vira `KCF124` indistinguível de "resolveu para outro
+  lugar"; conta alheia recebe `404 KCF122` opaco **antes** de qualquer DNS;
+* PENDING nunca roteia (indistinguível de host inexistente: `404 KCF100`);
+* remoção e poda (serviço/dispositivo) desativam a rota imediatamente;
+* **sem TLS/SNI neste slice**: o hostname próprio serve HTTP pela borda; HTTPS
+  depende de terminador externo (ver `12-tls.md`).
+
+## Fase futura — certificado + automação
 
 ## Automação de DNS
 

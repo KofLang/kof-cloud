@@ -11,7 +11,7 @@ comportamento, vale o comportamento.
 | aceitar conexão TCP | `net.listen(port)` + `listener.accept()` | ✅ |
 | conectar (outbound) | `net.connect(host, port)` | ✅ |
 | ler/escrever bytes | `conn.receive(n)`, `conn.send(Byte[])` | ✅ |
-| resolver DNS | `net.resolve(host) → List<String>` | ✅ |
+| resolver DNS | `net.resolve(host) → List<String>` | ✅ (medido: `localhost` → `["127.0.0.1"]`, literal passa direto, NXDOMAIN joga `String` capturável `NET004`; atenção: `String.split(".")` trata o ponto como regex — split manual em `CustomDomain.kf`) |
 | concorrência | `spawn { }`, `await h` | ✅ |
 | tarefas + canais | `channel<T>()`, `.send`, `.receive` | ✅ |
 | espera | `time.sleep(ms)`, `time.now()` | ✅ |

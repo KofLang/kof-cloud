@@ -80,8 +80,21 @@ limites/owner-gate no registry, códigos do Edge, Hint).
 
 ## Fase 6 — domínio próprio
 
-CNAME + validação por `net.resolve` + ativação da rota. Depende de TLS por SNI,
-que o Kof ainda não expõe — documentado.
+**Estado (slice 1): ✅ implementado.** Registro PENDING com instrução CNAME
+(`POST /v1/domains` → `CNAME api.example.com -> site.mel.kofcloud.io`),
+verificação por `net.resolve` contra os destinos esperados do Edge (config
+`kofcloud.edgeHosts`, comparação exata, NXDOMAIN/falha vira `KCF124`
+indistinguível de "resolveu para outro lugar"), rota ativa só depois de
+VERIFIED, poda junto com serviço/dispositivo. Dono verificado antes do DNS
+(sem trabalho de rede para conta alheia). CLI: `domain add --service`,
+`domain verify`, `domain remove`; erros `KCF120`–`KCF124` com `Hint:`.
+Prova: `tests/domains_test.kf` (7 testes: validação, registro/idempotência,
+verificação sem rede, rota/poda, API, Edge via túnel real, Hint).
+
+Falta (fatiado de propósito): TLS por SNI no Edge (o Kof não expõe — ver
+`12-tls.md`) e automação de DNS por provedor (Cloudflare/Route53). Sem isso,
+o hostname próprio serve HTTP pela borda; o HTTPS continua dependendo de
+terminador externo.
 
 ## Fase 7 — deploy
 

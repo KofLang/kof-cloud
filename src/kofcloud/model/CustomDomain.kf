@@ -1,0 +1,105 @@
+package kofcloud.model
+
+// Dominio proprio (Fase 6): hostname externo que aponta para um servico da
+// conta via CNAME. Ciclo de vida: o registro cria PENDING com a instrucao de
+// DNS; a VERIFICACAO resolve o nome e confere que ele chega ao Edge
+// (lista esperada de IPs/hosts vindos de config); so entao vira VERIFIED e a
+// rota e ativada. Remover o dominio (ou revogar o dispositivo do servico)
+// desativa a rota sem revelar nada a terceiros (404 opaco).
+record CustomDomain(String hostname, String accountId, String serviceId, String status, String verifiedAt, Long createdAt)
+
+String domainPending() {
+    return "PENDING"
+}
+
+String domainVerified() {
+    return "VERIFIED"
+}
+
+Bool domainIsVerified(CustomDomain domain) {
+    return domain.status == "VERIFIED"
+}
+
+// Hostname externo valido: um ou mais rotulos DNS separados por ponto
+// (letras/digitos/hifen, sem hifen nas pontas), com TLD de ao menos 2
+// letras. Recusa: vazio, espaco, underscore, ponto final/duplo, IP literal
+// (o CNAME precisa de nome, nao de endereco) e qualquer coisa dentro de
+// *.kofcloud.io (esse espaco continua automatico e nao precisa de registro).
+Bool validCustomHostname(String hostname) {
+    if (hostname.length == 0 || hostname.length > 253) {
+        return false
+    }
+    if (hostname.endsWith(".") || hostname.indexOf("..") >= 0) {
+        return false
+    }
+    if (hostname.indexOf(" ") >= 0 || hostname.indexOf("_") >= 0) {
+        return false
+    }
+    if (hostname.toLowerCase().endsWith(kofcloudDomainSuffix())) {
+        return false
+    }
+    var labels = splitHostname(hostname)
+    if (labels.size < 2) {
+        return false
+    }
+    var i = 0
+    while (i < labels.size) {
+        if (validLabel(labels[i].toLowerCase(), 1, 63) == false) {
+            return false
+        }
+        i = i + 1
+    }
+    var tld = labels[labels.size - 1].toLowerCase()
+    if (tld.length < 2) {
+        return false
+    }
+    for (var j = 0; j < tld.length; j++) {
+        var c = tld.charAt(j) as Int
+        if (c < 97 || c > 122) {
+            return false
+        }
+    }
+    // IP literal (v4) nao e dominio: quatro grupos so de digitos.
+    if (labels.size == 4) {
+        var numeric = true
+        for (var k = 0; k < 4; k++) {
+            var label = labels[k]
+            if (label.length == 0) {
+                numeric = false
+            } else {
+                for (var m = 0; m < label.length; m++) {
+                    var d = label.charAt(m) as Int
+                    if (d < 48 || d > 57) {
+                        numeric = false
+                    }
+                }
+            }
+        }
+        if (numeric) {
+            return false
+        }
+    }
+    return true
+}
+
+String kofcloudDomainSuffix() {
+    return ".kofcloud.io"
+}
+
+// Divide por ponto LITERAL. `String.split` trata o padrao como regex (ponto
+// casa tudo e o resultado vem vazio) — por isso o split manual.
+List<String> splitHostname(String hostname) {
+    var out = listOf<String>()
+    var current = ""
+    for (var i = 0; i < hostname.length; i++) {
+        var c = hostname.charAt(i)
+        if (c == 46) {
+            out.add(current)
+            current = ""
+        } else {
+            current = current + (c as Char)
+        }
+    }
+    out.add(current)
+    return out
+}

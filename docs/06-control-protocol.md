@@ -29,7 +29,10 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/services/status` | dispositivo | `{serviceId,status}` (health reportado pelo Agent) |
 | `POST` | `/v1/heartbeat` | dispositivo | `{deviceId}` → `{ok:true, serverTime}` |
 | `POST` | `/v1/connect` | dispositivo | `{deviceId}` → `{edgeHost,edgePort,tunnelToken}` |
-| `GET` | `/v1/domains` | conta | domínios/hostnames da conta |
+| `GET` | `/v1/domains` | conta | domínios/hostnames da conta (wildcard + serviços + próprios) |
+| `POST` | `/v1/domains` | conta | registra domínio próprio `{hostname,service}` → `{hostname,status,instruction}` (PENDING + CNAME) |
+| `POST` | `/v1/domains/verify` | conta | `{hostname}` → `{hostname,status,verifiedAt}` (verifica o DNS e ativa a rota) |
+| `POST` | `/v1/domains/remove` | conta | `{hostname}` → `{removed:true}` |
 | `GET` | `/v1/health` | — | liveness do control plane |
 
 ## Exemplos
@@ -64,6 +67,27 @@ X-KofCloud-Token: kfc_...
 200 {"token":"kfs_...","serviceId":"..."}
 ```
 
+Registrar domínio próprio (Fase 6, slice 1):
+
+```
+POST /v1/domains
+X-KofCloud-Token: kfc_...
+{"hostname":"api.example.com","service":"site"}
+
+200 {"hostname":"api.example.com","status":"PENDING",
+     "instruction":"CNAME api.example.com -> site.mel.kofcloud.io"}
+```
+
+Verificar (o operador cria o CNAME e chama):
+
+```
+POST /v1/domains/verify
+X-KofCloud-Token: kfc_...
+{"hostname":"api.example.com"}
+
+200 {"hostname":"api.example.com","status":"VERIFIED","verifiedAt":"..."}
+```
+
 `connect` (o Agent pede o ponto de entrada do Edge):
 
 ```
@@ -93,6 +117,10 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `401` | `KCF004` unauthorized | token da conta ausente/inválido |
 | `404` | `KCF021` device not found | device inexistente **ou de outra conta** (opaco por desenho) |
 | `404` | `KCF041` service not found | serviço inexistente **ou de outra conta** (opaco por desenho) |
+| `404` | `KCF122` domain not found | domínio inexistente **ou de outra conta** (opaco por desenho) |
+| `400` | `KCF120` invalid custom hostname | hostname fora do formato, IP literal ou `*.kofcloud.io` |
+| `409` | `KCF121` hostname already registered | hostname já registrado (outra conta ou outro serviço) |
+| `409` | `KCF124` does not resolve to this Edge | DNS ainda não aponta para este Edge |
 | `409` | `KCF002` handle taken | handle já em uso |
 | `429` | `KCF080` too many active devices | limite `kofcloud.limits.devices` |
 | `429` | `KCF081` too many services | limite `kofcloud.limits.services` por dispositivo |

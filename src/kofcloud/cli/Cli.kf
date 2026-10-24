@@ -103,13 +103,22 @@ Int runService(List<String> args) {
 
 Int runDomain(List<String> args) {
     if (args.size == 0) {
-        println("uso: kof cloud domain list")
+        println("uso: kof cloud domain list|add|verify|remove")
         return 1
     }
     var sub = args.get(0)
     var rest = args.subList(1, args.size)
     if (sub == "list") {
         return cmdDomainList(rest)
+    }
+    if (sub == "add") {
+        return cmdDomainAdd(rest)
+    }
+    if (sub == "verify") {
+        return cmdDomainVerify(rest)
+    }
+    if (sub == "remove") {
+        return cmdDomainRemove(rest)
     }
     println("subcomando desconhecido: domain " + sub)
     return 1

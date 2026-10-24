@@ -36,6 +36,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | múltiplos serviços | roteamento por `Host` no mesmo túnel | `e2e_multiservice_test.kf` |
 | credencial de serviço | `kfs_` emitido no control plane, validado no Edge | `service_token_test.kf`, `e2e_authenticated_test.kf` |
 | erros estáveis (R6) | `model/Errors.kf`: `KCFnnn` no control plane e no Edge + `Hint:` na CLI | `errors_test.kf` |
+| domínio próprio (slice 1) | `model/CustomDomain.kf` + registro/verificação/roda no registry, `POST /v1/domains[/verify][/remove]`, CLI `domain add/verify/remove` | `domains_test.kf` |
 
 ## Comportamentos provados
 
@@ -60,6 +61,12 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   serviço `kfs_` **antes** do túnel (`e2e_authenticated_test.kf`), com o token
   da conta recusado e a credencial removida antes de chegar ao serviço local.
 * **Revogação de dispositivo** derruba a sessão e remove as rotas dele.
+* **Domínio próprio (Fase 6, slice 1)**: hostname externo registrado como
+  PENDING com instrução CNAME, verificado por `net.resolve` contra os destinos
+  esperados do Edge (comparação exata; NXDOMAIN/falha = `KCF124` opaco), rota
+  ativa só após VERIFIED; conta alheia recebe o mesmo `404` opaco; poda junto
+  com serviço/dispositivo; persistido no estado (`domains_test.kf`, 7 testes).
+  Sem TLS/SNI neste slice (terminador externo — ver `12-tls.md`).
 * **Erros estáveis (R6, padrão kof-share)**: todo erro viaja como `KCFnnn`
   (`KCF001` handle inválido … `KCF106` streams esgotados); recurso de outra
   conta responde o mesmo `404` opaco de inexistente; `POST /v1/services/status`

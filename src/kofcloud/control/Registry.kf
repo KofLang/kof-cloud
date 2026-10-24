@@ -1,6 +1,7 @@
 package kofcloud.control
 
 import kofcloud.model.Account
+import kofcloud.model.CustomDomain
 import kofcloud.model.Device
 import kofcloud.model.Errors
 import kofcloud.model.Service
@@ -18,7 +19,7 @@ record TokenEntry(String accountId, String tokenHash, Long createdAt)
 
 record ServiceToken(String serviceId, String accountId, String tokenHash, Long createdAt)
 
-record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens)
+record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens, List<CustomDomain> customDomains)
 
 class Registry {
     List<Account> accounts
@@ -26,9 +27,14 @@ class Registry {
     List<Service> services
     List<TokenEntry> tokens
     List<ServiceToken> serviceTokens
+    List<CustomDomain> customDomains
     String path
     Int maxDevices
     Int maxServices
+    // Destinos que a verificacao de dominio proprio aceita: IPs e/ou hostnames
+    // do Edge (config `kofcloud.edgeHosts`, separados por virgula). Comparacao
+    // exata, sem sufixo: subdominios de um host esperado NAO valem.
+    List<String> edgeHosts
 
     constructor(path: String) {
         this.path = path
@@ -37,9 +43,16 @@ class Registry {
         this.services = listOf<Service>()
         this.tokens = listOf<TokenEntry>()
         this.serviceTokens = listOf<ServiceToken>()
+        this.customDomains = listOf<CustomDomain>()
         this.maxDevices = limitDevices()
         this.maxServices = limitServices()
+        this.edgeHosts = parseEdgeHosts(config.str("kofcloud.edgeHosts", ""))
         this.load()
+    }
+
+    // Permite aos testes fixarem os destinos esperados sem config de processo.
+    void setEdgeHosts(List<String> hosts) {
+        this.edgeHosts = hosts
     }
 
     // Permite aos testes exercitarem o limite sem depender de env/config do
@@ -71,6 +84,7 @@ class Registry {
             this.services = state.services
             this.tokens = state.tokens
             this.serviceTokens = state.serviceTokens
+            this.customDomains = state.customDomains
         } catch (String e) {
             // Estado corrompido: recomeca vazio em vez de derrubar o control
             // plane. O operador ve os dados ausentes e decide.
@@ -78,7 +92,7 @@ class Registry {
     }
 
     void save() {
-        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens, this.serviceTokens)))
+        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens, this.serviceTokens, this.customDomains)))
     }
 
     // ---- contas ----
@@ -203,6 +217,7 @@ class Registry {
             this.devices = updated
             this.removeServicesOfDevice(deviceId)
             this.pruneServiceTokens()
+            this.pruneCustomDomains()
             this.save()
         }
         return found
@@ -344,6 +359,7 @@ class Registry {
         if (found) {
             this.services = out
             this.pruneServiceTokens()
+            this.pruneCustomDomains()
             this.save()
         }
         return found
@@ -408,7 +424,9 @@ class Registry {
         return ""
     }
 
-    // Rota publica: so servicos com exposicao roteavel.
+    // Rota publica: so servicos com exposicao roteavel. Dominios proprios
+    // VERIFIED entram como apelidos do hostname do servico (mesma checagem de
+    // exposicao/status do Edge; PENDING nunca roteia).
     Service? resolveRoute(String hostname) {
         for (var service in this.services) {
             if (service.hostname == hostname) {
@@ -417,6 +435,199 @@ class Registry {
                 }
             }
         }
+        var custom = this.customByHostname(hostname)
+        if (custom != null && custom.status == domainVerified()) {
+            var service = this.serviceById(custom.serviceId)
+            if (service != null && service.accountId == custom.accountId) {
+                if (exposureIsRoutable(exposureFrom(service.exposure))) {
+                    return service
+                }
+            }
+        }
         return null
     }
+
+    // ---- dominios proprios (Fase 6) ----
+
+    // Registra um hostname externo para um servico da conta. Devolve o registro
+    // PENDING junto com a instrucao de DNS (CNAME para o hostname do servico).
+    // Falhas viajam como codigo KCF12x. O registro e idempotente por hostname
+    // dentro da conta: re-registrar o mesmo par (servico) devolve o existente.
+    CustomDomain registerCustomDomain(String accountId, String hostname, String serviceId) {
+        var clean = hostname.trim().toLowerCase()
+        if (validCustomHostname(clean) == false) {
+            throw errInvalidCustomHostname()
+        }
+        var service = this.serviceById(serviceId)
+        if (service == null) {
+            throw errServiceNotFound()
+        }
+        if (service.accountId != accountId) {
+            throw errServiceNotYours()
+        }
+        var taken = this.customByHostname(clean)
+        if (taken != null) {
+            if (taken.accountId == accountId && taken.serviceId == serviceId) {
+                return taken
+            }
+            throw errDomainTaken()
+        }
+        var domain = CustomDomain(clean, accountId, serviceId, domainPending(), "", time.now())
+        this.customDomains.add(domain)
+        this.save()
+        return domain
+    }
+
+    CustomDomain? customByHostname(String hostname) {
+        var clean = hostname.trim().toLowerCase()
+        for (var domain in this.customDomains) {
+            if (domain.hostname == clean) {
+                return domain
+            }
+        }
+        return null
+    }
+
+    List<CustomDomain> customDomainsForAccount(String accountId) {
+        var out = listOf<CustomDomain>()
+        for (var domain in this.customDomains) {
+            if (domain.accountId == accountId) {
+                out.add(domain)
+            }
+        }
+        return out
+    }
+
+    // Remove o registro. Inexistente e alheio devolvem false (o handler
+    // responde o mesmo 404 opaco nos dois casos).
+    Bool removeCustomDomain(String accountId, String hostname) {
+        var clean = hostname.trim().toLowerCase()
+        var out = listOf<CustomDomain>()
+        var found = false
+        for (var domain in this.customDomains) {
+            if (domain.hostname == clean && domain.accountId == accountId) {
+                found = true
+            } else {
+                out.add(domain)
+            }
+        }
+        if (found) {
+            this.customDomains = out
+            this.save()
+        }
+        return found
+    }
+
+    // Remove registros cujo servico sumiu ou saiu da conta (revogacao de
+    // dispositivo remove os servicos; a poda fecha o ciclo).
+    void pruneCustomDomains() {
+        var alive = listOf<CustomDomain>()
+        for (var domain in this.customDomains) {
+            var service = this.serviceById(domain.serviceId)
+            if (service == null) {
+                // orfao: servico sumiu, poda
+            } else if (service.accountId == domain.accountId) {
+                alive.add(domain)
+            }
+        }
+        this.customDomains = alive
+    }
+
+    // Verifica a delegacao DNS: resolve o hostname e confere se ALGUM endereco
+    // responde coincide (exato, sem sufixo) com um destino esperado do Edge.
+    // `addresses` e injetavel para testes sem rede.
+    String verifyCustomDomainWith(String accountId, String hostname, List<String> addresses) {
+        var domain = this.customByHostname(hostname)
+        if (domain == null) {
+            return errDomainNotFound()
+        }
+        var owner = domain.accountId
+        var target = domain.serviceId
+        var label = domain.hostname
+        if (owner != accountId) {
+            return errDomainNotFound()
+        }
+        if (this.serviceById(target) == null) {
+            return errDomainNotFound()
+        }
+        for (var address in addresses) {
+            if (isExpectedEdgeHost(address)) {
+                this.markDomainVerified(label)
+                return ""
+            }
+        }
+        return errDomainUnreachable()
+    }
+
+    // Verifica contra o DNS real. A ordem importa: primeiro dono/existencia
+    // (KCF122 opaco, sem tocar na rede), depois o DNS. Falha de resolucao
+    // (NXDOMAIN, timeout, rede) vira KCF124 indistinguivel de "resolveu para
+    // outro lugar": nos dois casos o hostname ainda nao aponta para este Edge.
+    String verifyCustomDomain(String accountId, String hostname) {
+        var domain = this.customByHostname(hostname)
+        if (domain == null) {
+            return errDomainNotFound()
+        }
+        var owner = domain.accountId
+        var label = domain.hostname
+        if (owner != accountId) {
+            return errDomainNotFound()
+        }
+        var resolved = listOf<String>()
+        try {
+            resolved = net.resolve(label)
+        } catch (String e) {
+            return errDomainUnreachable()
+        }
+        return this.verifyCustomDomainWith(accountId, hostname, resolved)
+    }
+
+    Bool isExpectedEdgeHost(String address) {
+        for (var expected in this.edgeHosts) {
+            if (expected == address) {
+                return true
+            }
+            if (expected.startsWith("*.") && address.endsWith(expected.substring(1))) {
+                return true
+            }
+        }
+        return false
+    }
+
+    void markDomainVerified(String hostname) {
+        var clean = hostname.trim().toLowerCase()
+        var updated = listOf<CustomDomain>()
+        for (var domain in this.customDomains) {
+            if (domain.hostname == clean) {
+                updated.add(CustomDomain(domain.hostname, domain.accountId, domain.serviceId, domainVerified(), longToString(time.now()), domain.createdAt))
+            } else {
+                updated.add(domain)
+            }
+        }
+        this.customDomains = updated
+        this.save()
+    }
+}
+
+// Destinos esperados do Edge vindos de config: "ip1,ip2,host" (virgula,
+// espaco ou ponto-e-virgula separam). Vazio = nenhum (verificacao sempre
+// recusa ate o operador configurar).
+List<String> parseEdgeHosts(String raw) {
+    var out = listOf<String>()
+    var current = ""
+    for (var i = 0; i < raw.length; i++) {
+        var c = raw.charAt(i)
+        if (c == "," || c == ";" || c == " ") {
+            if (current.length > 0) {
+                out.add(current.toLowerCase())
+                current = ""
+            }
+        } else {
+            current = current + (c as Char)
+        }
+    }
+    if (current.length > 0) {
+        out.add(current.toLowerCase())
+    }
+    return out
 }

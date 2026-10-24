@@ -19,6 +19,8 @@ import kofcloud.store.Store
 
 record DomainEntry(String hostname, String kind, String service)
 
+record DomainStatus(String hostname, String status, String instruction, String verifiedAt)
+
 // Falha com dica humana (padrao kof-share `errText`): a primeira linha mantem
 // o codigo estavel da plataforma; a `Hint:` orienta o proximo passo sem
 // revelar segredos ou recursos alheios.
@@ -448,6 +450,84 @@ Int cmdDomainList(List<String> args) {
         for (var domain in domains) {
             println(domain.kind + "  " + domain.hostname)
         }
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
+Int cmdDomainAdd(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    var hostname = firstPositional(args)
+    var service = flagValue(args, "--service")
+    if (hostname.length == 0 || service.length == 0) {
+        println("uso: kof cloud domain add <hostname> --service <nome>")
+        return 1
+    }
+    var body = mapOf()
+    body.put("hostname", hostname)
+    body.put("service", service)
+    try {
+        var raw = requireOk(http.post(session.controlUrl + "/v1/domains", json.encode(body), jsonHeader(session.token)))
+        var created = json.decode<DomainStatus>(raw)
+        println("Dominio registrado (pendente de DNS):")
+        println("  hostname: " + created.hostname)
+        println("  instrucao: " + created.instruction)
+        println("")
+        println("Crie o CNAME e rode: kof cloud domain verify " + created.hostname)
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
+Int cmdDomainVerify(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    var hostname = firstPositional(args)
+    if (hostname.length == 0) {
+        println("uso: kof cloud domain verify <hostname>")
+        return 1
+    }
+    var body = mapOf()
+    body.put("hostname", hostname)
+    try {
+        var raw = requireOk(http.post(session.controlUrl + "/v1/domains/verify", json.encode(body), jsonHeader(session.token)))
+        var verified = json.decode<DomainStatus>(raw)
+        println("Dominio verificado: " + verified.hostname)
+        println("Rota ativa.")
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
+Int cmdDomainRemove(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    var hostname = firstPositional(args)
+    if (hostname.length == 0) {
+        println("uso: kof cloud domain remove <hostname>")
+        return 1
+    }
+    var body = mapOf()
+    body.put("hostname", hostname)
+    try {
+        requireOk(http.post(session.controlUrl + "/v1/domains/remove", json.encode(body), jsonHeader(session.token)))
+        println("Dominio removido: " + hostname)
         return 0
     } catch (String e) {
         printFail("falha", e)

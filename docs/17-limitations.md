@@ -23,7 +23,8 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 * HTTP/2 e HTTP/3.
 * QUIC, UDP forwarding, TCP forwarding genérico.
 * CDN, edge distribuído, relay regional.
-* Domínio próprio automatizado (depende de TLS por SNI).
+* Domínio próprio: registro + verificação + rota (Fase 6 slice 1) ✅; sem
+  TLS por SNI e sem automação por provedor (Cloudflare/Route53).
 * Deploy (`kof cloud deploy`).
 * Daemon (systemd/launchd/Windows Service) — o core não depende deles.
 * Auto-update do Agent com verificação de assinatura.

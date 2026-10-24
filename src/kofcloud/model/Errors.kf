@@ -13,6 +13,7 @@ package kofcloud.model
 //   KCF060-KCF079  credenciais de servico (kfs_)
 //   KCF080-KCF099  limites
 //   KCF100-KCF119  Edge / roteamento / tunel
+//   KCF120-KCF139  dominio proprio (Fase 6; KCF123 reservado, nunca emitido)
 
 // ---- conta / autenticacao ----
 
@@ -114,6 +115,24 @@ String errTooManyStreams() {
     return "KCF106: too many concurrent streams"
 }
 
+// ---- dominio proprio (Fase 6) ----
+
+String errInvalidCustomHostname() {
+    return "KCF120: invalid custom hostname"
+}
+
+String errDomainTaken() {
+    return "KCF121: hostname already registered"
+}
+
+String errDomainNotFound() {
+    return "KCF122: domain not found"
+}
+
+String errDomainUnreachable() {
+    return "KCF124: hostname does not resolve to this Edge"
+}
+
 // Dica humana para um erro da plataforma. Nunca revela segredos, conteudo de
 // servico ou existencia de recurso alheio — so orienta o proximo passo.
 String errHint(String raw) {
@@ -173,6 +192,18 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF106") >= 0) {
         return "Muitas conexoes simultaneas — tente de novo em instantes."
+    }
+    if (raw.indexOf("KCF120") >= 0) {
+        return "O dominio precisa ser um hostname externo valido (ex: api.example.com) — sem IP e fora de *.kofcloud.io."
+    }
+    if (raw.indexOf("KCF121") >= 0) {
+        return "Esse hostname ja esta registrado — confira `kof cloud domain list`."
+    }
+    if (raw.indexOf("KCF122") >= 0) {
+        return "Esse dominio nao existe nesta conta — veja `kof cloud domain list`."
+    }
+    if (raw.indexOf("KCF124") >= 0) {
+        return "O DNS ainda nao aponta para este Edge — confira o CNAME e aguarde a propagacao; depois rode `kof cloud domain verify <hostname>`."
     }
     return ""
 }

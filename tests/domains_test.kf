@@ -1,0 +1,304 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.model.CustomDomain
+import kofcloud.model.Errors
+import kofcloud.store.Store
+import testkit.Support
+
+// Fase 6 (slice 1) — dominio proprio: registro PENDING com instrucao CNAME,
+// verificacao por DNS contra os destinos esperados do Edge, rota ativa so
+// depois de VERIFIED. Sem TLS/SNI neste slice (documentado em 12-tls.md).
+
+String domainErrOf(String response) {
+    return mapField(json.decode<Map<String, String>>(bodyOf(response)), "error")
+}
+
+Bool domainCodeIs(String body, String code) {
+    return body.indexOf(code) >= 0
+}
+
+// Sobe conta + device + servico PUBLIC e devolve "token|deviceId|serviceId".
+String domainFixture(Int controlPort, String path) {
+    var registry = Registry(path)
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    assert(statusOf(created) == 200, "conta criada")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var device = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(device)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
+    assert(statusOf(published) == 200, "servico publicado")
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
+    return accountToken + "|" + deviceId + "|" + serviceId
+}
+
+test "dominio: validacao de hostname externo", "domains" {
+    assert(validCustomHostname("api.example.com") == true, "dominio simples")
+    assert(validCustomHostname("www.loja.com.br") == true, "multi-nivel")
+    assert(validCustomHostname("a.b.c.example.org") == true, "subdominios")
+    assert(validCustomHostname("UPPER.EXAMPLE.COM") == true, "maiuscula aceita (normaliza)")
+    assert(validCustomHostname("") == false, "vazio")
+    assert(validCustomHostname("localhost") == false, "sem TLD")
+    assert(validCustomHostname("127.0.0.1") == false, "IP literal")
+    assert(validCustomHostname("1.2.3.4") == false, "IP literal generico")
+    assert(validCustomHostname("api.example") == true, "TLD longo de uma palavra e sintaticamente valido")
+    assert(validCustomHostname("api.e") == false, "TLD de 1 letra")
+    assert(validCustomHostname("api.example.c0m") == false, "digito no TLD")
+    assert(validCustomHostname("site.mel.kofcloud.io") == false, "espaco kofcloud reservado")
+    assert(validCustomHostname("mel.kofcloud.io") == false, "zona da conta reservada")
+    assert(validCustomHostname("api_example.com") == false, "underscore")
+    assert(validCustomHostname("api.example.com.") == false, "ponto final")
+    assert(validCustomHostname("api..example.com") == false, "ponto duplo")
+    assert(validCustomHostname("api.exa mple.com") == false, "espaco")
+    assert(validCustomHostname("-api.example.com") == false, "hifen na ponta")
+}
+
+test "dominio: registro e idempotencia no registry", "domains-reg" {
+    var registry = Registry("/tmp/kofcloud-domreg-" + crypto.randomHex(4) + ".json")
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var ana = registry.createAccount("ana", "a@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+
+    var first = registry.registerCustomDomain(mel.id, "API.Example.com", service.id)
+    assert(first.hostname == "api.example.com", "normaliza minusculas")
+    assert(first.status == "PENDING", "comeca pendente")
+
+    var again = registry.registerCustomDomain(mel.id, "api.example.com", service.id)
+    assert(again.hostname == "api.example.com", "idempotente: mesmo par")
+
+    var badHost = ""
+    try {
+        registry.registerCustomDomain(mel.id, "site.mel.kofcloud.io", service.id)
+    } catch (String e) {
+        badHost = e
+    }
+    assert(domainCodeIs(badHost, "KCF120"), "KCF120 hostname reservado")
+
+    var badService = ""
+    try {
+        registry.registerCustomDomain(mel.id, "outro.example.com", "inexistente")
+    } catch (String e) {
+        badService = e
+    }
+    assert(domainCodeIs(badService, "KCF041"), "KCF041 servico inexistente")
+
+    var anaDevice = registry.registerDevice(ana, "nb", "pk")
+    var anaService = registry.publishService(ana, anaDevice.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    var notYours = ""
+    try {
+        registry.registerCustomDomain(ana.id, "alheio.example.com", service.id)
+    } catch (String e) {
+        notYours = e
+    }
+    assert(domainCodeIs(notYours, "KCF042"), "KCF042 servico alheio")
+
+    var taken = ""
+    try {
+        registry.registerCustomDomain(ana.id, "api.example.com", anaService.id)
+    } catch (String e) {
+        taken = e
+    }
+    assert(domainCodeIs(taken, "KCF121"), "KCF121 ja registrado")
+
+    assert(registry.removeCustomDomain(ana.id, "api.example.com") == false, "alheio nao remove")
+    assert(registry.customByHostname("api.example.com") != null, "registro intacto")
+    assert(registry.removeCustomDomain(mel.id, "api.example.com") == true, "dona remove")
+    assert(registry.customByHostname("api.example.com") == null, "sumiu")
+}
+
+test "dominio: verificacao contra destinos esperados (sem rede)", "domains-verify" {
+    var registry = Registry("/tmp/kofcloud-domver-" + crypto.randomHex(4) + ".json")
+    registry.setEdgeHosts(listOf("203.0.113.10", "edge-by-name.example.net"))
+    assert(registry.edgeHosts.size == 2, "dois destinos")
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    registry.registerCustomDomain(mel.id, "api.example.com", service.id)
+
+    assert(registry.verifyCustomDomainWith(mel.id, "api.example.com", listOf("198.51.100.7")) == "KCF124: hostname does not resolve to this Edge", "outro IP recusa")
+    var pending = registry.customByHostname("api.example.com")
+    assert(pending != null, "registro existe")
+    if (pending != null) {
+        assert(pending.status == "PENDING", "continua pendente")
+    }
+    assert(registry.verifyCustomDomainWith(mel.id, "nope.example.com", listOf("203.0.113.10")) == "KCF122: domain not found", "desconhecido -> KCF122")
+    assert(registry.verifyCustomDomainWith(mel.id, "api.example.com", listOf("198.51.100.7", "203.0.113.10")) == "", "algum coincide aprova")
+    var verified = registry.customByHostname("api.example.com")
+    assert(verified != null, "registro existe")
+    if (verified != null) {
+        assert(verified.status == "VERIFIED", "vira VERIFIED")
+    }
+    assert(registry.resolveRoute("api.example.com") != null, "rota ativa apos verificar")
+
+    assert(registry.resolveRoute("api.example.com") != null, "rota antes")
+    assert(registry.verifyCustomDomainWith("outra-conta", "api.example.com", listOf("203.0.113.10")) == "KCF122: domain not found", "outra conta nao verifica")
+    assert(registry.resolveRoute("api.example.com") != null, "rota intacta")
+
+    registry.registerCustomDomain(mel.id, "nxd-12345.invalid", service.id)
+    assert(domainCodeIs(registry.verifyCustomDomain(mel.id, "nxd-12345.invalid"), "KCF124"), "NXDOMAIN vira KCF124 (sem distinguir)")
+}
+
+test "dominio: rota so ativa depois de VERIFIED; poda acompanha o servico", "domains-route" {
+    var registry = Registry("/tmp/kofcloud-domrt-" + crypto.randomHex(4) + ".json")
+    registry.setEdgeHosts(listOf("203.0.113.10"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    registry.registerCustomDomain(mel.id, "api.example.com", service.id)
+    assert(registry.resolveRoute("api.example.com") == null, "PENDING nao roteia")
+
+    registry.verifyCustomDomainWith(mel.id, "api.example.com", listOf("203.0.113.10"))
+    var routed = registry.resolveRoute("api.example.com")
+    assert(routed != null && routed.id == service.id, "VERIFIED roteia o servico")
+
+    registry.setServiceStatus(service.id, "OFFLINE")
+    // Igual ao hostname nativo: a rota persiste no registry e quem corta o
+    // trafego e o Edge front (503 KCF103) — ver hosts_test/statusIsRoutable.
+    assert(registry.resolveRoute("api.example.com") != null, "OFFLINE mantem a rota (Edge responde 503)")
+    registry.setServiceStatus(service.id, "ONLINE")
+
+    assert(registry.removeCustomDomain(mel.id, "api.example.com") == true, "remove")
+    assert(registry.resolveRoute("api.example.com") == null, "rota cai junto")
+
+    registry.registerCustomDomain(mel.id, "api.example.com", service.id)
+    registry.verifyCustomDomainWith(mel.id, "api.example.com", listOf("203.0.113.10"))
+    assert(registry.resolveRoute("api.example.com") != null, "re-registra e verifica")
+    assert(registry.revokeDevice(mel.id, device.id) == true, "revoga o dispositivo")
+    assert(registry.customByHostname("api.example.com") == null, "poda acompanha a revogacao")
+    assert(registry.resolveRoute("api.example.com") == null, "sem rota orfa")
+
+    var reloaded = Registry("/tmp/kofcloud-domrt-reload-" + crypto.randomHex(4) + ".json")
+    var mel2 = reloaded.createAccount("mel", "m@e.com", "segredo")
+    var dev2 = reloaded.registerDevice(mel2, "nb", "pk")
+    var svc2 = reloaded.publishService(mel2, dev2.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    reloaded.registerCustomDomain(mel2.id, "loja.example.com", svc2.id)
+    assert(reloaded.customByHostname("loja.example.com") != null, "PENDING persiste")
+}
+
+test "dominio: control plane registra, lista, verifica e remove", "domains-api" {
+    var controlPort = 19530
+    var joined = domainFixture(controlPort, "/tmp/kofcloud-domapi-" + crypto.randomHex(4) + ".json")
+    var firstBar = joined.indexOf("|")
+    var accountToken = joined.substring(0, firstBar)
+    var rest = joined.substring(firstBar + 1)
+    var serviceId = rest.substring(rest.indexOf("|") + 1)
+
+    var badHost = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"site.mel.kofcloud.io\",\"service\":\"site\"}", accountToken)
+    assert(statusOf(badHost) == 400, "reservado -> 400")
+    assert(domainCodeIs(domainErrOf(badHost), "KCF120"), "KCF120")
+
+    var badService = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"api.example.com\",\"service\":\"naosite\"}", accountToken)
+    assert(statusOf(badService) == 404, "servico inexistente -> 404")
+    assert(domainCodeIs(domainErrOf(badService), "KCF122"), "KCF122 opaco")
+
+    var created = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"api.example.com\",\"service\":\"site\"}", accountToken)
+    assert(statusOf(created) == 200, "registra")
+    var createdBody = json.decode<Map<String, String>>(bodyOf(created))
+    assert(mapField(createdBody, "status") == "PENDING", "pendente")
+    assert(mapField(createdBody, "instruction").indexOf("site.mel.kofcloud.io") >= 0, "instrucao CNAME aponta o servico")
+
+    var listed = httpGetRaw(controlPort, "/v1/domains", "127.0.0.1")
+    assert(statusOf(listed) == 401, "listagem exige token")
+
+    var again = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"api.example.com\",\"service\":\"site\"}", accountToken)
+    assert(statusOf(again) == 200, "re-registro idempotente")
+
+    var anaCreated = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
+    var anaToken = mapField(json.decode<Map<String, String>>(bodyOf(anaCreated)), "token")
+    var anaAttempt = httpPostJson(controlPort, "/v1/domains/verify", "{\"hostname\":\"api.example.com\"}", anaToken)
+    assert(statusOf(anaAttempt) == 404, "outra conta nao verifica")
+    assert(domainCodeIs(domainErrOf(anaAttempt), "KCF122"), "KCF122 opaco")
+
+    var removed = httpPostJson(controlPort, "/v1/domains/remove", "{\"hostname\":\"api.example.com\"}", anaToken)
+    assert(statusOf(removed) == 404, "outra conta nao remove")
+
+    var gone = httpPostJson(controlPort, "/v1/domains/remove", "{\"hostname\":\"api.example.com\"}", accountToken)
+    assert(statusOf(gone) == 200, "dona remove")
+    var goneAgain = httpPostJson(controlPort, "/v1/domains/remove", "{\"hostname\":\"api.example.com\"}", accountToken)
+    assert(statusOf(goneAgain) == 404, "remover de novo -> 404")
+}
+
+test "dominio: Edge serve o hostname proprio apos VERIFIED (tunel real)", "domains-e2e" {
+    var localSvc = 19531
+    var controlPort = 19532
+    var tunnelPort = 19533
+    var httpPort = 19534
+
+    var app = web.app()
+    app.get("/") { return "svc-custom" }
+    var server = spawn { app.listen(localSvc) }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var path = "/tmp/kofcloud-dome2e-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    registry.setEdgeHosts(listOf("127.0.0.1"))
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-dome2e-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-dome2e-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
+    assert(statusOf(published) == 200, "PUBLIC publicado")
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
+
+    var registered = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"shop.example.com\",\"service\":\"site\"}", accountToken)
+    assert(statusOf(registered) == 200, "dominio registrado")
+
+    assert(registry.verifyCustomDomainWith(accountId, "shop.example.com", listOf("127.0.0.1")) == "", "verificacao contra 127.0.0.1")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+
+    var viaCustom = httpGetRaw(httpPort, "/", "shop.example.com")
+    assert(statusOf(viaCustom) == 200, "hostname proprio roteia")
+    assert(bodyOf(viaCustom) == "svc-custom", "corpo veio do servico local")
+    var viaNative = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
+    assert(bodyOf(viaNative) == "svc-custom", "hostname nativo continua")
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}
+
+test "dominio: Hint orienta o operador sem vazar nada", "domains-hint" {
+    assert(errHint("KCF120: invalid custom hostname").indexOf("kofcloud.io") >= 0, "KCF120 orienta o formato")
+    assert(errHint("KCF122: domain not found").indexOf("domain list") >= 0, "KCF122 aponta a lista")
+    assert(errHint("KCF124: hostname does not resolve to this Edge").indexOf("CNAME") >= 0, "KCF124 sugere o CNAME")
+}

@@ -27,6 +27,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U13 | limites | `tests/limits_test.kf` | dispositivos ativos, serviços por dispositivo, streams por túnel, liberação de vaga |
 | U14 | credencial de serviço | `tests/service_token_test.kf` | emissão só pela conta dona, token vale apenas para o próprio serviço, poda ao remover serviço/revogar dispositivo, persistência |
 | U15 | erros estáveis (R6) | `tests/errors_test.kf` | códigos `KCFnnn` no control plane e no Edge, 404 opaco entre contas, owner-gate do status, `Hint:` sem vazar segredo |
+| U16 | domínio próprio | `tests/domains_test.kf` | validação de hostname, registro/idempotência, verificação sem rede, rota só após VERIFIED + poda, API (409/404 opacos), Edge via túnel real, `Hint:` |
 
 ## Integração
 
