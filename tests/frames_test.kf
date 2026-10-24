@@ -1,0 +1,290 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.protocol.Bytes
+import kofcloud.protocol.LineCodec
+import kofcloud.protocol.Payload
+import kofcloud.protocol.Session
+import kofcloud.protocol.Tunnel
+import kofcloud.store.Store
+import kofcloud.util.Limits
+import testkit.Support
+
+// Limite de frame no tunel (debito documentado em 08/17): DATA fatiado em
+// blocos de limitFrameBytes() e linha gigante recusada com fail-closed.
+// Sem isso, uma resposta grande virava uma unica linha sem teto — e o outro
+// lado acumulava sem poder recusar.
+
+test "frames: encodeChunks fatia e recompoe", "frames" {
+    assert(limitFrameBytes() == 1048576, "default 1 MiB")
+    assert(maxTunnelLineBytes() == 1048576 * 2 + 4096, "teto com margem UTF-8+JSON")
+
+    // 1.5 MiB = 2 chunks (1 MiB + 0.5 MiB). Maior que isso e o proprio
+    // bytesToString (O(n^2), ver 17-limitations) domina o tempo do teste.
+    var big = new Byte[1500000]
+    for (var i = 0; i < big.length; i++) {
+        big[i] = (i * 7 + 13) as Byte
+    }
+    var chunks = encodeChunks(big, "")
+    assert(chunks.size >= 2, "1.5 MiB em varios frames (blocos de 64 KiB)")
+    var acc = bytesEmpty()
+    for (var chunk in chunks) {
+        // Cada chunk cabe numa linha do tunel com folga.
+        assert(chunk.length <= maxTunnelLineBytes(), "chunk dentro do teto")
+        acc = bytesConcat(acc, bytesFromBase64(chunk))
+    }
+    assert(acc.length == big.length, "tamanho recomposto")
+    for (var j = 0; j < big.length; j++) {
+        if (acc[j] != big[j]) {
+            assert(false, "byte diverge")
+        }
+    }
+
+    var empty = encodeChunks(bytesEmpty(), "")
+    assert(empty.size == 1, "vazio gera um DATA (o END sozinho nao carrega nada)")
+}
+
+test "frames: LineCodec recusa linha gigante sem acumular", "frames-codec" {
+    var codec = LineCodec()
+    codec.feed(bytesFromString("{\"t\":\"PING\"}\n"))
+    assert(codec.overflowed() == false, "linha normal ok")
+    assert(codec.nextLine() == "{\"t\":\"PING\"}", "linha normal passa")
+
+    // 25 blocos de 100 KiB sem \n (2.5 MiB > teto de ~2.1 MiB): feeds
+    // grandes e poucos — O(n) no total, sem o O(n^2) de milhares de
+    // pedacinhos.
+    var flood = LineCodec()
+    var block = ""
+    var b = 0
+    while (b < 1000) {
+        block = block + "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"
+        b = b + 1
+    }
+    var f = 0
+    while (f < 25 && flood.overflowed() == false) {
+        flood.feed(bytesFromString(block))
+        f = f + 1
+    }
+    assert(flood.overflowed(), "2.5 MiB sem \n estoura")
+    assert(flood.remainder() == "", "buffer descartado, sem acumular")
+    flood.feed(bytesFromString("{\"t\":\"PING\"}\n"))
+    assert(flood.overflowed(), "travado em overflow (nao ressuscita)")
+    assert(flood.hasLine() == false, "nada vaza depois do overflow")
+}
+
+test "frames: Edge fecha tunel com HELLO gigante (fail-closed)", "frames-edge" {
+    var controlPort = 19591
+    var tunnelPort = 19592
+    var httpPort = 19593
+
+    var registry = Registry("/tmp/kofcloud-frame-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-frame-edge-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+
+    // HELLO com 2.5 MiB sem \n (25 sends de 100 KiB): o Edge acumula ate o
+    // teto (~2.1 MiB), fecha sem WELCOME e conta o motivo. Sem \n, nenhum
+    // HELLO parcial e processado.
+    var conn = net.connect("127.0.0.1", tunnelPort)
+    var block = ""
+    var b = 0
+    while (b < 1000) {
+        block = block + "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        b = b + 1
+    }
+    var s = 0
+    while (s < 25) {
+        conn.send(bytesFromString(block))
+        s = s + 1
+    }
+    var acc = bytesEmpty()
+    var closed = false
+    var tries = 20
+    while (tries > 0 && closed == false) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            closed = true
+        } else {
+            acc = bytesConcat(acc, chunk)
+        }
+        tries = tries - 1
+    }
+    conn.close()
+    assert(closed, "Edge fechou a conexao sem responder HELLO gigante")
+    assert(acc.length == 0, "nenhum WELCOME para HELLO gigante")
+    // O note roda na worker task do tunel: poll curto ate aparecer (race
+    // entre o close observado e o counter).
+    var counted = false
+    var waits = 50
+    while (waits > 0 && counted == false) {
+        if (metricValue(observability.metrics(), "kofcloud_edge_tunnel_refused_total_line_overflow") >= 1) {
+            counted = true
+        } else {
+            time.sleep(100)
+            waits = waits - 1
+        }
+    }
+    assert(counted, "recusa contada")
+
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(edgeStop).delete()
+}
+
+test "frames: resposta grande atravessa fatiada fim a fim", "frames-e2e" {
+    var localSvc = 19594
+    var controlPort = 19595
+    var tunnelPort = 19596
+    var httpPort = 19597
+
+    // Servico local devolve 1.5 MiB (24 frames DATA de 64 KiB). Servidor TCP
+    // cru de proposito: o web.app() do runtime fecha a conexao sem headers
+    // para corpos desse tamanho (medido) — e o que esta em prova e o tunel,
+    // nao o web server. Corpo via strings.repeat (O(n) nativo).
+    var bigBody = strings.repeat("0123456789", 150000)
+    var bigListener = net.listen(localSvc)
+    var bigServer = spawn {
+        var serving = true
+        while (serving) {
+            try {
+                var peer = bigListener.accept()
+                var worker = spawn { serveBigPeer(peer, bigBody) }
+            } catch (String e) {
+                serving = false
+            }
+        }
+    }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-framee2e-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-framee2e-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-framee2e-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+
+    // Leitura sem materializar 1.5 MiB em String: bytesToString e O(n^2) e
+    // httpGetRaw o usa no fim (ver 17-limitations). Aqui somamos tamanhos e
+    // conferimos prefixo/sufixo — tamanho exato + pontas certas provam a
+    // recomposicao byte-identica para corpo repetitivo.
+    var conn = net.connect("127.0.0.1", httpPort)
+    var head = "GET /big HTTP/1.1\r\nHost: site.mel.kofcloud.io\r\nConnection: close\r\n\r\n"
+    conn.send(bytesFromString(head))
+    var total = 0
+    var first = ""
+    var tail = ""
+    var status = 0
+    var gotHead = false
+    var reading = true
+    while (reading) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            reading = false
+        } else {
+            if (gotHead == false) {
+                var text = bytesToString(chunk)
+                var cut = text.indexOf("\r\n\r\n")
+                if (cut >= 0) {
+                    var statusLine = text.substring(0, text.indexOf("\r\n"))
+                    var code = statusLine.split(" ")
+                    if (code.length >= 2) {
+                        status = parseIntSafe(code[1], 0)
+                    }
+                    var rest = text.substring(cut + 4)
+                    first = rest.substring(0, 10)
+                    total = total + rest.length
+                    tail = rest
+                    gotHead = true
+                }
+            } else {
+                total = total + chunk.length
+                tail = bytesToString(chunk)
+            }
+        }
+    }
+    conn.close()
+    assert(status == 200, "resposta grande passa")
+    assert(total == 1500000, "1.5 MiB intactos apos fatiar e recompor")
+    assert(first == "0123456789", "prefixo certo")
+    assert(tail.endsWith("0123456789"), "sufixo certo")
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+    bigListener.close()
+}
+
+// Um peer do servidor cru: le ate o fim dos headers (ou EOF, caso do
+// health check TCP que so conecta e fecha) e responde 200 com o corpo.
+void serveBigPeer(Conn peer, String body) {
+    var req = ""
+    var reading = true
+    while (reading) {
+        var chunk = peer.receive(4096)
+        if (chunk.length == 0) {
+            reading = false
+        } else {
+            req = req + bytesToString(chunk)
+            if (req.indexOf("\r\n\r\n") >= 0) {
+                reading = false
+            }
+        }
+    }
+    if (req.indexOf("GET /big") == 0) {
+        var head = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n"
+        peer.send(bytesFromString(head + body))
+    }
+    peer.close()
+}
+
+Int metricValue(String exposition, String name) {
+    for (var line in exposition.split("\n")) {
+        var trimmed = line.trim()
+        if (trimmed.startsWith(name + " ")) {
+            return parseIntSafe(trimmed.substring(name.length + 1).trim(), -1)
+        }
+    }
+    return -1
+}

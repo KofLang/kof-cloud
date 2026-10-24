@@ -44,10 +44,18 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 * **Sem half-close no protocolo.** Um stream termina com `END`/`RESET`; não há
   sinal de "não vou mais escrever, mas ainda leio".
 * **Limites parcialmente aplicados.** Já valem dispositivos ativos por conta,
-  serviços por dispositivo e streams por túnel. **Ainda não** são aplicados:
-  conexões simultâneas por serviço, tamanho máximo de frame e idle timeout do
-  túnel/stream — estão especificados e configuráveis, mas sem enforcement.
-  Ver `03-device.md` e `08-multiplexing.md`.
+  serviços por dispositivo, streams por túnel, rate limit por hostname, frame
+  DATA fatiado (blocos de 16 KiB) e teto de linha do túnel (fail-closed).
+  **Ainda não** são aplicados: conexões simultâneas por serviço e idle timeout
+  do túnel/stream. Ver `03-device.md` e `08-multiplexing.md`.
+* **Throughput de payloads grandes é limitado por `bytesToString` O(n²).**
+  Medido: ~1 s para 100 KiB em `bytesToBase64`; 1 MiB levaria ~100 s. Por isso
+  o envio é fatiado em blocos de 16 KiB (custo total linear no tamanho do
+  bloco, não no payload) e o teto de linha existe para recusar, não para
+  transportar. Respostas de dezenas de MiB funcionam, mas devagar — quando o
+  stdlib tiver base64/slice O(n) sobre bytes, o bloco pode subir. Também por
+  isso os testes evitam materializar 1.5 MiB em String (`frames_test.kf` lê em
+  chunks e confere tamanho + pontas).
 
 ## O que o KofCloud deliberadamente NÃO é
 

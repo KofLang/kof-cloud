@@ -109,8 +109,9 @@ kof test --target jvm --timeout 120
 ```
 
 Suítes verdes: framing, bytes, protocolo de túnel, hostnames/exposição,
-identidade/cifra, registry, backoff, integração do control plane e E2E.
-Ver `docs/15-tests.md` para a matriz.
+identidade/cifra, registry, backoff, integração do control plane, E2E,
+domínio próprio, métricas, rate limit, suspensão/auditoria e frames
+fatiados (18 suites). Ver `docs/15-tests.md` para a matriz.
 
 ## Segurança
 

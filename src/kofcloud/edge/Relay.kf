@@ -16,7 +16,9 @@ Byte[] relayThroughTunnel(TunnelSession session, String serviceName, Byte[] requ
         throw "LIMIT_EXCEEDED"
     }
     session.send(openFrame(streamId, serviceName))
-    session.send(dataFrame(streamId, encodePayload(requestBytes, session.sessionKey)))
+    for (var chunk in encodeChunks(requestBytes, session.sessionKey)) {
+        session.send(dataFrame(streamId, chunk))
+    }
     session.send(endFrame(streamId))
 
     var acc = bytesEmpty()

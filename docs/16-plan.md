@@ -103,6 +103,18 @@ service). Não cria infraestrutura paralela. Bloqueado até a Fase 6 estar
 estável (está: slice 1 verde) — mas observabilidade e abuse prevention
 primeiro (ordem abaixo).
 
+## Débitos de limites (antes do deploy)
+
+**Estado (frame DATA fatiado + teto de linha): ✅ implementado.** Envio em
+blocos de 16 KiB (`kofcloud.limits.sendChunkBytes`) já codificados, um frame
+DATA por bloco; recepção recusa linha acima de `maxTunnelLineBytes()`
+(2×frameBytes + margem, fail-closed com `LINE_OVERFLOW` no Edge). Chunk
+adaptativo (encolhe até caber — o base64 do stdlib passa por UTF-8 e expande
+bytes altos). Prova: `tests/frames_test.kf` (4 testes: fatiamento +
+recomposição byte-idêntica, codec fail-closed, HELLO gigante fecha sem
+WELCOME, 1.5 MiB fim a fim). Resta: conexões simultâneas por serviço e idle
+timeout.
+
 ## Abuse prevention (parcial, antes do deploy)
 
 **Estado (slice 1 — rate limit por hostname): ✅ implementado.**

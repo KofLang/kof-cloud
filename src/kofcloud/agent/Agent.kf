@@ -109,6 +109,10 @@ void connectAndServe(AgentConfig config) {
             throw "edge closed during handshake"
         }
         codec.feed(chunk)
+        if (codec.overflowed()) {
+            conn.close()
+            throw "edge sent oversized line"
+        }
         welcomeLine = codec.nextLine()
     }
     var welcome = decodeFrame(welcomeLine)
@@ -144,10 +148,14 @@ void connectAndServe(AgentConfig config) {
             open = false
         } else {
             codec.feed(chunk)
-            while (codec.hasLine()) {
-                var line = codec.nextLine()
-                if (line.length > 0) {
-                    open = handleAgentFrame(session, servicesByName, line)
+            if (codec.overflowed()) {
+                open = false
+            } else {
+                while (codec.hasLine()) {
+                    var line = codec.nextLine()
+                    if (line.length > 0) {
+                        open = handleAgentFrame(session, servicesByName, line)
+                    }
                 }
             }
         }

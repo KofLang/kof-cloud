@@ -3,6 +3,8 @@ package kofcloud.protocol
 import kofcloud.protocol.Bytes
 
 import kofcloud.identity.Keys
+import kofcloud.util.Limits
+import kofcloud.util.Limits
 
 // Codificacao do campo `d` de um frame DATA.
 //
@@ -23,4 +25,45 @@ Byte[] decodePayload(String encoded, String sessionKeyHex) {
         return bytesFromBase64(encoded)
     }
     return bytesFromString(decryptPayload(encoded, sessionKeyHex))
+}
+
+// Fatia um payload em blocos de ate limitFrameBytes() ja codificados, um por
+// frame DATA. Quem envia itera; quem recebe acumula ate END (o limite total
+// continua sendo o maxBytes do relay). Sem isso, uma resposta grande virava
+// uma unica linha gigante no tunel — e o outro lado nao tinha como
+// recusa-la sem derrubar a sessao.
+// Teto de linha util para um chunk: o que sobra do teto do tunel menos a
+// margem do envelope JSON do frame.
+Int maxChunkLineBytes() {
+    return maxTunnelLineBytes() - 1024
+}
+
+// Fatia um payload em blocos ja codificados, um por frame DATA, GARANTINDO
+// que cada chunk cabe numa linha do tunel. Necessario porque o base64 do
+// stdlib passa por String (UTF-8): bytes altos expandem ate ~2x, entao o
+// tamanho codificado nao e funcao fixa do tamanho em bytes. O bloco comeca
+// em limitFrameBytes() e encolhe ate caber (termina: bloco de 1 byte sempre
+// cabe); no caso comum ASCII, uma passagem basta.
+List<String> encodeChunks(Byte[] raw, String sessionKeyHex) {
+    var out = listOf<String>()
+    var size = sendChunkBytes()
+    if (raw.length == 0) {
+        out.add(encodePayload(bytesEmpty(), sessionKeyHex))
+        return out
+    }
+    var offset = 0
+    while (offset < raw.length) {
+        var end = offset + size
+        if (end > raw.length) {
+            end = raw.length
+        }
+        var encoded = encodePayload(bytesSlice(raw, offset, end), sessionKeyHex)
+        while (encoded.length > maxChunkLineBytes() && end - offset > 1) {
+            end = offset + (end - offset) / 2
+            encoded = encodePayload(bytesSlice(raw, offset, end), sessionKeyHex)
+        }
+        out.add(encoded)
+        offset = end
+    }
+    return out
 }

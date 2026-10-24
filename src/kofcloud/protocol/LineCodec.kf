@@ -1,6 +1,7 @@
 package kofcloud.protocol
 
 import kofcloud.protocol.Bytes
+import kofcloud.util.Limits
 
 // Acumula bytes e extrai frames delimitados por \n.
 //
@@ -10,13 +11,30 @@ import kofcloud.protocol.Bytes
 
 class LineCodec {
     String pending
+    Bool overflow
 
     constructor() {
         this.pending = ""
+        this.overflow = false
     }
 
     void feed(Byte[] chunk) {
+        if (this.overflow) {
+            return
+        }
         this.pending = this.pending + bytesToString(chunk)
+        if (this.pending.length > maxTunnelLineBytes()) {
+            // Linha gigante sem terminador: descarta e trava em overflow.
+            // Quem le derruba a conexao (fail-closed) — um peer que manda
+            // isso e hostil ou esta corrompido.
+            this.pending = ""
+            this.overflow = true
+        }
+    }
+
+    // True quando algum feed estourou o teto (a conexao deve cair).
+    Bool overflowed() {
+        return this.overflow
     }
 
     // Proximo frame completo, ou "" quando ainda nao ha um.

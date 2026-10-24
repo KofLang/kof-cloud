@@ -7,9 +7,9 @@ package kofcloud.util
 //
 // Protegem as duas pontas: a infraestrutura KofCloud e a maquina do usuario.
 // O que e aplicado hoje: dispositivos ativos por conta, servicos por
-// dispositivo, streams simultaneos por tunel e requisicoes por hostname no
-// Edge. Limite de conexoes por servico e de tamanho de frame ainda NAO sao
-// aplicados (docs/17-limitations.md).
+// dispositivo, streams simultaneos por tunel, requisicoes por hostname no
+// Edge e bytes por frame DATA no tunel. Limite de conexoes por servico e
+// idle timeout ainda NAO sao aplicados (docs/17-limitations.md).
 
 Int limitDevices() {
     return config.int("kofcloud.limits.devices", 5)
@@ -21,6 +21,40 @@ Int limitServices() {
 
 Int limitStreams() {
     return config.int("kofcloud.limits.streams", 128)
+}
+
+// Teto de bytes uteis por frame DATA (antes do base64). Quem envia fatia;
+// quem recebe recusa a linha inteira acima de ~4/3 disso (margem do base64).
+// Protege os dois lados contra um peer que manda uma linha gigante de uma
+// vez (o LineCodec acumularia sem teto).
+Int limitFrameBytes() {
+    return config.int("kofcloud.limits.frameBytes", 1048576)
+}
+
+// Bloco de envio de cada frame DATA. Bem menor que o teto: blocos pequenos
+// chegam mais cedo (time-to-first-byte), usam menos memoria por frame e,
+// sobre tudo, evitam o custo O(n^2) de `bytesToString` em blocos grandes
+// (medido: ~1 s para 100 KiB em bytesToBase64; o custo total e n*tamanho —
+// ver 17-limitations). O teto (limitFrameBytes) continua valendo na recepcao.
+Int sendChunkBytes() {
+    var size = config.int("kofcloud.limits.sendChunkBytes", 16384)
+    if (size <= 0) {
+        size = 16384
+    }
+    var cap = limitFrameBytes()
+    if (cap > 0 && size > cap) {
+        size = cap
+    }
+    return size
+}
+
+// Teto de uma linha do protocolo de tunel (frame JSON + base64). O base64
+// do stdlib passa por String (UTF-8): bytes altos expandem ate ~2x, entao o
+// teto usa 2x + margem do envelope JSON. Quem ultrapassar tem a conexao
+// derrubada (fail-closed) — um peer que manda linha gigante e hostil ou
+// esta corrompido, e o LineCodec nao deve acumular sem teto.
+Int maxTunnelLineBytes() {
+    return limitFrameBytes() * 2 + 4096
 }
 
 // Requisicoes publicas por hostname e por janela no Edge (abuse prevention).

@@ -22,7 +22,14 @@ pública em andamento.
   streams prontos e limita a profundidade da fila de saída por stream
   (`limits.queueDepth`, default 64 frames). Fila cheia → o stream recebe
   `RESET{LIMIT_EXCEEDED}` em vez de bloquear a conexão inteira.
-* `DATA` é limitado a `limits.frameBytes` (1 MiB). Payload maior é fatiado.
+* `DATA` é limitado a `limits.frameBytes` (1 MiB). Payload maior é fatiado
+  em blocos de `limits.sendChunkBytes` (16 KiB) já codificados — um frame por
+  bloco; o receptor acumula até `END`. O bloco de envio é bem menor que o
+  teto de propósito: chega mais cedo, usa menos memória e evita o custo
+  O(n²) de `bytesToString` em blocos grandes (ver `17-limitations.md`).
+  O teto continua valendo na recepção: linha acima de
+  `maxTunnelLineBytes()` (= 2×frameBytes + margem, cobrindo a expansão
+  UTF-8 do base64) derruba a conexão (fail-closed).
 
 ## Backpressure e cancelamento
 
@@ -60,7 +67,9 @@ writer — ver `01-architecture.md` e `12-kof-apis.md`.
 |---|---|---|
 | streams simultâneos por túnel | 128 (`kofcloud.limits.streams`) | ✅ — `openStream` recusa; o Edge devolve `429`, o Agent responde `OPENED{ok:false}` + `RESET LIMIT_EXCEEDED` |
 | profundidade de fila por stream | 64 | ⏳ |
-| bytes por frame | 1 MiB | ⏳ |
+| bytes por frame | 1 MiB | ✅ — envio em blocos de 16 KiB (`sendChunkBytes`), recepção recusa acima de `maxTunnelLineBytes` (`frames_test.kf`) |
+| bloco de envio | 16 KiB | ✅ (`kofcloud.limits.sendChunkBytes`) |
+| linha maxima do tunel | 2 MiB + margem | ✅ — `LineCodec` trava em overflow e o leitor derruba a conexao |
 | idle timeout do stream | 30 s | ⏳ |
 
 O limite de streams é por sessão: fechar um stream libera a vaga imediatamente

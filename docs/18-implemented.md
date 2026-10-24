@@ -42,6 +42,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | métricas do Agent (slice 3) | `agent/Metrics.kf`: connects, reconnects, fatais por motivo, health, streams, erros locais | `agent_metrics_test.kf` |
 | rate limit por hostname (slice 1) | `security.rateLimit` no Edge público: 429 `KCF107` + `Retry-After` antes de rotear | `ratelimit_test.kf` |
 | suspensão + auditoria (slice 2) | `SUSPENDED` reversível (serviço/dispositivo), enforcement em request+PING, anel de auditoria + `GET /v1/audit` + `kof cloud audit` | `abuse_test.kf` |
+| frame DATA fatiado + teto de linha | `Payload.encodeChunks` (blocos de 16 KiB) + `LineCodec` fail-closed + `maxTunnelLineBytes` | `frames_test.kf` |
 
 ## Comportamentos provados
 
@@ -97,6 +98,11 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   `DEVICE_SUSPENDED` (fatal); health/API não dessuspendem; enforcement
   imediato (request) e contínuo (PING); anel de 100 eventos só com metadados,
   `GET /v1/audit` filtrado por conta (`abuse_test.kf`, 3 testes).
+* **Frame DATA fatiado + teto de linha (débito de limites)**: envio em blocos
+  de 16 KiB adaptativos (encolhem até caber — base64 via UTF-8 expande);
+  recepção recusa linha gigante com fail-closed (`LINE_OVERFLOW` no Edge,
+  throw de reconexão no Agent); 1.5 MiB atravessa fatiado fim a fim
+  (`frames_test.kf`, 4 testes).
 * **Parada limpa** do agente (`disconnect` via arquivo-sentinela) e da
   plataforma (`serve`, via fechamento do `Listener`).
 

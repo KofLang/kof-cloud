@@ -57,6 +57,12 @@ void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
             alive = false
         } else {
             codec.feed(chunk)
+            if (codec.overflowed()) {
+                // HELLO gigante: fecha sem responder (fail-closed).
+                conn.close()
+                noteTunnelRefused("LINE_OVERFLOW")
+                return
+            }
             helloLine = codec.nextLine()
         }
     }
@@ -124,10 +130,14 @@ void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
             open = false
         } else {
             reader.feed(chunk)
-            while (reader.hasLine()) {
-                var line = reader.nextLine()
-                if (line.length > 0) {
-                    open = handleTunnelFrame(state, session, line)
+            if (reader.overflowed()) {
+                open = false
+            } else {
+                            while (reader.hasLine()) {
+                    var line = reader.nextLine()
+                    if (line.length > 0) {
+                        open = handleTunnelFrame(state, session, line)
+                    }
                 }
             }
         }

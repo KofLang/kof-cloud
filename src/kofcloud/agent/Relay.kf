@@ -51,8 +51,8 @@ void agentStream(TunnelSession session, Service service, String streamId) {
         responseBytes = localErrorResponse("local service " + service.name + " error: " + e)
     }
 
-    if (responseBytes.length > 0) {
-        session.send(dataFrame(streamId, encodePayload(responseBytes, session.sessionKey)))
+    for (var chunk in encodeChunks(responseBytes, session.sessionKey)) {
+        session.send(dataFrame(streamId, chunk))
     }
     session.send(endFrame(streamId))
     session.closeStream(streamId)
