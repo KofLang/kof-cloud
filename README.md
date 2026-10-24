@@ -121,8 +121,10 @@ Ver `docs/15-tests.md` para a matriz.
   sem vazar segredos; recurso de outra conta responde o mesmo `404` opaco de
   inexistente; só a conta dona altera o status do serviço.
 * Observabilidade mínima: o Edge conta túneis/recusas, requisições
-  ok/negadas, bytes e latência (`observability.*`, export Prometheus);
-  nenhuma métrica carrega hostname, corpo, credencial ou chave.
+  ok/negadas, bytes e latência; o control plane conta lifecycle (contas,
+  logins, devices, serviços, tokens, domínios) — tudo via `observability.*`,
+  servido sem auth em `GET /v1/metrics`; nenhuma métrica carrega hostname,
+  corpo, credencial ou chave.
 
 ## Estrutura
 

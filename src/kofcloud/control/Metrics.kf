@@ -1,0 +1,92 @@
+package kofcloud.control
+
+// Metricas operacionais do control plane (observabilidade minima, slice 2).
+//
+// O que conta: lifecycle de recursos (contas, logins, devices, servicos,
+// dominios). O que NUNCA conta: handles, emails, senhas, tokens, chaves,
+// hostnames. So agregados monotonicos, sem cardinalidade por conta — o
+// `accountId` nunca vira label.
+//
+// Implementacao: `observability.counter` do stdlib (mesmo export Prometheus
+// do Edge via `observability.metrics()`); o endpoint e `GET /v1/metrics`
+// (texto Prometheus, sem autenticacao — igual ao `/v1/health`).
+
+String metricAccountsCreated() {
+    return "kofcloud_control_accounts_created_total"
+}
+
+String metricLogins() {
+    return "kofcloud_control_logins_total"
+}
+
+String metricDevicesRegistered() {
+    return "kofcloud_control_devices_registered_total"
+}
+
+String metricDevicesRevoked() {
+    return "kofcloud_control_devices_revoked_total"
+}
+
+String metricServicesPublished() {
+    return "kofcloud_control_services_published_total"
+}
+
+String metricServicesRemoved() {
+    return "kofcloud_control_services_removed_total"
+}
+
+String metricServiceTokensIssued() {
+    return "kofcloud_control_service_tokens_issued_total"
+}
+
+String metricDomainsRegistered() {
+    return "kofcloud_control_domains_registered_total"
+}
+
+String metricDomainsVerified() {
+    return "kofcloud_control_domains_verified_total"
+}
+
+String metricDomainsRemoved() {
+    return "kofcloud_control_domains_removed_total"
+}
+
+void noteAccountCreated() {
+    observability.counter(metricAccountsCreated())
+}
+
+void noteLogin() {
+    observability.counter(metricLogins())
+}
+
+void noteDeviceRegistered() {
+    observability.counter(metricDevicesRegistered())
+}
+
+void noteDeviceRevoked() {
+    observability.counter(metricDevicesRevoked())
+}
+
+void noteServicePublished() {
+    observability.counter(metricServicesPublished())
+}
+
+void noteServiceRemoved() {
+    observability.counter(metricServicesRemoved())
+}
+
+void noteServiceTokenIssued() {
+    observability.counter(metricServiceTokensIssued())
+}
+
+void noteDomainRegistered() {
+    observability.counter(metricDomainsRegistered())
+}
+
+void noteDomainVerified() {
+    observability.counter(metricDomainsVerified())
+}
+
+void noteDomainRemoved() {
+    observability.counter(metricDomainsRemoved())
+}

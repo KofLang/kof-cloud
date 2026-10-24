@@ -38,6 +38,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | erros estáveis (R6) | `model/Errors.kf`: `KCFnnn` no control plane e no Edge + `Hint:` na CLI | `errors_test.kf` |
 | domínio próprio (slice 1) | `model/CustomDomain.kf` + registro/verificação/roda no registry, `POST /v1/domains[/verify][/remove]`, CLI `domain add/verify/remove` | `domains_test.kf` |
 | métricas do Edge (slice 1) | `edge/Metrics.kf`: túneis/recusas, sessões, ok/negadas por motivo, bytes, latência via `observability.*` | `metrics_test.kf` |
+| métricas do control plane (slice 2) | `control/Metrics.kf`: lifecycle no Registry + `GET /v1/metrics` sem auth | `metrics_test.kf` |
 
 ## Comportamentos provados
 
@@ -72,8 +73,11 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   aceitos/recusados por motivo, sessões abertas, requisições ok/negadas por
   motivo, erros de upstream, bytes e latência — via `observability.*`
   (export Prometheus). Nenhum hostname, corpo, credencial ou chave chega às
-  métricas (`metrics_test.kf`, 4 testes, inclui asserção de privacidade).
-  Falta fatiado: `/metrics` no serve, contadores no control plane/Agent.
+  métricas (`metrics_test.kf`, inclui asserção de privacidade).
+* **Observabilidade mínima (slice 2)**: `control/Metrics.kf` conta lifecycle
+  no Registry (contas, logins, devices, serviços, tokens, domínios);
+  `GET /v1/metrics` serve o export sem auth. Falta fatiado: contadores no
+  Agent.
 * **Erros estáveis (R6, padrão kof-share)**: todo erro viaja como `KCFnnn`
   (`KCF001` handle inválido … `KCF106` streams esgotados); recurso de outra
   conta responde o mesmo `404` opaco de inexistente; `POST /v1/services/status`

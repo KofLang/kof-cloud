@@ -1,5 +1,6 @@
 import kofcloud.agent.Agent
 import kofcloud.control.ControlPlane
+import kofcloud.control.Metrics
 import kofcloud.control.Registry
 import kofcloud.edge.EdgeState
 import kofcloud.edge.HttpFront
@@ -144,4 +145,80 @@ test "metricas: exposicao nunca carrega dado de cliente", "metrics-privacy" {
     assert(exposition.indexOf("kofcloud.io") < 0, "sem hostname")
     assert(exposition.indexOf("Authorization") < 0, "sem header")
     assert(metricHas(exposition, "kofcloud_edge_http_denied_total_auth_required"), "motivo agregado sim")
+}
+
+test "metricas: GET /metrics expos sem auth e contadores do control plane", "metrics-endpoint" {
+    var controlPort = 19545
+    var registry = Registry("/tmp/kofcloud-metep-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+
+    // Sem autenticacao, igual ao /v1/health: so agregados.
+    var exposition = httpGetRaw(controlPort, "/v1/metrics", "127.0.0.1")
+    assert(statusOf(exposition) == 200, "/metrics 200 sem token")
+    assert(bodyOf(exposition).indexOf("kofcloud_control_") < 0 || metricHas(bodyOf(exposition), "kofcloud_control_accounts_created_total"), "export Prometheus")
+
+    var accountsBefore = metricValue(bodyOf(exposition), "kofcloud_control_accounts_created_total")
+    if (accountsBefore < 0) {
+        accountsBefore = 0
+    }
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    assert(statusOf(created) == 200, "conta criada")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+
+    var logged = httpPostJson(controlPort, "/v1/login", "{\"handle\":\"mel\",\"password\":\"segredo\"}", "")
+    assert(statusOf(logged) == 200, "login ok")
+
+    var device = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", accountToken)
+    assert(statusOf(device) == 200, "device registrado")
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(device)), "deviceId")
+
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
+    assert(statusOf(published) == 200, "servico publicado")
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
+
+    var minted = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
+    assert(statusOf(minted) == 200, "token emitido")
+
+    var domReg = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"api.example.com\",\"service\":\"site\"}", accountToken)
+    assert(statusOf(domReg) == 200, "dominio registrado")
+
+    var removed = httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
+    assert(statusOf(removed) == 200, "servico removido")
+
+    var revoked = httpPostJson(controlPort, "/v1/devices/revoke", "{\"deviceId\":\"" + deviceId + "\"}", accountToken)
+    assert(statusOf(revoked) == 200, "device revogado")
+
+    var domDel = httpPostJson(controlPort, "/v1/domains/remove", "{\"hostname\":\"api.example.com\"}", accountToken)
+    assert(statusOf(domDel) == 404, "dominio caiu com o servico (poda)")
+
+    var after = bodyOf(httpGetRaw(controlPort, "/v1/metrics", "127.0.0.1"))
+    assert(metricValue(after, "kofcloud_control_accounts_created_total") == accountsBefore + 1, "conta contada")
+    assert(metricHas(after, "kofcloud_control_logins_total"), "login contado")
+    assert(metricHas(after, "kofcloud_control_devices_registered_total"), "device contado")
+    assert(metricHas(after, "kofcloud_control_devices_revoked_total"), "revogacao contada")
+    assert(metricHas(after, "kofcloud_control_services_published_total"), "publicacao contada")
+    assert(metricHas(after, "kofcloud_control_services_removed_total"), "remocao contada")
+    assert(metricHas(after, "kofcloud_control_service_tokens_issued_total"), "token contado")
+    assert(metricHas(after, "kofcloud_control_domains_registered_total"), "dominio contado")
+    assert(after.indexOf("mel@") < 0, "sem email")
+    assert(after.indexOf("api.example.com") < 0, "sem hostname")
+}
+
+test "metricas: contadores do control plane tambem valem sem HTTP", "metrics-registry" {
+    var registry = Registry("/tmp/kofcloud-metreg-" + crypto.randomHex(4) + ".json")
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    registry.issueServiceToken(mel.id, service.id)
+    registry.registerCustomDomain(mel.id, "loja.example.com", service.id)
+    registry.verifyCustomDomainWith(mel.id, "loja.example.com", listOf("10.0.0.1"))
+    assert(registry.removeService(mel.id, service.id) == true, "servico removido")
+    var exposition = observability.metrics()
+    assert(metricHas(exposition, "kofcloud_control_services_published_total"), "publicacao sem HTTP conta")
+    assert(metricHas(exposition, "kofcloud_control_domains_verified_total") || metricHas(exposition, "kofcloud_control_domains_registered_total"), "dominio sem HTTP conta")
 }

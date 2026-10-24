@@ -96,8 +96,8 @@ O corpo das respostas de erro do Edge também viaja como `KCFnnn`:
 ## Observabilidade mínima
 
 O Edge conta eventos via `observability.*` do stdlib (`edge/Metrics.kf`) —
-export Prometheus em `observability.metrics()` (o serve ainda não expõe
-`/metrics`; é o próximo passo fatiado).
+export Prometheus em `observability.metrics()`, servido sem auth em
+`GET /v1/metrics` do control plane (mesmo processo no `serve`).
 
 | Métrica | Tipo | O que conta |
 |---|---|---|

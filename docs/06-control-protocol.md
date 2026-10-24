@@ -34,6 +34,7 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/domains/verify` | conta | `{hostname}` → `{hostname,status,verifiedAt}` (verifica o DNS e ativa a rota) |
 | `POST` | `/v1/domains/remove` | conta | `{hostname}` → `{removed:true}` |
 | `GET` | `/v1/health` | — | liveness do control plane |
+| `GET` | `/v1/metrics` | — | export Prometheus (`observability.metrics()`): contadores do control plane + Edge (mesmo processo no `serve`); sem auth, só agregados |
 
 ## Exemplos
 

@@ -29,6 +29,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U15 | erros estáveis (R6) | `tests/errors_test.kf` | códigos `KCFnnn` no control plane e no Edge, 404 opaco entre contas, owner-gate do status, `Hint:` sem vazar segredo |
 | U16 | domínio próprio | `tests/domains_test.kf` | validação de hostname, registro/idempotência, verificação sem rede, rota só após VERIFIED + poda, API (409/404 opacos), Edge via túnel real, `Hint:` |
 | U17 | métricas do Edge | `tests/metrics_test.kf` | nomes/formato Prometheus, recusa de túnel por motivo, contagem ok/negada + bytes fim a fim, exposição sem dado de cliente |
+| U18 | métricas do control plane | `tests/metrics_test.kf` | `GET /v1/metrics` sem auth, contadores de lifecycle via HTTP e via registry, sem email/hostname no export |
 
 ## Integração
 

@@ -1,5 +1,6 @@
 package kofcloud.control
 
+import kofcloud.control.Metrics
 import kofcloud.model.Account
 import kofcloud.model.CustomDomain
 import kofcloud.model.Device
@@ -107,6 +108,7 @@ class Registry {
         var account = Account(uuid.v4(), handle, email, passwords.hash(password), time.now())
         this.accounts.add(account)
         this.save()
+        noteAccountCreated()
         return account
     }
 
@@ -171,6 +173,7 @@ class Registry {
         var device = Device(uuid.v4(), account.id, name, publicKey, deviceActive(), time.now(), time.now())
         this.devices.add(device)
         this.save()
+        noteDeviceRegistered()
         return device
     }
 
@@ -219,6 +222,7 @@ class Registry {
             this.pruneServiceTokens()
             this.pruneCustomDomains()
             this.save()
+            noteDeviceRevoked()
         }
         return found
     }
@@ -251,6 +255,7 @@ class Registry {
         var token = newServiceToken()
         this.serviceTokens.add(ServiceToken(serviceId, accountId, tokenHash(token), time.now()))
         this.save()
+        noteServiceTokenIssued()
         return token
     }
 
@@ -305,6 +310,7 @@ class Registry {
         )
         this.services.add(service)
         this.save()
+        noteServicePublished()
         return service
     }
 
@@ -361,6 +367,7 @@ class Registry {
             this.pruneServiceTokens()
             this.pruneCustomDomains()
             this.save()
+            noteServiceRemoved()
         }
         return found
     }
@@ -475,6 +482,7 @@ class Registry {
         var domain = CustomDomain(clean, accountId, serviceId, domainPending(), "", time.now())
         this.customDomains.add(domain)
         this.save()
+        noteDomainRegistered()
         return domain
     }
 
@@ -514,6 +522,7 @@ class Registry {
         if (found) {
             this.customDomains = out
             this.save()
+            noteDomainRemoved()
         }
         return found
     }
@@ -606,6 +615,7 @@ class Registry {
         }
         this.customDomains = updated
         this.save()
+        noteDomainVerified()
     }
 }
 

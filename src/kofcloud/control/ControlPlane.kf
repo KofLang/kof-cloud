@@ -1,5 +1,6 @@
 package kofcloud.control
 
+import kofcloud.control.Metrics
 import kofcloud.control.Registry
 import kofcloud.model.Account
 import kofcloud.model.CustomDomain
@@ -190,11 +191,19 @@ HttpResult handleLogin(Registry registry, String bodyText) {
         return HttpResult(401, errorJson(errInvalidCredentials()))
     }
     var token = registry.issueToken(account.id)
+    noteLogin()
     var out = mapOf()
     out.put("accountId", account.id)
     out.put("handle", account.handle)
     out.put("token", token)
     return HttpResult(200, json.encode(out))
+}
+
+// Export Prometheus dos contadores do control plane + Edge (mesmo processo
+// no `serve`; mesmo export quando separados). Sem autenticacao, igual ao
+// `/v1/health`: so agregados monotonicos, nenhum dado de conta/servico.
+HttpResult handleMetrics() {
+    return HttpResult(200, observability.metrics())
 }
 
 HttpResult handleRegisterDevice(Registry registry, String? authHeader, String bodyText) {
@@ -535,6 +544,10 @@ class ControlPlane {
 
         app.get("/v1/health") {
             var result = handleHealth()
+            return result.body
+        }
+        app.get("/v1/metrics") {
+            var result = handleMetrics()
             return result.body
         }
         app.post("/v1/accounts") {
