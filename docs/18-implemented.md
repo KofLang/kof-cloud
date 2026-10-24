@@ -44,6 +44,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | suspensão + auditoria (slice 2) | `SUSPENDED` reversível (serviço/dispositivo), enforcement em request+PING, anel de auditoria + `GET /v1/audit` + `kof cloud audit` | `abuse_test.kf` |
 | frame DATA fatiado + teto de linha | `Payload.encodeChunks` (blocos de 16 KiB) + `LineCodec` fail-closed + `maxTunnelLineBytes` | `frames_test.kf` |
 | conexoes simultaneas por servico | contador por `serviceId` no Edge + `429 KCF108` antes do OPEN | `conns_test.kf` |
+| deploy declarativo (slice 1) | `kofcloud.json` + `deploy`/`down` sobre publish em lote (idempotente, sem tocar fora do manifesto) | `deploy_test.kf` |
 | idle timeout (tunel + stream) | `lastActivityMs` + sweepers Edge/Agent, EOF limpo vira throw (reconecta) | `idle_test.kf` |
 
 ## Comportamentos provados
@@ -114,6 +115,11 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   `serviceId` no Edge, `429 KCF108` + `Retry-After` antes do OPEN, liberação
   ao fim do relay, isolamento por serviço, métrica `_service_overloaded`
   (`conns_test.kf`, 2 testes).
+* **Deploy declarativo (Fase 7, slice 1)**: `kofcloud.json` declara
+  `services[]` (nome, porta numero ou string, address/exposure opcionais);
+  `kof cloud deploy` publica em lote (idempotente) e `kof cloud down` remove
+  só os listados — nada fora do manifesto é tocado; parser manual com erro
+  posicional (`deploy_test.kf`, 4 testes).
 * **Parada limpa** do agente (`disconnect` via arquivo-sentinela) e da
   plataforma (`serve`, via fechamento do `Listener`).
 

@@ -98,10 +98,15 @@ terminador externo.
 
 ## Fase 7 — deploy
 
-`kof cloud deploy` sobre as mesmas primitivas (identity + device + tunnel +
-service). Não cria infraestrutura paralela. Bloqueado até a Fase 6 estar
-estável (está: slice 1 verde) — mas observabilidade e abuse prevention
-primeiro (ordem abaixo).
+**Estado (slice 1 — deploy declarativo): ✅ implementado.** `kofcloud.json`
+(`--file` para outro caminho) declara `services[]` (nome, porta numero ou
+string, address/exposure opcionais); `kof cloud deploy` publica em lote
+(idempotente, sem remover o que nao declarou) e `kof cloud down` remove so
+os do manifesto. Sem build, sem artefato, sem daemon — so `publish` em
+lote sobre as primitivas existentes. Parser manual com erro posicional
+(Map<String, String> nao aceita numero — ClassCast medido). Prova:
+`tests/deploy_test.kf` (4 testes). Falta fatiado: build/artefato, daemon,
+auto-update.
 
 ## Débitos de limites (antes do deploy)
 

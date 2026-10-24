@@ -1,6 +1,7 @@
 package kofcloud.cli
 
 import kofcloud.cli.Commands
+import kofcloud.cli.Deploy
 import kofcloud.cli.Local
 import kofcloud.cli.Usage
 import kofcloud.util.Text
@@ -51,6 +52,12 @@ Int runCli(List<String> args) {
     }
     if (first == "domain") {
         return runDomain(rest)
+    }
+    if (first == "deploy") {
+        return cmdDeploy(rest)
+    }
+    if (first == "down") {
+        return cmdDown(rest)
     }
     if (first == "logs") {
         return cmdLogs(rest)

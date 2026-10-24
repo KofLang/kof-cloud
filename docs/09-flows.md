@@ -55,6 +55,23 @@ reconecta e os serviços continuam rodando.
 
 Sem Nginx, sem Caddy, sem certificado manual.
 
+## 3.1 Deploy declarativo (`kofcloud.json`)
+
+```
+kofcloud.json:
+  {"services": [{"name": "site", "port": 8080},
+                {"name": "api", "port": 3000, "exposure": "AUTHENTICATED"}]}
+
+ 1. usuário: kof cloud deploy [--file kofcloud.json]
+ 2. carrega identity + token + manifesto (parse com erro posicional)
+ 3. para cada serviço: POST /v1/services (igual ao publish, idempotente)
+ 4. reporta publicados/mantidos/falhas (exit 1 se alguma falhar)
+ 5. usuário: kof cloud down → unpublish só dos listados (extra sobrevive)
+```
+
+Sem build, sem artefato, sem daemon neste slice: só `publish` em lote.
+Nada fora do manifesto é tocado — deploy nunca remove.
+
 ## 4. Requisição pública (ponta a ponta)
 
 ```

@@ -28,6 +28,28 @@ String httpGetRaw(Int port, String path, String host) {
     return bytesToString(acc)
 }
 
+// GET autenticado no control plane (token da conta em X-KofCloud-Token,
+// mesmo header do httpPostJson — ver Local.kf sobre o Authorization).
+String httpGetToken(Int port, String path, String token) {
+    var conn = net.connect("127.0.0.1", port)
+    var req = "GET " + path + " HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+    req = req + "X-KofCloud-Token: " + token + "\r\n"
+    req = req + "Connection: close\r\n\r\n"
+    conn.send(bytesFromString(req))
+    var acc = bytesEmpty()
+    var reading = true
+    while (reading) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            reading = false
+        } else {
+            acc = bytesConcat(acc, chunk)
+        }
+    }
+    conn.close()
+    return bytesToString(acc)
+}
+
 String httpPostJson(Int port, String path, String body, String token) {
     var conn = net.connect("127.0.0.1", port)
     var req = "POST " + path + " HTTP/1.1\r\nHost: 127.0.0.1\r\n"

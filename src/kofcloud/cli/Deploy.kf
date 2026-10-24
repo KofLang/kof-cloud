@@ -1,0 +1,349 @@
+package kofcloud.cli
+
+import kofcloud.cli.Commands
+import kofcloud.cli.Local
+import kofcloud.model.Errors
+import kofcloud.model.Service
+import kofcloud.util.Text
+import kofcloud.store.Store
+
+// Deploy declarativo (Fase 7, slice 1): publica o que esta no manifesto e
+// nada alem dele. Sem build, sem transferencia de artefato, sem daemon — so
+// `publish` em lote sobre as primitivas existentes (identity + device +
+// tunnel + service). O `down` faz o inverso. Nao destroi nada fora do
+// manifesto: deploy nunca remove servico que ele nao declarou.
+//
+// Manifesto (`kofcloud.json`, `--file` para outro caminho):
+//   {"services": [{"name": "site", "port": 8080,
+//                  "address": "127.0.0.1", "exposure": "PUBLIC"}]}
+// `address` defaulta para 127.0.0.1 e `exposure` para PUBLIC — os mesmos
+// defaults do `publish`.
+
+record ManifestService(String name, String address, Int port, String exposure)
+
+String defaultManifestPath() {
+    return "kofcloud.json"
+}
+
+// Parse com erros honestos de CLI (mensagem + uso, sem codigo KCF — KCF e
+// para erros da plataforma via API, nao para manifesto local malformado).
+// `port` aceita numero ou string (o control plane usa strings, mas manifesto
+// com numero e o idiomatico em JSON); o resto tem defaults de `publish`.
+List<ManifestService> parseManifest(String raw) {
+    var trimmed = raw.trim()
+    if (trimmed.length == 0) {
+        throw "manifesto vazio"
+    }
+    var servicesRaw = manifestArray(trimmed)
+    var out = listOf<ManifestService>()
+    var index = 0
+    for (var entry in splitManifestObjects(servicesRaw)) {
+        var name = manifestField(entry, "name")
+        var port = parseIntSafe(manifestField(entry, "port"), 0)
+        var address = manifestField(entry, "address")
+        if (address.length == 0) {
+            address = "127.0.0.1"
+        }
+        var exposure = manifestField(entry, "exposure")
+        if (exposure.length == 0) {
+            exposure = "PUBLIC"
+        }
+        if (name.length == 0) {
+            throw "servico sem nome na posicao " + intToString(index)
+        }
+        if (port <= 0) {
+            throw "servico \"" + name + "\" sem porta valida"
+        }
+        out.add(ManifestService(name, address, port, exposure))
+        index = index + 1
+    }
+    if (out.size == 0) {
+        throw "manifesto sem servicos"
+    }
+    return out
+}
+
+// Extrai o array da chave "services" respeitando strings (nao confunde
+// chave dentro de valor). Devolve o texto interno (sem os colchetes).
+String manifestArray(String root) {
+    var key = "\"services\""
+    var at = root.indexOf(key)
+    if (at < 0) {
+        throw "manifesto sem lista \"services\""
+    }
+    var i = at + key.length
+    while (i < root.length && root.charAt(i) != 58) {
+        i = i + 1
+    }
+    if (i >= root.length) {
+        throw "manifesto sem lista \"services\""
+    }
+    i = i + 1
+    while (i < root.length && (root.charAt(i) == 32 || root.charAt(i) == 10 || root.charAt(i) == 13 || root.charAt(i) == 9)) {
+        i = i + 1
+    }
+    if (i >= root.length || root.charAt(i) != 91) {
+        throw "lista \"services\" nao e um array JSON"
+    }
+    var depth = 0
+    var inString = false
+    var escaped = false
+    var start = i
+    while (i < root.length) {
+        var c = root.charAt(i)
+        if (inString) {
+            if (escaped) {
+                escaped = false
+            } else if (c == 92) {
+                escaped = true
+            } else if (c == 34) {
+                inString = false
+            }
+        } else {
+            if (c == 34) {
+                inString = true
+            } else if (c == 91) {
+                depth = depth + 1
+            } else if (c == 93) {
+                depth = depth - 1
+                if (depth == 0) {
+                    return root.substring(start + 1, i)
+                }
+            }
+        }
+        i = i + 1
+    }
+    throw "lista \"services\" malformada"
+}
+
+// Divide o interior do array em objetos (texto), respeitando strings e
+// escapes — chaves e colchetes dentro de valores nao quebram o split.
+List<String> splitManifestObjects(String inner) {
+    var out = listOf<String>()
+    if (inner.trim().length == 0) {
+        return out
+    }
+    var depth = 0
+    var inString = false
+    var escaped = false
+    var current = ""
+    for (var i = 0; i < inner.length; i++) {
+        var c = inner.charAt(i)
+        if (inString) {
+            if (escaped) {
+                escaped = false
+            } else if (c == 92) {
+                escaped = true
+            } else if (c == 34) {
+                inString = false
+            }
+        } else {
+            if (c == 34) {
+                inString = true
+            } else if (c == 123) {
+                depth = depth + 1
+            } else if (c == 125) {
+                depth = depth - 1
+            }
+        }
+        current = current + (c as Char)
+        if (depth == 0 && inString == false) {
+            var trimmed = current.trim()
+            if (trimmed.length == 0 || trimmed == ",") {
+                // Separador entre objetos (virgula, espacos): descarta, sem
+                // tentar extrair. Sem isso, a virgula contaminaria o proximo
+                // piece e nada seria extraido.
+                current = ""
+            } else {
+                var piece = trimmed
+                if (piece.endsWith(",")) {
+                    piece = piece.substring(0, piece.length - 1).trim()
+                }
+                if (piece.startsWith("{") && piece.endsWith("}")) {
+                    out.add(piece)
+                    current = ""
+                }
+            }
+        }
+        if (depth < 0) {
+            throw "lista \"services\" malformada"
+        }
+    }
+    if (current.trim().length > 0 || depth != 0 || inString) {
+        throw "lista \"services\" malformada"
+    }
+    return out
+}
+
+// Le um campo de um objeto JSON plano: string ("...") com escapes basicos
+// ou numero/bool puro (devolvido como texto). Busca a chave com aspas
+// exatas, entao "port" nao casa com "portaria".
+String manifestField(String entry, String key) {
+    var needle = "\"" + key + "\""
+    var at = entry.indexOf(needle)
+    if (at < 0) {
+        return ""
+    }
+    var i = at + needle.length
+    while (i < entry.length && entry.charAt(i) != 58) {
+        i = i + 1
+    }
+    if (i >= entry.length) {
+        return ""
+    }
+    i = i + 1
+    while (i < entry.length && (entry.charAt(i) == 32 || entry.charAt(i) == 10 || entry.charAt(i) == 13 || entry.charAt(i) == 9)) {
+        i = i + 1
+    }
+    if (i >= entry.length) {
+        return ""
+    }
+    if (entry.charAt(i) == 34) {
+        var out = ""
+        var escaped = false
+        var j = i + 1
+        while (j < entry.length) {
+            var c = entry.charAt(j)
+            if (escaped) {
+                if (c == 34 || c == 92) {
+                    out = out + (c as Char)
+                } else {
+                    out = out + (92 as Char) + (c as Char)
+                }
+                escaped = false
+            } else if (c == 92) {
+                escaped = true
+            } else if (c == 34) {
+                return out
+            } else {
+                out = out + (c as Char)
+            }
+            j = j + 1
+        }
+        return ""
+    }
+    var num = ""
+    var k = i
+    while (k < entry.length) {
+        var d = entry.charAt(k)
+        if ((d >= 48 && d <= 57) || d == 45 || d == 43 || d == 46) {
+            num = num + (d as Char)
+        } else {
+            break
+        }
+        k = k + 1
+    }
+    return num
+}
+
+Int cmdDeploy(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado — rode: kof cloud login <handle> --password <senha>")
+        return 1
+    }
+    var identity = loadIdentity()
+    if (identity == null) {
+        println("nao logado — rode: kof cloud login <handle> --password <senha>")
+        return 1
+    }
+    var path = flagValue(args, "--file")
+    if (path.length == 0) {
+        path = defaultManifestPath()
+    }
+    var raw = readTextOr(path, "")
+    if (raw.length == 0) {
+        println("manifesto nao encontrado: " + path)
+        println("uso: kof cloud deploy [--file <caminho>]")
+        return 1
+    }
+    var services = listOf<ManifestService>()
+    try {
+        services = parseManifest(raw)
+    } catch (String e) {
+        println("manifesto invalido (" + path + "): " + e)
+        println("Hint: confira o exemplo em docs/09-flows.md")
+        return 1
+    }
+    var failures = 0
+    for (var wanted in services) {
+        var body = mapOf()
+        body.put("deviceId", identity.deviceId)
+        body.put("name", wanted.name)
+        body.put("localAddress", wanted.address)
+        body.put("localPort", intToString(wanted.port))
+        body.put("protocol", "http")
+        body.put("exposure", wanted.exposure)
+        try {
+            var created = requireOk(http.post(session.controlUrl + "/v1/services", json.encode(body), jsonHeader(session.token)))
+            var service = json.decode<Service>(created)
+            println("publicado: " + service.name + " -> https://" + service.hostname + " [" + service.exposure + "]")
+        } catch (String e) {
+            printFail("falha ao publicar " + wanted.name, e)
+            failures = failures + 1
+        }
+    }
+    if (failures > 0) {
+        println("deploy parcial: " + intToString(failures) + " falha(s)")
+        return 1
+    }
+    println("deploy ok: " + intToString(services.size) + " servico(s)")
+    return 0
+}
+
+Int cmdDown(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    var path = flagValue(args, "--file")
+    if (path.length == 0) {
+        path = defaultManifestPath()
+    }
+    var raw = readTextOr(path, "")
+    if (raw.length == 0) {
+        println("manifesto nao encontrado: " + path)
+        return 1
+    }
+    var services = listOf<ManifestService>()
+    try {
+        services = parseManifest(raw)
+    } catch (String e) {
+        println("manifesto invalido (" + path + "): " + e)
+        return 1
+    }
+    var failures = 0
+    try {
+        var live = fetchServices(session.controlUrl, session.token)
+        for (var wanted in services) {
+            var target = ""
+            for (var service in live) {
+                if (service.name == wanted.name) {
+                    target = service.id
+                }
+            }
+            if (target.length == 0) {
+                println("ausente (ok): " + wanted.name)
+            } else {
+                var body = mapOf()
+                body.put("serviceId", target)
+                try {
+                    requireOk(http.post(session.controlUrl + "/v1/services/remove", json.encode(body), jsonHeader(session.token)))
+                    println("removido: " + wanted.name)
+                } catch (String e) {
+                    printFail("falha ao remover " + wanted.name, e)
+                    failures = failures + 1
+                }
+            }
+        }
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+    if (failures > 0) {
+        return 1
+    }
+    println("down ok: " + intToString(services.size) + " servico(s) do manifesto removidos")
+    return 0
+}

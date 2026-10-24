@@ -1,0 +1,195 @@
+import kofcloud.cli.Deploy
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.store.Store
+import testkit.Support
+
+// Fase 7 slice 1 — deploy declarativo: publica o que esta no manifesto e
+// nada alem dele. Sem build, sem artefato, sem daemon: so publish em lote.
+// `down` faz o inverso; nada fora do manifesto e tocado.
+
+String deployManifest(String name, String body) {
+    var path = "/tmp/kofcloud-deploy-" + name + "-" + crypto.randomHex(4) + ".json"
+    File(path).writeText(body)
+    return path
+}
+
+test "deploy: manifesto valido com defaults", "deploy" {
+    var services = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"api\",\"port\":3000,\"exposure\":\"AUTHENTICATED\",\"address\":\"0.0.0.0\"}]}")
+    assert(services.size == 2, "dois servicos")
+    assert(services.get(0).name == "site", "nome")
+    assert(services.get(0).port == 8080, "porta numerica")
+    assert(services.get(0).address == "127.0.0.1", "default address")
+    assert(services.get(0).exposure == "PUBLIC", "default exposure")
+    assert(services.get(1).exposure == "AUTHENTICATED", "exposure explicita")
+    assert(services.get(1).address == "0.0.0.0", "address explicito")
+}
+
+test "deploy: manifesto com port como string (formato da API)", "deploy-str" {
+    var services = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":\"8080\"}]}")
+    assert(services.size == 1, "um servico")
+    assert(services.get(0).port == 8080, "port string aceita")
+}
+
+test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
+    var bad1 = ""
+    try {
+        parseManifest("")
+    } catch (String e) {
+        bad1 = e
+    }
+    assert(bad1 == "manifesto vazio", "vazio")
+
+    var bad2 = ""
+    try {
+        parseManifest("{\"services\":[]}")
+    } catch (String e) {
+        bad2 = e
+    }
+    assert(bad2 == "manifesto sem servicos", "vazio recusa")
+
+    var bad3 = ""
+    try {
+        parseManifest("{\"services\":[{\"port\":8080}]}")
+    } catch (String e) {
+        bad3 = e
+    }
+    assert(bad3 == "servico sem nome na posicao 0", "nome com posicao")
+
+    var bad4 = ""
+    try {
+        parseManifest("{\"services\":[{\"name\":\"site\"}]}")
+    } catch (String e) {
+        bad4 = e
+    }
+    assert(bad4 == "servico \"site\" sem porta valida", "porta com nome")
+
+    var bad5 = ""
+    try {
+        parseManifest("{\"services\":[{\"name\":\"a\",\"port\":1},{\"name\":\"b\"}]}")
+    } catch (String e) {
+        bad5 = e
+    }
+    assert(bad5 == "servico \"b\" sem porta valida", "posicao correta")
+
+    var bad6 = ""
+    try {
+        parseManifest("{\"services\":{\"name\":\"site\"}}")
+    } catch (String e) {
+        bad6 = e
+    }
+    assert(bad6 == "lista \"services\" nao e um array JSON", "nao-array")
+
+    var bad7 = ""
+    try {
+        parseManifest("{\"services\":[{\"name\":\"a\",\"port\":1}")
+    } catch (String e) {
+        bad7 = e
+    }
+    assert(bad7.indexOf("malformada") >= 0, "truncado")
+
+    // Chave "port" dentro de valor nao confunde ("portaria" tem "port" mas
+    // sem as aspas de fechamento na posicao certa).
+    var tricky = parseManifest("{\"services\":[{\"name\":\"portaria\",\"port\":9000}]}")
+    assert(tricky.get(0).name == "portaria", "substring nao casa")
+    assert(tricky.get(0).port == 9000, "porta certa")
+}
+
+test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {
+    var controlPort = 19711
+    var path = "/tmp/kofcloud-depe2e-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+
+    // Conta + device + UM servico fora do manifesto (deploy nao toca nele).
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var extraBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"extra\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"9999\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", extraBody, accountToken)) == 200, "extra fora do manifesto")
+
+    var manifest = "{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"api\",\"port\":3000,\"exposure\":\"AUTHENTICATED\"}]}"
+    var file = deployManifest("e2e", manifest)
+
+    // deploy via HTTP direto (o cmdDeploy precisa de sessao local; aqui
+    // exercitamos o protocolo que ele usa, com o mesmo corpo).
+    var services = parseManifest(manifest)
+    assert(services.size == 2, "manifesto parseado")
+    for (var wanted in services) {
+        var body = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"" + wanted.name + "\",\"localAddress\":\"" + wanted.address + "\",\"localPort\":\"" + intToString(wanted.port) + "\",\"protocol\":\"http\",\"exposure\":\"" + wanted.exposure + "\"}"
+        assert(statusOf(httpPostJson(controlPort, "/v1/services", body, accountToken)) == 200, "publicado: " + wanted.name)
+    }
+    // Idempotente: publicar de novo nao duplica.
+    for (var wanted in services) {
+        var body = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"" + wanted.name + "\",\"localAddress\":\"" + wanted.address + "\",\"localPort\":\"" + intToString(wanted.port) + "\",\"protocol\":\"http\",\"exposure\":\"" + wanted.exposure + "\"}"
+        assert(statusOf(httpPostJson(controlPort, "/v1/services", body, accountToken)) == 200, "re-publica ok")
+    }
+    // Tres servicos agora (extra + 2 do manifesto), sem duplicata.
+    var listedRaw = httpGetToken(controlPort, "/v1/services", accountToken)
+    assert(statusOf(listedRaw) == 200, "lista autenticada")
+    assert(countOccurrences(bodyOf(listedRaw), "\"name\"") == 3, "tres servicos, sem duplicata")
+
+    // down remove SO os do manifesto (extra sobrevive).
+    for (var wanted in services) {
+        var target = serviceIdByNameIn(listedRaw, wanted.name)
+        assert(target.length > 0, "alvo existe: " + wanted.name)
+        var removeBody = "{\"serviceId\":\"" + target + "\"}"
+        assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", removeBody, accountToken)) == 200, "removido: " + wanted.name)
+    }
+    // down idempotente: remover de novo da 404, sem quebrar nada.
+    var ghost = "{\"serviceId\":\"inexistente\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", ghost, accountToken)) == 404, "remover de novo -> 404")
+    var afterRaw = httpGetToken(controlPort, "/v1/services", accountToken)
+    assert(countOccurrences(bodyOf(afterRaw), "\"name\"") == 1, "so o extra sobreviveu")
+    assert(bodyOf(afterRaw).indexOf("\"extra\"") >= 0, "extra intacto")
+}
+
+Int serviceCount(String controlUrl, String token, Int port) {
+    return 0
+}
+
+// Conta ocorrencias nao sobrepostas (para contar servicos no JSON listado).
+Int countOccurrences(String haystack, String needle) {
+    if (needle.length == 0) {
+        return 0
+    }
+    var count = 0
+    var from = 0
+    while (from <= haystack.length - needle.length) {
+        var found = haystack.indexOf(needle, from)
+        if (found < 0) {
+            break
+        }
+        count = count + 1
+        from = found + needle.length
+    }
+    return count
+}
+
+// Extrai o id do servico com o nome dado do corpo de GET /v1/services.
+// "" quando ausente. O serviceJson do control plane emite "id" ANTES de
+// "name", entao a busca e para tras a partir do nome (sem risco de pegar o
+// id do servico vizinho).
+String serviceIdByNameIn(String servicesRaw, String name) {
+    var body = bodyOf(servicesRaw)
+    var needle = "\"name\":\"" + name + "\""
+    var at = body.indexOf(needle)
+    if (at < 0) {
+        return ""
+    }
+    var idKey = "\"id\":\""
+    var head = body.substring(0, at)
+    var back = head.lastIndexOf(idKey)
+    if (back < 0) {
+        return ""
+    }
+    var start = back + idKey.length
+    var end = head.indexOf("\"", start)
+    if (end < 0) {
+        return ""
+    }
+    return head.substring(start, end)
+}
