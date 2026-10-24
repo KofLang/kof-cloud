@@ -62,6 +62,8 @@ void noteTunnelRefused(String reason) {
         observability.counter(metricTunnelRefused() + "_unknown_device")
     } else if (reason == "DEVICE_REVOKED") {
         observability.counter(metricTunnelRefused() + "_revoked_device")
+    } else if (reason == "DEVICE_SUSPENDED") {
+        observability.counter(metricTunnelRefused() + "_suspended_device")
     } else {
         observability.counter(metricTunnelRefused() + "_auth")
     }

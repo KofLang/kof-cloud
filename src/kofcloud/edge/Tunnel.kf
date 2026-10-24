@@ -80,7 +80,11 @@ void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
         return
     }
     if (device.status != "ACTIVE") {
-        refuseTunnel(conn, "DEVICE_REVOKED")
+        if (device.status == deviceSuspended()) {
+            refuseTunnel(conn, "DEVICE_SUSPENDED")
+        } else {
+            refuseTunnel(conn, "DEVICE_REVOKED")
+        }
         return
     }
     var account = state.registry.accountByToken(token)
@@ -137,6 +141,18 @@ void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
 }
 
 Bool handleTunnelFrame(EdgeState state, TunnelSession session, String line) {
+    // Enforcement continuo: se o device foi suspenso/revogado depois do
+    // handshake, o proximo frame (inclusive PING de heartbeat) derruba a
+    // sessao. O Agent reconecta, o HELLO e recusado (fatal) e ele para.
+    // O PING vira assim o mecanismo de enforcement em ate um heartbeat.
+    var device = state.registry.deviceById(session.deviceId)
+    if (device == null) {
+        return false
+    }
+    var deviceStatus = device.status
+    if (deviceStatus != "ACTIVE") {
+        return false
+    }
     var frame = decodeFrame(line)
     var kind = frameKind(frame)
     if (kind == "PING") {

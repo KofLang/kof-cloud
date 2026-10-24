@@ -248,6 +248,52 @@ Int cmdDeviceRevoke(List<String> args) {
     }
 }
 
+Int cmdDeviceSuspend(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    var deviceId = firstPositional(args)
+    if (deviceId.length == 0) {
+        println("uso: kof cloud device suspend <deviceId>")
+        return 1
+    }
+    var body = mapOf()
+    body.put("deviceId", deviceId)
+    try {
+        requireOk(http.post(session.controlUrl + "/v1/devices/suspend", json.encode(body), jsonHeader(session.token)))
+        println("Dispositivo suspenso (tunel recusado, nada removido): " + deviceId)
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
+Int cmdDeviceUnsuspend(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    var deviceId = firstPositional(args)
+    if (deviceId.length == 0) {
+        println("uso: kof cloud device unsuspend <deviceId>")
+        return 1
+    }
+    var body = mapOf()
+    body.put("deviceId", deviceId)
+    try {
+        requireOk(http.post(session.controlUrl + "/v1/devices/unsuspend", json.encode(body), jsonHeader(session.token)))
+        println("Dispositivo liberado: " + deviceId)
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
 // ---- servicos ----
 
 Int cmdPublish(List<String> args) {
@@ -388,6 +434,74 @@ Int cmdServiceStatus(List<String> args) {
         printFail("falha", e)
         return 1
     }
+}
+
+Int cmdServiceSuspend(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    var name = firstPositional(args)
+    if (name.length == 0) {
+        println("uso: kof cloud service suspend <nome>")
+        return 1
+    }
+    try {
+        var target = serviceIdByName(session, name)
+        if (target.length == 0) {
+            println("servico nao encontrado: " + name)
+            return 1
+        }
+        var body = mapOf()
+        body.put("serviceId", target)
+        requireOk(http.post(session.controlUrl + "/v1/services/suspend", json.encode(body), jsonHeader(session.token)))
+        println("Servico suspenso (fora da rota, nada removido): " + name)
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
+Int cmdServiceUnsuspend(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    var name = firstPositional(args)
+    if (name.length == 0) {
+        println("uso: kof cloud service unsuspend <nome>")
+        return 1
+    }
+    try {
+        var target = serviceIdByName(session, name)
+        if (target.length == 0) {
+            println("servico nao encontrado: " + name)
+            return 1
+        }
+        var body = mapOf()
+        body.put("serviceId", target)
+        requireOk(http.post(session.controlUrl + "/v1/services/unsuspend", json.encode(body), jsonHeader(session.token)))
+        println("Servico liberado: " + name)
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
+// Id do servico pelo nome (para os comandos que operam por serviceId).
+// "" quando nao existe na conta.
+String serviceIdByName(LocalSession session, String name) {
+    var services = fetchServices(session.controlUrl, session.token)
+    for (var service in services) {
+        if (service.name == name) {
+            return service.id
+        }
+    }
+    return ""
 }
 
 // Emite uma credencial kfs_ para um servico AUTHENTICATED. O token da conta
@@ -543,6 +657,32 @@ Int cmdLogs(List<String> args) {
     }
     println(text)
     return 0
+}
+
+record AuditEntry(String at, String actor, String action, String target)
+
+// Trilha de auditoria da conta: ultimos eventos dos proprios recursos.
+Int cmdAudit(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    try {
+        var raw = requireOk(http.get(session.controlUrl + "/v1/audit", authHeader(session.token)))
+        var events = json.decode<List<AuditEntry>>(raw)
+        if (events.size == 0) {
+            println("sem eventos")
+            return 0
+        }
+        for (var event in events) {
+            println(event.at + "  " + event.action + "  " + event.target)
+        }
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
 }
 
 // ---- helpers de control plane ----

@@ -2,6 +2,7 @@ package kofcloud.control
 
 import kofcloud.control.Metrics
 import kofcloud.model.Account
+import kofcloud.model.Audit
 import kofcloud.model.CustomDomain
 import kofcloud.model.Device
 import kofcloud.model.Errors
@@ -20,7 +21,7 @@ record TokenEntry(String accountId, String tokenHash, Long createdAt)
 
 record ServiceToken(String serviceId, String accountId, String tokenHash, Long createdAt)
 
-record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens, List<CustomDomain> customDomains)
+record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens, List<CustomDomain> customDomains, List<AuditEvent> audit)
 
 class Registry {
     List<Account> accounts
@@ -29,6 +30,7 @@ class Registry {
     List<TokenEntry> tokens
     List<ServiceToken> serviceTokens
     List<CustomDomain> customDomains
+    List<AuditEvent> audit
     String path
     Int maxDevices
     Int maxServices
@@ -45,6 +47,7 @@ class Registry {
         this.tokens = listOf<TokenEntry>()
         this.serviceTokens = listOf<ServiceToken>()
         this.customDomains = listOf<CustomDomain>()
+        this.audit = listOf<AuditEvent>()
         this.maxDevices = limitDevices()
         this.maxServices = limitServices()
         this.edgeHosts = parseEdgeHosts(config.str("kofcloud.edgeHosts", ""))
@@ -86,14 +89,34 @@ class Registry {
             this.tokens = state.tokens
             this.serviceTokens = state.serviceTokens
             this.customDomains = state.customDomains
+            this.audit = state.audit
         } catch (String e) {
             // Estado corrompido: recomeca vazio em vez de derrubar o control
             // plane. O operador ve os dados ausentes e decide.
         }
     }
 
+    // Trilha de auditoria: anel capado (100 eventos). So metadados
+    // operacionais; nunca senha, token, chave ou conteudo.
+    void audit(String actor, String action, String target) {
+        this.audit.add(AuditEvent(longToString(time.now()), actor, action, target))
+        while (this.audit.size > 100) {
+            this.audit = this.audit.subList(1, this.audit.size)
+        }
+    }
+
+    List<AuditEvent> auditForAccount(String accountId) {
+        var out = listOf<AuditEvent>()
+        for (var event in this.audit) {
+            if (event.target == accountId || event.target.startsWith(accountId + "/")) {
+                out.add(event)
+            }
+        }
+        return out
+    }
+
     void save() {
-        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens, this.serviceTokens, this.customDomains)))
+        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens, this.serviceTokens, this.customDomains, this.audit)))
     }
 
     // ---- contas ----
@@ -107,6 +130,7 @@ class Registry {
         }
         var account = Account(uuid.v4(), handle, email, passwords.hash(password), time.now())
         this.accounts.add(account)
+        this.audit(auditActorAccount(handle), auditAccountCreated(), account.id)
         this.save()
         noteAccountCreated()
         return account
@@ -172,6 +196,7 @@ class Registry {
         }
         var device = Device(uuid.v4(), account.id, name, publicKey, deviceActive(), time.now(), time.now())
         this.devices.add(device)
+        this.audit(auditActorAccount(account.handle), auditDeviceRegistered(), account.id + "/" + device.id)
         this.save()
         noteDeviceRegistered()
         return device
@@ -206,6 +231,11 @@ class Registry {
     }
 
     Bool revokeDevice(String accountId, String deviceId) {
+        var account = this.accountById(accountId)
+        var actor = "account:?"
+        if (account != null) {
+            actor = auditActorAccount(account.handle)
+        }
         var found = false
         var updated = listOf<Device>()
         for (var device in this.devices) {
@@ -221,8 +251,52 @@ class Registry {
             this.removeServicesOfDevice(deviceId)
             this.pruneServiceTokens()
             this.pruneCustomDomains()
+            this.audit(actor, auditDeviceRevoked(), accountId + "/" + deviceId)
             this.save()
             noteDeviceRevoked()
+        }
+        return found
+    }
+
+    // Suspensao administrativa de dispositivo: recusa o tunel com
+    // DEVICE_SUSPENDED, sem remover nada. Idempotente.
+    Bool suspendDevice(String accountId, String deviceId) {
+        return this.setDeviceStatus(accountId, deviceId, deviceSuspended(), auditDeviceSuspended())
+    }
+
+    Bool unsuspendDevice(String accountId, String deviceId) {
+        return this.setDeviceStatus(accountId, deviceId, deviceActive(), auditDeviceUnsuspended())
+    }
+
+    Bool setDeviceStatus(String accountId, String deviceId, String status, String action) {
+        var account = this.accountById(accountId)
+        var actor = "account:?"
+        if (account != null) {
+            actor = auditActorAccount(account.handle)
+        }
+        var found = false
+        var updated = listOf<Device>()
+        for (var device in this.devices) {
+            if (device.id == deviceId && device.accountId == accountId) {
+                updated.add(Device(device.id, device.accountId, device.name, device.publicKey, status, device.lastSeenAt, device.createdAt))
+                found = true
+            } else {
+                updated.add(device)
+            }
+        }
+        if (found) {
+            this.devices = updated
+            if (action == auditDeviceSuspended()) {
+                this.audit(actor, action, accountId + "/" + deviceId)
+                this.save()
+                noteDeviceSuspended()
+            } else if (action == auditDeviceUnsuspended()) {
+                this.audit(actor, action, accountId + "/" + deviceId)
+                this.save()
+                noteDeviceUnsuspended()
+            } else {
+                this.save()
+            }
         }
         return found
     }
@@ -254,6 +328,10 @@ class Registry {
         }
         var token = newServiceToken()
         this.serviceTokens.add(ServiceToken(serviceId, accountId, tokenHash(token), time.now()))
+        var issuer = this.accountById(accountId)
+        if (issuer != null) {
+            this.audit(auditActorAccount(issuer.handle), "service.token_issued", accountId + "/" + serviceId)
+        }
         this.save()
         noteServiceTokenIssued()
         return token
@@ -309,6 +387,7 @@ class Registry {
             statusUnknown(), time.now()
         )
         this.services.add(service)
+        this.audit(auditActorAccount(account.handle), auditServicePublished(), account.id + "/" + service.id)
         this.save()
         noteServicePublished()
         return service
@@ -366,10 +445,51 @@ class Registry {
             this.services = out
             this.pruneServiceTokens()
             this.pruneCustomDomains()
+            var svcOwner = this.accountById(accountId)
+            if (svcOwner != null) {
+                this.audit(auditActorAccount(svcOwner.handle), auditServiceRemoved(), accountId + "/" + serviceId)
+            }
             this.save()
             noteServiceRemoved()
         }
         return found
+    }
+
+    // Suspensao administrativa de servico: sai da rota (opaco, como PRIVATE),
+    // sem remover nada. Idempotente. O dono ve SUSPENDED em `service status`.
+    Bool suspendService(String accountId, String serviceId) {
+        return this.setServiceStatusOwned(accountId, serviceId, statusSuspended(), auditServiceSuspended())
+    }
+
+    Bool unsuspendService(String accountId, String serviceId) {
+        return this.setServiceStatusOwned(accountId, serviceId, statusUnknown(), auditServiceUnsuspended())
+    }
+
+    // Troca de status com dono + auditoria + metrica. Devolve false para
+    // inexistente ou de outra conta (o handler responde o 404 opaco).
+    Bool setServiceStatusOwned(String accountId, String serviceId, String status, String action) {
+        var service = this.serviceById(serviceId)
+        if (service == null) {
+            return false
+        }
+        var owner = service.accountId
+        if (owner != accountId) {
+            return false
+        }
+        var account = this.accountById(accountId)
+        var actor = "account:?"
+        if (account != null) {
+            actor = auditActorAccount(account.handle)
+        }
+        this.setServiceStatus(serviceId, status)
+        this.audit(actor, action, accountId + "/" + serviceId)
+        this.save()
+        if (action == auditServiceSuspended()) {
+            noteServiceSuspended()
+        } else {
+            noteServiceUnsuspended()
+        }
+        return true
     }
 
     void removeServicesOfDevice(String deviceId) {
@@ -404,10 +524,16 @@ class Registry {
         return found
     }
 
+    // Health report do Agent (por device+nome; o tunel ja autenticou). NUNCA
+    // dessuspende: suspensao e decisao administrativa e so `unsuspendService`
+    // libera — senao o Agent reverteria a suspensao a cada ciclo de health.
     Bool setServiceStatusByName(String deviceId, String name, String status) {
         var target = ""
         for (var service in this.services) {
             if (service.deviceId == deviceId && service.name == name) {
+                if (statusIsSuspended(service.status)) {
+                    return true
+                }
                 target = service.id
             }
         }
@@ -427,6 +553,11 @@ class Registry {
         if (service.accountId != accountId) {
             return errServiceNotYours()
         }
+        // O dono reporta health, mas nao administra suspensao por aqui: so
+        // `unsuspendService` libera (mesma regra do health do Agent).
+        if (statusIsSuspended(service.status)) {
+            return ""
+        }
         this.setServiceStatus(serviceId, status)
         return ""
     }
@@ -437,6 +568,9 @@ class Registry {
     Service? resolveRoute(String hostname) {
         for (var service in this.services) {
             if (service.hostname == hostname) {
+                if (statusIsSuspended(service.status)) {
+                    return null
+                }
                 if (exposureIsRoutable(exposureFrom(service.exposure))) {
                     return service
                 }
@@ -446,6 +580,9 @@ class Registry {
         if (custom != null && custom.status == domainVerified()) {
             var service = this.serviceById(custom.serviceId)
             if (service != null && service.accountId == custom.accountId) {
+                if (statusIsSuspended(service.status)) {
+                    return null
+                }
                 if (exposureIsRoutable(exposureFrom(service.exposure))) {
                     return service
                 }
@@ -481,6 +618,10 @@ class Registry {
         }
         var domain = CustomDomain(clean, accountId, serviceId, domainPending(), "", time.now())
         this.customDomains.add(domain)
+        var domOwner = this.accountById(accountId)
+        if (domOwner != null) {
+            this.audit(auditActorAccount(domOwner.handle), auditDomainRegistered(), accountId + "/" + clean)
+        }
         this.save()
         noteDomainRegistered()
         return domain
@@ -521,6 +662,10 @@ class Registry {
         }
         if (found) {
             this.customDomains = out
+            var domOwner = this.accountById(accountId)
+            if (domOwner != null) {
+                this.audit(auditActorAccount(domOwner.handle), auditDomainRemoved(), accountId + "/" + clean)
+            }
             this.save()
             noteDomainRemoved()
         }
@@ -614,6 +759,13 @@ class Registry {
             }
         }
         this.customDomains = updated
+        var verified = this.customByHostname(clean)
+        if (verified != null) {
+            var verOwner = this.accountById(verified.accountId)
+            if (verOwner != null) {
+                this.audit(auditActorAccount(verOwner.handle), auditDomainVerified(), verified.accountId + "/" + clean)
+            }
+        }
         this.save()
         noteDomainVerified()
     }

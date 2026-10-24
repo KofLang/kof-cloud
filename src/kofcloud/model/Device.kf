@@ -12,6 +12,14 @@ String deviceRevoked() {
     return "REVOKED"
 }
 
+// Suspensao administrativa (abuse prevention): o tunel e recusado com
+// DEVICE_SUSPENDED (fatal — o Agent nao reconecta), mas o dispositivo e os
+// servicos continuam existindo; unsuspend libera. Ao contrario de REVOKED,
+// que remove os servicos junto.
+String deviceSuspended() {
+    return "SUSPENDED"
+}
+
 Bool deviceIsActive(Device device) {
     return device.status == "ACTIVE"
 }

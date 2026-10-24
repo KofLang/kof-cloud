@@ -41,6 +41,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | métricas do control plane (slice 2) | `control/Metrics.kf`: lifecycle no Registry + `GET /v1/metrics` sem auth | `metrics_test.kf` |
 | métricas do Agent (slice 3) | `agent/Metrics.kf`: connects, reconnects, fatais por motivo, health, streams, erros locais | `agent_metrics_test.kf` |
 | rate limit por hostname (slice 1) | `security.rateLimit` no Edge público: 429 `KCF107` + `Retry-After` antes de rotear | `ratelimit_test.kf` |
+| suspensão + auditoria (slice 2) | `SUSPENDED` reversível (serviço/dispositivo), enforcement em request+PING, anel de auditoria + `GET /v1/audit` + `kof cloud audit` | `abuse_test.kf` |
 
 ## Comportamentos provados
 
@@ -91,6 +92,11 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   host (configurável), `429 KCF107` + `Retry-After` antes de rotear — não
   revela existência nem consome túnel; cota isolada por hostname; métrica
   `_rate_limited` (`ratelimit_test.kf`).
+* **Suspensão + auditoria (abuse prevention, slice 2)**: serviço `SUSPENDED`
+  sai da rota (opaco), device `SUSPENDED` tem o túnel recusado com
+  `DEVICE_SUSPENDED` (fatal); health/API não dessuspendem; enforcement
+  imediato (request) e contínuo (PING); anel de 100 eventos só com metadados,
+  `GET /v1/audit` filtrado por conta (`abuse_test.kf`, 3 testes).
 * **Parada limpa** do agente (`disconnect` via arquivo-sentinela) e da
   plataforma (`serve`, via fechamento do `Listener`).
 

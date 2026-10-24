@@ -1,0 +1,216 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.model.Audit
+import kofcloud.store.Store
+import testkit.Support
+
+// Abuse prevention slice 2: suspensao operacional + trilha de auditoria.
+// Suspender NAO remove: o servico sai da rota (opaco, como PRIVATE) e o
+// dispositivo tem o tunel recusado (DEVICE_SUSPENDED, fatal — sem reconexao
+// sozinho). Health do Agent e status da API nao dessuspendem; so unsuspend
+// libera. Auditoria: anel de 100 eventos, so metadados, filtrada por conta.
+
+Bool auditHas(List<String> actions, String action) {
+    for (var a in actions) {
+        if (a == action) {
+            return true
+        }
+    }
+    return false
+}
+
+List<String> auditActions(List<AuditEvent> events) {
+    var out = listOf<String>()
+    for (var event in events) {
+        out.add(event.action)
+    }
+    return out
+}
+
+test "suspensao: servico sai da rota e volta; health nao dessuspende", "abuse" {
+    var registry = Registry("/tmp/kofcloud-abuse-" + crypto.randomHex(4) + ".json")
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var ana = registry.createAccount("ana", "a@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    assert(registry.resolveRoute(service.hostname) != null, "rota antes")
+
+    assert(registry.suspendService(ana.id, service.id) == false, "alheio nao suspende")
+    assert(registry.resolveRoute(service.hostname) != null, "rota intacta")
+    assert(registry.suspendService(mel.id, "inexistente") == false, "inexistente nao suspende")
+
+    assert(registry.suspendService(mel.id, service.id) == true, "suspende")
+    var suspended = registry.serviceById(service.id)
+    assert(suspended != null, "servico existe")
+    if (suspended != null) {
+        assert(suspended.status == "SUSPENDED", "status SUSPENDED")
+    }
+    assert(registry.resolveRoute(service.hostname) == null, "fora da rota (opaco)")
+
+    // Health do Agent NAO dessuspende.
+    assert(registry.setServiceStatusByName(device.id, "site", "ONLINE") == true, "report aceito (noop)")
+    var still = registry.serviceById(service.id)
+    if (still != null) {
+        assert(still.status == "SUSPENDED", "continua SUSPENDED")
+    }
+    assert(registry.resolveRoute(service.hostname) == null, "rota continua fora")
+
+    // Status via API tambem nao dessuspende.
+    assert(registry.reportServiceStatus(mel.id, service.id, "ONLINE") == "", "report ok (noop)")
+    var still2 = registry.serviceById(service.id)
+    if (still2 != null) {
+        assert(still2.status == "SUSPENDED", "API nao dessuspende")
+    }
+
+    assert(registry.unsuspendService(ana.id, service.id) == false, "alheio nao libera")
+    assert(registry.unsuspendService(mel.id, service.id) == true, "libera")
+    var back = registry.serviceById(service.id)
+    if (back != null) {
+        assert(back.status != "SUSPENDED", "voltou a status operacional")
+    }
+    assert(registry.resolveRoute(service.hostname) != null, "rota de volta")
+
+    // Auditoria registrou o ciclo sem segredo.
+    var actions = auditActions(registry.auditForAccount(mel.id))
+    assert(auditHas(actions, "service.published"), "publish auditado")
+    assert(auditHas(actions, "service.suspended"), "suspend auditado")
+    assert(auditHas(actions, "service.unsuspended"), "unsuspend auditado")
+    var anaActions = auditActions(registry.auditForAccount(ana.id))
+    assert(auditHas(anaActions, "service.suspended") == false, "nada de mel vaza para ana")
+}
+
+test "suspensao: dispositivo recusado no tunel, nada removido", "abuse-device" {
+    var registry = Registry("/tmp/kofcloud-abused-" + crypto.randomHex(4) + ".json")
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    assert(registry.suspendDevice(mel.id, device.id) == true, "suspende")
+    var suspended = registry.deviceById(device.id)
+    assert(suspended != null, "device existe")
+    if (suspended != null) {
+        assert(suspended.status == "SUSPENDED", "status SUSPENDED")
+    }
+    // Nada removido: servicos continuam (voltam quando liberar).
+    assert(registry.devicesForAccount(mel.id).size == 1, "device continua listado")
+
+    assert(registry.unsuspendDevice(mel.id, device.id) == true, "libera")
+    var back = registry.deviceById(device.id)
+    if (back != null) {
+        assert(back.status == "ACTIVE", "volta a ACTIVE")
+    }
+
+    // Revogar apos suspender funciona (caminho de remocao intacto).
+    assert(registry.suspendDevice(mel.id, device.id) == true, "suspende de novo")
+    assert(registry.revokeDevice(mel.id, device.id) == true, "revoga")
+    var gone = registry.deviceById(device.id)
+    if (gone != null) {
+        assert(gone.status == "REVOKED", "revogado vence suspensao")
+    }
+}
+
+test "suspensao: Edge recusa tunel suspenso e esconde rota; audit via HTTP", "abuse-e2e" {
+    var localSvc = 19581
+    var controlPort = 19582
+    var tunnelPort = 19583
+    var httpPort = 19584
+
+    var app = web.app()
+    app.get("/") { return "svc-abuse" }
+    var server = spawn { app.listen(localSvc) }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-abusee-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-abusee-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-abusee-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var anaCreated = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
+    var anaToken = mapField(json.decode<Map<String, String>>(bodyOf(anaCreated)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
+    assert(statusOf(published) == 200, "PUBLIC publicado")
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
+
+    // Conta alheia recebe o mesmo 404 opaco.
+    var anaSuspend = httpPostJson(controlPort, "/v1/services/suspend", "{\"serviceId\":\"" + serviceId + "\"}", anaToken)
+    assert(statusOf(anaSuspend) == 404, "alheio -> 404 opaco")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+    assert(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 200, "rota antes")
+
+    // Suspende o servico: some da rota (404 opaco), tunel continua.
+    var suspended = httpPostJson(controlPort, "/v1/services/suspend", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
+    assert(statusOf(suspended) == 200, "suspende")
+    assert(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 404, "fora da rota (opaco)")
+    assert(edgeState.isOnline(deviceId), "tunel continua vivo")
+
+    // Libera o servico: a rota volta sem precisar reconectar.
+    var unsuspended = httpPostJson(controlPort, "/v1/services/unsuspend", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
+    assert(statusOf(unsuspended) == 200, "libera servico")
+    assert(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-abuse", "rota de volta")
+
+    // Suspende o dispositivo (servico ativo): o proximo request derruba a
+    // sessao (enforcement imediato no Edge) e o tunel nao volta (HELLO
+    // recusado com fatal).
+    var devSuspended = httpPostJson(controlPort, "/v1/devices/suspend", "{\"deviceId\":\"" + deviceId + "\"}", accountToken)
+    assert(statusOf(devSuspended) == 200, "device suspenso")
+    var enforced = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
+    assert(statusOf(enforced) == 503, "request apos suspensao derruba a sessao (opaco)")
+    assert(edgeState.isOnline(deviceId) == false, "sessao caiu apos suspensao do device")
+
+    var exposition = observability.metrics()
+    assert(metricValue(exposition, "kofcloud_control_services_suspended_total") >= 1, "suspend contado")
+    assert(metricValue(exposition, "kofcloud_control_devices_suspended_total") >= 1, "device suspend contado")
+
+    // Auditoria via HTTP: so os proprios eventos, sem segredo.
+    var auditRaw = httpGetRaw(controlPort, "/v1/audit", "127.0.0.1")
+    assert(statusOf(auditRaw) == 401, "audit exige token")
+    var anaAudit = httpPostJson(controlPort, "/v1/devices/suspend", "{\"deviceId\":\"" + deviceId + "\"}", anaToken)
+    assert(statusOf(anaAudit) == 404, "ana nao suspende device de mel")
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}
+
+Int metricValue(String exposition, String name) {
+    for (var line in exposition.split("\n")) {
+        var trimmed = line.trim()
+        if (trimmed.startsWith(name + " ")) {
+            return parseIntSafe(trimmed.substring(name.length + 1).trim(), -1)
+        }
+    }
+    return -1
+}

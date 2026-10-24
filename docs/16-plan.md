@@ -112,9 +112,18 @@ primeiro (ordem abaixo).
 + `Retry-After`, **antes** de rotear (não revela se o host existe, não
 consome túnel). Chave = hostname (o Edge TCP não expõe IP de origem).
 Métrica `_rate_limited`, `Hint:` sem dado de cliente. Prova:
-`tests/ratelimit_test.kf` (2 testes: 4º pedido → 429 com/sem túnel, cota
-isolada por hostname, Retry-After, métrica, Hint). Falta fatiado: suspensão
-de serviço/dispositivo por abuso, auditoria operacional.
+`tests/ratelimit_test.kf` (2 testes: 4o pedido → 429 com/sem túnel, cota
+isolada por hostname, Retry-After, métrica, Hint).
+
+**Estado (slice 2 — suspensão + auditoria): ✅ implementado.**
+`SUSPENDED` reversível para serviço (sai da rota, opaco como PRIVATE) e
+dispositivo (túnel recusado com `DEVICE_SUSPENDED`, fatal — sem reconexão);
+health do Agent e status via API **não** dessuspendem (só `unsuspend`
+libera); enforcement imediato no Edge (request derruba a sessão) e contínuo
+via PING (cai em até um heartbeat); trilha de auditoria em anel (100
+eventos, só metadados) com `GET /v1/audit` filtrado por conta + `kof cloud
+audit`. Prova: `tests/abuse_test.kf` (3 testes: rota/health/API, device no
+túnel, Edge fim a fim + audit via HTTP).
 
 ## Observabilidade mínima (parcial, antes do deploy)
 

@@ -50,6 +50,8 @@ void noteAgentFatal(String reason) {
     observability.counter(metricAgentFatalRefusals())
     if (reason == "DEVICE_REVOKED") {
         observability.counter(metricAgentFatalRefusals() + "_revoked")
+    } else if (reason == "DEVICE_SUSPENDED") {
+        observability.counter(metricAgentFatalRefusals() + "_suspended")
     } else if (reason == "AUTH_FAILED") {
         observability.counter(metricAgentFatalRefusals() + "_auth")
     } else if (reason == "DEVICE_UNKNOWN") {

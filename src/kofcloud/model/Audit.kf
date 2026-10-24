@@ -1,0 +1,77 @@
+package kofcloud.model
+
+// Evento de auditoria operacional (abuse prevention, slice 2). Trilha
+// append-only em anel (capado em 100 no Registry): quem fez o que, quando.
+// O que NUNCA entra: senhas, tokens, chaves, conteudo de requisicao/resposta,
+// corpos, headers. IDs e handles do DONO sao visiveis para a propria conta
+// (o endpoint filtra por accountId); nada de terceiros vaza.
+record AuditEvent(String at, String actor, String action, String target)
+
+String auditActorAccount(String handle) {
+    return "account:" + handle
+}
+
+String auditActorEdge() {
+    return "edge"
+}
+
+// Acoes registradas (vocabulario fechado do slice; cresce por adicao).
+String auditAccountCreated() {
+    return "account.created"
+}
+
+String auditLogin() {
+    return "account.login"
+}
+
+String auditDeviceRegistered() {
+    return "device.registered"
+}
+
+String auditDeviceRevoked() {
+    return "device.revoked"
+}
+
+String auditDeviceSuspended() {
+    return "device.suspended"
+}
+
+String auditDeviceUnsuspended() {
+    return "device.unsuspended"
+}
+
+String auditServicePublished() {
+    return "service.published"
+}
+
+String auditServiceRemoved() {
+    return "service.removed"
+}
+
+String auditServiceSuspended() {
+    return "service.suspended"
+}
+
+String auditServiceUnsuspended() {
+    return "service.unsuspended"
+}
+
+String auditTunnelAccepted() {
+    return "tunnel.accepted"
+}
+
+String auditTunnelRefused() {
+    return "tunnel.refused"
+}
+
+String auditDomainRegistered() {
+    return "domain.registered"
+}
+
+String auditDomainVerified() {
+    return "domain.verified"
+}
+
+String auditDomainRemoved() {
+    return "domain.removed"
+}

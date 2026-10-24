@@ -3,6 +3,7 @@ package kofcloud.control
 import kofcloud.control.Metrics
 import kofcloud.control.Registry
 import kofcloud.model.Account
+import kofcloud.model.Audit
 import kofcloud.model.CustomDomain
 import kofcloud.model.Device
 import kofcloud.model.Errors
@@ -192,6 +193,8 @@ HttpResult handleLogin(Registry registry, String bodyText) {
     }
     var token = registry.issueToken(account.id)
     noteLogin()
+    registry.audit(auditActorAccount(account.handle), auditLogin(), account.id)
+    registry.save()
     var out = mapOf()
     out.put("accountId", account.id)
     out.put("handle", account.handle)
@@ -245,6 +248,38 @@ HttpResult handleRevokeDevice(Registry registry, String? authHeader, String body
     }
     var out = mapOf()
     out.put("revoked", "true")
+    return HttpResult(200, json.encode(out))
+}
+
+// Suspensao operacional (abuse prevention): reversivel, sem remover nada.
+// Idempotente; inexistente/alheio = mesmo 404 opaco da revogacao.
+HttpResult handleSuspendDevice(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var body = decodeBody(bodyText)
+    var deviceId = mapField(body, "deviceId")
+    if (registry.suspendDevice(account.id, deviceId) == false) {
+        return HttpResult(404, errorJson(errDeviceNotFound()))
+    }
+    var out = mapOf()
+    out.put("suspended", "true")
+    return HttpResult(200, json.encode(out))
+}
+
+HttpResult handleUnsuspendDevice(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var body = decodeBody(bodyText)
+    var deviceId = mapField(body, "deviceId")
+    if (registry.unsuspendDevice(account.id, deviceId) == false) {
+        return HttpResult(404, errorJson(errDeviceNotFound()))
+    }
+    var out = mapOf()
+    out.put("suspended", "false")
     return HttpResult(200, json.encode(out))
 }
 
@@ -320,6 +355,57 @@ HttpResult handleRemoveService(Registry registry, String? authHeader, String bod
     var out = mapOf()
     out.put("removed", "true")
     return HttpResult(200, json.encode(out))
+}
+
+// Suspensao operacional de servico: sai da rota (opaco), sem remover.
+// Idempotente; inexistente/alheio = mesmo 404 opaco da remocao.
+HttpResult handleSuspendService(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var body = decodeBody(bodyText)
+    var serviceId = mapField(body, "serviceId")
+    if (registry.suspendService(account.id, serviceId) == false) {
+        return HttpResult(404, errorJson(errServiceNotFound()))
+    }
+    var suspended = mapOf()
+    suspended.put("suspended", "true")
+    return HttpResult(200, json.encode(suspended))
+}
+
+HttpResult handleUnsuspendService(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var body = decodeBody(bodyText)
+    var serviceId = mapField(body, "serviceId")
+    if (registry.unsuspendService(account.id, serviceId) == false) {
+        return HttpResult(404, errorJson(errServiceNotFound()))
+    }
+    var active = mapOf()
+    active.put("suspended", "false")
+    return HttpResult(200, json.encode(active))
+}
+
+// Trilha de auditoria da conta: ultimos eventos dos proprios recursos.
+// Sem auth alem da conta; sem dado de terceiros (filtro por accountId).
+HttpResult handleListAudit(Registry registry, String? authHeader) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var parts = listOf<String>()
+    for (var event in registry.auditForAccount(account.id)) {
+        var entry = mapOf()
+        entry.put("at", event.at)
+        entry.put("actor", event.actor)
+        entry.put("action", event.action)
+        entry.put("target", event.target)
+        parts.add(json.encode(entry))
+    }
+    return HttpResult(200, "[" + joinStrings(parts, ",") + "]")
 }
 
 // Emite uma credencial de acesso para um servico AUTHENTICATED. O token da
@@ -585,6 +671,20 @@ class ControlPlane {
             }
             return status(result.code, result.body)
         }
+        app.post("/v1/devices/suspend") {
+            var result = handleSuspendDevice(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/devices/unsuspend") {
+            var result = handleUnsuspendDevice(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
         app.post("/v1/services") {
             var result = handlePublishService(reg, header("x-kofcloud-token"), body())
             if (result.code == 200) {
@@ -601,6 +701,27 @@ class ControlPlane {
         }
         app.post("/v1/services/remove") {
             var result = handleRemoveService(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/services/suspend") {
+            var result = handleSuspendService(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/services/unsuspend") {
+            var result = handleUnsuspendService(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.get("/v1/audit") {
+            var result = handleListAudit(reg, header("x-kofcloud-token"))
             if (result.code == 200) {
                 return result.body
             }

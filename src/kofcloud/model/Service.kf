@@ -33,6 +33,17 @@ String statusUnknown() {
     return "UNKNOWN"
 }
 
+// Suspensao administrativa (abuse prevention): reversivel via unsuspend, ao
+// contrario de OFFLINE (sinal do Agent). Nao roteia; health reports do Agent
+// nao a sobrescrevem (senao o Agent reverteria a decisao do operador).
+String statusSuspended() {
+    return "SUSPENDED"
+}
+
+Bool statusIsSuspended(String status) {
+    return status == "SUSPENDED"
+}
+
 Bool statusIsRoutable(String status) {
     return status == "ONLINE" || status == "DEGRADED" || status == "UNKNOWN"
 }

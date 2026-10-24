@@ -78,6 +78,29 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         noteHttpFinished("denied", "KCF102", raw.length, offline.length, time.now() - started)
         return
     }
+    // Enforcement imediato: device suspenso/revogado depois do handshake nao
+    // roteia mais — derruba a sessao aqui (o PING faria o mesmo em ate um
+    // heartbeat). Resposta opaca: para o cliente, o device esta offline.
+    var owner = state.registry.deviceById(service.deviceId)
+    if (owner == null) {
+        state.unbind(service.deviceId, session.sessionId)
+        session.close()
+        var gone = errorResponse(503, errDeviceOffline())
+        conn.send(gone)
+        conn.close()
+        noteHttpFinished("denied", "KCF102", raw.length, gone.length, time.now() - started)
+        return
+    }
+    var ownerStatus = owner.status
+    if (ownerStatus != "ACTIVE") {
+        state.unbind(service.deviceId, session.sessionId)
+        session.close()
+        var gone = errorResponse(503, errDeviceOffline())
+        conn.send(gone)
+        conn.close()
+        noteHttpFinished("denied", "KCF102", raw.length, gone.length, time.now() - started)
+        return
+    }
     if (statusIsRoutable(service.status) == false) {
         var down = errorResponse(503, errServiceDown(service.name, service.status))
         conn.send(down)

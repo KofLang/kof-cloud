@@ -35,6 +35,14 @@ String metricServicesRemoved() {
     return "kofcloud_control_services_removed_total"
 }
 
+String metricServicesSuspended() {
+    return "kofcloud_control_services_suspended_total"
+}
+
+String metricDevicesSuspended() {
+    return "kofcloud_control_devices_suspended_total"
+}
+
 String metricServiceTokensIssued() {
     return "kofcloud_control_service_tokens_issued_total"
 }
@@ -67,12 +75,28 @@ void noteDeviceRevoked() {
     observability.counter(metricDevicesRevoked())
 }
 
+void noteDeviceSuspended() {
+    observability.counter(metricDevicesSuspended())
+}
+
+void noteDeviceUnsuspended() {
+    observability.counter(metricDevicesSuspended())
+}
+
 void noteServicePublished() {
     observability.counter(metricServicesPublished())
 }
 
 void noteServiceRemoved() {
     observability.counter(metricServicesRemoved())
+}
+
+void noteServiceSuspended() {
+    observability.counter(metricServicesSuspended())
+}
+
+void noteServiceUnsuspended() {
+    observability.counter(metricServicesSuspended())
 }
 
 void noteServiceTokenIssued() {

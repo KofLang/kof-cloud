@@ -79,9 +79,10 @@ void runAgent(AgentConfig config, Bool once) {
     }
 }
 
-// Recusa definitiva: nao adianta reconectar.
+// Recusa definitiva: nao adianta reconectar. DEVICE_SUSPENDED e fatal do
+// mesmo jeito (o Agent nao reconecta sozinho; o operador libera e reconecta).
 Bool isFatal(String reason) {
-    return reason == "DEVICE_REVOKED" || reason == "AUTH_FAILED" || reason == "DEVICE_UNKNOWN" || reason == "VERSION_UNSUPPORTED"
+    return reason == "DEVICE_REVOKED" || reason == "DEVICE_SUSPENDED" || reason == "AUTH_FAILED" || reason == "DEVICE_UNKNOWN" || reason == "VERSION_UNSUPPORTED"
 }
 
 void connectAndServe(AgentConfig config) {

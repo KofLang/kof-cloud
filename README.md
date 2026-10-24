@@ -84,15 +84,20 @@ disconnect
 status
 device list
 device revoke <deviceId>
+device suspend <deviceId>      (túnel recusado, nada removido)
+device unsuspend <deviceId>
 publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]
 unpublish <nome>
 service list
 service status <nome>
+service suspend <nome>       (fora da rota, nada removido)
+service unsuspend <nome>
 service token <nome>        (credencial kfs_ para servico AUTHENTICATED)
 domain list
 domain add <hostname> --service <nome>   (dominio proprio, devolve a instrucao CNAME)
 domain verify <hostname>                 (confere o DNS e ativa a rota)
 domain remove <hostname>
+audit                        (trilha de auditoria da conta)
 logs
 serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>]
 ```
@@ -128,7 +133,9 @@ Ver `docs/15-tests.md` para a matriz.
   hostname, corpo, credencial ou chave.
 * Abuse prevention: rate limit por hostname no Edge (100 req/60 s,
   configurável) — excedeu, `429 KCF107` + `Retry-After` antes de rotear,
-  sem revelar se o host existe e sem consumir o túnel.
+  sem revelar se o host existe e sem consumir o túnel; suspensão reversível
+  de serviço/dispositivo (`SUSPENDED`, opaco) + trilha de auditoria
+  (`kof cloud audit`, anel de 100 eventos só com metadados).
 
 ## Estrutura
 

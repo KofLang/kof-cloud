@@ -22,10 +22,15 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/devices` | conta | registra dispositivo `{name,publicKey}` → `{deviceId}` |
 | `GET` | `/v1/devices` | conta | lista dispositivos |
 | `POST` | `/v1/devices/revoke` | conta | `{deviceId}` → `{revoked:true}` |
+| `POST` | `/v1/devices/suspend` | conta | `{deviceId}` → `{suspended:true}` (túnel recusado, nada removido) |
+| `POST` | `/v1/devices/unsuspend` | conta | `{deviceId}` → `{suspended:false}` |
 | `POST` | `/v1/services` | conta | publica `{deviceId,name,localAddress,localPort,protocol,exposure}` → `{service}` |
 | `GET` | `/v1/services` | conta | lista serviços |
 | `POST` | `/v1/services/token` | conta | emite credencial `kfs_` do serviço `{serviceId}` → `{token,serviceId}` |
 | `POST` | `/v1/services/remove` | conta | `{serviceId}` |
+| `POST` | `/v1/services/suspend` | conta | `{serviceId}` → `{suspended:true}` (sai da rota, nada removido) |
+| `POST` | `/v1/services/unsuspend` | conta | `{serviceId}` → `{suspended:false}` |
+| `GET` | `/v1/audit` | conta | últimos eventos da conta (anel de 100, só metadados) |
 | `POST` | `/v1/services/status` | dispositivo | `{serviceId,status}` (health reportado pelo Agent) |
 | `POST` | `/v1/heartbeat` | dispositivo | `{deviceId}` → `{ok:true, serverTime}` |
 | `POST` | `/v1/connect` | dispositivo | `{deviceId}` → `{edgeHost,edgePort,tunnelToken}` |

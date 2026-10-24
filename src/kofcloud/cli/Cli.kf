@@ -55,6 +55,9 @@ Int runCli(List<String> args) {
     if (first == "logs") {
         return cmdLogs(rest)
     }
+    if (first == "audit") {
+        return cmdAudit(rest)
+    }
     if (first == "serve") {
         return cmdServe(rest)
     }
@@ -66,7 +69,7 @@ Int runCli(List<String> args) {
 
 Int runDevice(List<String> args) {
     if (args.size == 0) {
-        println("uso: kof cloud device list|revoke <id>")
+        println("uso: kof cloud device list|revoke|suspend|unsuspend <id>")
         return 1
     }
     var sub = args.get(0)
@@ -77,13 +80,19 @@ Int runDevice(List<String> args) {
     if (sub == "revoke") {
         return cmdDeviceRevoke(rest)
     }
+    if (sub == "suspend") {
+        return cmdDeviceSuspend(rest)
+    }
+    if (sub == "unsuspend") {
+        return cmdDeviceUnsuspend(rest)
+    }
     println("subcomando desconhecido: device " + sub)
     return 1
 }
 
 Int runService(List<String> args) {
     if (args.size == 0) {
-        println("uso: kof cloud service list|status <nome>|token <nome>")
+        println("uso: kof cloud service list|status|suspend|unsuspend|token <nome>")
         return 1
     }
     var sub = args.get(0)
@@ -93,6 +102,12 @@ Int runService(List<String> args) {
     }
     if (sub == "status") {
         return cmdServiceStatus(rest)
+    }
+    if (sub == "suspend") {
+        return cmdServiceSuspend(rest)
+    }
+    if (sub == "unsuspend") {
+        return cmdServiceUnsuspend(rest)
     }
     if (sub == "token") {
         return cmdServiceToken(rest)
