@@ -2,6 +2,7 @@ package kofcloud.edge
 
 import kofcloud.control.Registry
 import kofcloud.control.ControlPlane
+import kofcloud.edge.Metrics
 import kofcloud.identity.Keys
 import kofcloud.protocol.Bytes
 import kofcloud.protocol.Frame
@@ -107,6 +108,7 @@ void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
 
     conn.send(bytesFromString(encodeFrame(welcomeFrame(true, "", sessionId, serverPub, 15000))))
     session.send(servicesFrame(serviceListJson(state.registry.servicesForDevice(deviceId))))
+    noteTunnelAccepted(state.onlineCount())
 
     var writer = spawn { tunnelWriter(conn, session) }
 
@@ -130,6 +132,7 @@ void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
     state.unbind(deviceId, sessionId)
     session.close()
     conn.close()
+    noteTunnelClosed(state.onlineCount())
     await writer
 }
 
@@ -179,4 +182,5 @@ void tunnelWriter(Conn conn, TunnelSession session) {
 void refuseTunnel(Conn conn, String reason) {
     conn.send(bytesFromString(encodeFrame(welcomeFrame(false, reason, "", "", 0))))
     conn.close()
+    noteTunnelRefused(reason)
 }

@@ -1,0 +1,110 @@
+package kofcloud.edge
+
+// Metricas operacionais do Edge (observabilidade minima, Fase 8 parcial).
+//
+// O que conta: eventos de ciclo de vida do tunel e das requisicoes publicas —
+// conexoes, recusas por motivo, bytes repassados, streams. O que NUNCA conta:
+// conteudo de requisicao/resposta, credenciais, chaves, hostnames, caminhos,
+// corpos. So metadados operacionais agregados, sem cardinalidade por cliente.
+//
+// Implementacao: `observability.*` do stdlib Kof (counters/gauges/histogramas
+// com export Prometheus via `observability.metrics()`). Contadores sao
+// monotonicos; gauges refletem o instante (sessoes e streams abertos).
+// Histogramas guardam latencia fim-a-fim da requisicao publica em ms
+// (sum + count, sem buckets por cliente).
+
+String metricTunnelAccepted() {
+    return "kofcloud_edge_tunnel_accepted_total"
+}
+
+String metricTunnelRefused() {
+    return "kofcloud_edge_tunnel_refused_total"
+}
+
+String metricSessionsOpen() {
+    return "kofcloud_edge_tunnel_sessions_open"
+}
+
+String metricHttpRequests() {
+    return "kofcloud_edge_http_requests_total"
+}
+
+String metricHttpDenied() {
+    return "kofcloud_edge_http_denied_total"
+}
+
+String metricHttpUpstreamErrors() {
+    return "kofcloud_edge_http_upstream_errors_total"
+}
+
+String metricRequestBytes() {
+    return "kofcloud_edge_http_request_bytes_total"
+}
+
+String metricResponseBytes() {
+    return "kofcloud_edge_http_response_bytes_total"
+}
+
+String metricStreamsOpen() {
+    return "kofcloud_edge_tunnel_streams_open"
+}
+
+String metricRequestLatencyMs() {
+    return "kofcloud_edge_http_request_latency_ms"
+}
+
+// Recusas de tunel por motivo (motivos sao do protocolo, nunca de cliente).
+void noteTunnelRefused(String reason) {
+    observability.counter(metricTunnelRefused())
+    if (reason == "VERSION_UNSUPPORTED") {
+        observability.counter(metricTunnelRefused() + "_version")
+    } else if (reason == "DEVICE_UNKNOWN") {
+        observability.counter(metricTunnelRefused() + "_unknown_device")
+    } else if (reason == "DEVICE_REVOKED") {
+        observability.counter(metricTunnelRefused() + "_revoked_device")
+    } else {
+        observability.counter(metricTunnelRefused() + "_auth")
+    }
+}
+
+void noteTunnelAccepted(Int openSessions) {
+    observability.counter(metricTunnelAccepted())
+    observability.gauge(metricSessionsOpen(), openSessions)
+}
+
+void noteTunnelClosed(Int openSessions) {
+    observability.gauge(metricSessionsOpen(), openSessions)
+}
+
+// Uma requisicao publica terminou: conta por desfecho, soma bytes e latencia.
+// `outcome`: "ok" | "denied" | "upstream_error". `deniedDetail` e o motivo da
+// plataforma (KCF100/KCF101/...), nunca dado do cliente.
+void noteHttpFinished(String outcome, String deniedDetail, Int requestBytes, Int responseBytes, Long elapsedMs) {
+    observability.counter(metricHttpRequests())
+    if (outcome == "denied") {
+        observability.counter(metricHttpDenied())
+        if (deniedDetail == "KCF100") {
+            observability.counter(metricHttpDenied() + "_no_route")
+        } else if (deniedDetail == "KCF101") {
+            observability.counter(metricHttpDenied() + "_auth_required")
+        } else if (deniedDetail == "KCF102") {
+            observability.counter(metricHttpDenied() + "_device_offline")
+        } else if (deniedDetail == "KCF103") {
+            observability.counter(metricHttpDenied() + "_service_down")
+        } else {
+            observability.counter(metricHttpDenied() + "_other")
+        }
+    } else if (outcome == "upstream_error") {
+        observability.counter(metricHttpUpstreamErrors())
+    }
+    observability.increment(metricRequestBytes(), requestBytes)
+    observability.increment(metricResponseBytes(), responseBytes)
+    observability.histogram(metricRequestLatencyMs(), elapsedMs as Int)
+    observability.gauge(metricStreamsOpen(), 0)
+}
+
+// Streams abertos no relay: gauge pontual por requisicao (abre/fecha no mesmo
+// fluxo; o valor global exato vive na sessao).
+void noteStreamOpened() {
+    observability.counter("kofcloud_edge_tunnel_streams_total")
+}

@@ -37,6 +37,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | credencial de serviço | `kfs_` emitido no control plane, validado no Edge | `service_token_test.kf`, `e2e_authenticated_test.kf` |
 | erros estáveis (R6) | `model/Errors.kf`: `KCFnnn` no control plane e no Edge + `Hint:` na CLI | `errors_test.kf` |
 | domínio próprio (slice 1) | `model/CustomDomain.kf` + registro/verificação/roda no registry, `POST /v1/domains[/verify][/remove]`, CLI `domain add/verify/remove` | `domains_test.kf` |
+| métricas do Edge (slice 1) | `edge/Metrics.kf`: túneis/recusas, sessões, ok/negadas por motivo, bytes, latência via `observability.*` | `metrics_test.kf` |
 
 ## Comportamentos provados
 
@@ -67,6 +68,12 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   ativa só após VERIFIED; conta alheia recebe o mesmo `404` opaco; poda junto
   com serviço/dispositivo; persistido no estado (`domains_test.kf`, 7 testes).
   Sem TLS/SNI neste slice (terminador externo — ver `12-tls.md`).
+* **Observabilidade mínima (slice 1)**: `edge/Metrics.kf` conta túneis
+  aceitos/recusados por motivo, sessões abertas, requisições ok/negadas por
+  motivo, erros de upstream, bytes e latência — via `observability.*`
+  (export Prometheus). Nenhum hostname, corpo, credencial ou chave chega às
+  métricas (`metrics_test.kf`, 4 testes, inclui asserção de privacidade).
+  Falta fatiado: `/metrics` no serve, contadores no control plane/Agent.
 * **Erros estáveis (R6, padrão kof-share)**: todo erro viaja como `KCFnnn`
   (`KCF001` handle inválido … `KCF106` streams esgotados); recurso de outra
   conta responde o mesmo `404` opaco de inexistente; `POST /v1/services/status`

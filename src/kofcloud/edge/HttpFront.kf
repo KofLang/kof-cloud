@@ -1,6 +1,7 @@
 package kofcloud.edge
 
 import kofcloud.edge.Http
+import kofcloud.edge.Metrics
 import kofcloud.edge.Relay
 import kofcloud.model.Errors
 import kofcloud.model.Service
@@ -31,6 +32,7 @@ void serveHttp(EdgeState state, Int port, Int maxBytes, String stopFile) {
 }
 
 void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
+    var started = time.now()
     var raw = readRequestBytes(conn, maxBytes)
     if (raw.length == 0) {
         conn.close()
@@ -42,8 +44,10 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     if (service == null) {
         // Opaco: host desconhecido e servico nao roteavel (PRIVATE) respondem
         // o mesmo 404 sem revelar qual dos dois aconteceu.
-        conn.send(errorResponse(404, errNoRoute()))
+        var notFound = errorResponse(404, errNoRoute())
+        conn.send(notFound)
         conn.close()
+        noteHttpFinished("denied", "KCF100", raw.length, notFound.length, time.now() - started)
         return
     }
     if (service.exposure == "AUTHENTICATED") {
@@ -52,41 +56,55 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
             var deny = unauthorizedResponse(errAuthRequired())
             conn.send(deny)
             conn.close()
+            noteHttpFinished("denied", "KCF101", raw.length, deny.length, time.now() - started)
             return
         }
     }
     var session = state.sessionFor(service.deviceId)
     if (session == null) {
-        conn.send(errorResponse(503, errDeviceOffline()))
+        var offline = errorResponse(503, errDeviceOffline())
+        conn.send(offline)
         conn.close()
+        noteHttpFinished("denied", "KCF102", raw.length, offline.length, time.now() - started)
         return
     }
     if (statusIsRoutable(service.status) == false) {
-        conn.send(errorResponse(503, errServiceDown(service.name, service.status)))
+        var down = errorResponse(503, errServiceDown(service.name, service.status))
+        conn.send(down)
         conn.close()
+        noteHttpFinished("denied", "KCF103", raw.length, down.length, time.now() - started)
         return
     }
     var dropCredential = service.exposure == "AUTHENTICATED"
     var forwarded = serializeRequest(request, "edge", dropCredential)
     var responseBytes = bytesEmpty()
     try {
+        noteStreamOpened()
         responseBytes = relayThroughTunnel(session, service.name, forwarded, maxBytes)
     } catch (String e) {
         if (e == "LIMIT_EXCEEDED") {
-            conn.send(errorResponse(429, errTooManyStreams()))
+            var limited = errorResponse(429, errTooManyStreams())
+            conn.send(limited)
+            conn.close()
+            noteHttpFinished("denied", "KCF106", raw.length, limited.length, time.now() - started)
         } else {
-            conn.send(errorResponse(502, errTunnel(e)))
+            var failed = errorResponse(502, errTunnel(e))
+            conn.send(failed)
+            conn.close()
+            noteHttpFinished("upstream_error", "", raw.length, failed.length, time.now() - started)
         }
-        conn.close()
         return
     }
     if (responseBytes.length == 0) {
-        conn.send(errorResponse(502, errEmptyUpstream()))
+        var empty = errorResponse(502, errEmptyUpstream())
+        conn.send(empty)
         conn.close()
+        noteHttpFinished("upstream_error", "", raw.length, empty.length, time.now() - started)
         return
     }
     conn.send(responseBytes)
     conn.close()
+    noteHttpFinished("ok", "", raw.length, responseBytes.length, time.now() - started)
 }
 
 String bearerFrom(String authorization) {

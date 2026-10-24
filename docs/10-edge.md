@@ -92,3 +92,26 @@ O corpo das respostas de erro do Edge também viaja como `KCFnnn`:
 | `502` | `KCF104` tunnel error | falha no relay pelo túnel |
 | `502` | `KCF105` empty response | serviço local devolveu resposta vazia |
 | `429` | `KCF106` too many concurrent streams | limite `kofcloud.limits.streams` por túnel |
+
+## Observabilidade mínima
+
+O Edge conta eventos via `observability.*` do stdlib (`edge/Metrics.kf`) —
+export Prometheus em `observability.metrics()` (o serve ainda não expõe
+`/metrics`; é o próximo passo fatiado).
+
+| Métrica | Tipo | O que conta |
+|---|---|---|
+| `kofcloud_edge_tunnel_accepted_total` | counter | túneis aceitos (handshake ok) |
+| `kofcloud_edge_tunnel_refused_total{,_motivo}` | counter | recusas (`_version`, `_unknown_device`, `_revoked_device`, `_auth`) |
+| `kofcloud_edge_tunnel_sessions_open` | gauge | sessões de túnel vivas |
+| `kofcloud_edge_http_requests_total` | counter | requisições públicas terminadas |
+| `kofcloud_edge_http_denied_total{,_motivo}` | counter | negadas (`_no_route`, `_auth_required`, `_device_offline`, `_service_down`, `_other`) |
+| `kofcloud_edge_http_upstream_errors_total` | counter | falhas de relay (502) |
+| `kofcloud_edge_http_request_bytes_total` | counter | bytes de pedido somados |
+| `kofcloud_edge_http_response_bytes_total` | counter | bytes de resposta somados |
+| `kofcloud_edge_tunnel_streams_total` | counter | streams abertos no relay |
+| `kofcloud_edge_http_request_latency_ms_{count,sum}` | histogram | latência fim-a-fim por requisição (ms) |
+
+Regra de privacidade: só metadados operacionais agregados, sem cardinalidade
+por cliente — nenhum hostname, caminho, header, corpo, credencial ou chave
+chega às métricas (provado em `tests/metrics_test.kf`).

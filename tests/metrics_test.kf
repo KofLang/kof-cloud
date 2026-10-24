@@ -1,0 +1,147 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Metrics
+import kofcloud.edge.Tunnel
+import kofcloud.store.Store
+import testkit.Support
+
+// Observabilidade minima do Edge (Fase 8 parcial): contadores, gauges e
+// latencia via `observability.*`, sem cardinalidade por cliente — so
+// metadados operacionais agregados. Nada de conteudo, credencial, chave,
+// hostname ou corpo passa para as metricas.
+
+Int metricValue(String exposition, String name) {
+    for (var line in exposition.split("\n")) {
+        var trimmed = line.trim()
+        if (trimmed.startsWith(name + " ")) {
+            return parseIntSafe(trimmed.substring(name.length + 1).trim(), -1)
+        }
+    }
+    return -1
+}
+
+Bool metricHas(String exposition, String name) {
+    return metricValue(exposition, name) >= 0
+}
+
+test "metricas: nomes e saidas no formato Prometheus", "metrics" {
+    noteTunnelAccepted(1)
+    noteHttpFinished("ok", "", 120, 450, 9)
+    noteHttpFinished("denied", "KCF100", 100, 60, 2)
+    var exposition = observability.metrics()
+    assert(metricHas(exposition, "kofcloud_edge_tunnel_accepted_total"), "tuneis aceitos")
+    assert(metricHas(exposition, "kofcloud_edge_http_requests_total"), "requisicoes")
+    assert(metricHas(exposition, "kofcloud_edge_http_denied_total"), "negadas")
+    assert(metricHas(exposition, "kofcloud_edge_http_denied_total_no_route"), "negada por motivo")
+    assert(metricHas(exposition, "kofcloud_edge_http_request_bytes_total"), "bytes de pedido")
+    assert(metricHas(exposition, "kofcloud_edge_http_response_bytes_total"), "bytes de resposta")
+    assert(metricValue(exposition, "kofcloud_edge_tunnel_sessions_open") == 1, "gauge de sessoes")
+}
+
+test "metricas: recusas de tunel contam por motivo", "metrics-tunnel" {
+    // Contadores zerados podem nao aparecer no export: -1 = "ainda zero".
+    var rawBefore = metricValue(observability.metrics(), "kofcloud_edge_tunnel_refused_total")
+    var before = rawBefore
+    if (before < 0) {
+        before = 0
+    }
+    noteTunnelRefused("DEVICE_REVOKED")
+    var exposition = observability.metrics()
+    var after = metricValue(exposition, "kofcloud_edge_tunnel_refused_total")
+    assert(after == before + 1, "recusa contada")
+    assert(metricHas(exposition, "kofcloud_edge_tunnel_refused_total_revoked_device"), "motivo contado")
+    noteTunnelClosed(0)
+    assert(metricValue(observability.metrics(), "kofcloud_edge_tunnel_sessions_open") == 0, "gauge zera ao fechar")
+}
+
+test "metricas: Edge real conta ok/negada e bytes fim a fim", "metrics-e2e" {
+    var localSvc = 19541
+    var controlPort = 19542
+    var tunnelPort = 19543
+    var httpPort = 19544
+
+    var app = web.app()
+    app.get("/") { return "svc-metrics" }
+    var server = spawn { app.listen(localSvc) }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-met-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-met-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-met-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+
+    var requestsBefore = metricValue(observability.metrics(), "kofcloud_edge_http_requests_total")
+    var deniedBefore = metricValue(observability.metrics(), "kofcloud_edge_http_denied_total")
+
+    // sem tunel: negada conta como denied/device_offline
+    var offline = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
+    assert(statusOf(offline) == 503, "offline -> 503")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+
+    var ok = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
+    assert(statusOf(ok) == 200, "roteia com tunel")
+    assert(bodyOf(ok) == "svc-metrics", "corpo do servico")
+
+    var unknown = httpGetRaw(httpPort, "/", "naoexiste.mel.kofcloud.io")
+    assert(statusOf(unknown) == 404, "desconhecido -> 404")
+
+    var exposition = observability.metrics()
+    assert(metricValue(exposition, "kofcloud_edge_http_requests_total") == requestsBefore + 3, "tres requisicoes contadas")
+    assert(metricValue(exposition, "kofcloud_edge_http_denied_total") == deniedBefore + 2, "duas negadas contadas")
+    assert(metricHas(exposition, "kofcloud_edge_http_denied_total_device_offline"), "offline por motivo")
+    assert(metricHas(exposition, "kofcloud_edge_http_denied_total_no_route"), "sem rota por motivo")
+    assert(metricHas(exposition, "kofcloud_edge_http_request_latency_ms_count"), "latencia amostrada")
+    assert(metricValue(exposition, "kofcloud_edge_http_request_bytes_total") >= 0, "bytes somados")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_tunnel_accepted_total") >= 1, "tunel contado")
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}
+
+test "metricas: exposicao nunca carrega dado de cliente", "metrics-privacy" {
+    noteHttpFinished("denied", "KCF101", 80, 50, 1)
+    var exposition = observability.metrics()
+    assert(exposition.indexOf("kfc_") < 0, "sem token de conta")
+    assert(exposition.indexOf("kfs_") < 0, "sem token de servico")
+    assert(exposition.indexOf("kofcloud.io") < 0, "sem hostname")
+    assert(exposition.indexOf("Authorization") < 0, "sem header")
+    assert(metricHas(exposition, "kofcloud_edge_http_denied_total_auth_required"), "motivo agregado sim")
+}

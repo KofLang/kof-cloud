@@ -120,6 +120,9 @@ Ver `docs/15-tests.md` para a matriz.
 * Erros estáveis `KCFnnn` (padrão kof-share R6): a CLI imprime `Hint:` humana
   sem vazar segredos; recurso de outra conta responde o mesmo `404` opaco de
   inexistente; só a conta dona altera o status do serviço.
+* Observabilidade mínima: o Edge conta túneis/recusas, requisições
+  ok/negadas, bytes e latência (`observability.*`, export Prometheus);
+  nenhuma métrica carrega hostname, corpo, credencial ou chave.
 
 ## Estrutura
 

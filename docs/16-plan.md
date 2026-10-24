@@ -99,7 +99,20 @@ terminador externo.
 ## Fase 7 — deploy
 
 `kof cloud deploy` sobre as mesmas primitivas (identity + device + tunnel +
-service). Não cria infraestrutura paralela.
+service). Não cria infraestrutura paralela. Bloqueado até a Fase 6 estar
+estável (está: slice 1 verde) — mas observabilidade primeiro (ordem abaixo).
+
+## Observabilidade mínima (parcial, antes do deploy)
+
+**Estado (slice 1): ✅ implementado.** `edge/Metrics.kf` conta via
+`observability.*`: túneis aceitos/recusados por motivo, sessões abertas
+(gauge), requisições ok/negadas por motivo, erros de upstream, bytes
+somados, streams e latência (histograma). Sem cardinalidade por cliente:
+nenhum hostname, corpo, credencial ou chave chega às métricas. Prova:
+`tests/metrics_test.kf` (4 testes). Falta fatiado: expor `/metrics` no
+serve e contadores no control plane / Agent.
+
+## Fase 8 — produto multiplataforma
 
 ## Fase 8 — produto multiplataforma
 
