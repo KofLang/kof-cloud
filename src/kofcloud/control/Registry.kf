@@ -404,9 +404,11 @@ class Registry {
         }
         var now = time.now()
         var kept = listOf<ServiceToken>()
+        var expired = 0
         var matchedServiceId = ""
         for (var entry in this.serviceTokens) {
             if (serviceTokenExpired(entry, now)) {
+                expired = expired + 1
                 continue
             }
             kept.add(entry)
@@ -418,6 +420,11 @@ class Registry {
             this.serviceTokens = kept
             this.save()
         }
+        var i = 0
+        while (i < expired) {
+            noteServiceTokenExpired()
+            i = i + 1
+        }
         if (matchedServiceId.length == 0) {
             return null
         }
@@ -428,6 +435,8 @@ class Registry {
     // Devolve os registros (hash + emissao), nunca o valor: o kfs_ em claro
     // so existe no instante da emissao. Filtra por conta dona aqui (e nao
     // no chamador): inexistente e alheio dao lista vazia, sem oraculo.
+    // Expirados nao aparecem (mesma regra da validacao — coerencia: o que
+    // nao autoriza nao e listado).
     List<ServiceToken> serviceTokensFor(String accountId, String serviceId) {
         var service = this.serviceById(serviceId)
         if (service == null) {
@@ -436,9 +445,10 @@ class Registry {
         if (service.accountId != accountId) {
             return listOf<ServiceToken>()
         }
+        var now = time.now()
         var out = listOf<ServiceToken>()
         for (var entry in this.serviceTokens) {
-            if (entry.serviceId == serviceId) {
+            if (entry.serviceId == serviceId && serviceTokenExpired(entry, now) == false) {
                 out.add(entry)
             }
         }

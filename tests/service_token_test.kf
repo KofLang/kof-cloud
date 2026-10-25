@@ -174,10 +174,24 @@ test "token de servico: expiracao opcional poda na validacao", "token-ttl" {
     // Expirada: constroi o registro direto no passado (sem dormir 1h).
     var stale = ServiceToken(service.id, mel.id, tokenHash("kfs_vencido"), time.now() - 1000, time.now() - 1)
     registry.serviceTokens.add(stale)
+    var expiredBefore = metricCount("kofcloud_control_service_tokens_expired_total")
     assert(registry.serviceByServiceToken("kfs_vencido") == null, "expirado nao resolve")
+    assert(metricCount("kofcloud_control_service_tokens_expired_total") == expiredBefore + 1, "expiracao conta na metrica")
     // A poda preguicosa removeu: nem no inventario aparece mais.
     assert(registry.serviceTokensFor(mel.id, service.id).size == 2, "expirado some do inventario")
     // As validas sobrevivem a poda.
     assert(registry.serviceByServiceToken(forever) != null, "sem TTL intacto apos poda")
     assert(registry.serviceByServiceToken(timed) != null, "com TTL intacto apos poda")
+}
+
+// Contador Prometheus atual (0 quando ausente): cada suite roda no mesmo
+// processo, entao a assercao e sempre relativa (antes/depois).
+Int metricCount(String name) {
+    for (var line in observability.metrics().split("\n")) {
+        var trimmed = line.trim()
+        if (trimmed.startsWith(name + " ")) {
+            return parseIntSafe(trimmed.substring(name.length + 1).trim(), 0)
+        }
+    }
+    return 0
 }

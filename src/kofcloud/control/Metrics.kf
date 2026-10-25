@@ -51,6 +51,10 @@ String metricServiceTokensRevoked() {
     return "kofcloud_control_service_tokens_revoked_total"
 }
 
+String metricServiceTokensExpired() {
+    return "kofcloud_control_service_tokens_expired_total"
+}
+
 String metricDomainsRegistered() {
     return "kofcloud_control_domains_registered_total"
 }
@@ -109,6 +113,10 @@ void noteServiceTokenIssued() {
 
 void noteServiceTokenRevoked() {
     observability.counter(metricServiceTokensRevoked())
+}
+
+void noteServiceTokenExpired() {
+    observability.counter(metricServiceTokensExpired())
 }
 
 void noteDomainRegistered() {
