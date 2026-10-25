@@ -113,6 +113,15 @@ test "e2e: servico AUTHENTICATED exige credencial de servico", "auth" {
     assert(statusOf(httpPostJson(controlPort, "/v1/services/token/revoke", anaAttempt, anaToken)) == 404, "alheio -> 404 opaco")
     assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", serviceToken2)) == 200, "token intacto apos tentativa alheia")
 
+    // inventario: o dono ve as credenciais SEM os valores; alheio recebe 404.
+    var listBody = "{\"serviceId\":\"" + secretId + "\"}"
+    var listed = httpPostJson(controlPort, "/v1/services/tokens", listBody, accountToken)
+    assert(statusOf(listed) == 200, "inventario ok para o dono")
+    assert(bodyOf(listed).indexOf(serviceToken2) < 0, "valor kfs_ nunca viaja no inventario")
+    assert(bodyOf(listed).indexOf(secretId) >= 0, "inventario traz o servico certo")
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/tokens", listBody, anaToken)) == 404, "alheio nao inventaria")
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/tokens", "{\"serviceId\":\"inexistente\"}", accountToken)) == 404, "inexistente -> 404")
+
     // Nota: nao testamos "PUBLIC com Authorization" porque um servico local
     // Kof (web.app) recusa QUALQUER Authorization antes do handler (L8). Em
     // PUBLIC o Edge repassa o header como proxy transparente; em AUTHENTICATED

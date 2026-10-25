@@ -102,6 +102,7 @@ service status <nome>
 service suspend <nome>       (fora da rota, nada removido)
 service unsuspend <nome>
 service token <nome>        (credencial kfs_ para servico AUTHENTICATED)
+service token-list <nome>   (inventario, sem valores)
 service token-revoke <nome> <kfs_>  (revoga UMA credencial vazada)
 domain list
 domain add <hostname> --service <nome>   (dominio proprio, devolve a instrucao CNAME)

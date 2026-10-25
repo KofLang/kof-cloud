@@ -27,6 +27,7 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/services` | conta | publica `{deviceId,name,localAddress,localPort,protocol,exposure}` → `{service}` |
 | `GET` | `/v1/services` | conta | lista serviços |
 | `POST` | `/v1/services/token` | conta | emite credencial `kfs_` do serviço `{serviceId}` → `{token,serviceId}` |
+| `POST` | `/v1/services/tokens` | conta | inventário do serviço `{serviceId}` → `[{serviceId,id,createdAt}]` (id = 8 hex do hash; nunca o valor `kfs_`; 404 opaco se alheio/inexistente) |
 | `POST` | `/v1/services/token/revoke` | conta | revoga UMA credencial `{serviceId,token}` → `{revoked:true}` (404 opaco se alheio/inexistente) |
 | `POST` | `/v1/services/remove` | conta | `{serviceId}` |
 | `POST` | `/v1/services/suspend` | conta | `{serviceId}` → `{suspended:true}` (sai da rota, nada removido) |
@@ -73,6 +74,17 @@ X-KofCloud-Token: kfc_...
 {"serviceId":"..."}
 
 200 {"token":"kfs_...","serviceId":"..."}
+
+Inventario (saber o que revogar sem expor valores — o `kfs_` em claro so
+existe no instante da emissao):
+
+```
+POST /v1/services/tokens
+X-KofCloud-Token: kfc_...
+{"serviceId":"..."}
+
+200 [{"serviceId":"...","id":"a1b2c3d4","createdAt":"..."}]
+```
 
 Revogar UMA credencial (`kfs_` vazou): o corpo leva o `serviceId` (dono) +
 o proprio token a revogar. Inexistente, de outro servico ou de outra conta:

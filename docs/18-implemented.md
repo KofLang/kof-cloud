@@ -34,7 +34,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | `cli/` | dispatcher + comandos (`login`, `connect`, `publish`, …) | aceitação manual |
 | limites | `util/Limits.kf` + enforcement no registry/sessão | `limits_test.kf` |
 | múltiplos serviços | roteamento por `Host` no mesmo túnel | `e2e_multiservice_test.kf` |
-| credencial de serviço | `kfs_` emitido no control plane, validado no Edge; revogacao por token (`token-revoke`) | `service_token_test.kf`, `e2e_authenticated_test.kf` |
+| credencial de serviço | `kfs_` emitido no control plane, validado no Edge; revogacao por token (`token-revoke`) + inventario sem valores (`token-list`) | `service_token_test.kf`, `e2e_authenticated_test.kf` |
 | erros estáveis (R6) | `model/Errors.kf`: `KCFnnn` no control plane e no Edge + `Hint:` na CLI | `errors_test.kf` |
 | domínio próprio (slice 1) | `model/CustomDomain.kf` + registro/verificação/roda no registry, `POST /v1/domains[/verify][/remove]`, CLI `domain add/verify/remove` | `domains_test.kf` |
 | métricas do Edge (slice 1) | `edge/Metrics.kf`: túneis/recusas, sessões, ok/negadas por motivo, bytes, latência via `observability.*` | `metrics_test.kf` |

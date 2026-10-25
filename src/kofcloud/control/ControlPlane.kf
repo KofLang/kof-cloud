@@ -126,6 +126,35 @@ String domainListJson(List<CustomDomain> domains, Registry registry) {
     return "[" + joinStrings(parts, ",") + "]"
 }
 
+// Uma entrada do inventario de credenciais: digito curto do hash (para o
+// operador distinguir "qual revogar") + emissao. NUNCA o valor kfs_: ele so
+// existe no instante da emissao e nao e recuperavel depois.
+String serviceTokenJson(ServiceToken entry) {
+    var out = mapOf()
+    out.put("serviceId", entry.serviceId)
+    out.put("id", shortTokenId(entry.tokenHash))
+    out.put("createdAt", longToString(entry.createdAt))
+    return json.encode(out)
+}
+
+// Digito curto e nao sensivel: 8 primeiros hex do hash (o hash nao e
+// reversivel ao kfs_). Suficiente para distinguir credenciais no `list`
+// sem vazar nada que autorize acesso.
+String shortTokenId(String tokenHash) {
+    if (tokenHash.length <= 8) {
+        return tokenHash
+    }
+    return tokenHash.substring(0, 8)
+}
+
+String serviceTokenListJson(List<ServiceToken> entries) {
+    var parts = listOf<String>()
+    for (var entry in entries) {
+        parts.add(serviceTokenJson(entry))
+    }
+    return "[" + joinStrings(parts, ",") + "]"
+}
+
 // Instrucao de DNS devolvida no registro: CNAME do hostname externo para o
 // hostname do servico na conta (o caminho feliz do wildcard continua
 // automatico; isto e so para dominio proprio).
@@ -449,6 +478,30 @@ HttpResult handleIssueServiceToken(Registry registry, String? authHeader, String
         // Opaco: conta nao dona recebe o mesmo 404 de servico inexistente.
         return HttpResult(404, errorJson(errServiceNotFound()))
     }
+}
+
+// Inventario das credenciais de UM servico (para `service token list`).
+// Autenticado e filtrado por conta dona: inexistente e alheio respondem o
+// mesmo 404 opaco (sem oraculo). Cada entrada traz digito curto + emissao;
+// o valor kfs_ nunca viaja aqui (so existe na emissao).
+HttpResult handleListServiceTokens(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var body = decodeBody(bodyText)
+    var serviceId = mapField(body, "serviceId")
+    if (serviceId.length == 0) {
+        return HttpResult(400, errorJson(errServiceIdRequired()))
+    }
+    var service = registry.serviceById(serviceId)
+    if (service == null) {
+        return HttpResult(404, errorJson(errServiceNotFound()))
+    }
+    if (service.accountId != account.id) {
+        return HttpResult(404, errorJson(errServiceNotFound()))
+    }
+    return HttpResult(200, serviceTokenListJson(registry.serviceTokensFor(account.id, serviceId)))
 }
 
 // Revoga UMA credencial de servico (ex.: vazou). O corpo leva o serviceId
@@ -778,6 +831,13 @@ class ControlPlane {
         }
         app.post("/v1/services/token") {
             var result = handleIssueServiceToken(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/services/tokens") {
+            var result = handleListServiceTokens(reg, header("x-kofcloud-token"), body())
             if (result.code == 200) {
                 return result.body
             }

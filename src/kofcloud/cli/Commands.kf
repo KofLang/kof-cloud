@@ -570,6 +570,46 @@ Int cmdServiceToken(List<String> args) {
     }
 }
 
+// Lista as credenciais kfs_ de UM servico (inventario, sem valores).
+// Devolve id curto + emissao para o operador saber o que revogar; o kfs_ em
+// claro so existe no instante da emissao e nunca e recuperavel.
+record ServiceTokenEntry(String serviceId, String id, String createdAt)
+
+Int cmdServiceTokenList(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    var name = firstPositional(args)
+    if (name.length == 0) {
+        println("uso: kof cloud service token-list <nome>")
+        return 1
+    }
+    try {
+        var target = serviceIdByName(session, name)
+        if (target.length == 0) {
+            println("servico nao encontrado: " + name)
+            return 1
+        }
+        var body = mapOf()
+        body.put("serviceId", target)
+        var raw = requireOk(http.post(session.controlUrl + "/v1/services/tokens", json.encode(body), jsonHeader(session.token)))
+        var entries = json.decode<List<ServiceTokenEntry>>(raw)
+        if (entries.size == 0) {
+            println("nenhuma credencial emitida para: " + name)
+            return 0
+        }
+        for (var entry in entries) {
+            println(entry.id + "  emitida em " + entry.createdAt)
+        }
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
 // Revoga UMA credencial kfs_ (ex.: vazou no log, no chat, no repo).
 // Recebe o valor do token na CLI — ele viaja no corpo HTTPS ate o control
 // plane (nunca em URL/log) e so o hash e comparado/guardado.

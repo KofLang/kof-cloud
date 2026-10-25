@@ -384,6 +384,27 @@ class Registry {
         return null
     }
 
+    // Inventario das credenciais de UM servico (para `service token list`).
+    // Devolve os registros (hash + emissao), nunca o valor: o kfs_ em claro
+    // so existe no instante da emissao. Filtra por conta dona aqui (e nao
+    // no chamador): inexistente e alheio dao lista vazia, sem oraculo.
+    List<ServiceToken> serviceTokensFor(String accountId, String serviceId) {
+        var service = this.serviceById(serviceId)
+        if (service == null) {
+            return listOf<ServiceToken>()
+        }
+        if (service.accountId != accountId) {
+            return listOf<ServiceToken>()
+        }
+        var out = listOf<ServiceToken>()
+        for (var entry in this.serviceTokens) {
+            if (entry.serviceId == serviceId) {
+                out.add(entry)
+            }
+        }
+        return out
+    }
+
     // Remove credenciais orfas (servico removido ou dispositivo revogado).
     void pruneServiceTokens() {
         var alive = listOf<ServiceToken>()

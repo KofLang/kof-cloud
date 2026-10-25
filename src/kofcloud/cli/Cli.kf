@@ -107,7 +107,7 @@ Int runDevice(List<String> args) {
 
 Int runService(List<String> args) {
     if (args.size == 0) {
-        println("uso: kof cloud service list|status|suspend|unsuspend|token <nome>|token-revoke <nome> <kfs_...>")
+        println("uso: kof cloud service list|status|suspend|unsuspend|token <nome>|token-list <nome>|token-revoke <nome> <kfs_...>")
         return 1
     }
     var sub = args.get(0)
@@ -126,6 +126,9 @@ Int runService(List<String> args) {
     }
     if (sub == "token") {
         return cmdServiceToken(rest)
+    }
+    if (sub == "token-list") {
+        return cmdServiceTokenList(rest)
     }
     if (sub == "token-revoke") {
         return cmdServiceTokenRevoke(rest)

@@ -66,7 +66,7 @@ túnel.
 plane (`POST /v1/services/token`) e validada no Edge; o token da conta não
 autoriza acesso público; o Edge remove a credencial antes de repassar ao
 serviço local; `401` com `WWW-Authenticate: Bearer`. CLI: `kof cloud service
-token <nome>` (revogacao: `kof cloud service token-revoke <nome> <kfs_>` → `POST /v1/services/token/revoke`, 404 opaco se alheio). Prova: `tests/service_token_test.kf` (9 testes) +
+token <nome>` (revogacao: `kof cloud service token-revoke <nome> <kfs_>` → `POST /v1/services/token/revoke`, 404 opaco se alheio; inventario: `kof cloud service token-list <nome>` → `POST /v1/services/tokens`, so id curto + emissao, nunca o valor). Prova: `tests/service_token_test.kf` (10 testes) +
 `tests/e2e_authenticated_test.kf`.
 
 **Endurecimento (padrão kof-share R6): ✅ implementado.** Erros estáveis

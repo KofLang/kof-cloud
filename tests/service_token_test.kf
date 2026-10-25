@@ -110,8 +110,7 @@ test "token de servico: revoke invalida so o token revogado", "token-revoke" {
     assert(registry.revokeServiceToken(account.id, service.id, leaked) == false, "re-revoke e no-op")
 }
 
-test "token de servico: revoke exige dono, servico e token validos", "token-revoke-gate" {
-    var registry = Registry(serviceTokenPath("revoke-gate"))
+test "token de servico: revoke exige dono, servico e token validos", "token-revoke-gate" {    var registry = Registry(serviceTokenPath("revoke-gate"))
     var mel = registry.createAccount("mel", "m@e.com", "segredo")
     var ana = registry.createAccount("ana", "ana@e.com", "segredo")
     var device = registry.registerDevice(mel, "nb", "pk")
@@ -127,4 +126,31 @@ test "token de servico: revoke exige dono, servico e token validos", "token-revo
     assert(registry.revokeServiceToken(mel.id, service.id, "kfs_inexistente") == false, "desconhecido nao revoga")
     // E2E: endpoint HTTP devolve 200 e o token para de autorizar.
     assert(true, "cobertura HTTP no e2e abaixo")
+}
+
+test "token de servico: inventario lista sem expor valores", "token-list" {
+    var registry = Registry(serviceTokenPath("inventory"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var ana = registry.createAccount("ana", "ana@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED")
+    // Vazio antes de emitir.
+    assert(registry.serviceTokensFor(mel.id, service.id).size == 0, "sem credenciais no inicio")
+    // Emite duas: o inventario cresce, mas nunca devolve o valor.
+    var first = registry.issueServiceToken(mel.id, service.id)
+    var second = registry.issueServiceToken(mel.id, service.id)
+    var entries = registry.serviceTokensFor(mel.id, service.id)
+    assert(entries.size == 2, "duas credenciais listadas")
+    for (var entry in entries) {
+        assert(entry.serviceId == service.id, "inventario so do servico pedido")
+        assert(entry.tokenHash != first && entry.tokenHash != second, "hash guardado, nunca o valor")
+        assert(entry.tokenHash.length > 8, "hash longo o bastante para o id curto")
+    }
+    // Conta alheia nao ve nada (nem existencia): lista vazia, sem oraculo.
+    assert(registry.serviceTokensFor(ana.id, service.id).size == 0, "alheio ve vazio")
+    // Servico inexistente: vazio, sem erro.
+    assert(registry.serviceTokensFor(mel.id, "inexistente").size == 0, "inexistente da vazio")
+    // Revogar uma tira so ela do inventario.
+    assert(registry.revokeServiceToken(mel.id, service.id, first) == true, "revogou a primeira")
+    assert(registry.serviceTokensFor(mel.id, service.id).size == 1, "so a segunda resta")
 }
