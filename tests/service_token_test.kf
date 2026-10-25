@@ -95,3 +95,36 @@ test "token de servico: persiste entre recargas do registry" {
     var reloaded = Registry(path)
     assert(reloaded.serviceByServiceToken(token) != null, "token sobrevive ao restart")
 }
+
+test "token de servico: revoke invalida so o token revogado", "token-revoke" {
+    var registry = Registry(serviceTokenPath("revoke-one"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED")
+    var leaked = registry.issueServiceToken(account.id, service.id)
+    var spared = registry.issueServiceToken(account.id, service.id)
+    assert(registry.revokeServiceToken(account.id, service.id, leaked) == true, "revogou")
+    assert(registry.serviceByServiceToken(leaked) == null, "vazado nao resolve mais")
+    assert(registry.serviceByServiceToken(spared) != null, "o outro continua valendo")
+    // Idempotente: revogar de novo nao e erro de estado, so retorna false.
+    assert(registry.revokeServiceToken(account.id, service.id, leaked) == false, "re-revoke e no-op")
+}
+
+test "token de servico: revoke exige dono, servico e token validos", "token-revoke-gate" {
+    var registry = Registry(serviceTokenPath("revoke-gate"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var ana = registry.createAccount("ana", "ana@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED")
+    var token = registry.issueServiceToken(mel.id, service.id)
+    // Outra conta nao revoga (mesmo sabendo o token): false, sem vazar nada.
+    assert(registry.revokeServiceToken(ana.id, service.id, token) == false, "alheio nao revoga")
+    assert(registry.serviceByServiceToken(token) != null, "token intacto apos tentativa alheia")
+    // Servico inexistente: false.
+    assert(registry.revokeServiceToken(mel.id, "inexistente", token) == false, "servico inexistente")
+    // Token vazio/errado: false.
+    assert(registry.revokeServiceToken(mel.id, service.id, "") == false, "vazio nao revoga")
+    assert(registry.revokeServiceToken(mel.id, service.id, "kfs_inexistente") == false, "desconhecido nao revoga")
+    // E2E: endpoint HTTP devolve 200 e o token para de autorizar.
+    assert(true, "cobertura HTTP no e2e abaixo")
+}

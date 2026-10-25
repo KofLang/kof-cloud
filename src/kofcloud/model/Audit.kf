@@ -48,6 +48,10 @@ String auditServiceRemoved() {
     return "service.removed"
 }
 
+String auditServiceTokenRevoked() {
+    return "service.token_revoked"
+}
+
 String auditServiceSuspended() {
     return "service.suspended"
 }

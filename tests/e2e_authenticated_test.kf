@@ -96,6 +96,23 @@ test "e2e: servico AUTHENTICATED exige credencial de servico", "auth" {
     assert(statusOf(allowed) == 200, "com a credencial do servico -> 200")
     assert(bodyOf(allowed) == "svc-secret", "corpo do servico")
 
+    // revoga: o MESMO token passa a dar 401, sem derrubar o tunel
+    var revokeBody = "{\"serviceId\":\"" + secretId + "\",\"token\":\"" + serviceToken + "\"}"
+    var revoked = httpPostJson(controlPort, "/v1/services/token/revoke", revokeBody, accountToken)
+    assert(statusOf(revoked) == 200, "revogacao ok")
+    var denied = httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", serviceToken)
+    assert(statusOf(denied) == 401, "token revogado -> 401")
+    // outro servico nao e afetado: emite novo e funciona de novo
+    var minted2 = httpPostJson(controlPort, "/v1/services/token", mintBody, accountToken)
+    var serviceToken2 = mapField(json.decode<Map<String, String>>(bodyOf(minted2)), "token")
+    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", serviceToken2)) == 200, "novo token funciona")
+    // conta alheia nao revoga: 404 opaco, token continua valendo
+    var anaCreated = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"ana@e.com\",\"password\":\"segredo\"}", "")
+    var anaToken = mapField(json.decode<Map<String, String>>(bodyOf(anaCreated)), "token")
+    var anaAttempt = "{\"serviceId\":\"" + secretId + "\",\"token\":\"" + serviceToken2 + "\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/token/revoke", anaAttempt, anaToken)) == 404, "alheio -> 404 opaco")
+    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", serviceToken2)) == 200, "token intacto apos tentativa alheia")
+
     // Nota: nao testamos "PUBLIC com Authorization" porque um servico local
     // Kof (web.app) recusa QUALQUER Authorization antes do handler (L8). Em
     // PUBLIC o Edge repassa o header como proxy transparente; em AUTHENTICATED

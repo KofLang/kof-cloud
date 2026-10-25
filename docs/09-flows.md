@@ -189,6 +189,20 @@ curl -H 'Authorization: Bearer kfs_…' https://secret.mel.kofcloud.io/
 O token da conta (`kfc_`) não passa nessa checagem: administração e acesso
 público são credenciais distintas.
 
+Revogação de UMA credencial (vazou no log, no chat, no repo):
+
+```
+kof cloud service token-revoke secret kfs_abc123…
+        │
+        ▼  POST /v1/services/token/revoke {serviceId, token}
+   conta dona? token pertence ao servico?
+     ├── nao → 404 opaco (igual a inexistente; nao confirma nada alheio)
+     └── sim → remove o hash, audita service.token_revoked, 200
+```
+
+Só a conta dona revoga; outros tokens do mesmo serviço continuam válidos
+(rotação sem downtime); remover o serviço ou revogar o device poda o resto.
+
 ## 7. Revogação de dispositivo
 
 ```

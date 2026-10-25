@@ -27,6 +27,7 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/services` | conta | publica `{deviceId,name,localAddress,localPort,protocol,exposure}` → `{service}` |
 | `GET` | `/v1/services` | conta | lista serviços |
 | `POST` | `/v1/services/token` | conta | emite credencial `kfs_` do serviço `{serviceId}` → `{token,serviceId}` |
+| `POST` | `/v1/services/token/revoke` | conta | revoga UMA credencial `{serviceId,token}` → `{revoked:true}` (404 opaco se alheio/inexistente) |
 | `POST` | `/v1/services/remove` | conta | `{serviceId}` |
 | `POST` | `/v1/services/suspend` | conta | `{serviceId}` → `{suspended:true}` (sai da rota, nada removido) |
 | `POST` | `/v1/services/unsuspend` | conta | `{serviceId}` → `{suspended:false}` |
@@ -71,6 +72,17 @@ X-KofCloud-Token: kfc_...
 {"serviceId":"..."}
 
 200 {"token":"kfs_...","serviceId":"..."}
+
+Revogar UMA credencial (`kfs_` vazou): o corpo leva o `serviceId` (dono) +
+o proprio token a revogar. Inexistente, de outro servico ou de outra conta:
+mesmo `404` opaco (nunca confirma nem nega token alheio).
+
+```
+POST /v1/services/token/revoke
+X-KofCloud-Token: kfc_...
+{"serviceId":"...","token":"kfs_..."}
+
+200 {"revoked":true}
 ```
 
 Registrar domínio próprio (Fase 6, slice 1):

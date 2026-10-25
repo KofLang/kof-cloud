@@ -552,6 +552,59 @@ Int cmdServiceToken(List<String> args) {
     }
 }
 
+// Revoga UMA credencial kfs_ (ex.: vazou no log, no chat, no repo).
+// Recebe o valor do token na CLI — ele viaja no corpo HTTPS ate o control
+// plane (nunca em URL/log) e so o hash e comparado/guardado.
+Int cmdServiceTokenRevoke(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println("nao logado")
+        return 1
+    }
+    var name = firstPositional(args)
+    var token = secondPositional(args)
+    if (name.length == 0 || token.length == 0) {
+        println("uso: kof cloud service token-revoke <nome> <kfs_...>")
+        return 1
+    }
+    try {
+        var services = fetchServices(session.controlUrl, session.token)
+        var target = ""
+        for (var service in services) {
+            if (service.name == name) {
+                target = service.id
+            }
+        }
+        if (target.length == 0) {
+            println("servico nao encontrado: " + name)
+            return 1
+        }
+        var body = mapOf()
+        body.put("serviceId", target)
+        body.put("token", token)
+        requireOk(http.post(session.controlUrl + "/v1/services/token/revoke", json.encode(body), jsonHeader(session.token)))
+        println("Token revogado para o servico: " + name)
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
+// Segundo argumento posicional (o primeiro e capturado por firstPositional).
+String secondPositional(List<String> args) {
+    var seen = false
+    for (var arg in args) {
+        if (arg.startsWith("--") == false) {
+            if (seen) {
+                return arg
+            }
+            seen = true
+        }
+    }
+    return ""
+}
+
 Int cmdDomainList(List<String> args) {
     var session = loadSession()
     if (session == null) {

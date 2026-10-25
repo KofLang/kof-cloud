@@ -75,6 +75,10 @@ String errServiceTokenForbidden() {
     return "KCF060: not the owner of service"
 }
 
+String errServiceTokenRequired() {
+    return "KCF061: serviceId and token required"
+}
+
 // ---- limites ----
 
 String errLimitDevices() {
@@ -164,6 +168,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF022") >= 0 || raw.indexOf("KCF042") >= 0 || raw.indexOf("KCF060") >= 0) {
         return "Esse recurso pertence a outra conta — confira `kof cloud status` e use a conta dona."
+    }
+    if (raw.indexOf("KCF061") >= 0) {
+        return "Informe o servico e o token: `kof cloud service token revoke <nome> <kfs_...>`."
     }
     if (raw.indexOf("KCF040") >= 0) {
         return "O nome do servico usa letras minusculas, numeros e tracos (ex: site)."

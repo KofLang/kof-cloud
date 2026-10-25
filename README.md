@@ -24,7 +24,7 @@ completa e os protocolos.
 | 2 — publicação HTTP (`publish` → `curl` pela borda) | ✅ implementado e testado ponta a ponta |
 | 3 — hostname automático + DNS (`*.handle.kofcloud.io`) | ✅ hostname/roteamento implementados; **DNS e TLS são externos** (o Kof não tem ACME nem TLS em socket cru — ver `docs/12-tls.md`) |
 | 4 — múltiplos serviços no mesmo túnel + limites por dispositivo | ✅ implementado e testado |
-| 5 — `AUTHENTICATED` com credencial de serviço (`kfs_`) | ✅ implementado e testado |
+| 5 — `AUTHENTICATED` com credencial de serviço (`kfs_`, com revogacao por token) | ✅ implementado e testado |
 | 6 — domínio próprio (slice 1: registro + verificação DNS + rota) | ✅ implementado e testado; sem TLS/SNI (externo — ver `docs/12-tls.md`) |
 | 6+ — observabilidade, abuse prevention, limites | ✅ implementados e testados |
 | 7 — deploy (slices 1–4: declarativo, --check, daemon, doctor) | ✅ implementado e testado; sem build/artefato, sem daemon Windows/macOS |
@@ -102,6 +102,7 @@ service status <nome>
 service suspend <nome>       (fora da rota, nada removido)
 service unsuspend <nome>
 service token <nome>        (credencial kfs_ para servico AUTHENTICATED)
+service token-revoke <nome> <kfs_>  (revoga UMA credencial vazada)
 domain list
 domain add <hostname> --service <nome>   (dominio proprio, devolve a instrucao CNAME)
 domain verify <hostname>                 (confere o DNS e ativa a rota)

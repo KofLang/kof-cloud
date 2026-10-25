@@ -361,6 +361,46 @@ class Registry {
         this.serviceTokens = alive
     }
 
+    // Revoga UMA credencial de servico (ex.: vazou, rotacao forçada).
+    // O token e identificado pelo proprio valor (o operador cola o kfs_ que
+    // quer matar); o que e comparado/guardado continua sendo so o hash —
+    // nunca persistimos nem logamos o valor em claro. So a conta dona do
+    // servico pode revogar. Inexistente (ou de outro servico/outra conta):
+    // false, e o chamador responde o 404 opaco padrao.
+    Bool revokeServiceToken(String accountId, String serviceId, String token) {
+        if (token.length == 0) {
+            return false
+        }
+        var service = this.serviceById(serviceId)
+        if (service == null) {
+            return false
+        }
+        if (service.accountId != accountId) {
+            return false
+        }
+        var kept = listOf<ServiceToken>()
+        var revoked = false
+        for (var entry in this.serviceTokens) {
+            if (entry.serviceId == serviceId && tokenMatches(entry.tokenHash, token)) {
+                revoked = true
+            } else {
+                kept.add(entry)
+            }
+        }
+        if (revoked == false) {
+            return false
+        }
+        this.serviceTokens = kept
+        var issuer = this.accountById(accountId)
+        if (issuer != null) {
+            // Audita o servico, nunca o token (o valor nao e logado).
+            this.audit(auditActorAccount(issuer.handle), auditServiceTokenRevoked(), accountId + "/" + serviceId)
+        }
+        this.save()
+        noteServiceTokenRevoked()
+        return true
+    }
+
     // ---- servicos ----
 
     Service publishService(Account account, String deviceId, String name, String localAddress, Int localPort, String protocol, String exposure) {

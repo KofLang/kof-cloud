@@ -432,6 +432,29 @@ HttpResult handleIssueServiceToken(Registry registry, String? authHeader, String
     }
 }
 
+// Revoga UMA credencial de servico (ex.: vazou). O corpo leva o serviceId
+// (dono) + o proprio token kfs_ a revogar. Inexistente, de outro servico ou
+// de outra conta: mesmo 404 opaco — nunca confirma nem nega a existencia de
+// um token alheio.
+HttpResult handleRevokeServiceToken(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var body = decodeBody(bodyText)
+    var serviceId = mapField(body, "serviceId")
+    var token = mapField(body, "token")
+    if (serviceId.length == 0 || token.length == 0) {
+        return HttpResult(400, errorJson(errServiceTokenRequired()))
+    }
+    if (registry.revokeServiceToken(account.id, serviceId, token)) {
+        var out = mapOf()
+        out.put("revoked", "true")
+        return HttpResult(200, json.encode(out))
+    }
+    return HttpResult(404, errorJson(errServiceNotFound()))
+}
+
 HttpResult handleReportStatus(Registry registry, String? authHeader, String bodyText) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
@@ -729,6 +752,13 @@ class ControlPlane {
         }
         app.post("/v1/services/token") {
             var result = handleIssueServiceToken(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/services/token/revoke") {
+            var result = handleRevokeServiceToken(reg, header("x-kofcloud-token"), body())
             if (result.code == 200) {
                 return result.body
             }

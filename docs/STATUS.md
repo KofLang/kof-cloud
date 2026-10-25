@@ -9,7 +9,7 @@
 |---|---|---|
 | Fases 1–3 (tunel, publish, hostname) | ✅ verde | `e2e_test.kf` |
 | Fase 4 (multi-servico + limites) | ✅ verde | `e2e_multiservice_test.kf`, `limits_test.kf` |
-| Fase 5 (AUTHENTICATED kfs_) | ✅ verde | `service_token_test.kf`, `e2e_authenticated_test.kf` |
+| Fase 5 (AUTHENTICATED kfs_ + revoke) | ✅ verde | `service_token_test.kf` (9), `e2e_authenticated_test.kf` |
 | Fase 6 slice 1 (dominio proprio) | ✅ verde | `domains_test.kf` (sem TLS/SNI — externo) |
 | Observabilidade (3 slices) | ✅ verde | `metrics_test.kf`, `agent_metrics_test.kf` |
 | Abuse prevention (2 slices) | ✅ verde | `ratelimit_test.kf`, `abuse_test.kf` |
@@ -66,7 +66,7 @@ o run total imprime `21 passed, 0 failed`. Falha = nome do teste + assert
 | e2e multiservico | `tests/e2e_multiservice_test.kf` | 1 |
 | e2e autenticado | `tests/e2e_authenticated_test.kf` | 1 |
 
-Total: 101 testes. Ver `15-tests.md` para a matriz.
+Total: 103 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 
