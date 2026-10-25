@@ -19,7 +19,7 @@ import kofcloud.store.Store
 // Tokens sao guardados como hash (nunca em claro).
 record TokenEntry(String accountId, String tokenHash, Long createdAt)
 
-record ServiceToken(String serviceId, String accountId, String tokenHash, Long createdAt)
+record ServiceToken(String serviceId, String accountId, String tokenHash, Long createdAt, Long expiresAt)
 
 record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens, List<CustomDomain> customDomains, List<AuditEvent> audit)
 
@@ -350,9 +350,32 @@ class Registry {
 
     // ---- tokens de servico (AUTHENTICATED) ----
 
-    // Emite uma credencial nova para o servico. Varias podem existir (rotacao
-    // sem downtime); cada uma e guardada apenas como hash.
+    // `expiresAt` em ms desde a epoca; 0 = sem expiracao (tokens antigos e o
+    // default de emissao). Expirado nao autoriza nem aparece no inventario.
+    Long serviceTokenExpiry(Long nowMs, Int ttlHours) {
+        if (ttlHours <= 0) {
+            return 0
+        }
+        return nowMs + ttlHours * 3600000
+    }
+
+    Bool serviceTokenExpired(ServiceToken entry, Long nowMs) {
+        if (entry.expiresAt <= 0) {
+            return false
+        }
+        return nowMs >= entry.expiresAt
+    }
+
+    // Atalho sem TTL (sem expiracao): mantem os chamadores antigos e os
+    // tokens antigos validos para sempre, como antes.
     String issueServiceToken(String accountId, String serviceId) {
+        return this.issueServiceToken(accountId, serviceId, 0)
+    }
+
+    // Emite uma credencial nova para o servico. Varias podem existir (rotacao
+    // sem downtime); cada uma e guardada apenas como hash. `ttlHours` <= 0
+    // significa sem expiracao (comportamento antigo); > 0 fixa `expiresAt`.
+    String issueServiceToken(String accountId, String serviceId, Int ttlHours) {
         var service = this.serviceById(serviceId)
         if (service == null) {
             throw errServiceNotFound()
@@ -361,7 +384,8 @@ class Registry {
             throw errServiceTokenForbidden()
         }
         var token = newServiceToken()
-        this.serviceTokens.add(ServiceToken(serviceId, accountId, tokenHash(token), time.now()))
+        var expiresAt = serviceTokenExpiry(time.now(), ttlHours)
+        this.serviceTokens.add(ServiceToken(serviceId, accountId, tokenHash(token), time.now(), expiresAt))
         var issuer = this.accountById(accountId)
         if (issuer != null) {
             this.audit(auditActorAccount(issuer.handle), "service.token_issued", accountId + "/" + serviceId)
@@ -371,17 +395,33 @@ class Registry {
         return token
     }
 
-    // Resolve o servico dono de um token de servico; null se invalido.
+    // Resolve o servico dono de um token de servico; null se invalido OU
+    // expirado. Expirado e podado na hora (preguicoso): nao acumula lixo e o
+    // proximo `list` ja nao mostra.
     Service? serviceByServiceToken(String token) {
         if (token.length == 0) {
             return null
         }
+        var now = time.now()
+        var kept = listOf<ServiceToken>()
+        var matchedServiceId = ""
         for (var entry in this.serviceTokens) {
-            if (tokenMatches(entry.tokenHash, token)) {
-                return this.serviceById(entry.serviceId)
+            if (serviceTokenExpired(entry, now)) {
+                continue
+            }
+            kept.add(entry)
+            if (matchedServiceId.length == 0 && tokenMatches(entry.tokenHash, token)) {
+                matchedServiceId = entry.serviceId
             }
         }
-        return null
+        if (kept.size != this.serviceTokens.size) {
+            this.serviceTokens = kept
+            this.save()
+        }
+        if (matchedServiceId.length == 0) {
+            return null
+        }
+        return this.serviceById(matchedServiceId)
     }
 
     // Inventario das credenciais de UM servico (para `service token list`).

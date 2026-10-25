@@ -524,6 +524,8 @@ String serviceIdByName(LocalSession session, String name) {
 
 // Emite uma credencial kfs_ para um servico AUTHENTICATED. O token da conta
 // autoriza a emissao; o token devolvido e o que o cliente final usa.
+// `--ttl <horas>`: expiracao opcional (ex.: 24 = 1 dia); sem flag, sem
+// expiracao. O TTL e validado no control plane (KCF062 se invalido).
 Int cmdServiceToken(List<String> args) {
     var session = loadSession()
     if (session == null) {
@@ -532,9 +534,10 @@ Int cmdServiceToken(List<String> args) {
     }
     var name = firstPositional(args)
     if (name.length == 0) {
-        println("uso: kof cloud service token <nome>")
+        println("uso: kof cloud service token <nome> [--ttl <horas>]")
         return 1
     }
+    var ttlRaw = flagValue(args, "--ttl")
     try {
         var services = fetchServices(session.controlUrl, session.token)
         var target = ""
@@ -556,10 +559,16 @@ Int cmdServiceToken(List<String> args) {
         }
         var body = mapOf()
         body.put("serviceId", target)
+        if (ttlRaw.length > 0) {
+            body.put("ttlHours", ttlRaw)
+        }
         var raw = requireOk(http.post(session.controlUrl + "/v1/services/token", json.encode(body), jsonHeader(session.token)))
         var token = mapField(json.decode<Map<String, String>>(raw), "token")
         println("Token de acesso (" + name + "):")
         println(token)
+        if (ttlRaw.length > 0) {
+            println("Expira em " + ttlRaw + "h — depois disso, 401 ate emitir outro.")
+        }
         println("")
         println("Uso:")
         println("  curl -H 'Authorization: Bearer " + token + "' https://" + hostname + "/")
@@ -571,9 +580,10 @@ Int cmdServiceToken(List<String> args) {
 }
 
 // Lista as credenciais kfs_ de UM servico (inventario, sem valores).
-// Devolve id curto + emissao para o operador saber o que revogar; o kfs_ em
-// claro so existe no instante da emissao e nunca e recuperavel.
-record ServiceTokenEntry(String serviceId, String id, String createdAt)
+// Devolve id curto + emissao (+ expiracao, quando houver) para o operador
+// saber o que revogar; o kfs_ em claro so existe no instante da emissao e
+// nunca e recuperavel. Expiradas nao aparecem (podadas na validacao).
+record ServiceTokenEntry(String serviceId, String id, String createdAt, String? expiresAt)
 
 Int cmdServiceTokenList(List<String> args) {
     var session = loadSession()
@@ -601,7 +611,11 @@ Int cmdServiceTokenList(List<String> args) {
             return 0
         }
         for (var entry in entries) {
-            println(entry.id + "  emitida em " + entry.createdAt)
+            var line = entry.id + "  emitida em " + entry.createdAt
+            if (entry.expiresAt != null) {
+                line = line + "  expira em " + entry.expiresAt
+            }
+            println(line)
         }
         return 0
     } catch (String e) {

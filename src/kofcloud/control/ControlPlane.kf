@@ -134,6 +134,9 @@ String serviceTokenJson(ServiceToken entry) {
     out.put("serviceId", entry.serviceId)
     out.put("id", shortTokenId(entry.tokenHash))
     out.put("createdAt", longToString(entry.createdAt))
+    if (entry.expiresAt > 0) {
+        out.put("expiresAt", longToString(entry.expiresAt))
+    }
     return json.encode(out)
 }
 
@@ -458,6 +461,8 @@ HttpResult handleListAudit(Registry registry, String? authHeader) {
 
 // Emite uma credencial de acesso para um servico AUTHENTICATED. O token da
 // conta autoriza a EMISSAO; o token emitido (kfs_) e o que vai ao cliente.
+// `ttlHours` opcional (> 0): expiracao em horas desde a emissao; ausente ou
+// <= 0 = sem expiracao (comportamento antigo). TTL invalido (lixo) = 400.
 HttpResult handleIssueServiceToken(Registry registry, String? authHeader, String bodyText) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
@@ -468,11 +473,22 @@ HttpResult handleIssueServiceToken(Registry registry, String? authHeader, String
     if (serviceId.length == 0) {
         return HttpResult(400, errorJson(errServiceIdRequired()))
     }
+    var ttlRaw = mapField(body, "ttlHours")
+    var ttlHours = 0
+    if (ttlRaw.length > 0) {
+        ttlHours = parseIntSafe(ttlRaw, -1)
+        if (ttlHours <= 0) {
+            return HttpResult(400, errorJson(errInvalidTtl()))
+        }
+    }
     try {
-        var token = registry.issueServiceToken(account.id, serviceId)
+        var token = registry.issueServiceToken(account.id, serviceId, ttlHours)
         var out = mapOf()
         out.put("token", token)
         out.put("serviceId", serviceId)
+        if (ttlHours > 0) {
+            out.put("ttlHours", intToString(ttlHours))
+        }
         return HttpResult(200, json.encode(out))
     } catch (String e) {
         // Opaco: conta nao dona recebe o mesmo 404 de servico inexistente.

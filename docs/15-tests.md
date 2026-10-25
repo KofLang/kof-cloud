@@ -28,7 +28,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U4 | backoff | `tests/backoff_test.kf` (3 testes) | crescimento, teto, jitter, defaults |
 | U5 | registry (conta/device/serviço/store) | `tests/registry_test.kf` (7 testes) | handle duplicado, login, hostname, `PRIVATE` sem rota, revoke poda, persistência |
 | U6 | limites | `tests/limits_test.kf` (6 testes) | dispositivos ativos, idempotência, revoke libera vaga, serviços por dispositivo, streams com `setLimits` |
-| U7 | credencial de serviço | `tests/service_token_test.kf` (10 testes) | emissão só pela conta dona, token vale apenas para o próprio serviço, poda ao remover serviço/revogar dispositivo, persistência, **revogacao por token (KCF061, 404 opaco, preserva os demais)**, **inventario sem valores (filtro por dono, alheio ve vazio)** |
+| U7 | credencial de serviço | `tests/service_token_test.kf` (11 testes) | emissão só pela conta dona, token vale apenas para o próprio serviço, poda ao remover serviço/revogar dispositivo, persistência, **revogacao por token (KCF061, 404 opaco, preserva os demais)**, **inventario sem valores (filtro por dono, alheio ve vazio)**, **expiracao opcional (TTL futuro vale, expirado nao resolve nem lista, poda preguicosa)** |
 | U8 | erros estáveis (R6) | `tests/errors_test.kf` (5 testes) | códigos `KCFnnn` no control plane e no Edge, 404 opaco entre contas, owner-gate do status, `Hint:` sem vazar segredo |
 | U9 | domínio próprio | `tests/domains_test.kf` (7 testes) | validação de hostname, registro/idempotência, verificação sem rede, rota só após VERIFIED + poda, API (409/404 opacos), Edge via túnel real, `Hint:` |
 | U10 | métricas (Edge + control plane) | `tests/metrics_test.kf` (6 testes) | nomes/formato Prometheus, recusa de túnel por motivo, contagem ok/negada + bytes fim a fim, `GET /v1/metrics` sem auth, contadores de lifecycle, exposição sem dado de cliente |
@@ -59,7 +59,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 |---|---|---|---|
 | E1 | ponta a ponta | `tests/e2e_test.kf` | conta → device → connect → publish → HTTP → túnel → localhost → resposta |
 | E2 | múltiplos serviços | `tests/e2e_multiservice_test.kf` | 3 hostnames no mesmo túnel, cada um na sua porta; derrubar um não afeta os outros |
-| E3 | AUTHENTICATED | `tests/e2e_authenticated_test.kf` | 401 sem credencial (com `WWW-Authenticate`), 401 com token inválido, 401 com token da conta, 200 com `kfs_` do serviço; PUBLIC segue livre; revoke via HTTP (alheio 404); inventario sem valores (alheio/inexistente 404) |
+| E3 | AUTHENTICATED | `tests/e2e_authenticated_test.kf` | 401 sem credencial (com `WWW-Authenticate`), 401 com token inválido, 401 com token da conta, 200 com `kfs_` do serviço; PUBLIC segue livre; revoke via HTTP (alheio 404); inventario sem valores (alheio/inexistente 404); TTL futuro autoriza, TTL inválido/zero 400 `KCF062`, inventario marca `expiresAt` |
 | E4 | control plane (HTTP real) | `tests/control_test.kf` (2 testes) | ciclo conta → device → publish → list → revoke + 401 sem token |
 | E5 | erros R6 fim a fim | `tests/errors_test.kf` (5 testes, `errors-edge`) | códigos no Edge via túnel real (KCF100/101/102, offline, conteúdo) |
 | E6 | domínio próprio fim a fim | `tests/domains_test.kf` (`domains-e2e`) | hostname próprio roteia junto do nativo após VERIFIED |

@@ -79,6 +79,10 @@ String errServiceTokenRequired() {
     return "KCF061: serviceId and token required"
 }
 
+String errInvalidTtl() {
+    return "KCF062: ttlHours must be a positive number of hours"
+}
+
 // ---- limites ----
 
 String errLimitDevices() {
@@ -171,6 +175,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF061") >= 0) {
         return "Informe o servico e o token: `kof cloud service token revoke <nome> <kfs_...>`."
+    }
+    if (raw.indexOf("KCF062") >= 0) {
+        return "O TTL precisa ser horas positivas (ex: `--ttl 24` para 1 dia); sem `--ttl`, sem expiracao."
     }
     if (raw.indexOf("KCF040") >= 0) {
         return "O nome do servico usa letras minusculas, numeros e tracos (ex: site)."

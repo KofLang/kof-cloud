@@ -26,7 +26,7 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/devices/unsuspend` | conta | `{deviceId}` → `{suspended:false}` |
 | `POST` | `/v1/services` | conta | publica `{deviceId,name,localAddress,localPort,protocol,exposure}` → `{service}` |
 | `GET` | `/v1/services` | conta | lista serviços |
-| `POST` | `/v1/services/token` | conta | emite credencial `kfs_` do serviço `{serviceId}` → `{token,serviceId}` |
+| `POST` | `/v1/services/token` | conta | emite credencial `kfs_` do serviço `{serviceId}` (+ `ttlHours` opcional, horas) → `{token,serviceId,ttlHours?}` (TTL inválido = 400 `KCF062`) |
 | `POST` | `/v1/services/tokens` | conta | inventário do serviço `{serviceId}` → `[{serviceId,id,createdAt}]` (id = 8 hex do hash; nunca o valor `kfs_`; 404 opaco se alheio/inexistente) |
 | `POST` | `/v1/services/token/revoke` | conta | revoga UMA credencial `{serviceId,token}` → `{revoked:true}` (404 opaco se alheio/inexistente) |
 | `POST` | `/v1/services/remove` | conta | `{serviceId}` |
@@ -75,6 +75,19 @@ X-KofCloud-Token: kfc_...
 
 200 {"token":"kfs_...","serviceId":"..."}
 
+Com expiracao (`--ttl 24` = 1 dia na CLI; sem flag, sem expiracao):
+
+```
+POST /v1/services/token
+X-KofCloud-Token: kfc_...
+{"serviceId":"...","ttlHours":"24"}
+
+200 {"token":"kfs_...","serviceId":"...","ttlHours":"24"}
+```
+
+Expirado nao autoriza (401, como revogado) e some do inventario na
+proxima validacao (poda preguicosa). TTL zero/lixo = `400 KCF062`.
+
 Inventario (saber o que revogar sem expor valores — o `kfs_` em claro so
 existe no instante da emissao):
 
@@ -84,6 +97,8 @@ X-KofCloud-Token: kfc_...
 {"serviceId":"..."}
 
 200 [{"serviceId":"...","id":"a1b2c3d4","createdAt":"..."}]
+
+(`expiresAt` aparece quando a credencial tem TTL.)
 ```
 
 Revogar UMA credencial (`kfs_` vazou): o corpo leva o `serviceId` (dono) +

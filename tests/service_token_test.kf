@@ -1,4 +1,5 @@
 import kofcloud.control.Registry
+import kofcloud.identity.Tokens
 
 // Fase 5 — credencial de servico (kfs_) para servicos AUTHENTICATED.
 // O token da conta autoriza a EMISSAO; o token emitido autoriza o ACESSO e
@@ -153,4 +154,30 @@ test "token de servico: inventario lista sem expor valores", "token-list" {
     // Revogar uma tira so ela do inventario.
     assert(registry.revokeServiceToken(mel.id, service.id, first) == true, "revogou a primeira")
     assert(registry.serviceTokensFor(mel.id, service.id).size == 1, "so a segunda resta")
+}
+
+test "token de servico: expiracao opcional poda na validacao", "token-ttl" {
+    var registry = Registry(serviceTokenPath("ttl"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED")
+    // Sem TTL: vale para sempre (comportamento antigo), expiresAt zero.
+    var forever = registry.issueServiceToken(mel.id, service.id, 0)
+    assert(registry.serviceByServiceToken(forever) != null, "sem TTL continua valendo")
+    var listed = registry.serviceTokensFor(mel.id, service.id)
+    assert(listed.size == 1, "uma credencial listada")
+    assert(listed.get(0).expiresAt == 0, "sem expiracao marcada")
+    // Com TTL: expiracao futura marcada, ainda valida.
+    var timed = registry.issueServiceToken(mel.id, service.id, 24)
+    assert(registry.serviceByServiceToken(timed) != null, "com TTL futuro vale")
+    assert(registry.serviceTokensFor(mel.id, service.id).size == 2, "duas listadas")
+    // Expirada: constroi o registro direto no passado (sem dormir 1h).
+    var stale = ServiceToken(service.id, mel.id, tokenHash("kfs_vencido"), time.now() - 1000, time.now() - 1)
+    registry.serviceTokens.add(stale)
+    assert(registry.serviceByServiceToken("kfs_vencido") == null, "expirado nao resolve")
+    // A poda preguicosa removeu: nem no inventario aparece mais.
+    assert(registry.serviceTokensFor(mel.id, service.id).size == 2, "expirado some do inventario")
+    // As validas sobrevivem a poda.
+    assert(registry.serviceByServiceToken(forever) != null, "sem TTL intacto apos poda")
+    assert(registry.serviceByServiceToken(timed) != null, "com TTL intacto apos poda")
 }

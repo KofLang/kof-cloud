@@ -122,6 +122,19 @@ test "e2e: servico AUTHENTICATED exige credencial de servico", "auth" {
     assert(statusOf(httpPostJson(controlPort, "/v1/services/tokens", listBody, anaToken)) == 404, "alheio nao inventaria")
     assert(statusOf(httpPostJson(controlPort, "/v1/services/tokens", "{\"serviceId\":\"inexistente\"}", accountToken)) == 404, "inexistente -> 404")
 
+    // TTL: emissao com expiracao futura autoriza; TTL invalido = 400 KCF062.
+    var timedBody = "{\"serviceId\":\"" + secretId + "\",\"ttlHours\":\"1\"}"
+    var timedMint = httpPostJson(controlPort, "/v1/services/token", timedBody, accountToken)
+    assert(statusOf(timedMint) == 200, "emissao com TTL ok")
+    var timedToken = mapField(json.decode<Map<String, String>>(bodyOf(timedMint)), "token")
+    assert(timedToken.startsWith("kfs_"), "TTL tambem emite kfs_")
+    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", timedToken)) == 200, "token com TTL futuro autoriza")
+    assert(bodyOf(httpPostJson(controlPort, "/v1/services/tokens", listBody, accountToken)).indexOf("expiresAt") >= 0, "inventario marca expiracao")
+    var badTtl = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + secretId + "\",\"ttlHours\":\"lixo\"}", accountToken)
+    assert(statusOf(badTtl) == 400, "TTL invalido -> 400")
+    assert(bodyOf(badTtl).indexOf("KCF062") >= 0, "codigo estavel de TTL")
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + secretId + "\",\"ttlHours\":\"0\"}", accountToken)) == 400, "TTL zero -> 400")
+
     // Nota: nao testamos "PUBLIC com Authorization" porque um servico local
     // Kof (web.app) recusa QUALQUER Authorization antes do handler (L8). Em
     // PUBLIC o Edge repassa o header como proxy transparente; em AUTHENTICATED
