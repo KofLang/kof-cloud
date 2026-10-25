@@ -79,7 +79,23 @@ DoctorReport doctorCheck(String manifestPath) {
     }
     lines.add(doctorOkLine("dispositivo registrado (" + identity.deviceId + ")"))
 
-    // 4. Servicos publicados acessiveis + porta local respondendo.
+    // 4. Tunel real no Edge (presenca confirmada, nao inferida do processo
+    // local): sem sessao viva nao ha rota, mesmo com manifesto ok. Antes
+    // dos servicos para rodar tambem sem `kofcloud.json`.
+    try {
+        var presenceRaw = requireOk(http.get(session.controlUrl + "/v1/presence", authHeader(session.token)))
+        if (bodyContainsId(presenceRaw, identity.deviceId)) {
+            lines.add(doctorOkLine("tunel ativo no Edge (sessao viva)"))
+        } else {
+            lines.add(doctorFailLine("tunel", "sem sessao no Edge — rode: kof cloud connect"))
+            failed = true
+        }
+    } catch (String e) {
+        lines.add(doctorFailLine("tunel", "presenca indisponivel (" + e + ")"))
+        failed = true
+    }
+
+    // 5. Servicos publicados acessiveis + porta local respondendo.
     if (manifestPath.length == 0) {
         manifestPath = defaultManifestPath()
     }

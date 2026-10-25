@@ -55,7 +55,23 @@ reconecta e os serviços continuam rodando.
 
 Sem Nginx, sem Caddy, sem certificado manual.
 
-## 3.1 Deploy declarativo (`kofcloud.json`)
+## 3.1 Presenca real do tunel (`GET /v1/presence`)
+
+```
+kof cloud status    → Tunel: ONLINE (sessao viva no Edge)
+kof cloud doctor    → ok tunel ativo no Edge (sessao viva)
+
+GET /v1/presence (X-KofCloud-Token: kfc_...)
+  → ["<deviceId>", ...]   # so devices DA CONTA com sessao viva
+                            # neste Edge; vazio = offline (nao erro)
+```
+
+O Edge espelha bind/unbind das sessoes num mapa do Registry (nao
+persistido — restart limpa, reconexao recria). Filtrado por conta:
+inexistente/alheio nunca aparece. `status` e `doctor` deixam de inferir
+pelo processo local e passam a mostrar o que o Edge confirma.
+
+## 3.2 Deploy declarativo (`kofcloud.json`)
 
 ```
 kofcloud.json:

@@ -38,6 +38,11 @@ class Registry {
     // do Edge (config `kofcloud.edgeHosts`, separados por virgula). Comparacao
     // exata, sem sufixo: subdominios de um host esperado NAO valem.
     List<String> edgeHosts
+    // Espelho das sessoes vivas do Edge NESTE processo (deviceId -> true).
+    // Nao e persistido: presenca e efemera, some no restart. So o Edge
+    // escreve aqui (via bind/unbind); o control plane so le, filtrado por
+    // conta. Em deploy multi-processo cada Edge tem o seu mapa.
+    Map<String, Bool> edgeOnline
 
     constructor(path: String) {
         this.path = path
@@ -48,6 +53,7 @@ class Registry {
         this.serviceTokens = listOf<ServiceToken>()
         this.customDomains = listOf<CustomDomain>()
         this.audit = listOf<AuditEvent>()
+        this.edgeOnline = mapOf()
         this.maxDevices = limitDevices()
         this.maxServices = limitServices()
         this.edgeHosts = parseEdgeHosts(config.str("kofcloud.edgeHosts", ""))
@@ -312,6 +318,34 @@ class Registry {
         }
         this.devices = updated
         this.save()
+    }
+
+    // Espelho de presenca do Edge (mesmo processo): true ao ligar o tunel,
+    // false ao desligar. Sem persistencia — restart limpa tudo, e a primeira
+    // reconexao do Agent recria a entrada.
+    void noteEdgeOnline(String deviceId, Bool online) {
+        if (online) {
+            this.edgeOnline.put(deviceId, true)
+        } else {
+            this.edgeOnline.remove(deviceId)
+        }
+    }
+
+    Bool edgeIsOnline(String deviceId) {
+        return this.edgeOnline.get(deviceId) == true
+    }
+
+    // Ids dos dispositivos DA CONTA com sessao viva neste Edge. Filtragem por
+    // conta aqui (e nao no chamador): o endpoint responde so com o que e do
+    // dono do token — nada de terceiros vaza, nem existencia.
+    List<String> onlineDeviceIdsFor(String accountId) {
+        var out = listOf<String>()
+        for (var device in this.devicesForAccount(accountId)) {
+            if (this.edgeIsOnline(device.id)) {
+                out.add(device.id)
+            }
+        }
+        return out
     }
 
     // ---- tokens de servico (AUTHENTICATED) ----

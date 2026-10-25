@@ -189,6 +189,24 @@ Int cmdStatus(List<String> args) {
     } else {
         println("Agente:       ATIVO")
     }
+    // Tunel real, confirmado pelo Edge (nao pela maquina local): o control
+    // plane responde com os devices que tem sessao viva NESTE Edge. So conta
+    // o device atual; OFFLINE aqui significa "sem rota" mesmo com o agente
+    // rodando (tunel caiu, Edge reiniciou, conta suspensa...).
+    try {
+        var raw = requireOk(http.get(session.controlUrl + "/v1/presence", authHeader(session.token)))
+        // Lista JSON de ids (strings). Comparacao por substring com aspas:
+        // IDs sao UUIDs sem aspas internas, entao nao ha falso positivo.
+        // (json.decode nao suporta List<Map<...>> — JSN004.)
+        var online = bodyContainsId(raw, identity.deviceId)
+        if (online) {
+            println("Tunel:        ONLINE (sessao viva no Edge)")
+        } else {
+            println("Tunel:        OFFLINE (sem sessao no Edge — rode: kof cloud connect)")
+        }
+    } catch (String e) {
+        println("Tunel:        desconhecido (" + e + ")")
+    }
     try {
         var services = fetchServices(session.controlUrl, session.token)
         println("Servicos:     " + intToString(services.size))

@@ -22,8 +22,8 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 
 | # | Alvo | Arquivo | O que prova |
 |---|---|---|---|
-| U1 | enquadramento + bytes + frame + tunnel + sessão | `tests/protocol_test.kf` (10 testes) | split por `\n`, buffer parcial, base64 ida-e-volta, `t` de cada frame, HELLO/WELCOME, streams independentes |
-| U2 | hostnames + exposição + texto | `tests/hosts_test.kf` (7 testes) | `<name>.<handle>.kofcloud.io`, handle inválido, `PRIVATE` não roteia, `OFFLINE` não roteia, parse seguro |
+| U1 | enquadramento + bytes + frame + tunnel + sessão | `tests/protocol_test.kf` (11 testes) | split por `\n`, buffer parcial, base64 ida-e-volta, `t` de cada frame, HELLO/WELCOME, streams independentes, OPENED aceito/recusado |
+| U2 | hostnames + exposição + texto | `tests/hosts_test.kf` (8 testes) | `<name>.<handle>.kofcloud.io`, handle inválido, `PRIVATE` não roteia, `OFFLINE` não roteia, parse seguro, `bodyContainsId` exato entre aspas |
 | U3 | identidade + cifra + tokens | `tests/identity_test.kf` (7 testes) | par X25519, session key, HKDF, AES-GCM, hash constante, prefixo `kft_` |
 | U4 | backoff | `tests/backoff_test.kf` (3 testes) | crescimento, teto, jitter, defaults |
 | U5 | registry (conta/device/serviço/store) | `tests/registry_test.kf` (7 testes) | handle duplicado, login, hostname, `PRIVATE` sem rota, revoke poda, persistência |
@@ -42,6 +42,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U18 | daemon user-level | `tests/daemon_test.kf` (3 testes) | unit com Restart/NoNewPrivileges/aponta connect, paths user-level, sem systemctl nao quebra |
 | U19 | hot-reload + handshake por stream | `tests/reload_test.kf` (1 teste) + `tests/protocol_test.kf` (OPENED aceito/recusado) | servico publicado depois do connect roteia sem reconnect; OPEN recusado responde 502 sem travar o relay |
 | U20 | diagnostico doctor | `tests/doctor_test.kf` (3 testes) | para na primeira camada sem login, manifesto com caminho no erro, fim a fim acusa/aprova servico |
+| U21 | presenca real do tunel | `tests/presence_test.kf` (1 teste) | tunel vivo listado em /v1/presence, morto some; 401 sem token, filtro por conta, sem vazar device alheio |
 
 ## Integração
 

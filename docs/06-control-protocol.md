@@ -35,6 +35,7 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/services/status` | dispositivo | `{serviceId,status}` (health reportado pelo Agent) |
 | `POST` | `/v1/heartbeat` | dispositivo | `{deviceId}` → `{ok:true, serverTime}` |
 | `POST` | `/v1/connect` | dispositivo | `{deviceId}` → `{edgeHost,edgePort,tunnelToken}` |
+| `GET` | `/v1/presence` | conta | devices DA CONTA com túnel vivo neste Edge → `["<deviceId>", ...]` (vazio = offline, não erro; 401 sem token; nada de terceiros vaza) |
 | `GET` | `/v1/domains` | conta | domínios/hostnames da conta (wildcard + serviços + próprios) |
 | `POST` | `/v1/domains` | conta | registra domínio próprio `{hostname,service}` → `{hostname,status,instruction}` (PENDING + CNAME) |
 | `POST` | `/v1/domains/verify` | conta | `{hostname}` → `{hostname,status,verifiedAt}` (verifica o DNS e ativa a rota) |
@@ -107,7 +108,6 @@ X-KofCloud-Token: kfc_...
 ```
 
 `connect` (o Agent pede o ponto de entrada do Edge):
-
 ```
 POST /v1/connect
 X-KofCloud-Token: kfc_...
@@ -116,6 +116,20 @@ X-KofCloud-Token: kfc_...
 200 {"edgeHost":"127.0.0.1","edgePort":7000,"tunnelToken":"kft_...",
      "heartbeatMs":15000,"services":[ ... ]}
 ```
+
+Presença real do túnel (o Edge espelha bind/unbind num mapa do Registry, não
+persistido; filtrado por conta — inexistente/alheio nunca aparece):
+
+```
+GET /v1/presence
+X-KofCloud-Token: kfc_...
+
+200 ["<deviceId>", ...]
+```
+
+Sem túnel a lista vem vazia (ausência, não erro). `kof cloud status` mostra
+`Tunel: ONLINE/OFFLINE` confirmado pelo Edge e o `doctor` checa a camada do
+túnel antes dos serviços (roda também sem `kofcloud.json`).
 
 ## Erros
 

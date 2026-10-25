@@ -1,0 +1,96 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.store.Store
+import testkit.Support
+
+// Presenca real fim a fim: o tunel sobe, /v1/presence lista o device;
+// o tunel cai, a lista esvazia. O endpoint e autenticado e filtrado por
+// conta: sem token -> 401; conta alheia nao ve device de outra conta.
+
+test "presenca: tunel vivo aparece em /v1/presence; morto some", "presence" {
+    var localSvc = 19731
+    var controlPort = 19732
+    var tunnelPort = 19733
+    var httpPort = 19734
+
+    var app = web.app()
+    app.get("/") { return "svc-presence" }
+    var server = spawn { app.listen(localSvc) }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-pres-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-pres-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-pres-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+
+    // Sem tunel: lista vazia (200, nao 404 — ausencia, nao erro).
+    var empty = httpGetToken(controlPort, "/v1/presence", accountToken)
+    assert(statusOf(empty) == 200, "presence 200 sem tunel")
+    assert(bodyOf(empty).indexOf(deviceId) < 0, "device offline nao listado")
+
+    // Sem token: 401 igual as demais rotas autenticadas.
+    assert(statusOf(httpGetRaw(controlPort, "/v1/presence", "127.0.0.1")) == 401, "sem token -> 401")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+
+    var present = httpGetToken(controlPort, "/v1/presence", accountToken)
+    assert(statusOf(present) == 200, "presence 200 com tunel")
+    assert(bodyOf(present).indexOf("\"" + deviceId + "\"") >= 0, "device listado com sessao viva")
+
+    // Conta alheia nao ve device de outra conta (mesmo sabendo o id).
+    var anaCreated = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
+    var anaToken = mapField(json.decode<Map<String, String>>(bodyOf(anaCreated)), "token")
+    var anaView = httpGetToken(controlPort, "/v1/presence", anaToken)
+    assert(statusOf(anaView) == 200, "alheia lista a propria (vazia)")
+    assert(bodyOf(anaView).indexOf(deviceId) < 0, "device de mel nao vaza para ana")
+
+    // Tunel cai: sai da lista (poll com teto, sem dormir fixo).
+    writeTextTo(agentStop, "stop")
+    var drained = false
+    var waits = 60
+    while (waits > 0 && drained == false) {
+        if (bodyOf(httpGetToken(controlPort, "/v1/presence", accountToken)).indexOf(deviceId) < 0) {
+            drained = true
+        } else {
+            time.sleep(250)
+            waits = waits - 1
+        }
+    }
+    assert(drained, "sessao encerrada some da presenca")
+
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}

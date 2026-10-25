@@ -53,3 +53,12 @@ test "text: parseIntSafe aceita digito e recusa lixo" {
     assert(parseIntSafe("80a", 7) == 7, "lixo usa default")
     assert(parseIntSafe("-5", 0) == -5, "negativo")
 }
+
+test "text: bodyContainsId casa id exato entre aspas" {
+    var body = "[\"abc-123\",\"def-456\"]"
+    assert(bodyContainsId(body, "abc-123") == true, "id presente")
+    assert(bodyContainsId(body, "abc-12") == false, "prefixo nao casa")
+    assert(bodyContainsId(body, "zzz") == false, "ausente")
+    assert(bodyContainsId(body, "") == false, "vazio nunca casa")
+    assert(bodyContainsId("[]", "abc-123") == false, "lista vazia")
+}

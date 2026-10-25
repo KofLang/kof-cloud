@@ -70,3 +70,13 @@ String requireOk(String raw) {
     }
     return raw
 }
+
+// Corpo JSON e um id opaco (UUID/hex, sem aspas internas)? Presenca exata
+// entre aspas — evita falso positivo de prefixo. Usado onde
+// json.decode<List<...>> nao compila (JSN004 nao suporta colecoes aninhadas).
+Bool bodyContainsId(String body, String id) {
+    if (id.length == 0) {
+        return false
+    }
+    return body.indexOf("\"" + id + "\"") >= 0
+}

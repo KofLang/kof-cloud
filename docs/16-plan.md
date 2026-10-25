@@ -122,6 +122,14 @@ espera OPENED antes de DATA, e OPEN recusado vira 502 em vez de travar o
 relay para sempre (buraco real: publicar-depois-do-connect pendurava a vaga).
 Prova: `tests/reload_test.kf` + OPENED em `tests/protocol_test.kf`.
 
+**Estado (presenca real do tunel): ✅ implementado.** O Edge espelha
+bind/unbind num mapa do Registry (nao persistido); `GET /v1/presence`
+(autenticado, filtrado por conta) lista devices com sessao viva; `kof cloud
+status` mostra `Tunel: ONLINE/OFFLINE` confirmado pelo Edge (nao inferido do
+processo local) e o `doctor` ganhou a camada do tunel. Prova:
+`tests/presence_test.kf` (vivo listado, morto some, 401 sem token, filtro
+por conta).
+
 Falta fatiado (Fase 7): build/artefato, auto-update. `kof cloud doctor` (somente-leitura: login, control plane,
 device, servicos do manifesto) responde "onde quebrou" sem alterar nada.
 

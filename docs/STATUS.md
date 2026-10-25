@@ -15,6 +15,7 @@
 | Abuse prevention (2 slices) | ✅ verde | `ratelimit_test.kf`, `abuse_test.kf` |
 | Debitos de limites (frame, idle, conns) | ✅ verde | `frames_test.kf`, `idle_test.kf`, `conns_test.kf` |
 | Fase 7 slices 1–4 (deploy, --check, daemon, doctor) | ✅ verde | `deploy_test.kf`, `daemon_test.kf`, `doctor_test.kf` |
+| Presença real do túnel | ✅ verde | `presence_test.kf` (1), `hosts_test.kf` (bodyContainsId) |
 | Hot-reload + handshake por stream | ✅ verde (debito quitado) | `reload_test.kf`, `protocol_test.kf` |
 | Fase 7 slice 5+ (build/artefato) | ⏳ nao iniciado | — |
 | TLS/SNI no Edge, ACME | ⏳ externo por desenho | `12-tls.md` |
@@ -24,7 +25,7 @@
 ```bash
 export PATH=/home/mel/tools/jdk-25/bin:$PATH
 KOF=/home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar
-java -jar $KOF test --target jvm --timeout 150   # 23 suites, 0 falhas
+java -jar $KOF test --target jvm --timeout 150   # 25 suites, 0 falhas
 java -jar $KOF build --output /tmp/kofcloud-check # compila sem erro
 ```
 
@@ -35,19 +36,19 @@ Ver `13-kof-apis.md` e `14-modules.md`.
 ## Marcadores por area (goldens)
 
 Cada suite imprime `PASS <nome>` por teste e `0 failed of N tests` no fim;
-o run total imprime `21 passed, 0 failed`. Falha = nome do teste + assert
+o run total imprime `25 passed, 0 failed`. Falha = nome do teste + assert
 + abort sem cleanup (listeners presos ate o `--timeout` matar — ver
 `15-tests.md` sobre sentinelas).
 
 | Suite | Arquivo | Testes |
 |---|---|---|
 | framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 11 |
-| hostnames/exposicao/texto | `tests/hosts_test.kf` | 7 |
+| hostnames/exposicao/texto | `tests/hosts_test.kf` | 8 |
 | identidade/cifra/tokens | `tests/identity_test.kf` | 7 |
 | backoff | `tests/backoff_test.kf` | 3 |
 | registry | `tests/registry_test.kf` | 7 |
 | limites | `tests/limits_test.kf` | 6 |
-| service token | `tests/service_token_test.kf` | 7 |
+| service token | `tests/service_token_test.kf` | 9 |
 | erros R6 | `tests/errors_test.kf` | 5 |
 | dominios | `tests/domains_test.kf` | 7 |
 | metricas | `tests/metrics_test.kf` | 6 |
@@ -62,11 +63,12 @@ o run total imprime `21 passed, 0 failed`. Falha = nome do teste + assert
 | doctor | `tests/doctor_test.kf` | 3 |
 | hot-reload | `tests/reload_test.kf` | 1 |
 | control plane | `tests/control_test.kf` | 2 |
+| presenca | `tests/presence_test.kf` | 1 |
 | e2e | `tests/e2e_test.kf` | 1 |
 | e2e multiservico | `tests/e2e_multiservice_test.kf` | 1 |
 | e2e autenticado | `tests/e2e_authenticated_test.kf` | 1 |
 
-Total: 103 testes. Ver `15-tests.md` para a matriz.
+Total: 106 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

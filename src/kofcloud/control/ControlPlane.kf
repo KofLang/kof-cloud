@@ -236,6 +236,25 @@ HttpResult handleListDevices(Registry registry, String? authHeader) {
     return HttpResult(200, deviceListJson(registry.devicesForAccount(account.id)))
 }
 
+// Presenca real: quais devices DESTA CONTA tem tunel vivo no Edge deste
+// processo. Autenticado e filtrado por conta (igual a /v1/devices): nada de
+// terceiros vaza, nem existencia. Quando control e Edge rodam separados, o
+// control responde lista vazia (sem dado errado — ausencia, nao mentira).
+HttpResult handlePresence(Registry registry, String? authHeader) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var parts = listOf<String>()
+    for (var deviceId in registry.onlineDeviceIdsFor(account.id)) {
+        // Array de strings: evita decode aninhado no cliente (JSN004 nao
+        // suporta List<Map<...>>). So ids — sem status, sem horario, sem nada
+        // que permita inferir atividade de terceiros.
+        parts.add(json.encode(deviceId))
+    }
+    return HttpResult(200, "[" + joinStrings(parts, ",") + "]")
+}
+
 HttpResult handleRevokeDevice(Registry registry, String? authHeader, String bodyText) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
@@ -682,6 +701,13 @@ class ControlPlane {
         }
         app.get("/v1/devices") {
             var result = handleListDevices(reg, header("x-kofcloud-token"))
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.get("/v1/presence") {
+            var result = handlePresence(reg, header("x-kofcloud-token"))
             if (result.code == 200) {
                 return result.body
             }
