@@ -233,8 +233,50 @@ test "erros: Edge devolve codigos estaveis (rota, auth, offline, conteudo)", "er
 test "erros: Hint orienta sem vazar segredo ou recurso alheio", "errors-hint" {
     assert(errHint("KCF004: missing or invalid account token").indexOf("login") >= 0, "KCF004 sugere login")
     assert(errHint("KCF022: not the owner of device").indexOf("outra conta") >= 0, "KCF022 sem revelar dono")
+    assert(errHint("KCF060: not the owner of service").indexOf("outra conta") >= 0, "KCF060 sem revelar dono")
+    assert(errHint("KCF061: serviceId and token required").indexOf("service token") >= 0, "KCF061 sugere comando")
+    assert(errHint("KCF062: ttlHours must be positive").indexOf("--ttl") >= 0, "KCF062 sugere flag")
     assert(errHint("KCF101: authentication required").indexOf("kfs_") >= 0, "KCF101 sugere service token")
     assert(errHint("KCF102: device not connected").indexOf("connect") >= 0, "KCF102 sugere connect")
     assert(errHint("KCF080: too many active devices").indexOf("revoke") >= 0, "KCF080 sugere revoke")
     assert(errHint("KCF999: algo desconhecido") == "", "codigo desconhecido nao inventa dica")
+}
+
+test "erros: revoke e TTL invalidos viajam como KCF061/KCF062", "errors-token" {
+    var controlPort = 19540
+    var registry = Registry("/tmp/kofcloud-errt-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}"
+    var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
+    assert(statusOf(published) == 200, "servico publicado")
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
+
+    // Revoke sem serviceId nem token: 400 KCF061 (nao 404 — e erro de
+    // requisicao, nao recurso ausente).
+    var noFields = httpPostJson(controlPort, "/v1/services/token/revoke", "{}", accountToken)
+    assert(statusOf(noFields) == 400, "revoke sem campos -> 400")
+    assert(codeIs(errorCodeOf(noFields), "KCF061"), "KCF061 campos obrigatorios")
+    // Revoke sem o token: mesmo 400 (o serviceId sozinho nao basta).
+    var noTokenField = httpPostJson(controlPort, "/v1/services/token/revoke", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
+    assert(statusOf(noTokenField) == 400, "revoke sem token -> 400")
+    assert(codeIs(errorCodeOf(noTokenField), "KCF061"), "KCF061 sem token")
+    // Revoke de token inexistente: 404 opaco, nao 400 (a forma esta certa,
+    // o recurso e que nao existe).
+    var ghost = httpPostJson(controlPort, "/v1/services/token/revoke", "{\"serviceId\":\"" + serviceId + "\",\"token\":\"kfs_inexistente\"}", accountToken)
+    assert(statusOf(ghost) == 404, "revoke de fantasma -> 404 opaco")
+
+    // TTL zero e lixo: 400 KCF062 (na borda, igual ao e2e autenticado).
+    var zeroTtl = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"0\"}", accountToken)
+    assert(statusOf(zeroTtl) == 400, "TTL zero -> 400")
+    assert(codeIs(errorCodeOf(zeroTtl), "KCF062"), "KCF062 TTL positivo")
+    var junkTtl = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"para-sempre\"}", accountToken)
+    assert(statusOf(junkTtl) == 400, "TTL lixo -> 400")
+    assert(codeIs(errorCodeOf(junkTtl), "KCF062"), "KCF062 lixo")
 }
