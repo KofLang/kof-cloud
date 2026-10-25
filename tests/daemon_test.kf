@@ -15,6 +15,17 @@ test "daemon: unit tem restart, sem privilegios e aponta o connect", "daemon" {
     assert(text.indexOf("User=") < 0, "sem User= (roda como o proprio usuario)")
 }
 
+test "daemon: ExecStart usa a forma publica kof cloud connect", "daemon-cloud-prefix" {
+    // Contrato com Main.kf (prefixo `cloud` opcional la, obrigatorio aqui):
+    // sem ele a unit chamaria um subcomando inexistente no binario do usuario.
+    var text = daemonUnitText("kof", "http://127.0.0.1:8080")
+    assert(text.indexOf("ExecStart=kof cloud connect --control ") >= 0, "prefixo cloud presente")
+    assert(text.indexOf("ExecStart=kof connect ") < 0, "sem forma sem prefixo")
+    // Com binario absoluto (o que install grava de verdade), igual.
+    var abs = daemonUnitText("/usr/local/bin/kof", "http://127.0.0.1:8080")
+    assert(abs.indexOf("ExecStart=/usr/local/bin/kof cloud connect --control http://127.0.0.1:8080") >= 0, "absoluto tambem leva o prefixo")
+}
+
 test "daemon: paths ficam no espaco do usuario", "daemon-paths" {
     assert(daemonUnitName() == "kofcloud-agent.service", "nome da unit")
     assert(daemonUnitPath().endsWith("/.config/systemd/user/kofcloud-agent.service"), "path user-level")

@@ -37,6 +37,8 @@ String daemonUnitPath() {
 // Unit que executa exatamente o mesmo `connect` da CLI, com restart e sem
 // privilegios extras. `kof` resolvido no PATH do usuario no momento do
 // install (gravado absoluto para o systemd nao depender de ambiente).
+// O prefixo `cloud` e exigido (nao opcional): `Main.kf` aceita `kof cloud
+// <comando>` e `kof run Main.kf <comando>`, e a unit usa a forma publica.
 String daemonUnitText(String kofBin, String controlUrl) {
     var out = "[Unit]\n"
     out = out + "Description=KofCloud Agent (tunel reverso)\n"
