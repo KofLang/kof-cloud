@@ -41,7 +41,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U17 | deploy declarativo | `tests/deploy_test.kf` (5 testes) | manifesto válido/inválido com erro posicional, port número/string, fim a fim (publica sem duplicar, down remove só o manifesto), verify acusa/aprova |
 | U18 | daemon user-level | `tests/daemon_test.kf` (3 testes) | unit com Restart/NoNewPrivileges/aponta connect, paths user-level, sem systemctl nao quebra |
 | U19 | hot-reload + handshake por stream | `tests/reload_test.kf` (1 teste) + `tests/protocol_test.kf` (OPENED aceito/recusado) | servico publicado depois do connect roteia sem reconnect; OPEN recusado responde 502 sem travar o relay |
-| U20 | diagnostico doctor | `tests/doctor_test.kf` (3 testes) | para na primeira camada sem login, manifesto com caminho no erro, fim a fim acusa/aprova servico |
+| U20 | diagnostico doctor | `tests/doctor_test.kf` (4 testes) | para na primeira camada sem login, manifesto com caminho no erro, **camada do tunel pura (presente/ausente/erro sem rede nem HOME)**, fim a fim acusa/aprova servico |
 | U21 | presenca real do tunel | `tests/presence_test.kf` (1 teste) | tunel vivo listado em /v1/presence, morto some; 401 sem token, filtro por conta, sem vazar device alheio |
 
 ## Integração

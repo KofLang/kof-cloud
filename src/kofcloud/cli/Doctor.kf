@@ -28,6 +28,19 @@ String doctorFailLine(String label, String why) {
     return "FALHA " + label + ": " + why
 }
 
+// Linha da camada do tunel a partir do corpo de /v1/presence ja buscado
+// (ou do erro da busca): pura, sem rede nem HOME — testavel sem tunel.
+// Devolve a linha pronta; "" significa "ok, sessao viva".
+String doctorTunnelLine(String presenceRaw, String deviceId, String fetchError) {
+    if (fetchError.length > 0) {
+        return doctorFailLine("tunel", "presenca indisponivel (" + fetchError + ")")
+    }
+    if (bodyContainsId(presenceRaw, deviceId)) {
+        return doctorOkLine("tunel ativo no Edge (sessao viva)")
+    }
+    return doctorFailLine("tunel", "sem sessao no Edge — rode: kof cloud connect")
+}
+
 DoctorReport doctorCheck(String manifestPath) {
     var lines = listOf<String>()
     var failed = false
@@ -81,17 +94,17 @@ DoctorReport doctorCheck(String manifestPath) {
 
     // 4. Tunel real no Edge (presenca confirmada, nao inferida do processo
     // local): sem sessao viva nao ha rota, mesmo com manifesto ok. Antes
-    // dos servicos para rodar tambem sem `kofcloud.json`.
+    // dos servicos para rodar tambem sem `kofcloud.json`. A decisao vive
+    // em doctorTunnelLine (pura, com teste); aqui so busca e formata.
+    var tunnelLine = ""
     try {
         var presenceRaw = requireOk(http.get(session.controlUrl + "/v1/presence", authHeader(session.token)))
-        if (bodyContainsId(presenceRaw, identity.deviceId)) {
-            lines.add(doctorOkLine("tunel ativo no Edge (sessao viva)"))
-        } else {
-            lines.add(doctorFailLine("tunel", "sem sessao no Edge — rode: kof cloud connect"))
-            failed = true
-        }
+        tunnelLine = doctorTunnelLine(presenceRaw, identity.deviceId, "")
     } catch (String e) {
-        lines.add(doctorFailLine("tunel", "presenca indisponivel (" + e + ")"))
+        tunnelLine = doctorTunnelLine("", identity.deviceId, e)
+    }
+    lines.add(tunnelLine)
+    if (tunnelLine.startsWith("FALHA")) {
         failed = true
     }
 

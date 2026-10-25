@@ -60,7 +60,7 @@ o run total imprime `25 passed, 0 failed`. Falha = nome do teste + assert
 | conexoes | `tests/conns_test.kf` | 2 |
 | deploy | `tests/deploy_test.kf` | 5 |
 | daemon | `tests/daemon_test.kf` | 3 |
-| doctor | `tests/doctor_test.kf` | 3 |
+| doctor | `tests/doctor_test.kf` | 4 |
 | hot-reload | `tests/reload_test.kf` | 1 |
 | control plane | `tests/control_test.kf` | 2 |
 | presenca | `tests/presence_test.kf` | 1 |
@@ -68,7 +68,7 @@ o run total imprime `25 passed, 0 failed`. Falha = nome do teste + assert
 | e2e multiservico | `tests/e2e_multiservice_test.kf` | 1 |
 | e2e autenticado | `tests/e2e_authenticated_test.kf` | 1 |
 
-Total: 106 testes. Ver `15-tests.md` para a matriz.
+Total: 107 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

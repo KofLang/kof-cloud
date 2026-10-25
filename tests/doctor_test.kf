@@ -27,6 +27,25 @@ test "doctor: manifesto invalido e reportado com caminho", "doctor-manifest" {
     assert(report.ok == false, "falha sem login")
 }
 
+test "doctor: camada do tunel decide sem rede nem HOME", "doctor-tunnel" {
+    // Presente: corpo de /v1/presence com o id entre aspas (formato real).
+    var online = doctorTunnelLine("[\"dev-1\",\"dev-2\"]", "dev-1", "")
+    assert(online.startsWith("ok"), "sessao viva e ok")
+    assert(online.indexOf("tunel") >= 0, "rotula a camada")
+    // Ausente: mesmo corpo, outro device — FALHA que aponta o connect.
+    // (Prefixo sozinho nao casa: bodyContainsId exige as aspas.)
+    var offline = doctorTunnelLine("[\"dev-1\"]", "dev-10", "")
+    assert(offline.startsWith("FALHA tunel"), "sem sessao e FALHA")
+    assert(offline.indexOf("connect") >= 0, "orienta o proximo passo")
+    // Lista vazia: offline, nao erro.
+    var empty = doctorTunnelLine("[]", "dev-1", "")
+    assert(empty.startsWith("FALHA tunel"), "vazio tambem e FALHA")
+    // Busca falhou (rede/conta): FALHA distinta, com o motivo.
+    var failed = doctorTunnelLine("", "dev-1", "KCF004: unauthorized")
+    assert(failed.startsWith("FALHA tunel"), "erro de busca e FALHA")
+    assert(failed.indexOf("indisponivel") >= 0, "diz que nao deu para saber")
+}
+
 test "doctor: fim a fim acusa servico fora do ar e aprova quando sobe", "doctor-e2e" {
     var controlPort = 19741
     var path = "/tmp/kofcloud-doctor-" + crypto.randomHex(4) + ".json"
