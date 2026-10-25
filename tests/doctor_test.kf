@@ -1,6 +1,7 @@
 import kofcloud.cli.Daemon
 import kofcloud.cli.Deploy
 import kofcloud.cli.Doctor
+import kofcloud.cli.Usage
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.store.Store
@@ -16,6 +17,14 @@ test "doctor: sem login pede login e para na primeira camada", "doctor" {
     assert(report.ok == false, "falha sem login")
     assert(report.lines.size == 1, "para na primeira camada")
     assert(report.lines.get(0).startsWith("FALHA login local"), "aponta o login")
+}
+
+test "doctor: ajuda lista a camada do tunel", "doctor-usage" {
+    // Regressao: o help ficou para tras quando o doctor ganhou o tunel
+    // (README ja citava, Usage.kf nao). Puro, sem rede nem HOME.
+    var help = usageText()
+    assert(help.indexOf("doctor") >= 0, "menciona o doctor")
+    assert(help.indexOf("tunel") >= 0, "menciona o tunel")
 }
 
 test "doctor: manifesto invalido e reportado com caminho", "doctor-manifest" {
