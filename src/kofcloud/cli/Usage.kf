@@ -22,7 +22,7 @@ String usageText() {
     out = out + "  service status <nome>\n"
     out = out + "  service suspend <nome>\n"
     out = out + "  service unsuspend <nome>\n"
-    out = out + "  service token <nome>        (credencial kfs_ para AUTHENTICATED)\n"
+    out = out + "  service token <nome> [--ttl <horas>]  (credencial kfs_ para AUTHENTICATED)\n"
     out = out + "  service token-list <nome>   (inventario, sem valores)\n"
     out = out + "  service token-revoke <nome> <kfs_>  (revoga UMA credencial vazada)\n"
     out = out + "  domain list\n"

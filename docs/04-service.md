@@ -46,13 +46,31 @@ localmente. `kof cloud publish` é a única forma de criar rota.
 O Edge exige uma **credencial de serviço** (`kfs_`) antes de encaminhar:
 
 ```
-kof cloud service token secret      # emite (autenticado pela conta)
+kof cloud service token secret                 # emite (autenticado pela conta)
+kof cloud service token secret --ttl 24        # emite com expiracao de 1 dia
 curl -H 'Authorization: Bearer kfs_…' https://secret.mel.kofcloud.io/
 ```
 
 Sem credencial, ou com credencial de outro serviço, devolve `401` com
 `WWW-Authenticate: Bearer` — e **não** vaza o conteúdo. O token da conta
 (`kfc_`) **não** autoriza acesso público: as credenciais são separadas.
+
+**Ciclo de vida da credencial.** O valor `kfs_` em claro existe uma única
+vez: no instante da emissão. Depois, só o hash é guardado — não há como
+recuperar, só emitir outra. Operação do dia a dia:
+
+```
+kof cloud service token-list secret         # inventario: id curto + emissao (+ expiracao)
+kof cloud service token-revoke secret <kfs_…>   # revoga UMA (vazou, rotacao)
+```
+
+Detalhes honestos: sem `--ttl`, a credencial vale para sempre; com
+`--ttl <horas>`, expirado vira `401` (como revogado) e some do inventário
+na próxima validação (poda preguiçosa, contada em
+`kofcloud_control_service_tokens_expired_total`). O inventário nunca
+devolve o valor — só id curto (8 hex do hash) + emissão (+ expiração).
+Revogar credencial inexistente/alheia devolve o mesmo `404` opaco de
+recurso inexistente (sem oráculo entre contas).
 
 A autenticação acontece **no Edge**, antes de o tráfego tocar o túnel, e o Edge
 **consome** a credencial: ela é removida da requisição repassada ao serviço
