@@ -91,3 +91,11 @@ Int limitHttpWindowMs() {
 Int limitServiceConns() {
     return config.int("kofcloud.limits.serviceConns", 64)
 }
+
+// Teto do `agent.log` local (bytes). Append que estourar corta o inicio
+// (linhas inteiras, via trimLogHead) em vez de crescer sem limite: log
+// local de diagnostico, nao trilha de auditoria (essa vive no control
+// plane, em anel de 100). Default folgado para sessoes longas de connect.
+Int limitLogBytes() {
+    return config.int("kofcloud.limits.logBytes", 262144)
+}

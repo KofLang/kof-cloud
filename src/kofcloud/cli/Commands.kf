@@ -12,6 +12,7 @@ import kofcloud.identity.Keys
 import kofcloud.model.Device
 import kofcloud.model.Errors
 import kofcloud.model.Service
+import kofcloud.util.Limits
 import kofcloud.util.Text
 import kofcloud.store.Store
 
@@ -780,6 +781,15 @@ Int cmdLogs(List<String> args) {
         println("sem logs")
         return 0
     }
+    var tailRaw = flagValue(args, "--tail")
+    if (tailRaw.length > 0) {
+        var n = parseIntSafe(tailRaw, -1)
+        if (n <= 0) {
+            println("uso: kof cloud logs [--tail <linhas>]")
+            return 1
+        }
+        text = tailLines(text, n)
+    }
     println(text)
     return 0
 }
@@ -861,8 +871,12 @@ Int cmdServe(List<String> args) {
 void appendLog(String message) {
     var line = longToString(time.now()) + " " + message + "\n"
     var file = File(logPath())
+    // Teto anti-crescimento infinito: estouro corta o inicio (linhas
+    // inteiras), mantendo o recente. O que entra aqui nunca tem segredo
+    // (so marcos de sessao — ver cmdConnect); tokens e chaves jamais.
     if (file.exists()) {
-        file.appendText(line)
+        var capped = trimLogHead(readTextOr(logPath(), "") + line, limitLogBytes())
+        writeTextTo(logPath(), capped)
     } else {
         writeTextTo(logPath(), line)
     }

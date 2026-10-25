@@ -34,7 +34,7 @@ String usageText() {
     out = out + "  daemon install|status|uninstall   (systemd --user, sem root)\n"
     out = out + "  doctor [--file kofcloud.json]       (diagnostico: login, control, device, servicos)\n"
     out = out + "  audit                     (trilha de auditoria da conta)\n"
-    out = out + "  logs\n"
+    out = out + "  logs [--tail <linhas>]  (log local do agent, teto 256 KiB)\n"
     out = out + "\n"
     out = out + "  serve [--control-port 8080] [--tunnel-port 7000] [--http-port 8081]\n"
     out = out + "        sobe a plataforma (control plane + edge) localmente\n"

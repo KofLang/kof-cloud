@@ -62,3 +62,32 @@ test "text: bodyContainsId casa id exato entre aspas" {
     assert(bodyContainsId(body, "") == false, "vazio nunca casa")
     assert(bodyContainsId("[]", "abc-123") == false, "lista vazia")
 }
+
+test "text: tailLines devolve as ultimas linhas", "logs-tail" {
+    var log = "l1\nl2\nl3\n"
+    assert(tailLines(log, 2) == "l2\nl3\n", "duas ultimas")
+    assert(tailLines(log, 5) == log, "mais que o total devolve tudo")
+    assert(tailLines(log, 0) == log, "zero devolve tudo")
+    assert(tailLines(log, -1) == log, "negativo devolve tudo")
+    assert(tailLines("so-uma\n", 1) == "so-uma\n", "linha unica")
+    assert(tailLines("", 3) == "", "vazio devolve vazio")
+    // Sem trailing newline: a parcial conta como linha.
+    assert(tailLines("a\nb", 1) == "b\n", "parcial conta")
+}
+
+test "text: trimLogHead corta o inicio em linhas inteiras", "logs-cap" {
+    var log = "l1-antiga\nl2\nl3-recente\n"
+    // Teto folgado: nada muda.
+    assert(trimLogHead(log, 1000) == log, "dentro do teto intacto")
+    // Teto zero/desligado: nada muda.
+    assert(trimLogHead(log, 0) == log, "teto zero desliga")
+    // Teto curto: corta l1, mantem o fim em linhas inteiras.
+    var trimmed = trimLogHead(log, 12)
+    assert(trimmed.indexOf("l1-antiga") < 0, "inicio velho sai")
+    assert(trimmed.indexOf("l3-recente") >= 0, "recente fica")
+    assert(trimmed.endsWith("\n"), "termina em linha inteira")
+    assert(trimmed.length <= 12 + "l2\n".length, "perde no maximo uma linha parcial")
+    // Sem newline no trecho util: devolve o fim cru.
+    var flat = trimLogHead("abcdefghij", 4)
+    assert(flat == "ghij", "sem newline corta cru")
+}

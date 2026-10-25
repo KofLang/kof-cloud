@@ -80,3 +80,46 @@ Bool bodyContainsId(String body, String id) {
     }
     return body.indexOf("\"" + id + "\"") >= 0
 }
+
+// Ultimas `n` linhas de um texto (para `logs --tail`). Puro e sem IO:
+// o chamador le o arquivo uma vez e formata aqui. `n` <= 0 devolve tudo;
+// texto sem trailing newline tambem funciona (a ultima linha parcial conta).
+String tailLines(String text, Int n) {
+    if (n <= 0) {
+        return text
+    }
+    var lines = text.split("\n")
+    // Desconto o "" apos o newline final: nao e uma linha de log.
+    var count = lines.size
+    if (count > 0 && lines[count - 1].length == 0) {
+        count = count - 1
+    }
+    if (n >= count) {
+        return text
+    }
+    var out = ""
+    var i = count - n
+    while (i < count) {
+        out = out + lines[i] + "\n"
+        i = i + 1
+    }
+    return out
+}
+
+// Corta o inicio de um log para caber no teto, mantendo o FIM (o recente)
+// e so linhas inteiras: acha o primeiro "\n" a partir do excesso e corta
+// ate depois dele. Sem newline no trecho util, devolve o fim cru.
+String trimLogHead(String text, Int maxBytes) {
+    if (maxBytes <= 0) {
+        return text
+    }
+    if (text.length <= maxBytes) {
+        return text
+    }
+    var cut = text.length - maxBytes
+    var at = text.indexOf("\n", cut)
+    if (at < 0) {
+        return text.substring(cut)
+    }
+    return text.substring(at + 1)
+}

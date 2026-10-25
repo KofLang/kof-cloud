@@ -112,7 +112,7 @@ deploy [--file kofcloud.json] [--check]   (publica + verifica saude local)
 down [--file kofcloud.json]     (remove os servicos do manifesto)
 doctor [--file kofcloud.json]   (diagnostico: login, control, device, tunel, servicos)
 audit                        (trilha de auditoria da conta)
-logs
+logs [--tail <linhas>]      (log local do agent, ultimas N linhas; teto 256 KiB)
 serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>]
 ```
 

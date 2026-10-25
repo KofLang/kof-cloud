@@ -23,7 +23,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | # | Alvo | Arquivo | O que prova |
 |---|---|---|---|
 | U1 | enquadramento + bytes + frame + tunnel + sessão | `tests/protocol_test.kf` (11 testes) | split por `\n`, buffer parcial, base64 ida-e-volta, `t` de cada frame, HELLO/WELCOME, streams independentes, OPENED aceito/recusado |
-| U2 | hostnames + exposição + texto | `tests/hosts_test.kf` (8 testes) | `<name>.<handle>.kofcloud.io`, handle inválido, `PRIVATE` não roteia, `OFFLINE` não roteia, parse seguro, `bodyContainsId` exato entre aspas |
+| U2 | hostnames + exposição + texto + log local | `tests/hosts_test.kf` (10 testes) | `<name>.<handle>.kofcloud.io`, handle inválido, `PRIVATE` não roteia, `OFFLINE` não roteia, parse seguro, `bodyContainsId` exato entre aspas, **`tailLines` (últimas N) + `trimLogHead` (teto em linhas inteiras)** |
 | U3 | identidade + cifra + tokens | `tests/identity_test.kf` (7 testes) | par X25519, session key, HKDF, AES-GCM, hash constante, prefixo `kft_` |
 | U4 | backoff | `tests/backoff_test.kf` (3 testes) | crescimento, teto, jitter, defaults |
 | U5 | registry (conta/device/serviço/store) | `tests/registry_test.kf` (7 testes) | handle duplicado, login, hostname, `PRIVATE` sem rota, revoke poda, persistência |
