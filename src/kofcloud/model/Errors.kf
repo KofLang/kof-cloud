@@ -73,6 +73,10 @@ String errInvalidExposure() {
     return "KCF045: exposure must be PUBLIC, AUTHENTICATED or PRIVATE"
 }
 
+String errInvalidProtocol() {
+    return "KCF046: protocol must be http (MVP: so HTTP/1.1 pelo tunel)"
+}
+
 // ---- credenciais de servico ----
 
 String errServiceTokenForbidden() {
@@ -194,6 +198,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF045") >= 0) {
         return "Exposicao invalida — use PUBLIC, AUTHENTICATED ou PRIVATE (`kof cloud publish <nome> --port <porta> --exposure PRIVATE`)."
+    }
+    if (raw.indexOf("KCF046") >= 0) {
+        return "O tunel do MVP so fala HTTP — revise o manifesto/API (protocol tem que ser http)."
     }
     if (raw.indexOf("KCF080") >= 0) {
         return "Limite de dispositivos ativos atingido — revogue um com `kof cloud device revoke <id>`."

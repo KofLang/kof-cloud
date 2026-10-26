@@ -70,6 +70,11 @@ test "erros: control plane devolve codigos estaveis", "errors" {
     var badExposure = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"db\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"5432\",\"protocol\":\"http\",\"exposure\":\"PUBLIK\"}", accountToken)
     assert(statusOf(badExposure) == 400, "exposure invalida -> 400")
     assert(codeIs(errorCodeOf(badExposure), "KCF045"), "KCF045 exposure")
+
+    // Protocol fora do MVP nao e aceito em silencio: o tunel so fala HTTP.
+    var badProtocol = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"db\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"5432\",\"protocol\":\"tcp\",\"exposure\":\"PRIVATE\"}", accountToken)
+    assert(statusOf(badProtocol) == 400, "protocol invalido -> 400")
+    assert(codeIs(errorCodeOf(badProtocol), "KCF046"), "KCF046 protocol")
 }
 
 test "erros: conta nao dona recebe 404 opaco (nao revela recurso alheio)", "errors-xacct" {
@@ -246,6 +251,7 @@ test "erros: Hint orienta sem vazar segredo ou recurso alheio", "errors-hint" {
     assert(errHint("KCF102: device not connected").indexOf("connect") >= 0, "KCF102 sugere connect")
     assert(errHint("KCF080: too many active devices").indexOf("revoke") >= 0, "KCF080 sugere revoke")
     assert(errHint("KCF045: exposure must be PUBLIC").indexOf("PRIVATE") >= 0, "KCF045 lista as opcoes")
+    assert(errHint("KCF046: protocol must be http").indexOf("HTTP") >= 0, "KCF046 diz que e so HTTP")
     assert(errHint("KCF999: algo desconhecido") == "", "codigo desconhecido nao inventa dica")
 }
 

@@ -96,6 +96,15 @@ List<ManifestService> parseManifest(String raw) {
         if (exposure != "PUBLIC" && exposure != "AUTHENTICATED" && exposure != "PRIVATE") {
             throw "servico \"" + name + "\" com exposure invalida: " + exposure
         }
+        // Mesma regra da API (KCF046): o tunel do MVP so fala HTTP. Falha
+        // posicional no parse, antes de publicar qualquer coisa.
+        var protocol = manifestField(entry, "protocol")
+        if (protocol.length == 0) {
+            protocol = "http"
+        }
+        if (protocol != "http") {
+            throw "servico \"" + name + "\" com protocol invalido: " + protocol
+        }
         if (name.length == 0) {
             throw "servico sem nome na posicao " + intToString(index)
         }

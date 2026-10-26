@@ -106,6 +106,15 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     // Vazia continua defaultando (ausente != invalido); as validas passam.
     var defaulted = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"db\",\"port\":5432,\"exposure\":\"PRIVATE\"}]}")
     assert(defaulted.get(0).exposure == "PUBLIC", "ausente defaulta")
+
+    // Protocol fora do MVP falha no parse, antes de publicar qualquer coisa.
+    var badProtocol = ""
+    try {
+        parseManifest("{\"services\":[{\"name\":\"db\",\"port\":5432,\"protocol\":\"tcp\"}]}")
+    } catch (String e) {
+        badProtocol = e
+    }
+    assert(badProtocol == "servico \"db\" com protocol invalido: tcp", "protocol com nome e valor")
     assert(defaulted.get(1).exposure == "PRIVATE", "valida passa")
 }
 
