@@ -90,6 +90,12 @@ List<ManifestService> parseManifest(String raw) {
         if (exposure.length == 0) {
             exposure = "PUBLIC"
         }
+        // Sem default silencioso para valor desconhecido: `exposureFrom`
+        // cairia para PUBLIC e um typo ("PUBLIK") exporia o que devia ser
+        // PRIVATE. Falha posicional, como nome e porta.
+        if (exposure != "PUBLIC" && exposure != "AUTHENTICATED" && exposure != "PRIVATE") {
+            throw "servico \"" + name + "\" com exposure invalida: " + exposure
+        }
         if (name.length == 0) {
             throw "servico sem nome na posicao " + intToString(index)
         }

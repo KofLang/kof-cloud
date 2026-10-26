@@ -93,6 +93,20 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     var tricky = parseManifest("{\"services\":[{\"name\":\"portaria\",\"port\":9000}]}")
     assert(tricky.get(0).name == "portaria", "substring nao casa")
     assert(tricky.get(0).port == 9000, "porta certa")
+
+    // Exposure desconhecida nao cai para PUBLIC em silencio: typo
+    // ("PUBLIK") num servico que devia ser PRIVATE exporia o servico.
+    var badExposure = ""
+    try {
+        parseManifest("{\"services\":[{\"name\":\"db\",\"port\":5432,\"exposure\":\"PUBLIK\"}]}")
+    } catch (String e) {
+        badExposure = e
+    }
+    assert(badExposure == "servico \"db\" com exposure invalida: PUBLIK", "exposure com nome e valor")
+    // Vazia continua defaultando (ausente != invalido); as validas passam.
+    var defaulted = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"db\",\"port\":5432,\"exposure\":\"PRIVATE\"}]}")
+    assert(defaulted.get(0).exposure == "PUBLIC", "ausente defaulta")
+    assert(defaulted.get(1).exposure == "PRIVATE", "valida passa")
 }
 
 test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {
