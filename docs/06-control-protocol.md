@@ -172,6 +172,7 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `400` | `KCF040` invalid service name | nome de serviço fora do formato |
 | `400` | `KCF043` localPort required | publish sem porta |
 | `400` | `KCF044` serviceId required | endpoint sem serviceId |
+| `400` | `KCF045` exposure inválida | publish com exposure fora de PUBLIC/AUTHENTICATED/PRIVATE |
 | `401` | `KCF003` invalid credentials | conta/senha não conferem (opaco: conta inexistente responde igual) |
 | `401` | `KCF004` unauthorized | token da conta ausente/inválido |
 | `404` | `KCF021` device not found | device inexistente **ou de outra conta** (opaco por desenho) |

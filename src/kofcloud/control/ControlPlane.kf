@@ -355,6 +355,9 @@ HttpResult handlePublishService(Registry registry, String? authHeader, String bo
     if (exposure.length == 0) {
         exposure = "PUBLIC"
     }
+    if (exposure != "PUBLIC" && exposure != "AUTHENTICATED" && exposure != "PRIVATE") {
+        return HttpResult(400, errorJson(errInvalidExposure()))
+    }
     if (localPort <= 0) {
         return HttpResult(400, errorJson(errLocalPort()))
     }

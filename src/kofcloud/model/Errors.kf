@@ -69,6 +69,10 @@ String errServiceIdRequired() {
     return "KCF044: serviceId required"
 }
 
+String errInvalidExposure() {
+    return "KCF045: exposure must be PUBLIC, AUTHENTICATED or PRIVATE"
+}
+
 // ---- credenciais de servico ----
 
 String errServiceTokenForbidden() {
@@ -187,6 +191,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF043") >= 0) {
         return "Informe a porta local: `kof cloud publish <nome> --port <porta>`."
+    }
+    if (raw.indexOf("KCF045") >= 0) {
+        return "Exposicao invalida — use PUBLIC, AUTHENTICATED ou PRIVATE (`kof cloud publish <nome> --port <porta> --exposure PRIVATE`)."
     }
     if (raw.indexOf("KCF080") >= 0) {
         return "Limite de dispositivos ativos atingido — revogue um com `kof cloud device revoke <id>`."
