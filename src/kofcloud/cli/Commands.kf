@@ -339,7 +339,14 @@ Int cmdPublish(List<String> args) {
     var deviceId = identity.deviceId
     var overrideDevice = flagValue(args, "--device")
     if (overrideDevice.length > 0) {
-        deviceId = overrideDevice
+        // Aceita NOME ou id: a ajuda documenta <nome>, mas ids tambem
+        // funcionam (compat). Nome resolve pela lista da conta; id passa
+        // direto e o control plane valida (404 opaco se alheio).
+        deviceId = deviceIdByNameOrId(session, overrideDevice)
+        if (deviceId.length == 0) {
+            println("dispositivo nao encontrado: " + overrideDevice)
+            return 1
+        }
     }
     if (name.length == 0 || port <= 0) {
         println("uso: kof cloud publish <nome> --port <porta>")
@@ -518,6 +525,25 @@ String serviceIdByName(LocalSession session, String name) {
     for (var service in services) {
         if (service.name == name) {
             return service.id
+        }
+    }
+    return ""
+}
+
+// Id do dispositivo por NOME ou id (para `--device`). Nome resolve pela
+// lista da conta (filtrada no control plane); id passa direto e o control
+// plane valida depois (404 opaco se alheio/inexistente). "" so quando o
+// NOME nao existe — id cru nunca e recusado aqui.
+String deviceIdByNameOrId(LocalSession session, String nameOrId) {
+    var devices = fetchDevices(session.controlUrl, session.token)
+    for (var device in devices) {
+        if (device.name == nameOrId) {
+            return device.id
+        }
+    }
+    for (var device in devices) {
+        if (device.id == nameOrId) {
+            return device.id
         }
     }
     return ""

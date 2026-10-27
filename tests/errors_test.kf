@@ -1,4 +1,6 @@
 import kofcloud.agent.Agent
+import kofcloud.cli.Commands
+import kofcloud.cli.Local
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.edge.EdgeState
@@ -118,6 +120,32 @@ test "erros: conta nao dona recebe 404 opaco (nao revela recurso alheio)", "erro
     assert(statusOf(melStatus) == 200, "dono altera")
     var svcAfter = registry.serviceById(serviceId)
     assert(svcAfter != null && svcAfter.status == "ONLINE", "status aplicado")
+}
+
+test "erros: device resolve por nome ou id (publish --device)", "errors-device" {
+    var path = "/tmp/kofcloud-errd-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    var control = ControlPlane(registry, 19546, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(19546, 60), "control plane no ar")
+
+    var created = httpPostJson(19546, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var controlUrl = "http://127.0.0.1:19546"
+    var session = LocalSession("", "", accountToken, controlUrl)
+
+    var nb = httpPostJson(19546, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pk1\"}", accountToken)
+    var nbId = mapField(json.decode<Map<String, String>>(bodyOf(nb)), "deviceId")
+    var srv = httpPostJson(19546, "/v1/devices", "{\"name\":\"server\",\"publicKey\":\"pk2\"}", accountToken)
+    var srvId = mapField(json.decode<Map<String, String>>(bodyOf(srv)), "deviceId")
+
+    // Nome resolve para o id (e o outro nome resolve para o outro id).
+    assert(deviceIdByNameOrId(session, "notebook") == nbId, "nome resolve")
+    assert(deviceIdByNameOrId(session, "server") == srvId, "segundo nome resolve")
+    // Id passa direto (compat: quem ja usa id nao quebra).
+    assert(deviceIdByNameOrId(session, nbId) == nbId, "id passa direto")
+    // Nome inexistente: "" (o chamador responde erro local honesto).
+    assert(deviceIdByNameOrId(session, "fantasma") == "", "nome ruim da vazio")
 }
 
 test "erros: limites e owner-gate no registry viajam como KCF080/KCF081/KCF022/KCF060", "errors-reg" {

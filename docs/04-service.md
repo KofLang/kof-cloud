@@ -29,6 +29,11 @@ kof cloud publish site --port 8080
   → hostname: https://site.mel.kofcloud.io
 ```
 
+`--device <nome|id>` publica em nome de outro dispositivo da conta
+(padrão: o dispositivo do `login`). Nome resolve pelo `device list`;
+id passa direto; nome inexistente falha local ("dispositivo nao
+encontrado"), sem tocar a API.
+
 ## Níveis de exposição
 
 | Nível | Rota no Edge | Quem acessa |
