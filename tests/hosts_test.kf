@@ -1,4 +1,5 @@
 
+import kofcloud.cli.Commands
 import kofcloud.model.Exposure
 import kofcloud.model.Service
 import kofcloud.util.Hosts
@@ -104,4 +105,24 @@ test "text: trimLogHead corta o inicio em linhas inteiras", "logs-cap" {
     // Sem newline no trecho util: devolve o fim cru.
     var flat = trimLogHead("abcdefghij", 4)
     assert(flat == "ghij", "sem newline corta cru")
+}
+
+test "text: tokenInventoryLine resume credenciais sem vazar valor", "token-status" {
+    // Pura, sem rede nem HOME (precedente: doctorTunnelLine): o status
+    // chama com o que a API ja devolve (id curto + expiracao opcional).
+    var empty = listOf<ServiceTokenEntry>()
+    assert(tokenInventoryLine(empty) == "", "sem credenciais, sem linha")
+    var plain = listOf<ServiceTokenEntry>()
+    plain.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", null))
+    var one = tokenInventoryLine(plain)
+    assert(one.indexOf("1 emitida(s)") >= 0, "conta uma")
+    assert(one.indexOf("a1b2c3d4") < 0, "nao vaza nem o id curto")
+    assert(one.indexOf("expiracao") < 0, "sem TTL, sem aviso")
+    var mixed = listOf<ServiceTokenEntry>()
+    mixed.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", null))
+    mixed.add(ServiceTokenEntry("svc", "e5f6a7b8", "1700000000000", "1730000000000"))
+    var two = tokenInventoryLine(mixed)
+    assert(two.indexOf("2 emitida(s)") >= 0, "conta duas")
+    assert(two.indexOf("1 com expiracao") >= 0, "aponta que ha prazo")
+    assert(two.indexOf("token-list") >= 0, "orienta o proximo passo")
 }

@@ -484,6 +484,22 @@ Int cmdServiceStatus(List<String> args) {
                 println("Local:   " + service.localAddress + ":" + intToString(service.localPort))
                 println("Exposicao: " + service.exposure)
                 println("Status:  " + service.status)
+                // Inventario de credenciais junto do status: o operador ve
+                // de relance se ha kfs_ com prazo a vigiar (só AUTHENTICATED
+                // usa; nos demais, a lista vem vazia e nada e impresso).
+                try {
+                    var tokenBody = mapOf()
+                    tokenBody.put("serviceId", service.id)
+                    var tokenRaw = requireOk(http.post(session.controlUrl + "/v1/services/tokens", json.encode(tokenBody), jsonHeader(session.token)))
+                    var entries = json.decode<List<ServiceTokenEntry>>(tokenRaw)
+                    var inventory = tokenInventoryLine(entries)
+                    if (inventory.length > 0) {
+                        println(inventory)
+                    }
+                } catch (String inner) {
+                    // Inventario e diagnostico secundario: nao derruba o
+                    // status se falhar (o dado principal ja saiu).
+                }
                 return 0
             }
         }
@@ -644,6 +660,28 @@ Int cmdServiceToken(List<String> args) {
 // saber o que revogar; o kfs_ em claro so existe no instante da emissao e
 // nunca e recuperavel. Expiradas nao aparecem (podadas na validacao).
 record ServiceTokenEntry(String serviceId, String id, String createdAt, String? expiresAt)
+
+// Resumo do inventario de kfs_ para `service status`: puro, sem rede nem
+// HOME — recebe as entradas ja buscadas e devolve a linha pronta ("" quando
+// nao ha credenciais). Conta com e sem expiracao separadas para o operador
+// saber que ha prazo a vigiar (`token-list` mostra cada uma). Nunca vaza
+// valor de token (as entradas so tem id curto, por desenho da API).
+String tokenInventoryLine(List<ServiceTokenEntry> entries) {
+    if (entries.size == 0) {
+        return ""
+    }
+    var withTtl = 0
+    for (var entry in entries) {
+        if (entry.expiresAt != null) {
+            withTtl = withTtl + 1
+        }
+    }
+    var line = "Credenciais: " + intToString(entries.size) + " emitida(s)"
+    if (withTtl > 0) {
+        line = line + " (" + intToString(withTtl) + " com expiracao — veja: kof cloud service token-list)"
+    }
+    return line
+}
 
 Int cmdServiceTokenList(List<String> args) {
     var session = loadSession()
