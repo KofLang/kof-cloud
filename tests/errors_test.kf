@@ -317,6 +317,55 @@ test "erros: Hint orienta sem vazar segredo ou recurso alheio", "errors-hint" {
     assert(errHint("KCF999: algo desconhecido") == "", "codigo desconhecido nao inventa dica")
 }
 
+test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" {
+    // Lista canonica = todos os codigos que Errors.kf emite (KCF123 e
+    // reservado, nunca emitido; KCF005 e inline no handler, mas emitido).
+    // Se um codigo novo for adicionado sem Hint, este teste quebra de
+    // proposito — Hint sem teste apodrece em silencio (licao KCF005).
+    var codes = listOf<String>()
+    codes.add("KCF001")
+    codes.add("KCF002")
+    codes.add("KCF003")
+    codes.add("KCF004")
+    codes.add("KCF005")
+    codes.add("KCF020")
+    codes.add("KCF021")
+    codes.add("KCF022")
+    codes.add("KCF040")
+    codes.add("KCF041")
+    codes.add("KCF042")
+    codes.add("KCF043")
+    codes.add("KCF044")
+    codes.add("KCF045")
+    codes.add("KCF046")
+    codes.add("KCF047")
+    codes.add("KCF060")
+    codes.add("KCF061")
+    codes.add("KCF062")
+    codes.add("KCF063")
+    codes.add("KCF080")
+    codes.add("KCF081")
+    codes.add("KCF100")
+    codes.add("KCF101")
+    codes.add("KCF102")
+    codes.add("KCF103")
+    codes.add("KCF104")
+    codes.add("KCF105")
+    codes.add("KCF106")
+    codes.add("KCF107")
+    codes.add("KCF108")
+    codes.add("KCF120")
+    codes.add("KCF121")
+    codes.add("KCF122")
+    codes.add("KCF124")
+    for (var code in codes) {
+        assert(errHint(code + ": x").length > 0, code + " tem Hint")
+    }
+    // E o reservado continua sem dica (nunca emitido — se alguem emitir,
+    // o teste acima nao pega, mas a tabela do protocolo acusa).
+    assert(errHint("KCF123: reservado") == "", "KCF123 sem Hint (reservado)")
+}
+
 test "erros: revoke e TTL invalidos viajam como KCF061/KCF062", "errors-token" {
     var controlPort = 19540
     var registry = Registry("/tmp/kofcloud-errt-" + crypto.randomHex(4) + ".json")
