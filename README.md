@@ -67,7 +67,7 @@ Ou declarativo, com `kofcloud.json` na pasta (`{"services":[{"name":"site",
 "port":8080}]}` — ver `docs/09-flows.md` §3.1):
 
 ```bash
-kof run src/Main.kf deploy [--file kofcloud.json] [--check]   # publica (+ verifica)
+kof run src/Main.kf deploy [--file kofcloud.json] [--check] [--plan]   # publica (+ verifica; --plan so mostra)
 kof run src/Main.kf down [--prune]              # remove os do manifesto (+ orfaos do device)
 ```
 
@@ -108,7 +108,7 @@ domain list
 domain add <hostname> --service <nome>   (dominio proprio, devolve a instrucao CNAME)
 domain verify <hostname>                 (confere o DNS e ativa a rota)
 domain remove <hostname>
-deploy [--file kofcloud.json] [--check]   (publica + verifica saude local)
+deploy [--file kofcloud.json] [--check] [--plan]  (publica + verifica; --plan so mostra o diff)
 down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove orfaos)
 doctor [--file kofcloud.json]   (diagnostico: login, control, device, tunel, servicos)
 audit                        (trilha de auditoria da conta)

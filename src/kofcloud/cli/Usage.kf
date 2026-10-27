@@ -29,7 +29,7 @@ String usageText() {
     out = out + "  domain add <hostname> --service <nome>\n"
     out = out + "  domain verify <hostname>\n"
     out = out + "  domain remove <hostname>\n"
-    out = out + "  deploy [--file kofcloud.json] [--check]   (publica os servicos do manifesto + verifica)\n"
+    out = out + "  deploy [--file kofcloud.json] [--check] [--plan]  (publica + verifica; --plan so mostra o diff)\n"
     out = out + "  down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove orfaos do device)\n"
     out = out + "  daemon install|status|uninstall   (systemd --user, sem root)\n"
     out = out + "  doctor [--file kofcloud.json]       (diagnostico: login, control, device, tunel, servicos)\n"

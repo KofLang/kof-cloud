@@ -133,6 +133,25 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     assert(loopbacks.get(1).address == "::1", "::1 passa")
 }
 
+test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
+    // Puro: duas listas, nenhuma rede, nenhum HOME. Cobre novo/igual/
+    // diferente/extra numa chamada so (precedente: doctorTunnelLine).
+    var live = listOf<Service>()
+    live.add(Service("id-site", "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0))
+    live.add(Service("id-veterano", "acc", "dev", "veterano", "127.0.0.1", 9000, "http", "veterano.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0))
+    var wanted = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"mudou\",\"port\":3000,\"exposure\":\"PRIVATE\"}]}")
+    var plan = diffDeployment(live, wanted)
+    assert(plan.size == 3, "tres linhas: igual, novo, extra")
+    assert(plan.get(0) == "= site (igual)", "igual detectado")
+    assert(plan.get(1).startsWith("+ mudou"), "novo com +")
+    assert(plan.get(2).startsWith("- veterano"), "extra com - e dica de prune")
+    // Mudanca de porta vira ~ (vai atualizar), nao + (novo).
+    var wanted2 = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":9090}]}")
+    var plan2 = diffDeployment(live, wanted2)
+    assert(plan2.size == 2, "mudado + extra")
+    assert(plan2.get(0).startsWith("~ site"), "porta diferente e update")
+}
+
 test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {
     var controlPort = 19711
     var path = "/tmp/kofcloud-depe2e-" + crypto.randomHex(4) + ".json"

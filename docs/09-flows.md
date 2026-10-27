@@ -78,7 +78,9 @@ kofcloud.json:
   {"services": [{"name": "site", "port": 8080},
                 {"name": "api", "port": 3000, "exposure": "AUTHENTICATED"}]}
 
- 1. usuário: kof cloud deploy [--file kofcloud.json] [--check]
+ 1. usuário: kof cloud deploy [--file kofcloud.json] [--check] [--plan]
+    com `--plan`: só mostra o diff (`+ novo`, `~ atualiza`, `= igual`,
+    `- fora do manifesto`) via `diffDeployment` pura — nada aplicado
  2. carrega identity + token + manifesto (parse com erro posicional)
  3. para cada serviço: POST /v1/services (igual ao publish, idempotente)
  4. reporta publicados/mantidos/falhas (exit 1 se alguma falhar)

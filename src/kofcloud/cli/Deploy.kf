@@ -40,6 +40,46 @@ Bool checkLocalService(String address, Int port) {
     }
 }
 
+// Diff manifesto x publicado, sem aplicar nada (para `deploy --plan`).
+// Pura: recebe as duas listas e devolve linhas legiveis ("+ site" novo,
+// "~ site" muda porta/address/exposure, "= site" igual). `live` deve vir
+// filtrado pelo chamador (conta atual; device atual se quiser escopo).
+// Ordem: manifesto primeiro (o que vai acontecer), depois extras.
+List<String> diffDeployment(List<Service> live, List<ManifestService> wanted) {
+    var out = listOf<String>()
+    for (var item in wanted) {
+        var found = false
+        var same = false
+        for (var service in live) {
+            if (service.name == item.name) {
+                found = true
+                if (service.localPort == item.port && service.localAddress == item.address && service.exposure == item.exposure) {
+                    same = true
+                }
+            }
+        }
+        if (found == false) {
+            out.add("+ " + item.name + " (novo: " + item.address + ":" + intToString(item.port) + " " + item.exposure + ")")
+        } else if (same) {
+            out.add("= " + item.name + " (igual)")
+        } else {
+            out.add("~ " + item.name + " (vai atualizar)")
+        }
+    }
+    for (var service in live) {
+        var declared = false
+        for (var item in wanted) {
+            if (service.name == item.name) {
+                declared = true
+            }
+        }
+        if (declared == false) {
+            out.add("- " + service.name + " (fora do manifesto; use down --prune para remover)")
+        }
+    }
+    return out
+}
+
 // Confere que cada servico do manifesto esta publicado (existe no control
 // plane para esta conta) e responde localmente. Devolve a lista de problemas
 // `nome: motivo`; vazia = tudo saudavel.
@@ -328,6 +368,24 @@ Int cmdDeploy(List<String> args) {
         println("manifesto invalido (" + path + "): " + e)
         println("Hint: confira o exemplo em docs/09-flows.md")
         return 1
+    }
+    // --plan: mostra o diff sem aplicar nada (como `terraform plan`).
+    // Puro depois do fetch: nenhuma escrita, nenhum publish.
+    if (hasFlag(args, "--plan")) {
+        try {
+            var live = fetchServices(session.controlUrl, session.token)
+            var plan = diffDeployment(live, services)
+            if (plan.size == 0) {
+                println("plan: nada a fazer (manifesto vazio não chega aqui — parse recusaria)")
+            }
+            for (var line in plan) {
+                println("plan: " + line)
+            }
+            return 0
+        } catch (String e) {
+            printFail("falha", e)
+            return 1
+        }
     }
     var failures = 0
     for (var wanted in services) {
