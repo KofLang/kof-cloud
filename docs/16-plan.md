@@ -207,8 +207,6 @@ real via túnel, recusa fatal por motivo).
 
 ## Fase 8 — produto multiplataforma
 
-## Fase 8 — produto multiplataforma
-
 Linux → Windows → macOS → Android. O core é compartilhado; só daemon,
 filesystem, processos e UI variam. Bloqueado por lacunas do Kof em
 native/JS (`13-kof-apis.md`).
@@ -218,6 +216,85 @@ native/JS (`13-kof-apis.md`).
 depois do `connect` pendurava o relay para sempre). Prova:
 `tests/reload_test.kf` + OPENED em `tests/protocol_test.kf`. Lição registrada:
 Map nao atravessa `spawn` (usar objeto compartilhado) — ver `STATUS.md`.
+
+## Fase 9 — TLS/HTTPS na borda (cloud robusta)
+
+**Motivação:** hoje o Edge fala HTTP/1.1 em claro — o `kfs_` viaja legível
+entre cliente e Edge. Cloud robusta de verdade exige HTTPS ponta a ponta
+(cliente→Edge) + túnel cifrado (Edge→Agent, já existe com
+`KOFCLOUD_TUNNEL_SECRET`).
+
+**Estado: ⏳ não iniciado.** Desenho fatiado (cada slice é um incremento
+testável, na ordem):
+
+* **Slice 1 — Edge HTTPS com PEM do operador.** `serve` ganha
+  `--tls-cert/--tls-key`; sem flags, HTTP (comportamento atual + aviso);
+  com flags, `web.app().listenSecure` (JVM) no lugar do listener cru.
+  Roteamento por `Host` e relay inalterados (o núcleo trabalha com bytes
+  já decifrados). Prova: e2e HTTPS com cert autoassinado gerado no teste.
+* **Slice 2 — HSTS + redirecionamento HTTP→HTTPS.** Resposta 301 para
+  `http://` quando o TLS está ativo + header `Strict-Transport-Security`.
+  Sem flag nova (segue o modo do slice 1).
+* **Slice 3 — SNI por hostname + renovação assistida.** Um PEM por
+  hostname próprio VERIFIED (mapa em memória, recarregado sem derrubar
+  o Edge); `domain verify` passa a aceitar o PEM; expiração visível no
+  `service status`/`doctor` (aviso a N dias, nunca bloqueio silencioso).
+  ACME de verdade (DNS-01) depende de ES256 no stdlib — sem isso, emissão
+  continua externa (ver `12-tls.md`).
+
+**Bloqueios honestos:** sem TLS em socket cru (L2) — por isso `listenSecure`
+(JVM-only); sem ACME e sem ES256 (só Ed25519) — por isso sem Let's Encrypt
+automático ainda. Ver `12-tls.md` e `13-kof-apis.md` L2.
+
+## Fase 10 — WAF + proteção da aplicação (cloud robusta)
+
+**Motivação:** hoje o Edge roteia sem inspecionar — SQLi/XSS/RCE passam
+direto para o serviço local. Cloud robusta filtra o óbvio na borda sem
+quebrar o legítimo (fail-open com log vs fail-closed configurável).
+
+**Estado: ⏳ não iniciado.** Desenho fatiado:
+
+* **Slice 1 — regras básicas por padrão (modo detectar).** Assinaturas
+  mínimas em método/path/query/corpo pequeno (traversal `../`, null byte,
+  `UNION SELECT`/`OR 1=1` canônicos, `<script` em query): casa → `403 KCF109`
+  + métrica `_waf_denied` + log só com padrão+hostname (nunca corpo).
+  Default **detectar** (conta + header `X-KofCloud-WAF: would-block`);
+  `--waf=enforce` bloqueia. Prova: unit das assinaturas + e2e (ataque 403,
+  legítimo 200).
+* **Slice 2 — limites de corpo/tempo por rota.** Teto de request body por
+  serviço (`kofcloud.limits.httpBodyBytes`, default 1 MiB; excedeu →
+  `413 KCF110`) + timeout de upstream (502 após N s, sem pendurar o stream).
+* **Slice 3 — allowlist por serviço.** `exposure: AUTHENTICATED` ganha
+  `allowMethods: [GET, POST]` e `allowPaths: ["/api/*"]` opcionais no
+  manifesto/API; fora da lista → `403 KCF111`. Fail-closed por desenho.
+
+**Regra de ouro:** WAF nunca vaza conteúdo em log/métrica (só padrão que
+casou + hostname) e nunca quebra o legítimo por default (slice 1 começa
+em detectar).
+
+## Fase 11 — criptografia pós-quântica (cloud robusta)
+
+**Motivação:** X25519 + AES-GCM são clássicos — um adversário que grave o
+tráfego hoje quebra amanhã ("harvest now, decrypt later"). Cloud robusta
+de verdade oferece KEM pós-quântico no túnel sem regredir quem não tem.
+
+**Estado: ⏳ não iniciado. Bloqueado no stdlib.** Desenho (para quando o
+Kof expuser o primitivo):
+
+* **Slice 1 — inventário + agilidade.** `protocol/Version.kf` negocia
+  `kex: x25519 | ml-kem-512-x25519`; handshake anuncia capacidades e cai
+  para X25519 puro quando um lado não tem PQC (interop primeiro).
+* **Slice 2 — híbrido ML-KEM+X25519.** `session key = HKDF(kem_secret ||
+  xof_shared)`; AES-GCM continua (é o KEM que troca, não a cifra).
+  Prova: e2e com túnel híbrido + fallback clássico.
+* **Slice 3 — assinatura PQC no control plane.** Trocar Ed25519 por
+  ML-DSA onde hoje há assinatura de longo prazo (tokens continuam hash
+  opaco — não precisam migrar).
+
+**Bloqueio honesto:** o stdlib do Kof hoje expõe X25519, HKDF, AES-GCM e
+Ed25519 — **sem ML-KEM/ML-DSA**. Sem o primitivo não há slice que ande;
+esta fase existe no plano como compromisso público, não como promessa.
+Ver `13-kof-apis.md` (tabela de cripto).
 
 ## Ordem de execução no MVP
 

@@ -163,5 +163,6 @@ de serviços mora na sessão), nunca em Map solto passado por parâmetro.
 | watch de arquivo | ausente | polling |
 | permissões de arquivo | ausente | best-effort |
 | assinatura ES256 | ausente (só Ed25519) | token opaco + X25519 |
+| KEM/assinatura pós-quântica (ML-KEM/ML-DSA) | ausente (só X25519/Ed25519) | X25519+HKDF+AES-GCM clássicos; híbrido quando o primitivo existir (Fase 11) |
 | socket Unix | ausente | loopback TCP |
 | relay UDP | parcial | HTTP/HTTPS apenas |

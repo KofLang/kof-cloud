@@ -146,5 +146,13 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   **deploy com build/artefato**, **daemon Windows/macOS**, **painel web**.
 * **Múltiplos nós** de control plane/edge (sem consenso; registro único em
   memória + arquivo).
+* **TLS/HTTPS na borda (Fase 9)** — slices: PEM do operador via
+  `listenSecure`, HSTS+301, SNI por hostname; ACME automático bloqueado
+  (sem ES256/ACME no stdlib).
+* **WAF + proteção da aplicação (Fase 10)** — slices: assinaturas mínimas
+  (detectar antes de bloquear), teto de corpo/timeout por rota, allowlist
+  por serviço. Regra: nunca logar conteúdo, nunca quebrar o legítimo.
+* **PQC no túnel (Fase 11)** — híbrido ML-KEM+X25519 com fallback clássico;
+  bloqueado no primitivo do stdlib (só X25519/Ed25519 hoje).
 
 Ver `16-plan.md` para as fases e `17-limitations.md` para as lacunas.
