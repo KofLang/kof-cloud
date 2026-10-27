@@ -1,4 +1,5 @@
 import kofcloud.cli.Daemon
+import kofcloud.cli.Usage
 
 // Daemon user-level (Fase 7, slice 3): unit systemd gerada localmente.
 // Tudo aqui e puro (texto + paths); systemctl real so no CLI do usuario.
@@ -24,6 +25,16 @@ test "daemon: ExecStart usa a forma publica kof cloud connect", "daemon-cloud-pr
     // Com binario absoluto (o que install grava de verdade), igual.
     var abs = daemonUnitText("/usr/local/bin/kof", "http://127.0.0.1:8080")
     assert(abs.indexOf("ExecStart=/usr/local/bin/kof cloud connect --control http://127.0.0.1:8080") >= 0, "absoluto tambem leva o prefixo")
+}
+
+test "daemon: ajuda documenta device por nome ou id", "daemon-usage" {
+    // Regressao do padrao nome|id: revoke/suspend/unsuspend e --device do
+    // publish aceitam os dois; o help e que conta isso. Puro, sem rede.
+    var help = usageText()
+    assert(help.indexOf("device revoke <nome|deviceId>") >= 0, "revoke documenta nome|id")
+    assert(help.indexOf("device suspend <nome|deviceId>") >= 0, "suspend documenta nome|id")
+    assert(help.indexOf("device unsuspend <nome|deviceId>") >= 0, "unsuspend documenta nome|id")
+    assert(help.indexOf("[--device <nome>]") >= 0, "publish documenta --device por nome")
 }
 
 test "daemon: paths ficam no espaco do usuario", "daemon-paths" {
