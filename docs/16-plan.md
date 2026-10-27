@@ -296,6 +296,122 @@ Ed25519 — **sem ML-KEM/ML-DSA**. Sem o primitivo não há slice que ande;
 esta fase existe no plano como compromisso público, não como promessa.
 Ver `13-kof-apis.md` (tabela de cripto).
 
+## Fase 12 — gestão da nuvem (web client / painel)
+
+**Motivação:** hoje tudo é CLI + JSON. Operar conta/dispositivos/serviços/
+domínios/tokens pelo terminal afasta quem não é técnico — e gestão visual
+é o que transforma "túnel" em "nuvem" na cabeça do usuário.
+
+**Estado: ⏳ não iniciado.** Desenho fatiado (cada slice é um incremento
+testável; o painel consome só a API pública `/v1` — nenhum endpoint novo
+privilegiado, mesma auth `X-KofCloud-Token`):
+
+* **Slice 1 — painel somente-leitura.** `serve` ganha `--panel` que expõe
+  página estática (status da conta, devices online via `/v1/presence`,
+  serviços + hostnames, domínios VERIFIED/PENDING). Sem escritas, sem
+  login novo (cola o `kfc_` existente). Prova: teste serve a página e os
+  dados batem com a API.
+* **Slice 2 — gestão completa.** Criar conta, registrar device, publish/
+  unpublish, add/verify/remove domínio, emitir/revogar/listar `kfs_`,
+  suspend/unsuspend — tudo pelo painel, chamando os mesmos endpoints da
+  CLI. Cada ação pede confirmação quando destrutiva (revoke/remove).
+  Prova: e2e via HTTP do painel (publica e remove de verdade).
+* **Slice 3 — onboarding guiado.** Criar conta → baixar desktop client →
+  publish do primeiro serviço em 3 telas, com diagnóstico embutido
+  (reaproveita a lógica do `doctor`, camada por camada). Prova: fluxo
+  completo num control plane de teste.
+
+**Regras:** o painel nunca mostra `kfs_` depois da emissão (mesma regra da
+CLI); nunca loga corpo/token; é estático + `fetch`, sem framework pesado
+(o Kof serve arquivo + JSON; o resto é HTML/JS simples).
+
+## Fase 13 — desktop client (daemon que sincroniza com a nuvem)
+
+**Motivação:** hoje o "client" é `kof cloud connect` em foreground ou uma
+unit systemd manual no Linux. Usuário real quer instalar, logar uma vez e
+esquecer — com tray, reconexão visível e update assistido.
+
+**Estado: ⏳ não iniciado (base pronta: daemon user-level + doctor).**
+Desenho fatiado:
+
+* **Slice 1 — instalador por SO.** Linux: usa a unit systemd atual
+  (empacotar + `enable` com consentimento); Windows: serviço via
+  `sc.exe`/NSSM chamando o mesmo `connect`; macOS: `launchd` user agent.
+  Cada um atrás de `kof cloud daemon install` (detecção de SO, não flag).
+  Prova: teste gera o artefato certo por SO (puro, sem instalar).
+* **Slice 2 — tray + estado visível.** Ícone mostra ONLINE/OFFLINE
+  (lê `/v1/presence`, igual ao `status`), serviços publicados, botão
+  connect/disconnect, link para o painel. Sem o tray o usuário não sabe
+  se está no ar — hoje só o `status` diz.
+* **Slice 3 — sincronização + auto-update.** O client observa o manifesto
+  local (`kofcloud.json`): mudou → re-publica sozinho (usa a mesma
+  idempotência do `deploy`); nova versão do Agent → baixa, verifica
+  assinatura Ed25519 (chave embutida, nunca baixada junto) e troca no
+  próximo restart. Prova: e2e de update com assinatura válida/inválida.
+
+**Regras:** enable/start sempre com consentimento explícito (como hoje);
+nunca auto-update silencioso sem assinatura válida; segredos ficam no
+keychain do SO quando houver (fallback: `~/.kofcloud` com permissão
+best-effort, como hoje).
+
+## Fase 14 — baixa latência (cloud rápida de verdade)
+
+**Motivação:** hoje há UM Edge (`serve` único) e relay em chunks de 16 KiB
+com `bytesToString` O(n²) no caminho. Funciona, mas latência é distância +
+custo por byte — cloud rápida precisa dos dois endereçados com medição.
+
+**Estado: ⏳ não iniciado.** Desenho fatiado (cada slice com benchmark
+antes/depois, mesmo protocolo, sem mudar formato público):
+
+* **Slice 1 — medir de verdade.** Benchmark contínuo no Edge: latência
+  p50/p99 por hostname (agregado, sem dado de cliente), tempo de relay
+  por tamanho, custo do chunk. Sem medir, otimizar é chute. Prova: nova
+  seção no `/v1/metrics` + teste de formato.
+* **Slice 2 — relay regional.** `connect` passa a receber a lista de Edges
+  (`edgeHost` vira ranking por latência medida no handshake); o Agent
+  escolhe o mais próximo e reavalia a cada N minutos. Sem consenso
+  distribuído no MVP (cada Edge continua independente; o control plane
+  só publica a lista). Prova: e2e com 2 Edges, Agent migra para o mais
+  rápido.
+* **Slice 3 — caminho de bytes O(n).** Tirar `bytesToString`/`base64` via
+  String do caminho quente: chunks maiores (64 KiB) + cópia direta de
+  bytes quando o stdlib permitir; handshake comprime `services[]`
+  (hoje vai cheio a cada `connect`). Prova: benchmark mostra queda
+  linear no tempo por MiB.
+
+**Regra:** nenhuma otimização sem número antes/depois no `STATUS.md`;
+latência de cauda (p99) vale mais que média.
+
+## Fase 15 — E2EE real (nem a plataforma lê)
+
+**Motivação:** hoje o túnel cifra Agent↔Edge (`sessionKey` por sessão),
+mas o Edge **decifra para rotear** — ele vê o Host e o corpo em claro.
+E2EE real significa: a plataforma nunca tem a chave do conteúdo, mesmo
+comprometida. É o que protege a máquina física e o site hospedado de
+verdade (inclusive da própria operadora da nuvem).
+
+**Estado: ⏳ não iniciado.** Modelo honesto, em camadas (cada slice reduz
+o que a plataforma vê, sem quebrar o anterior):
+
+* **Slice 1 — declarar o modelo.** Documentar o que cada parte vê hoje
+  (cliente vê tudo; Edge vê Host+corpo; Agent/serviço veem tudo) vs o
+  alvo (Edge vê só o necessário para rotear). Sem código — alinhamento.
+* **Slice 2 — Host blindado, corpo opaco.** O `Host` continua visível
+  (roteamento exige), mas o corpo passa a viajar cifrado de ponta a
+  ponta (chave por serviço, distribuída via control plane autenticado;
+  o Edge repassa bytes opacos sem decifrar). Prova: e2e onde o Edge
+  serve sem conseguir ler o corpo (teste inspeciona memória do Edge).
+* **Slice 3 — SNI/hostname mínimo.** Com TLS na borda (Fase 9), o SNI
+  vaza o hostname — mitigar com ECH quando o stdlib permitir, ou
+  documentar como resíduo aceito. Alvo final: plataforma vê metadados
+  de roteamento, nunca conteúdo.
+
+**Limites honestos:** E2EE total (nem o Host visível) exigiria routing
+oblivious — fora do escopo; o compromisso é **conteúdo opaco para a
+plataforma**, com metadados mínimos documentados. WAF (Fase 10) e E2EE
+são tensão direta: inspecionar corpo exige ver corpo — por serviço, o
+operador escolhe (WAF **ou** E2EE estrito, nunca os dois fingindo).
+
 ## Ordem de execução no MVP
 
 ```

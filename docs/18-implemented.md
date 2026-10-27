@@ -154,5 +154,13 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   por serviço. Regra: nunca logar conteúdo, nunca quebrar o legítimo.
 * **PQC no túnel (Fase 11)** — híbrido ML-KEM+X25519 com fallback clássico;
   bloqueado no primitivo do stdlib (só X25519/Ed25519 hoje).
+* **Gestão web (Fase 12)** — painel somente-leitura → gestão completa →
+  onboarding guiado; consome só a API `/v1` pública, nunca mostra `kfs_`.
+* **Desktop client (Fase 13)** — instalador por SO + tray com estado +
+  sincronização do manifesto + auto-update com assinatura Ed25519.
+* **Baixa latência (Fase 14)** — medir (p50/p99) → relay regional →
+  caminho de bytes O(n); sem número antes/depois, sem otimização.
+* **E2EE real (Fase 15)** — corpo opaco para a plataforma (Edge roteia
+  sem decifrar); tensão honesta com WAF (por serviço: um ou outro).
 
 Ver `16-plan.md` para as fases e `17-limitations.md` para as lacunas.
