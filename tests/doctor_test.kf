@@ -101,6 +101,20 @@ test "doctor: fim a fim acusa servico fora do ar e aprova quando sobe", "doctor-
     var up = verifyDeploymentLike(controlUrl, accountToken, wanted)
     assert(up.size == 0, "tudo saudavel")
     listener.close()
+
+    // Drift de config pelo caminho do doctor: remove e republica o mesmo
+    // nome com porta diferente (publish e idempotente por nome — re-publicar
+    // retorna o existente sem atualizar). O doctor acusa antes de testar
+    // resposta, com a dica de re-deploy.
+    var driftTarget = doctorServiceIdIn(bodyOf(httpGetToken(controlPort, "/v1/services", accountToken)), "site")
+    assert(driftTarget.length > 0, "alvo existe")
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + driftTarget + "\"}", accountToken)) == 200, "removido")
+    var driftBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19743\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", driftBody, accountToken)) == 200, "republicado com drift")
+    var drifted = verifyDeploymentLike(controlUrl, accountToken, wanted)
+    assert(drifted.size == 1, "um problema de drift")
+    assert(drifted.get(0).indexOf("config diferente") >= 0, "doctor acusa o drift")
+    assert(drifted.get(0).indexOf("deploy") >= 0, "doctor orienta o re-deploy")
 }
 
 // Replica a ordem de checagem de cmdDoctor sem precisar de HOME/sessao:
@@ -108,6 +122,28 @@ test "doctor: fim a fim acusa servico fora do ar e aprova quando sobe", "doctor-
 // via doctorCheck, que nao precisa de rede quando sem login).
 List<String> verifyDeploymentLike(String controlUrl, String token, List<ManifestService> wanted) {
     return verifyDeployment(controlUrl, token, wanted)
+}
+
+// Id do servico pelo nome no JSON listado (mesma tecnica do deploy_test:
+// o "id" vem antes do "name" no objeto; busca para tras a partir do nome).
+String doctorServiceIdIn(String servicesBody, String name) {
+    var needle = "\"name\":\"" + name + "\""
+    var at = servicesBody.indexOf(needle)
+    if (at < 0) {
+        return ""
+    }
+    var idKey = "\"id\":\""
+    var head = servicesBody.substring(0, at)
+    var back = head.lastIndexOf(idKey)
+    if (back < 0) {
+        return ""
+    }
+    var start = back + idKey.length
+    var end = head.indexOf("\"", start)
+    if (end < 0) {
+        return ""
+    }
+    return head.substring(start, end)
 }
 
 String deployManifest(String name, String body) {
