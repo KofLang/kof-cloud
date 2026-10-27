@@ -192,8 +192,19 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `409` | `KCF002` handle taken | handle já em uso |
 | `429` | `KCF080` too many active devices | limite `kofcloud.limits.devices` |
 | `429` | `KCF081` too many services | limite `kofcloud.limits.services` por dispositivo |
+| `404` | `KCF100` no route for host | Edge: host desconhecido **ou** serviço não roteável (PRIVATE — opaco por desenho) |
+| `401` | `KCF101` authentication required | Edge: AUTHENTICATED sem credencial `kfs_` válida (+ `WWW-Authenticate: Bearer`) |
+| `503` | `KCF102` device not connected | Edge: device sem sessão viva (offline, suspenso/revogado depois do handshake) |
+| `503` | `KCF103` service OFFLINE | Edge: serviço publicado mas local sem resposta (health) |
+| `502` | `KCF104` tunnel error | Edge: falha no relay (OPEN recusado, túnel caiu no meio) |
+| `502` | `KCF105` empty response from service | Edge: upstream respondeu vazio |
+| `429` | `KCF106` too many concurrent streams | Edge: `LIMIT_EXCEEDED` no túnel (antes de tocar o Agent) |
+| `429` | `KCF107` too many requests | Edge: rate limit por hostname (`Retry-After`; antes de rotear) |
+| `429` | `KCF108` too many connections | Edge: sem vaga de relay por serviço (`Retry-After`; antes do OPEN) |
 
 Owner-gate: `POST /v1/services/status` só aceita a conta dona (`KCF042`
 interno vira o mesmo `404 KCF041` na borda, para não revelar recurso alheio).
 `handleRegisterDevice` responde `429` apenas para limite; erro de validação é
-`400`.
+`400`. Códigos internos que nunca cruzam a borda com identidade própria:
+`KCF022`/`KCF060` (vira `404` opaco), `KCF061` (vira `400` sem serviceId/token
+no corpo), `KCF005` (inline no handler de contas, sem construtor dedicado).
