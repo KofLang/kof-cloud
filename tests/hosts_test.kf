@@ -24,6 +24,20 @@ test "host only: remove a porta" {
     assert(hostOnly("site.mel.kofcloud.io") == "site.mel.kofcloud.io", "sem porta")
 }
 
+test "address: so loopback publica (anti-SSRF)", "hosts-loopback" {
+    // Lista fechada: o Agent conecta nesse endereco a cada request —
+    // qualquer outro valor o transformaria em escaneador da rede local.
+    assert(validLocalAddress("127.0.0.1") == true, "loopback IPv4")
+    assert(validLocalAddress("localhost") == true, "localhost")
+    assert(validLocalAddress("::1") == true, "loopback IPv6")
+    assert(validLocalAddress("0.0.0.0") == false, "todas as interfaces recusa")
+    assert(validLocalAddress("10.0.0.5") == false, "rede privada recusa")
+    assert(validLocalAddress("169.254.169.254") == false, "metadata cloud recusa")
+    assert(validLocalAddress("example.com") == false, "hostname externo recusa")
+    assert(validLocalAddress("") == false, "vazio recusa (default e antes)")
+    assert(validLocalAddress("127.0.0.2") == false, "quase-loopback recusa")
+}
+
 test "host: extrai o servico do hostname da conta" {
     assert(serviceFromHost("site.mel.kofcloud.io", "mel") == "site", "servico")
     assert(serviceFromHost("api.mel.kofcloud.io", "mel") == "api", "api")

@@ -43,7 +43,7 @@ o run total imprime `25 passed, 0 failed`. Falha = nome do teste + assert
 | Suite | Arquivo | Testes |
 |---|---|---|
 | framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 11 |
-| hostnames/exposicao/texto/log | `tests/hosts_test.kf` | 10 |
+| hostnames/exposicao/texto/log/loopback | `tests/hosts_test.kf` | 11 |
 | identidade/cifra/tokens | `tests/identity_test.kf` | 7 |
 | backoff | `tests/backoff_test.kf` | 3 |
 | registry | `tests/registry_test.kf` | 7 |
@@ -68,7 +68,7 @@ o run total imprime `25 passed, 0 failed`. Falha = nome do teste + assert
 | e2e multiservico | `tests/e2e_multiservice_test.kf` | 1 |
 | e2e autenticado | `tests/e2e_authenticated_test.kf` | 1 |
 
-Total: 115 testes. Ver `15-tests.md` para a matriz.
+Total: 116 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 
