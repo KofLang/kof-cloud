@@ -81,8 +81,11 @@ List<String> diffDeployment(List<Service> live, List<ManifestService> wanted) {
 }
 
 // Confere que cada servico do manifesto esta publicado (existe no control
-// plane para esta conta) e responde localmente. Devolve a lista de problemas
-// `nome: motivo`; vazia = tudo saudavel.
+// plane para esta conta), COM A MESMA CONFIG (porta/address/exposure/
+// protocol) e responde localmente. Devolve a lista de problemas
+// `nome: motivo`; vazia = tudo saudavel. Drift de config e acusado antes
+// do check de resposta (nao adianta o local responder se e outro servico
+// que esta publicado).
 List<String> verifyDeployment(String controlUrl, String token, List<ManifestService> wanted) {
     var problems = listOf<String>()
     var live = listOf<Service>()
@@ -94,13 +97,25 @@ List<String> verifyDeployment(String controlUrl, String token, List<ManifestServ
     }
     for (var service in wanted) {
         var found = false
+        var drift = ""
         for (var remote in live) {
             if (remote.name == service.name) {
                 found = true
+                if (remote.localPort != service.port) {
+                    drift = "porta " + intToString(remote.localPort) + " != " + intToString(service.port)
+                } else if (remote.localAddress != service.address) {
+                    drift = "address " + remote.localAddress + " != " + service.address
+                } else if (remote.exposure != service.exposure) {
+                    drift = "exposure " + remote.exposure + " != " + service.exposure
+                } else if (remote.protocol != service.protocol) {
+                    drift = "protocol " + remote.protocol + " != " + service.protocol
+                }
             }
         }
         if (found == false) {
             problems.add(service.name + ": nao publicado")
+        } else if (drift.length > 0) {
+            problems.add(service.name + ": publicado com config diferente (" + drift + ") — rode: kof cloud deploy")
         } else if (checkLocalService(service.address, service.port) == false) {
             problems.add(service.name + ": publicado mas sem resposta em " + service.address + ":" + intToString(service.port))
         }

@@ -289,6 +289,21 @@ test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-che
     assert(checkLocalService("127.0.0.1", 19729), "check unitario ok")
     assert(checkLocalService("127.0.0.1", 19728) == false, "porta fechada recusa")
     listener.close()
+
+    // Drift de config: remove e republica o mesmo nome com porta/exposicao
+    // diferentes (o publish e idempotente por nome — re-publicar retorna o
+    // existente sem atualizar; drift real vem de remove+publish). O check
+    // acusa ANTES de testar resposta, com o diff e a dica de re-deploy.
+    var listedDrift = httpGetToken(controlPort, "/v1/services", accountToken)
+    var driftTarget = serviceIdByNameIn(listedDrift, "site")
+    assert(driftTarget.length > 0, "alvo existe")
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + driftTarget + "\"}", accountToken)) == 200, "removido")
+    var driftBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19728\",\"protocol\":\"http\",\"exposure\":\"PRIVATE\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", driftBody, accountToken)) == 200, "republicado com drift")
+    var drifted = verifyDeployment(controlUrl, accountToken, services)
+    assert(drifted.size == 1, "um problema de drift")
+    assert(drifted.get(0).indexOf("config diferente") >= 0, "acusa o drift")
+    assert(drifted.get(0).indexOf("deploy") >= 0, "orienta o re-deploy")
 }
 
 Int serviceCount(String controlUrl, String token, Int port) {
