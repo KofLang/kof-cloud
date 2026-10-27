@@ -58,7 +58,7 @@ Sem heartbeat por `3 × interval`, o control plane marca o dispositivo
 
 ## Revogação
 
-`kof cloud device revoke <id>`:
+`kof cloud device revoke <nome|id>` (nome resolve pelo `device list`):
 
 1. marca `status = REVOKED` no control plane;
 2. remove as rotas dos serviços daquele dispositivo;
@@ -69,7 +69,7 @@ A conta e os demais dispositivos permanecem válidos.
 
 ## Suspensão
 
-`kof cloud device suspend <id>` (reversível com `unsuspend`): marca
+`kof cloud device suspend <nome|id>` (reversível com `unsuspend`, que aceita nome também): marca
 `status = SUSPENDED` sem remover nada; o túnel é recusado com
 `DEVICE_SUSPENDED` (fatal — sem reconexão) e sessões vivas caem no próximo
 frame útil ou request (enforcement em request + PING). Diferente de revogar,

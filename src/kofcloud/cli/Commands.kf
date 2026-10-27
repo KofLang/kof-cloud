@@ -250,16 +250,27 @@ Int cmdDeviceRevoke(List<String> args) {
         println("nao logado")
         return 1
     }
-    var deviceId = firstPositional(args)
-    if (deviceId.length == 0) {
-        println("uso: kof cloud device revoke <deviceId>")
+    var deviceArg = firstPositional(args)
+    if (deviceArg.length == 0) {
+        println("uso: kof cloud device revoke <nome|deviceId>")
+        return 1
+    }
+    var deviceId = deviceArg
+    try {
+        deviceId = deviceIdByNameOrId(session, deviceArg)
+        if (deviceId.length == 0) {
+            println("dispositivo nao encontrado: " + deviceArg)
+            return 1
+        }
+    } catch (String e) {
+        printFail("falha", e)
         return 1
     }
     var body = mapOf()
     body.put("deviceId", deviceId)
     try {
         requireOk(http.post(session.controlUrl + "/v1/devices/revoke", json.encode(body), jsonHeader(session.token)))
-        println("Dispositivo revogado: " + deviceId)
+        println("Dispositivo revogado: " + deviceArg)
         return 0
     } catch (String e) {
         printFail("falha", e)
@@ -273,16 +284,27 @@ Int cmdDeviceSuspend(List<String> args) {
         println("nao logado")
         return 1
     }
-    var deviceId = firstPositional(args)
-    if (deviceId.length == 0) {
-        println("uso: kof cloud device suspend <deviceId>")
+    var deviceArg = firstPositional(args)
+    if (deviceArg.length == 0) {
+        println("uso: kof cloud device suspend <nome|deviceId>")
+        return 1
+    }
+    var deviceId = deviceArg
+    try {
+        deviceId = deviceIdByNameOrId(session, deviceArg)
+        if (deviceId.length == 0) {
+            println("dispositivo nao encontrado: " + deviceArg)
+            return 1
+        }
+    } catch (String e) {
+        printFail("falha", e)
         return 1
     }
     var body = mapOf()
     body.put("deviceId", deviceId)
     try {
         requireOk(http.post(session.controlUrl + "/v1/devices/suspend", json.encode(body), jsonHeader(session.token)))
-        println("Dispositivo suspenso (tunel recusado, nada removido): " + deviceId)
+        println("Dispositivo suspenso (tunel recusado, nada removido): " + deviceArg)
         return 0
     } catch (String e) {
         printFail("falha", e)
@@ -296,16 +318,27 @@ Int cmdDeviceUnsuspend(List<String> args) {
         println("nao logado")
         return 1
     }
-    var deviceId = firstPositional(args)
-    if (deviceId.length == 0) {
-        println("uso: kof cloud device unsuspend <deviceId>")
+    var deviceArg = firstPositional(args)
+    if (deviceArg.length == 0) {
+        println("uso: kof cloud device unsuspend <nome|deviceId>")
+        return 1
+    }
+    var deviceId = deviceArg
+    try {
+        deviceId = deviceIdByNameOrId(session, deviceArg)
+        if (deviceId.length == 0) {
+            println("dispositivo nao encontrado: " + deviceArg)
+            return 1
+        }
+    } catch (String e) {
+        printFail("falha", e)
         return 1
     }
     var body = mapOf()
     body.put("deviceId", deviceId)
     try {
         requireOk(http.post(session.controlUrl + "/v1/devices/unsuspend", json.encode(body), jsonHeader(session.token)))
-        println("Dispositivo liberado: " + deviceId)
+        println("Dispositivo liberado: " + deviceArg)
         return 0
     } catch (String e) {
         printFail("falha", e)

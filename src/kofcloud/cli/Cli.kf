@@ -84,7 +84,7 @@ Int runCli(List<String> args) {
 
 Int runDevice(List<String> args) {
     if (args.size == 0) {
-        println("uso: kof cloud device list|revoke|suspend|unsuspend <id>")
+        println("uso: kof cloud device list|revoke|suspend|unsuspend <nome|id>")
         return 1
     }
     var sub = args.get(0)

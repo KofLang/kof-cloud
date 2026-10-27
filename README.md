@@ -92,9 +92,9 @@ connect
 disconnect
 status
 device list
-device revoke <deviceId>
-device suspend <deviceId>      (túnel recusado, nada removido)
-device unsuspend <deviceId>
+device revoke <nome|deviceId>
+device suspend <nome|deviceId>      (túnel recusado, nada removido)
+device unsuspend <nome|deviceId>
 publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]
 unpublish <nome>
 service list

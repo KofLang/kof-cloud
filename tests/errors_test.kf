@@ -152,6 +152,18 @@ test "erros: device resolve por nome ou id (publish --device)", "errors-device" 
     assert(deviceIdByNameOrId(session, nbId) == nbId, "id passa direto")
     // Nome inexistente: "" (o chamador responde erro local honesto).
     assert(deviceIdByNameOrId(session, "fantasma") == "", "nome ruim da vazio")
+
+    // E o id resolvido opera de verdade: suspende por nome via API (o que
+    // os comandos fazem depois de resolver).
+    var suspendBody = "{\"deviceId\":\"" + deviceIdByNameOrId(session, "notebook") + "\"}"
+    assert(statusOf(httpPostJson(19546, "/v1/devices/suspend", suspendBody, accountToken)) == 200, "suspend do id resolvido")
+    var suspended = registry.deviceById(nbId)
+    assert(suspended != null, "device existe")
+    if (suspended != null) {
+        assert(suspended.status == "SUSPENDED", "suspenso de verdade")
+    }
+    var unsuspendBody = "{\"deviceId\":\"" + deviceIdByNameOrId(session, "notebook") + "\"}"
+    assert(statusOf(httpPostJson(19546, "/v1/devices/unsuspend", unsuspendBody, accountToken)) == 200, "unsuspend do id resolvido")
 }
 
 test "erros: limites e owner-gate no registry viajam como KCF080/KCF081/KCF022/KCF060", "errors-reg" {

@@ -222,7 +222,7 @@ Só a conta dona revoga; outros tokens do mesmo serviço continuam válidos
 ## 7. Revogação de dispositivo
 
 ```
-kof cloud device revoke <id>
+kof cloud device revoke <nome|id>
   → control plane: status=REVOKED, rotas removidas
   → próxima HELLO: WELCOME{ok:false, reason:"DEVICE_REVOKED"} + close
   → Agent registra o motivo e PARA de reconectar (não é falha de rede)

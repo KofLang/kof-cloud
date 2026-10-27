@@ -43,9 +43,9 @@ chave privada **nunca sai da máquina** (persistida em `~/.kofcloud/identity.jso
 com permissão restrita). A chave pública é registrada no control plane no
 momento do `device register`.
 
-* Revogar um dispositivo (`device revoke <id>`) marca `status = REVOKED` e
+* Revogar um dispositivo (`device revoke <nome|id>`) marca `status = REVOKED` e
   **não** invalida a conta nem os demais dispositivos.
-* Suspender (`device suspend <id>`) marca `SUSPENDED`: mesmo efeito de
+* Suspender (`device suspend <nome|id>`) marca `SUSPENDED`: mesmo efeito de
   bloqueio, mas reversível com `unsuspend` e sem remover nada.
 * Um dispositivo revogado/suspenso é recusado no handshake do túnel
   (`WELCOME` de erro `DEVICE_REVOKED` / `DEVICE_SUSPENDED`).
