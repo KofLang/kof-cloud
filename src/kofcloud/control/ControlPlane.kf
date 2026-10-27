@@ -530,9 +530,10 @@ HttpResult handleListServiceTokens(Registry registry, String? authHeader, String
 }
 
 // Revoga UMA credencial de servico (ex.: vazou). O corpo leva o serviceId
-// (dono) + o proprio token kfs_ a revogar. Inexistente, de outro servico ou
-// de outra conta: mesmo 404 opaco — nunca confirma nem nega a existencia de
-// um token alheio.
+// (dono) + o proprio token kfs_ a revogar OU o id curto do inventario
+// (quando unico no servico). Inexistente, de outro servico ou de outra
+// conta: mesmo 404 opaco — nunca confirma nem nega a existencia de um
+// token alheio. Id curto ambiguo: 409 KCF063 (pede o kfs_ completo).
 HttpResult handleRevokeServiceToken(Registry registry, String? authHeader, String bodyText) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
@@ -544,10 +545,14 @@ HttpResult handleRevokeServiceToken(Registry registry, String? authHeader, Strin
     if (serviceId.length == 0 || token.length == 0) {
         return HttpResult(400, errorJson(errServiceTokenRequired()))
     }
-    if (registry.revokeServiceToken(account.id, serviceId, token)) {
+    var outcome = registry.revokeServiceTokenResult(account.id, serviceId, token)
+    if (outcome == "revoked") {
         var out = mapOf()
         out.put("revoked", "true")
         return HttpResult(200, json.encode(out))
+    }
+    if (outcome == "ambiguous") {
+        return HttpResult(409, errorJson(errAmbiguousToken()))
     }
     return HttpResult(404, errorJson(errServiceNotFound()))
 }

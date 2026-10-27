@@ -95,6 +95,10 @@ String errInvalidTtl() {
     return "KCF062: ttlHours must be a positive number of hours"
 }
 
+String errAmbiguousToken() {
+    return "KCF063: short id matches more than one credential; use the full kfs_ value"
+}
+
 // ---- limites ----
 
 String errLimitDevices() {
@@ -190,6 +194,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF062") >= 0) {
         return "O TTL precisa ser horas positivas (ex: `--ttl 24` para 1 dia); sem `--ttl`, sem expiracao."
+    }
+    if (raw.indexOf("KCF063") >= 0) {
+        return "Esse id curto casa com mais de uma credencial — copie o `kfs_...` completo do `token-list` (ele so aparece na emissao) ou revogue por outro id."
     }
     if (raw.indexOf("KCF040") >= 0) {
         return "O nome do servico usa letras minusculas, numeros e tracos (ex: site)."

@@ -184,6 +184,41 @@ test "token de servico: expiracao opcional poda na validacao", "token-ttl" {
     assert(registry.serviceByServiceToken(timed) != null, "com TTL intacto apos poda")
 }
 
+test "token de servico: revoke aceita id curto unico, recusa ambiguo", "token-short" {
+    var registry = Registry(serviceTokenPath("short"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED")
+    var first = registry.issueServiceToken(mel.id, service.id)
+    var second = registry.issueServiceToken(mel.id, service.id)
+    // Id curto: 8 primeiros hex do hash (mesmo que o inventario mostra).
+    var firstId = tokenHash(first).substring(0, 8)
+    var secondId = tokenHash(second).substring(0, 8)
+    if (firstId == secondId) {
+        // Colisao de 32 bits entre dois tokens: astronomicamente improvavel
+        // (1/4bi); se um dia cair aqui, o teste acusa em vez de fingir.
+        assert(false, "colisao de id curto no teste (re-rodar)")
+    }
+    // Prefixo que casa com os dois: ambiguo (nem toca em nada).
+    var common = ""
+    var i = 0
+    while (i < 8 && firstId.substring(0, i + 1) == secondId.substring(0, i + 1)) {
+        i = i + 1
+    }
+    if (i > 0) {
+        var ambiguous = firstId.substring(0, i)
+        assert(registry.revokeServiceTokenResult(mel.id, service.id, ambiguous) == "ambiguous", "prefixo comum e ambiguo")
+        assert(registry.serviceByServiceToken(first) != null, "nada removido no ambiguo")
+        assert(registry.serviceByServiceToken(second) != null, "outro intacto no ambiguo")
+    }
+    // Id curto unico: revoga exatamente aquele.
+    assert(registry.revokeServiceTokenResult(mel.id, service.id, firstId) == "revoked", "id unico revoga")
+    assert(registry.serviceByServiceToken(first) == null, "primeiro saiu")
+    assert(registry.serviceByServiceToken(second) != null, "segundo fica")
+    // E o wrapper Bool continua valendo true/false.
+    assert(registry.revokeServiceToken(mel.id, service.id, secondId) == true, "wrapper revoga por id")
+}
+
 // Contador Prometheus atual (0 quando ausente): cada suite roda no mesmo
 // processo, entao a assercao e sempre relativa (antes/depois).
 Int metricCount(String name) {

@@ -468,21 +468,26 @@ class Registry {
 
     // Revoga UMA credencial de servico (ex.: vazou, rotacao forçada).
     // O token e identificado pelo proprio valor (o operador cola o kfs_ que
-    // quer matar); o que e comparado/guardado continua sendo so o hash —
+    // quer matar) OU pelo id curto do inventario (8 hex do hash, como mostra
+    // o `token-list`) — desde que UNICO no servico. Id curto que casa com
+    // mais de uma credencial: false (o chamador responde 409 KCF063, pedindo
+    // o kfs_ completo). O que e comparado/guardado continua sendo so o hash —
     // nunca persistimos nem logamos o valor em claro. So a conta dona do
     // servico pode revogar. Inexistente (ou de outro servico/outra conta):
     // false, e o chamador responde o 404 opaco padrao.
-    Bool revokeServiceToken(String accountId, String serviceId, String token) {
+    // Retorna "revoked" | "ambiguous" | "" (nao encontrado/sem dono).
+    String revokeServiceTokenResult(String accountId, String serviceId, String token) {
         if (token.length == 0) {
-            return false
+            return ""
         }
         var service = this.serviceById(serviceId)
         if (service == null) {
-            return false
+            return ""
         }
         if (service.accountId != accountId) {
-            return false
+            return ""
         }
+        // Valor completo primeiro (caminho exato, constant-time).
         var kept = listOf<ServiceToken>()
         var revoked = false
         for (var entry in this.serviceTokens) {
@@ -492,9 +497,36 @@ class Registry {
                 kept.add(entry)
             }
         }
-        if (revoked == false) {
-            return false
+        if (revoked) {
+            this.finishRevoke(accountId, serviceId, kept)
+            return "revoked"
         }
+        // Senao, tenta como id curto (prefixo do hash, sem "kfs_").
+        // Exige unicidade no servico: 0 = nao existe, 2+ = ambiguo.
+        var matches = 0
+        for (var entry in this.serviceTokens) {
+            if (entry.serviceId == serviceId && entry.tokenHash.startsWith(token)) {
+                matches = matches + 1
+            }
+        }
+        if (matches == 0) {
+            return ""
+        }
+        if (matches > 1) {
+            return "ambiguous"
+        }
+        var keptShort = listOf<ServiceToken>()
+        for (var entry in this.serviceTokens) {
+            if (entry.serviceId == serviceId && entry.tokenHash.startsWith(token)) {
+                continue
+            }
+            keptShort.add(entry)
+        }
+        this.finishRevoke(accountId, serviceId, keptShort)
+        return "revoked"
+    }
+
+    void finishRevoke(String accountId, String serviceId, List<ServiceToken> kept) {
         this.serviceTokens = kept
         var issuer = this.accountById(accountId)
         if (issuer != null) {
@@ -503,7 +535,10 @@ class Registry {
         }
         this.save()
         noteServiceTokenRevoked()
-        return true
+    }
+
+    Bool revokeServiceToken(String accountId, String serviceId, String token) {
+        return this.revokeServiceTokenResult(accountId, serviceId, token) == "revoked"
     }
 
     // ---- servicos ----

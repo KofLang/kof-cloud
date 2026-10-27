@@ -28,7 +28,7 @@ Base: `http://<control-host>/v1`
 | `GET` | `/v1/services` | conta | lista serviços |
 | `POST` | `/v1/services/token` | conta | emite credencial `kfs_` do serviço `{serviceId}` (+ `ttlHours` opcional, horas) → `{token,serviceId,ttlHours?}` (TTL inválido = 400 `KCF062`) |
 | `POST` | `/v1/services/tokens` | conta | inventário do serviço `{serviceId}` → `[{serviceId,id,createdAt}]` (id = 8 hex do hash; nunca o valor `kfs_`; 404 opaco se alheio/inexistente) |
-| `POST` | `/v1/services/token/revoke` | conta | revoga UMA credencial `{serviceId,token}` → `{revoked:true}` (404 opaco se alheio/inexistente) |
+| `POST` | `/v1/services/token/revoke` | conta | revoga UMA credencial `{serviceId,token}` (`token` = `kfs_` completo ou id curto único) → `{revoked:true}` (404 opaco se alheio/inexistente; 409 `KCF063` se o id casa com 2+) |
 | `POST` | `/v1/services/remove` | conta | `{serviceId}` |
 | `POST` | `/v1/services/suspend` | conta | `{serviceId}` → `{suspended:true}` (sai da rota, nada removido) |
 | `POST` | `/v1/services/unsuspend` | conta | `{serviceId}` → `{suspended:false}` |
@@ -112,6 +112,11 @@ X-KofCloud-Token: kfc_...
 
 200 {"revoked":true}
 ```
+
+O `token` aceita o `kfs_` completo OU o id curto do inventario
+(quando unico no servico — sem precisar do valor, que so existe na
+emissao). Id curto que casa com 2+ credenciais: `409 KCF063`
+(pede o `kfs_` completo; nada e revogado).
 
 Registrar domínio próprio (Fase 6, slice 1):
 

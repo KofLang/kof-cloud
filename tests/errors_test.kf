@@ -299,6 +299,7 @@ test "erros: Hint orienta sem vazar segredo ou recurso alheio", "errors-hint" {
     assert(errHint("KCF045: exposure must be PUBLIC").indexOf("PRIVATE") >= 0, "KCF045 lista as opcoes")
     assert(errHint("KCF046: protocol must be http").indexOf("HTTP") >= 0, "KCF046 diz que e so HTTP")
     assert(errHint("KCF047: localAddress must be loopback").indexOf("loopback") >= 0, "KCF047 sugere loopback")
+    assert(errHint("KCF063: short id matches more").indexOf("kfs_") >= 0, "KCF063 pede o valor completo")
     assert(errHint("KCF999: algo desconhecido") == "", "codigo desconhecido nao inventa dica")
 }
 

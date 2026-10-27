@@ -135,6 +135,21 @@ test "e2e: servico AUTHENTICATED exige credencial de servico", "auth" {
     assert(bodyOf(badTtl).indexOf("KCF062") >= 0, "codigo estavel de TTL")
     assert(statusOf(httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + secretId + "\",\"ttlHours\":\"0\"}", accountToken)) == 400, "TTL zero -> 400")
 
+    // Id curto: o inventario traz "id" (8 hex do hash). Primeiro limpa o
+    // cenario para o id ser unico: revoga o serviceToken2 pelo valor
+    // completo (ja testado acima que funciona). Sobram timedToken (+ o
+    // primeiro, ja revogado e podado) — o id do timed e deterministico.
+    var cleanupBody = "{\"serviceId\":\"" + secretId + "\",\"token\":\"" + serviceToken2 + "\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/token/revoke", cleanupBody, accountToken)) == 200, "limpa o segundo")
+    var listedRaw = bodyOf(httpPostJson(controlPort, "/v1/services/tokens", listBody, accountToken))
+    assert(listedRaw.indexOf("\"id\":\"") >= 0, "inventario traz id curto")
+    var idNeedle = "\"id\":\""
+    var idAt = listedRaw.indexOf(idNeedle)
+    var shortId = listedRaw.substring(idAt + idNeedle.length, idAt + idNeedle.length + 8)
+    var shortRevoke = "{\"serviceId\":\"" + secretId + "\",\"token\":\"" + shortId + "\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/token/revoke", shortRevoke, accountToken)) == 200, "revoke por id curto unico")
+    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", timedToken)) == 401, "token do id revogado nao autoriza")
+
     // Nota: nao testamos "PUBLIC com Authorization" porque um servico local
     // Kof (web.app) recusa QUALQUER Authorization antes do handler (L8). Em
     // PUBLIC o Edge repassa o header como proxy transparente; em AUTHENTICATED

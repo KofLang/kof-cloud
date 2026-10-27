@@ -723,8 +723,10 @@ Int cmdServiceTokenList(List<String> args) {
 }
 
 // Revoga UMA credencial kfs_ (ex.: vazou no log, no chat, no repo).
-// Recebe o valor do token na CLI — ele viaja no corpo HTTPS ate o control
-// plane (nunca em URL/log) e so o hash e comparado/guardado.
+// Aceita o valor completo (kfs_...) OU o id curto do `token-list`
+// (quando unico no servico; ambiguo pede o completo com 409 KCF063).
+// O valor viaja no corpo HTTPS ate o control plane (nunca em URL/log)
+// e so o hash e comparado/guardado.
 Int cmdServiceTokenRevoke(List<String> args) {
     var session = loadSession()
     if (session == null) {
@@ -734,7 +736,7 @@ Int cmdServiceTokenRevoke(List<String> args) {
     var name = firstPositional(args)
     var token = secondPositional(args)
     if (name.length == 0 || token.length == 0) {
-        println("uso: kof cloud service token-revoke <nome> <kfs_...>")
+        println("uso: kof cloud service token-revoke <nome> <kfs_...|id>")
         return 1
     }
     try {

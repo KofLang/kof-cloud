@@ -107,7 +107,7 @@ Int runDevice(List<String> args) {
 
 Int runService(List<String> args) {
     if (args.size == 0) {
-        println("uso: kof cloud service list|status|suspend|unsuspend|token <nome>|token-list <nome>|token-revoke <nome> <kfs_...>")
+        println("uso: kof cloud service list|status|suspend|unsuspend|token <nome>|token-list <nome>|token-revoke <nome> <kfs_...|id>")
         return 1
     }
     var sub = args.get(0)
