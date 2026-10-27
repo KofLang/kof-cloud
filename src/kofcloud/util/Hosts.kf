@@ -23,6 +23,24 @@ Bool validServiceName(String name) {
     return validLabel(name, 1, 32)
 }
 
+// Endereco local permitido para publish: so loopback. O Agent conecta
+// nesse endereco a cada request (relay) e a cada health check — um valor
+// externo transformaria o Agent num proxy/escaneador da rede local via
+// tunel publico (SSRF). Lista fechada, sem CIDR/wildcard: 127.0.0.1,
+// localhost, ::1. Vazio nunca chega aqui (default antes).
+Bool validLocalAddress(String address) {
+    if (address == "127.0.0.1") {
+        return true
+    }
+    if (address == "localhost") {
+        return true
+    }
+    if (address == "::1") {
+        return true
+    }
+    return false
+}
+
 Bool validLabel(String text, Int min, Int max) {
     if (text.length < min || text.length > max) {
         return false

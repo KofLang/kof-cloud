@@ -15,14 +15,14 @@ String deployManifest(String name, String body) {
 }
 
 test "deploy: manifesto valido com defaults", "deploy" {
-    var services = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"api\",\"port\":3000,\"exposure\":\"AUTHENTICATED\",\"address\":\"0.0.0.0\"}]}")
+    var services = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"api\",\"port\":3000,\"exposure\":\"AUTHENTICATED\",\"address\":\"localhost\"}]}")
     assert(services.size == 2, "dois servicos")
     assert(services.get(0).name == "site", "nome")
     assert(services.get(0).port == 8080, "porta numerica")
     assert(services.get(0).address == "127.0.0.1", "default address")
     assert(services.get(0).exposure == "PUBLIC", "default exposure")
     assert(services.get(1).exposure == "AUTHENTICATED", "exposure explicita")
-    assert(services.get(1).address == "0.0.0.0", "address explicito")
+    assert(services.get(1).address == "localhost", "address explicito")
 }
 
 test "deploy: manifesto com port como string (formato da API)", "deploy-str" {
@@ -116,6 +116,20 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     }
     assert(badProtocol == "servico \"db\" com protocol invalido: tcp", "protocol com nome e valor")
     assert(defaulted.get(1).exposure == "PRIVATE", "valida passa")
+
+    // Address fora de loopback falha no parse: o Agent conecta nesse
+    // endereco — externo o transformaria em escaneador (SSRF). Lista
+    // fechada: 127.0.0.1, localhost, ::1; ausente defaulta.
+    var badAddress = ""
+    try {
+        parseManifest("{\"services\":[{\"name\":\"db\",\"port\":5432,\"address\":\"10.0.0.5\"}]}")
+    } catch (String e) {
+        badAddress = e
+    }
+    assert(badAddress == "servico \"db\" com address invalido: 10.0.0.5", "address com nome e valor")
+    var loopbacks = parseManifest("{\"services\":[{\"name\":\"a\",\"port\":1,\"address\":\"localhost\"},{\"name\":\"b\",\"port\":2,\"address\":\"::1\"}]}")
+    assert(loopbacks.get(0).address == "localhost", "localhost passa")
+    assert(loopbacks.get(1).address == "::1", "::1 passa")
 }
 
 test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {

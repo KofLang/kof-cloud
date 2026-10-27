@@ -50,9 +50,10 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   sinal de "não vou mais escrever, mas ainda leio".
 * **Limites aplicados.** Dispositivos ativos por conta, serviços por
   dispositivo, streams por túnel, rate limit por hostname, frame DATA fatiado
-  (blocos de 16 KiB), teto de linha do túnel (fail-closed), idle timeout e
-  conexões simultâneas por serviço — todos configuráveis e com enforcement.
-  Ver `03-device.md` e `08-multiplexing.md`.
+  (blocos de 16 KiB), teto de linha do túnel (fail-closed), idle timeout,
+  conexões simultâneas por serviço e validação de entrada (nome/porta/
+  exposure/protocol/address loopback) — todos com enforcement. Ver
+  `03-device.md` e `08-multiplexing.md`.
 * **Contador por serviço é aproximado sob corrida** (check-then-act sem lock;
   o Kof não expõe mutex, L3): pode estourar em poucas unidades, nunca recusa
   a menos. Contadores internos usam `Map<String, String>` porque

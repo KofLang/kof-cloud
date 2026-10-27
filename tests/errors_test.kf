@@ -77,6 +77,12 @@ test "erros: control plane devolve codigos estaveis", "errors" {
     var badProtocol = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"db\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"5432\",\"protocol\":\"tcp\",\"exposure\":\"PRIVATE\"}", accountToken)
     assert(statusOf(badProtocol) == 400, "protocol invalido -> 400")
     assert(codeIs(errorCodeOf(badProtocol), "KCF046"), "KCF046 protocol")
+
+    // Address fora de loopback nao e aceito: o Agent conectaria nesse
+    // endereco — externo o transformaria em escaneador (SSRF).
+    var badAddress = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"db\",\"localAddress\":\"169.254.169.254\",\"localPort\":\"80\",\"protocol\":\"http\",\"exposure\":\"PRIVATE\"}", accountToken)
+    assert(statusOf(badAddress) == 400, "address externo -> 400")
+    assert(codeIs(errorCodeOf(badAddress), "KCF047"), "KCF047 loopback")
 }
 
 test "erros: conta nao dona recebe 404 opaco (nao revela recurso alheio)", "errors-xacct" {
@@ -280,6 +286,7 @@ test "erros: Hint orienta sem vazar segredo ou recurso alheio", "errors-hint" {
     assert(errHint("KCF080: too many active devices").indexOf("revoke") >= 0, "KCF080 sugere revoke")
     assert(errHint("KCF045: exposure must be PUBLIC").indexOf("PRIVATE") >= 0, "KCF045 lista as opcoes")
     assert(errHint("KCF046: protocol must be http").indexOf("HTTP") >= 0, "KCF046 diz que e so HTTP")
+    assert(errHint("KCF047: localAddress must be loopback").indexOf("loopback") >= 0, "KCF047 sugere loopback")
     assert(errHint("KCF999: algo desconhecido") == "", "codigo desconhecido nao inventa dica")
 }
 
