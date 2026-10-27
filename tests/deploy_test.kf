@@ -22,8 +22,10 @@ test "deploy: manifesto valido com defaults", "deploy" {
     assert(services.get(0).port == 8080, "porta numerica")
     assert(services.get(0).address == "127.0.0.1", "default address")
     assert(services.get(0).exposure == "PUBLIC", "default exposure")
+    assert(services.get(0).protocol == "http", "default protocol")
     assert(services.get(1).exposure == "AUTHENTICATED", "exposure explicita")
     assert(services.get(1).address == "localhost", "address explicito")
+    assert(services.get(1).protocol == "http", "protocol default mesmo com resto explicito")
 }
 
 test "deploy: manifesto com port como string (formato da API)", "deploy-str" {

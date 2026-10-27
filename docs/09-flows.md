@@ -78,6 +78,11 @@ kofcloud.json:
   {"services": [{"name": "site", "port": 8080},
                 {"name": "api", "port": 3000, "exposure": "AUTHENTICATED"}]}
 
+Campos por serviço: `name` (obrigatório), `port` (número ou string),
+`address` (default 127.0.0.1; só loopback), `exposure` (default PUBLIC),
+`protocol` (default http; único aceito no MVP). Todos validados no parse
+com erro posicional — nada com default silencioso perigoso.
+
  1. usuário: kof cloud deploy [--file kofcloud.json] [--check] [--plan]
     com `--plan`: só mostra o diff (`+ novo`, `~ atualiza`, `= igual`,
     `- fora do manifesto`) via `diffDeployment` pura — nada aplicado

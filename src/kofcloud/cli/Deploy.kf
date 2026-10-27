@@ -20,7 +20,7 @@ import kofcloud.store.Store
 // `address` defaulta para 127.0.0.1 e `exposure` para PUBLIC — os mesmos
 // defaults do `publish`.
 
-record ManifestService(String name, String address, Int port, String exposure)
+record ManifestService(String name, String address, Int port, String exposure, String protocol)
 
 String defaultManifestPath() {
     return "kofcloud.json"
@@ -53,7 +53,7 @@ List<String> diffDeployment(List<Service> live, List<ManifestService> wanted) {
         for (var service in live) {
             if (service.name == item.name) {
                 found = true
-                if (service.localPort == item.port && service.localAddress == item.address && service.exposure == item.exposure) {
+                if (service.localPort == item.port && service.localAddress == item.address && service.exposure == item.exposure && service.protocol == item.protocol) {
                     same = true
                 }
             }
@@ -158,7 +158,7 @@ List<ManifestService> parseManifest(String raw) {
         if (port <= 0) {
             throw "servico \"" + name + "\" sem porta valida"
         }
-        out.add(ManifestService(name, address, port, exposure))
+        out.add(ManifestService(name, address, port, exposure, protocol))
         index = index + 1
     }
     if (out.size == 0) {
@@ -394,7 +394,7 @@ Int cmdDeploy(List<String> args) {
         body.put("name", wanted.name)
         body.put("localAddress", wanted.address)
         body.put("localPort", intToString(wanted.port))
-        body.put("protocol", "http")
+        body.put("protocol", wanted.protocol)
         body.put("exposure", wanted.exposure)
         try {
             var created = requireOk(http.post(session.controlUrl + "/v1/services", json.encode(body), jsonHeader(session.token)))
