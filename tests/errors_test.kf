@@ -289,6 +289,9 @@ test "erros: Edge devolve codigos estaveis (rota, auth, offline, conteudo)", "er
 
 test "erros: Hint orienta sem vazar segredo ou recurso alheio", "errors-hint" {
     assert(errHint("KCF004: missing or invalid account token").indexOf("login") >= 0, "KCF004 sugere login")
+    assert(errHint("KCF005: password too short").indexOf("4 caracteres") >= 0, "KCF005 sugere tamanho")
+    assert(errHint("KCF043: localPort required").indexOf("--port") >= 0, "KCF043 sugere flag")
+    assert(errHint("KCF044: serviceId required").indexOf("service list") >= 0, "KCF044 sugere lista")
     assert(errHint("KCF022: not the owner of device").indexOf("outra conta") >= 0, "KCF022 sem revelar dono")
     assert(errHint("KCF060: not the owner of service").indexOf("outra conta") >= 0, "KCF060 sem revelar dono")
     assert(errHint("KCF061: serviceId and token required").indexOf("service token") >= 0, "KCF061 sugere comando")

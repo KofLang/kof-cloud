@@ -180,6 +180,9 @@ String errHint(String raw) {
     if (raw.indexOf("KCF004") >= 0) {
         return "O control plane precisa de credencial — rode `kof cloud login` primeiro."
     }
+    if (raw.indexOf("KCF005") >= 0) {
+        return "Senha muito curta — use ao menos 4 caracteres (`kof cloud login <handle> --password <senha>`)."
+    }
     if (raw.indexOf("KCF020") >= 0) {
         return "O registro do dispositivo precisa de nome e chave publica — rode `kof cloud login` de novo."
     }
