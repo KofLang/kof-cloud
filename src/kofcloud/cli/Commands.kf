@@ -12,6 +12,7 @@ import kofcloud.identity.Keys
 import kofcloud.model.Device
 import kofcloud.model.Errors
 import kofcloud.model.Service
+import kofcloud.util.Hosts
 import kofcloud.util.Limits
 import kofcloud.util.Text
 import kofcloud.store.Store
@@ -348,6 +349,22 @@ Int cmdDeviceUnsuspend(List<String> args) {
 
 // ---- servicos ----
 
+// Valida nome/porta/exposure/address ANTES de qualquer rede ou sessao:
+// pura, testavel sem HOME. Devolve "" quando ok, ou a mensagem de erro
+// (mesmas regras da API KCF045/KCF047 — fail-fast local com dica).
+String validatePublishLocal(String name, Int port, String exposure, String address) {
+    if (name.length == 0 || port <= 0) {
+        return "uso: kof cloud publish <nome> --port <porta>"
+    }
+    if (exposure != "PUBLIC" && exposure != "AUTHENTICATED" && exposure != "PRIVATE") {
+        return "exposure invalida: " + exposure + " (use PUBLIC, AUTHENTICATED ou PRIVATE)"
+    }
+    if (validLocalAddress(address) == false) {
+        return "address invalido: " + address + " (use 127.0.0.1, localhost ou ::1)"
+    }
+    return ""
+}
+
 Int cmdPublish(List<String> args) {
     var identity = loadIdentity()
     var session = loadSession()
@@ -381,8 +398,11 @@ Int cmdPublish(List<String> args) {
             return 1
         }
     }
-    if (name.length == 0 || port <= 0) {
-        println("uso: kof cloud publish <nome> --port <porta>")
+    // Fail-fast local (mesmas regras da API KCF045/KCF047): evita uma
+    // viagem de rede para um erro certo, com dica acionavel na hora.
+    var localError = validatePublishLocal(name, port, exposure, address)
+    if (localError.length > 0) {
+        println(localError)
         return 1
     }
     var body = mapOf()

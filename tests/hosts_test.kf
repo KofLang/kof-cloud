@@ -126,3 +126,15 @@ test "text: tokenInventoryLine resume credenciais sem vazar valor", "token-statu
     assert(two.indexOf("1 com expiracao") >= 0, "aponta que ha prazo")
     assert(two.indexOf("token-list") >= 0, "orienta o proximo passo")
 }
+
+test "text: validatePublishLocal barra exposure/address ruins sem rede", "publish-local" {
+    // Pura, sem rede nem HOME (precedente: doctorTunnelLine): o cmdPublish
+    // chama antes de qualquer fetch; aqui cobrimos a decisao direto.
+    assert(validatePublishLocal("site", 8080, "PUBLIC", "127.0.0.1") == "", "caso valido passa")
+    assert(validatePublishLocal("site", 8080, "PRIVATE", "localhost") == "", "localhost passa")
+    assert(validatePublishLocal("", 8080, "PUBLIC", "127.0.0.1").indexOf("uso:") >= 0, "sem nome pede uso")
+    assert(validatePublishLocal("site", 0, "PUBLIC", "127.0.0.1").indexOf("uso:") >= 0, "sem porta pede uso")
+    assert(validatePublishLocal("site", 8080, "PUBLIK", "127.0.0.1").indexOf("exposure invalida") >= 0, "typo nao vira PUBLIC")
+    assert(validatePublishLocal("site", 8080, "PUBLIC", "10.0.0.5").indexOf("address invalido") >= 0, "externo barra (SSRF)")
+    assert(validatePublishLocal("site", 8080, "PUBLIC", "169.254.169.254").indexOf("127.0.0.1") >= 0, "metadata barra com dica")
+}
