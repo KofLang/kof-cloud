@@ -412,6 +412,135 @@ plataforma**, com metadados mínimos documentados. WAF (Fase 10) e E2EE
 são tensão direta: inspecionar corpo exige ver corpo — por serviço, o
 operador escolhe (WAF **ou** E2EE estrito, nunca os dois fingindo).
 
+## Fase 16 — arquitetura robusta e escalável
+
+**Motivação:** hoje é um nó de control plane + um Edge, estado em JSON
+em memória + arquivo. Isso prova o fluxo, mas é ponto único de falha e
+teto de escala. Cloud robusta separa o que escala junto do que não
+escala — sem reescrever o núcleo (router + túnel + streams continuam
+iguais).
+
+**Estado: ⏳ não iniciado.** Desenho fatiado:
+
+* **Slice 1 — separar estado do processo.** Registry atrás de interface
+  (hoje a classe já concentra tudo): backend arquivo (atual) → backend
+  SQLite/Postgres por config. Migração com `kof cloud migrate --dry-run`
+  (lê, valida, escreve, compara contagem) antes de trocar. Prova: suíte
+  roda igual nos dois backends.
+* **Slice 2 — Edge horizontal.** N Edges atrás de qualquercast/DNS-round-
+  robin; presença vira pub/sub entre Edges (o `/v1/presence` agrega, com
+  TTL curto por entrada); rate limit passa a janela deslizante em store
+  compartilhado (Redis ou o próprio control plane). Sem afinidade:
+  qualquer request pode cair em qualquer Edge. Prova: e2e com 2 Edges.
+* **Slice 3 — control plane ativo-passivo.** Líder eleito por lease no
+  store (quem tem o lease escreve; o outro serve leitura + fila). Split-
+  brain é pior que indisponibilidade curta: em dúvida, o passivo recusa
+  escrita (fail-closed, 503 + `Retry-After`).
+* **Slice 4 — células e blast radius.** Contas distribuídas em células
+  (shards por faixa de `accountId`); incidente numa célula não derruba as
+  outras; `status`/`doctor` mostram a célula (transparência, não detalhe
+  interno). Prova: teste desliga uma célula, a outra serve.
+
+**Regras:** mesma API `/v1` em todos os slices (escala não muda contrato);
+estado nunca em memória sem dono (todo mapa efêmero tem TTL + prova de
+expiração, como já faz `serviceTokens`/`edgeOnline`); deploy multi-nó
+sempre com rollback de um comando.
+
+## Fase 17 — resposta a incidentes (cloud que se defende e se explica)
+
+**Motivação:** segurança real não é só prevenir — é detectar, conter,
+comunicar e aprender. Hoje há auditoria em anel (100 eventos) e métricas;
+falta o ciclo completo: do sinal ao post-mortem.
+
+**Estado: ⏳ não iniciado.** Desenho fatiado (cada slice exercitado em
+game-day: simula o incidente de propósito e mede o tempo de resposta):
+
+* **Slice 1 — detecção e severidade.** Sinais com nível
+  (`INFO/WARN/CRIT`): pico de 401/429, \u200btúnel caindo em massa, revoke em lote,
+  expiração em massa de `kfs_`, Edge sem heartbeat. `GET /v1/incidents`
+  lista os abertos (filtrado por conta quando for dado de cliente, global
+  quando for plataforma). Prova: teste injeta o sinal, incidente abre.
+* **Slice 2 — contenção em um comando.** `kof cloud freeze <alvo>`
+  (conta|device|service|edge): congela tudo do alvo (suspend + revoga
+  tokens vivos + derruba sessões) e gera ID de incidente; `unfreeze`
+  reverte passo a passo com confirmação. Congelar é reversível por
+  desenho — destruir nunca é automático. Prova: e2e congela e
+  descongela sem perder configuração.
+* **Slice 3 — comunicação e post-mortem.** Status page mínima (lê os
+  incidentes globais; sem login), notificação por webhook configurável
+  (conta cadastra URL + segredo; payload assinado Ed25519), e template
+  de post-mortem no repo (`docs/incidents/AAAA-MM-DD-titulo.md`: causa,
+  impacto, timeline, correção, ação preventiva com dono e prazo).
+  Prova: game-day completo fecha com post-mortem publicado.
+
+**Regras:** contenção sempre reversível; comunicação sempre antes do
+fix secreto (avisa o impacto, depois corrige); todo incidente vira teste
+novo (se não tem regressão, não fechou).
+
+## Fase 18 — integrações com o mercado (plugar sem prender)
+
+**Motivação:** ninguém vive isolado — DNS, certificados, alertas, CI/CD,
+identidade e billing moram em ferramentas que o operador já usa. Cloud
+robusta pluga por padrão aberto, nunca por SDK proprietário.
+
+**Estado: ⏳ não iniciado.** Princípio único: **a KofCloud fala o protocolo
+do mercado, não o contrário.** Fatiado por conector (cada um: config por
+env, credencial nunca em log, teste com fake local + e2e opcional real):
+
+* **Slice 1 — DNS e certificados.** Provedores DNS (Cloudflare, Route53,
+  outros via webhook genérico) para criar o CNAME do domínio próprio
+  (`domain add --dns=cloudflare`); ACME DNS-01 quando ES256 existir
+  (Fase 9 slice 3). Credencial do provedor em env, escopo mínimo
+  (só zona do domínio).
+* **Slice 2 — identidade e SSO.** OIDC genérico (qualquer IdP:
+  Google, GitHub, Keycloak): `login` abre browser, troca code por conta
+  vinculada (nunca substitui `kfc_` — vira segundo fator de emissão).
+  SCIM mínimo para times (provisionar/revogar conta em lote).
+* **Slice 3 — CI/CD e GitOps.** Action oficial (`kofcloud/deploy@v1`):
+  lê `kofcloud.json`, publica, roda `--check`, falha o pipeline se
+  quebrar; `kof cloud deploy --plan` mostra o diff sem aplicar (como
+  `terraform plan`). Prova: pipeline de exemplo no repo.
+* **Slice 4 — observabilidade e billing.** Export OpenTelemetry
+  (traces do relay + logs estruturados) para o backend que o operador
+  já tem (Grafana/Datadog); webhook de uso (requests/bytes por conta)
+  para billing externo; Stripe como referência (nunca único).
+* **Slice 5 — segredos e chaves.** Provedores de segredo (Vault, AWS SM,
+  1Password Connect) como fonte do `tunnelSecret`/PEMs: a plataforma lê
+  na partida, nunca persiste em disco; rotação por SIGHUP/reload.
+
+**Regras:** todo conector é opcional e sem lock-in (o caminho manual
+continua funcionando); credencial de terceiro nunca atravessa o túnel
+nem aparece em log/métrica/audit; cada conector tem modo `--dry-run`.
+
+## Fase 19 — segurança profunda e contínua (cloud auditável)
+
+**Motivação:** juntar o que as Fases 9–11 e 17 começaram num programa
+contínuo: a segurança não é uma fase que "termina", é um ritmo (scan,
+revisão, game-day, auditoria). Esta fase é o metrônomo.
+
+**Estado: ⏳ não iniciado (ritmo, não projeto).** Desenho:
+
+* **Slice 1 — baseline e SBOM.** `kof cloud audit --sbom` gera inventário
+  (versão do CLI, Runtime Kof, deps, hashes); `docs/SECURITY.md`
+  (política: o que é suportado, como reportar, SLA de resposta);
+  `security.txt` no Edge (`/.well-known/security.txt`).
+* **Slice 2 — varredura contínua.** `kof cloud scan` (dependências,
+  segredos vazados em `kofcloud.json`/env, PEM expirando, `kfs_` sem
+  TTL em serviço crítico); roda no CI a cada push + game-day mensal.
+  Achado vira issue com severidade, nunca silêncio.
+* **Slice 3 — resposta e rotação programada.** Rotação assistida
+  (`kof cloud rotate --all`: re-emite `kfs_` com overlap, revoga os
+  antigos depois do TTL; PEMs com 30 dias de antecedência); kill-switch
+  documentado (o `freeze` da Fase 17 em escala de plataforma).
+* **Slice 4 — auditoria externa.** Trilha imutável (audit log WORM:
+  append-only com hash encadeado, verificável por terceiro); relatório
+  SOC2-tipo-II como meta (controles mapeados 1:1 com o que já existe:
+  R6, 404 opaco, E2EE, TTL, auditoria).
+
+**Regras:** segurança por default em todo slice novo (a pergunta "o que
+pode vazar aqui?" entra no template de teste); nenhum dado de cliente
+em log/métrica/audit — sem exceção, sem "só dessa vez".
+
 ## Ordem de execução no MVP
 
 ```

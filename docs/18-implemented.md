@@ -162,5 +162,13 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   caminho de bytes O(n); sem número antes/depois, sem otimização.
 * **E2EE real (Fase 15)** — corpo opaco para a plataforma (Edge roteia
   sem decifrar); tensão honesta com WAF (por serviço: um ou outro).
+* **Arquitetura escalável (Fase 16)** — estado plugável → Edge horizontal
+  → control ativo-passivo → células; mesma API, fail-closed, rollback.
+* **Resposta a incidentes (Fase 17)** — detecção com severidade → `freeze`
+  reversível → status page + webhook assinado + post-mortem; game-day.
+* **Integrações de mercado (Fase 18)** — DNS/cert, OIDC/SSO+SCIM, CI/CD
+  com `--plan`, OTel/billing, segredos externos; sem lock-in, dry-run.
+* **Segurança contínua (Fase 19)** — SBOM + `security.txt`, scan no CI,
+  rotação assistida + kill-switch, audit log WORM rumo a SOC2.
 
 Ver `16-plan.md` para as fases e `17-limitations.md` para as lacunas.
