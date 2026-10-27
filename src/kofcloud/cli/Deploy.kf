@@ -375,6 +375,11 @@ Int cmdDown(List<String> args) {
         println("nao logado")
         return 1
     }
+    var identity = loadIdentity()
+    if (identity == null) {
+        println("nao logado")
+        return 1
+    }
     var path = flagValue(args, "--file")
     if (path.length == 0) {
         path = defaultManifestPath()
@@ -391,6 +396,7 @@ Int cmdDown(List<String> args) {
         println("manifesto invalido (" + path + "): " + e)
         return 1
     }
+    var prune = hasFlag(args, "--prune")
     var failures = 0
     try {
         var live = fetchServices(session.controlUrl, session.token)
@@ -414,6 +420,37 @@ Int cmdDown(List<String> args) {
                     failures = failures + 1
                 }
             }
+        }
+        // --prune fecha o drift: remove publicados DESTE device que nao
+        // estao no manifesto (ex.: publish manual antigo). Escopo: so o
+        // device atual (nunca toca servico de outro device) e so o que
+        // nao foi declarado (nunca remove a mais do que o diff).
+        if (prune) {
+            var pruned = 0
+            for (var service in live) {
+                if (service.deviceId != identity.deviceId) {
+                    continue
+                }
+                var declared = false
+                for (var wanted in services) {
+                    if (service.name == wanted.name) {
+                        declared = true
+                    }
+                }
+                if (declared == false) {
+                    var body = mapOf()
+                    body.put("serviceId", service.id)
+                    try {
+                        requireOk(http.post(session.controlUrl + "/v1/services/remove", json.encode(body), jsonHeader(session.token)))
+                        println("podado (fora do manifesto): " + service.name)
+                        pruned = pruned + 1
+                    } catch (String e) {
+                        printFail("falha ao podar " + service.name, e)
+                        failures = failures + 1
+                    }
+                }
+            }
+            println("prune: " + intToString(pruned) + " orfao(s) removidos")
         }
     } catch (String e) {
         printFail("falha", e)

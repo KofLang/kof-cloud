@@ -1,6 +1,7 @@
 import kofcloud.cli.Deploy
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
+import kofcloud.model.Service
 import kofcloud.store.Store
 import testkit.Support
 
@@ -182,6 +183,44 @@ test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {
     var afterRaw = httpGetToken(controlPort, "/v1/services", accountToken)
     assert(countOccurrences(bodyOf(afterRaw), "\"name\"") == 1, "so o extra sobreviveu")
     assert(bodyOf(afterRaw).indexOf("\"extra\"") >= 0, "extra intacto")
+
+    // --prune fecha o drift: orfao do MESMO device some; de outro device,
+    // nunca (escopo do prune e o device atual).
+    var otherDevice = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"cel\",\"publicKey\":\"pk2\"}", accountToken)
+    var otherId = mapField(json.decode<Map<String, String>>(bodyOf(otherDevice)), "deviceId")
+    var otherBody = "{\"deviceId\":\"" + otherId + "\",\"name\":\"alheio\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"9998\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", otherBody, accountToken)) == 200, "servico de outro device")
+    // Simula o prune: diff dos publicados DESTE device contra o manifesto.
+    var prePrune = httpGetToken(controlPort, "/v1/services", accountToken)
+    var pruned = pruneOrphans(controlPort, accountToken, deviceId, services)
+    assert(pruned == 1, "um orfao podado (o extra)")
+    var postPrune = httpGetToken(controlPort, "/v1/services", accountToken)
+    assert(bodyOf(postPrune).indexOf("\"extra\"") < 0, "extra sumiu")
+    assert(bodyOf(postPrune).indexOf("\"alheio\"") >= 0, "outro device intacto")
+}
+
+// Replica a regra do cmdDown --prune via protocolo: remove publicados
+// DESTE device fora do manifesto; devolve quantos removeu.
+Int pruneOrphans(Int controlPort, String token, String deviceId, List<ManifestService> wanted) {
+    var pruned = 0
+    var live = json.decode<List<Service>>(bodyOf(httpGetToken(controlPort, "/v1/services", token)))
+    for (var service in live) {
+        if (service.deviceId != deviceId) {
+            continue
+        }
+        var declared = false
+        for (var item in wanted) {
+            if (service.name == item.name) {
+                declared = true
+            }
+        }
+        if (declared == false) {
+            var removeBody = "{\"serviceId\":\"" + service.id + "\"}"
+            assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", removeBody, token)) == 200, "podado: " + service.name)
+            pruned = pruned + 1
+        }
+    }
+    return pruned
 }
 
 test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-check" {

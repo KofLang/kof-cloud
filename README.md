@@ -68,7 +68,7 @@ Ou declarativo, com `kofcloud.json` na pasta (`{"services":[{"name":"site",
 
 ```bash
 kof run src/Main.kf deploy [--file kofcloud.json] [--check]   # publica (+ verifica)
-kof run src/Main.kf down                            # remove os do manifesto
+kof run src/Main.kf down [--prune]              # remove os do manifesto (+ orfaos do device)
 ```
 
 `connect` mantém o túnel e reconecta sozinho. Enquanto ele roda:
@@ -109,7 +109,7 @@ domain add <hostname> --service <nome>   (dominio proprio, devolve a instrucao C
 domain verify <hostname>                 (confere o DNS e ativa a rota)
 domain remove <hostname>
 deploy [--file kofcloud.json] [--check]   (publica + verifica saude local)
-down [--file kofcloud.json]     (remove os servicos do manifesto)
+down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove orfaos)
 doctor [--file kofcloud.json]   (diagnostico: login, control, device, tunel, servicos)
 audit                        (trilha de auditoria da conta)
 logs [--tail <linhas>]      (log local do agent, ultimas N linhas; teto 256 KiB)

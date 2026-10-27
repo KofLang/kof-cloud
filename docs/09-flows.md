@@ -83,6 +83,8 @@ kofcloud.json:
  3. para cada serviço: POST /v1/services (igual ao publish, idempotente)
  4. reporta publicados/mantidos/falhas (exit 1 se alguma falhar)
  5. usuário: kof cloud down → unpublish só dos listados (extra sobrevive)
+    com `--prune`: remove também os órfãos DESTE device fora do manifesto
+    (nunca toca serviço de outro device)
  6. com `--check`: publicado E respondendo localmente? (`checkLocalService`,
     mesma regra do Agent) — sem rollback, só diagnóstico
 ```
