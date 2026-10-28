@@ -369,3 +369,29 @@ String serviceIdByNameIn(String servicesRaw, String name) {
     }
     return head.substring(start, end)
 }
+
+test "deploy: loadManifestFile distingue ausente, invalido e valido", "deploy-load" {
+    // Pura na decisao (so IO: ler + parsear) — cobre o caminho que
+    // cmdDeploy/cmdDown usam antes de qualquer rede/sessao.
+    assert(resolveManifestPath("") == "kofcloud.json", "vazio vira default")
+    assert(resolveManifestPath("/tmp/x.json") == "/tmp/x.json", "flag passa direto")
+    var missing = loadManifestFile("/tmp/kofcloud-deploy-ausente-" + crypto.randomHex(8) + ".json")
+    assert(missing.ok == false, "inexistente falha")
+    assert(missing.error.indexOf("nao encontrado") >= 0, "diz que nao achou")
+    assert(missing.services.size == 0, "sem servicos no erro")
+    var emptyPath = deployManifest("vazio-load", "")
+    var empty = loadManifestFile(emptyPath)
+    assert(empty.ok == false, "vazio falha")
+    assert(empty.error.indexOf("nao encontrado") >= 0, "vazio e 'nao encontrado'")
+    var badPath = deployManifest("bad-load", "{\"services\":[{\"name\":\"x\"}]}")
+    var bad = loadManifestFile(badPath)
+    assert(bad.ok == false, "invalido falha")
+    assert(bad.error.indexOf("invalido") >= 0, "diz que e invalido")
+    assert(bad.error.indexOf(badPath) >= 0, "erro cita o caminho")
+    var goodPath = deployManifest("good-load", "{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
+    var good = loadManifestFile(goodPath)
+    assert(good.ok == true, "valido passa")
+    assert(good.error == "", "sem erro no ok")
+    assert(good.services.size == 1, "um servico")
+    assert(good.services.get(0).name == "site", "nome certo")
+}
