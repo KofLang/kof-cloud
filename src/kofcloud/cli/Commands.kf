@@ -972,6 +972,22 @@ String logPath() {
 
 // Sobe a plataforma: control plane + edge no MESMO processo, compartilhando
 // uma unica instancia de Registry (sem corrida de arquivo entre processos).
+// Portas do `serve` validas? Pura, sem IO — o cmdServe chama antes de
+// abrir qualquer listener (fail-fast: sem bind parcial). Mesma faixa da
+// API/manifesto (KCF043): 1-65535. Devolve "" quando ok.
+String validateServePorts(Int controlPort, Int tunnelPort, Int httpPort) {
+    if (controlPort <= 0 || controlPort > 65535) {
+        return "control-port invalida: " + intToString(controlPort) + " (use 1-65535)"
+    }
+    if (tunnelPort <= 0 || tunnelPort > 65535) {
+        return "tunnel-port invalida: " + intToString(tunnelPort) + " (use 1-65535)"
+    }
+    if (httpPort <= 0 || httpPort > 65535) {
+        return "http-port invalida: " + intToString(httpPort) + " (use 1-65535)"
+    }
+    return ""
+}
+
 // Portas: control HTTP, tunel e HTTP publico do edge.
 Int cmdServe(List<String> args) {
     var controlPort = parseIntSafe(flagValue(args, "--control-port"), 8080)
@@ -983,6 +999,16 @@ Int cmdServe(List<String> args) {
     }
     var tunnelSecret = config.str("kofcloud.tunnelSecret", "")
     var maxBytes = parseIntSafe(config.str("kofcloud.maxBodyBytes", "16777216"), 16777216)
+
+    // Fail-fast: valida as tres portas ANTES de abrir qualquer listener —
+    // sem isso, --control-port abc caia no default 8080 em silencio e porta
+    // fora da faixa quebrava so no bind (com metade da plataforma no ar).
+    var portsError = validateServePorts(controlPort, tunnelPort, httpPort)
+    if (portsError.length > 0) {
+        println(portsError)
+        println("uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] (portas 1-65535)")
+        return 1
+    }
 
     var registry = Registry(statePath)
     var edgeState = EdgeState(registry)

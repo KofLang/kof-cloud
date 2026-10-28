@@ -151,3 +151,14 @@ test "text: validTtlHours aceita vazio e positivos", "ttl-local" {
     assert(validTtlHours("lixo") == false, "texto recusa")
     assert(validTtlHours("  ") == false, "branco recusa")
 }
+
+test "text: validateServePorts barra porta fora da faixa", "serve-ports" {
+    // Pura, sem rede nem HOME: o cmdServe chama antes de abrir qualquer
+    // listener (fail-fast, sem bind parcial).
+    assert(validateServePorts(8080, 7000, 8081) == "", "defaults passam")
+    assert(validateServePorts(1, 1, 1).length == 0, "minimo passa")
+    assert(validateServePorts(65535, 65535, 65535).length == 0, "maximo passa")
+    assert(validateServePorts(0, 7000, 8081).indexOf("control-port") >= 0, "zero barra no control")
+    assert(validateServePorts(8080, 70000, 8081).indexOf("tunnel-port") >= 0, "teto barra no tunel")
+    assert(validateServePorts(8080, 7000, -1).indexOf("http-port") >= 0, "negativa barra no http")
+}
