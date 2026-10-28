@@ -138,3 +138,15 @@ test "text: validatePublishLocal barra exposure/address ruins sem rede", "publis
     assert(validatePublishLocal("site", 8080, "PUBLIC", "10.0.0.5").indexOf("address invalido") >= 0, "externo barra (SSRF)")
     assert(validatePublishLocal("site", 8080, "PUBLIC", "169.254.169.254").indexOf("127.0.0.1") >= 0, "metadata barra com dica")
 }
+
+test "text: validTtlHours aceita vazio e positivos", "ttl-local" {
+    // Pura, sem rede nem HOME: o cmdServiceToken chama antes de buscar
+    // servicos (fail-fast local, mesma regra do KCF062 na API).
+    assert(validTtlHours("") == true, "ausente = sem expiracao")
+    assert(validTtlHours("24") == true, "horas ok")
+    assert(validTtlHours("1") == true, "minimo ok")
+    assert(validTtlHours("0") == false, "zero recusa")
+    assert(validTtlHours("-5") == false, "negativo recusa")
+    assert(validTtlHours("lixo") == false, "texto recusa")
+    assert(validTtlHours("  ") == false, "branco recusa")
+}

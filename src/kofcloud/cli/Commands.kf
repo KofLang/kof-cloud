@@ -618,10 +618,21 @@ String deviceIdByNameOrId(LocalSession session, String nameOrId) {
     return ""
 }
 
+// TTL do `service token --ttl` valido? Vazio = sem expiracao (ok);
+// senao, inteiro positivo (mesma regra do KCF062 na API). Pura, sem
+// rede nem HOME — o cmdServiceToken usa antes de qualquer fetch.
+Bool validTtlHours(String ttlRaw) {
+    if (ttlRaw.length == 0) {
+        return true
+    }
+    return parseIntSafe(ttlRaw, -1) > 0
+}
+
 // Emite uma credencial kfs_ para um servico AUTHENTICATED. O token da conta
 // autoriza a emissao; o token devolvido e o que o cliente final usa.
 // `--ttl <horas>`: expiracao opcional (ex.: 24 = 1 dia); sem flag, sem
-// expiracao. O TTL e validado no control plane (KCF062 se invalido).
+// expiracao. Valido localmente antes da rede (mesma regra do KCF062);
+// o control plane valida de novo (defesa em profundidade).
 Int cmdServiceToken(List<String> args) {
     var session = loadSession()
     if (session == null) {
@@ -634,6 +645,10 @@ Int cmdServiceToken(List<String> args) {
         return 1
     }
     var ttlRaw = flagValue(args, "--ttl")
+    if (validTtlHours(ttlRaw) == false) {
+        println("ttl invalido: " + ttlRaw + " (use horas positivas, ex: --ttl 24)")
+        return 1
+    }
     try {
         var services = fetchServices(session.controlUrl, session.token)
         var target = ""
