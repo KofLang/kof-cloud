@@ -171,6 +171,32 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     assert(plan2.get(0).startsWith("~ site"), "porta diferente e update")
 }
 
+test "deploy: build opcional no manifesto executa antes do publish", "deploy-build" {
+    // Puro no parse + execucao real de comandos triviais (/bin/true e
+    // /bin/false existem em Linux; o deploy roda no Linux). Ausente = sem
+    // build (comportamento anterior, inalterado); presente e repassado como
+    // esta; vazio equivale a ausente.
+    var plain = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
+    assert(plain.get(0).build == "", "ausente vira vazio")
+    var withBuild = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"build\":\"npm run build\"}]}")
+    assert(withBuild.get(0).build == "npm run build", "comando repassado")
+    assert(withBuild.get(0).port == 8080, "resto intacto")
+    var emptyBuild = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"build\":\"\"}]}")
+    assert(emptyBuild.get(0).build == "", "vazio vira ausente")
+    // Execucao: vazio = skip honesto (nao toca o shell); true = ok;
+    // false = exit 1 com motivo; comando inexistente = erro honesto.
+    var skipped = runServiceBuild("")
+    assert(skipped.ok == true, "sem build: ok")
+    assert(skipped.detail == "sem build", "sem build: motivo")
+    var good = runServiceBuild("/bin/true")
+    assert(good.ok == true, "exit 0: ok")
+    var bad = runServiceBuild("/bin/false")
+    assert(bad.ok == false, "exit 1: falha")
+    assert(bad.detail.indexOf("exit 1") >= 0, "exit no motivo")
+    var missing = runServiceBuild("/nao/existe/kofcloud-build-" + crypto.randomHex(4))
+    assert(missing.ok == false, "inexistente: falha honesta")
+}
+
 test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {
     var controlPort = 19711
     var path = "/tmp/kofcloud-depe2e-" + crypto.randomHex(4) + ".json"

@@ -131,7 +131,9 @@ processo local) e o `doctor` ganhou a camada do tunel. Prova:
 `tests/presence_test.kf` (vivo listado, morto some, 401 sem token, filtro
 por conta).
 
-Falta fatiado (Fase 7): build/artefato, auto-update. `kof cloud doctor` (somente-leitura: login, control plane,
+Falta fatiado (Fase 7): build/artefato (passo 1 ✅: campo `build` opcional por
+serviço no manifesto, executado antes do publish, falha não publica;
+falta: artefato transferível, cache, build remoto), auto-update. `kof cloud doctor` (somente-leitura: login, control plane,
 device, servicos do manifesto) responde "onde quebrou" sem alterar nada.
 
 ## Débitos de limites (antes do deploy)

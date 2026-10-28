@@ -20,7 +20,28 @@ import kofcloud.store.Store
 // `address` defaulta para 127.0.0.1 e `exposure` para PUBLIC — os mesmos
 // defaults do `publish`.
 
-record ManifestService(String name, String address, Int port, String exposure, String protocol)
+record ManifestService(String name, String address, Int port, String exposure, String protocol, String build)
+
+// Resultado de rodar o build de UM servico: ok=true, comando executado;
+// ok=false traz o motivo ja formatado ("falhou (exit N)" ou "nao executou").
+// Pura na decisao (so IO: executa o comando via process.run). Comando vazio
+// (sem "build" no manifesto) = skip honesto, nao executa nada.
+record BuildResult(Bool ok, String detail)
+
+BuildResult runServiceBuild(String buildCmd) {
+    if (buildCmd.length == 0) {
+        return BuildResult(true, "sem build")
+    }
+    try {
+        var result = process.run(buildCmd)
+        if (result.exitCode == 0) {
+            return BuildResult(true, "ok")
+        }
+        return BuildResult(false, "build falhou (exit " + intToString(result.exitCode) + ")")
+    } catch (String e) {
+        return BuildResult(false, "build nao executou: " + e)
+    }
+}
 
 String defaultManifestPath() {
     return "kofcloud.json"
@@ -193,13 +214,19 @@ List<ManifestService> parseManifest(String raw) {
         if (protocol != "http") {
             throw "servico \"" + name + "\" com protocol invalido: " + protocol
         }
+        // Build opcional (Fase 7, slice 5): comando de shell rodado pelo
+        // `deploy` ANTES do publish (ex.: "npm run build", "make dist").
+        // Ausente = sem build (comportamento atual, inalterado); presente e
+        // executado como esta — sem sandbox no MVP (mesma confianca do
+        // `connect` local). Vazio ("" explicito) equivale a ausente.
+        var build = manifestField(entry, "build")
         if (name.length == 0) {
             throw "servico sem nome na posicao " + intToString(index)
         }
         if (port <= 0 || port > 65535) {
             throw "servico \"" + name + "\" sem porta valida (1-65535)"
         }
-        out.add(ManifestService(name, address, port, exposure, protocol))
+        out.add(ManifestService(name, address, port, exposure, protocol, build))
         index = index + 1
     }
     if (out.size == 0) {
@@ -427,6 +454,18 @@ Int cmdDeploy(List<String> args) {
     }
     var failures = 0
     for (var wanted in services) {
+        // Build antes do publish (Fase 7, slice 5): gera o artefato local
+        // antes de expor. Falhou = nao publica esse servico (fail-fast por
+        // servico: os demais seguem; o parcial aparece no relatorio).
+        if (wanted.build.length > 0) {
+            var built = runServiceBuild(wanted.build)
+            if (built.ok == false) {
+                printFail("falha no build de " + wanted.name, built.detail)
+                failures = failures + 1
+                continue
+            }
+            println("build ok: " + wanted.name)
+        }
         var body = mapOf()
         body.put("deviceId", identity.deviceId)
         body.put("name", wanted.name)

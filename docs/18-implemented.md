@@ -118,9 +118,11 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   `serviceId` no Edge, `429 KCF108` + `Retry-After` antes do OPEN, liberação
   ao fim do relay, isolamento por serviço, métrica `_service_overloaded`
   (`conns_test.kf`, 2 testes).
-* **Deploy declarativo (Fase 7, slice 1)**: `kofcloud.json` declara
-  `services[]` (nome, porta numero ou string, address/exposure opcionais);
-  `kof cloud deploy` publica em lote (idempotente) e `kof cloud down` remove
+* **Deploy declarativo (Fase 7, slice 1 + slice 5 passo 1)**: `kofcloud.json` declara
+  `services[]` (nome, porta numero ou string, address/exposure/protocol/build
+  opcionais); `kof cloud deploy` roda o `build` de cada serviço (quando
+  declarado) antes do publish em lote (idempotente; build falhou = não publica
+  aquele serviço) e `kof cloud down` remove
   só os listados — nada fora do manifesto é tocado; parser manual com erro
   posicional (`deploy_test.kf`, 5 testes). `deploy --check` confirma publicado
   + respondendo (mesma regra do Agent; sem rollback).

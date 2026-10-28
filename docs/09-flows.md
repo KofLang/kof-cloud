@@ -80,14 +80,17 @@ kofcloud.json:
 
 Campos por serviço: `name` (obrigatório), `port` (número ou string),
 `address` (default 127.0.0.1; só loopback), `exposure` (default PUBLIC),
-`protocol` (default http; único aceito no MVP). Todos validados no parse
+`protocol` (default http; único aceito no MVP), `build` (opcional: comando
+de shell rodado antes do publish, ex. `"build": "npm run build"`; ausente
+ou vazio = sem build). Todos validados no parse
 com erro posicional — nada com default silencioso perigoso.
 
  1. usuário: kof cloud deploy [--file kofcloud.json] [--check] [--plan]
     com `--plan`: só mostra o diff (`+ novo`, `~ atualiza`, `= igual`,
     `- fora do manifesto`) via `diffDeployment` pura — nada aplicado
  2. carrega identity + token + manifesto (parse com erro posicional)
- 3. para cada serviço: POST /v1/services (igual ao publish, idempotente)
+ 3. para cada serviço: roda `build` (se declarado; falhou = não publica
+    esse serviço) e depois POST /v1/services (igual ao publish, idempotente)
  4. reporta publicados/mantidos/falhas (exit 1 se alguma falhar)
  5. usuário: kof cloud down → unpublish só dos listados (extra sobrevive)
     com `--prune`: remove também os órfãos DESTE device fora do manifesto
@@ -96,7 +99,8 @@ com erro posicional — nada com default silencioso perigoso.
     mesma regra do Agent) — sem rollback, só diagnóstico
 ```
 
-Sem build, sem artefato neste slice: só `publish` em lote.
+Sem transferência de artefato neste slice: o build roda na máquina do
+usuário (onde o código já está) e só o publish atravessa a rede.
 
 ## 3.3 Diagnostico (`kof cloud doctor`)
 
