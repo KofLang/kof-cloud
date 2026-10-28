@@ -152,6 +152,10 @@ DoctorReport doctorCheck(String manifestPath) {
 }
 
 Int cmdDoctor(List<String> args) {
+    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file")) {
+        println("uso: kof cloud doctor [--file kofcloud.json]")
+        return 1
+    }
     var file = flagValue(args, "--file")
     var report = doctorCheck(file)
     for (var line in report.lines) {

@@ -202,3 +202,12 @@ test "text: extraPositional barra posicional sobrando", "extra-positional" {
     assert(extraPositional(listOf("site", "kfs_x"), 2) == false, "dois exatos ok")
     assert(extraPositional(listOf("site", "--ttl", "24"), 1) == false, "ttl com valor nao conta")
 }
+
+test "text: comandos sem posicional rejeitam sobra", "extra-zero" {
+    // logout/connect/disconnect/status/doctor/deploy/down nao tem
+    // posicionais: qualquer token solto e erro, nao no-op silencioso.
+    assert(extraPositional(listOf("qualquer"), 0) == true, "um solto barra")
+    assert(extraPositional(listOf<String>(), 0) == false, "vazio ok")
+    assert(extraPositional(listOf("--file", "k.json"), 0) == false, "so flag com valor ok")
+    assert(extraPositional(listOf("x", "--file", "k.json"), 0) == true, "posicional com flag barra")
+}

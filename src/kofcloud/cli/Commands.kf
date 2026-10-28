@@ -201,6 +201,10 @@ String registerDevice(String control, String token, String name, String publicKe
 }
 
 Int cmdLogout(List<String> args) {
+    if (extraPositional(args, 0)) {
+        println("uso: kof cloud logout")
+        return 1
+    }
     File(identityPath()).delete()
     File(sessionPath()).delete()
     File(stopPath()).delete()
@@ -211,6 +215,10 @@ Int cmdLogout(List<String> args) {
 // ---- connect / disconnect ----
 
 Int cmdConnect(List<String> args) {
+    if (extraPositional(args, 0)) {
+        println("uso: kof cloud connect")
+        return 1
+    }
     var identity = loadIdentity()
     var session = loadSession()
     if (identity == null) {
@@ -230,6 +238,10 @@ Int cmdConnect(List<String> args) {
 }
 
 Int cmdDisconnect(List<String> args) {
+    if (extraPositional(args, 0)) {
+        println("uso: kof cloud disconnect")
+        return 1
+    }
     writeTextTo(stopPath(), longToString(time.now()))
     println("Desconexao solicitada — o agente encerra no proximo heartbeat.")
     return 0
@@ -247,6 +259,10 @@ Int cmdStatus(List<String> args) {
     if (session == null) {
         println("Estado: DESCONECTADO (nao logado)")
         return 0
+    }
+    if (extraPositional(args, 0)) {
+        println("uso: kof cloud status")
+        return 1
     }
     println("Conta:        " + identity.handle)
     println("Dispositivo:  " + identity.deviceName + " (" + identity.deviceId + ")")
@@ -515,7 +531,7 @@ Int cmdUnpublish(List<String> args) {
         return 1
     }
     var name = firstPositional(args)
-    if (name.length == 0) {
+    if (name.length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud unpublish <nome>")
         return 1
     }
@@ -571,7 +587,7 @@ Int cmdServiceStatus(List<String> args) {
         return 1
     }
     var name = firstPositional(args)
-    if (name.length == 0) {
+    if (name.length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud service status <nome>")
         return 1
     }
@@ -618,7 +634,7 @@ Int cmdServiceSuspend(List<String> args) {
         return 1
     }
     var name = firstPositional(args)
-    if (name.length == 0) {
+    if (name.length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud service suspend <nome>")
         return 1
     }
@@ -646,7 +662,7 @@ Int cmdServiceUnsuspend(List<String> args) {
         return 1
     }
     var name = firstPositional(args)
-    if (name.length == 0) {
+    if (name.length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud service unsuspend <nome>")
         return 1
     }
@@ -809,7 +825,7 @@ Int cmdServiceTokenList(List<String> args) {
         return 1
     }
     var name = firstPositional(args)
-    if (name.length == 0) {
+    if (name.length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud service token-list <nome>")
         return 1
     }
@@ -923,7 +939,7 @@ Int cmdDomainAdd(List<String> args) {
     }
     var hostname = firstPositional(args)
     var service = flagValue(args, "--service")
-    if (hostname.length == 0 || service.length == 0) {
+    if (hostname.length == 0 || service.length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud domain add <hostname> --service <nome>")
         return 1
     }
@@ -952,7 +968,7 @@ Int cmdDomainVerify(List<String> args) {
         return 1
     }
     var hostname = firstPositional(args)
-    if (hostname.length == 0) {
+    if (hostname.length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud domain verify <hostname>")
         return 1
     }
@@ -977,7 +993,7 @@ Int cmdDomainRemove(List<String> args) {
         return 1
     }
     var hostname = firstPositional(args)
-    if (hostname.length == 0) {
+    if (hostname.length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud domain remove <hostname>")
         return 1
     }
