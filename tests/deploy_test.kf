@@ -169,6 +169,16 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     var plan2 = diffDeployment(live, wanted2)
     assert(plan2.size == 2, "mudado + extra")
     assert(plan2.get(0).startsWith("~ site"), "porta diferente e update")
+    // Build aparece no plan sem executar: o operador ve que o deploy vai
+    // rodar um comando local. "=" nao marca (nada sera aplicado nele).
+    var wanted3 = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"build\":\"npm run build\"},{\"name\":\"novo\",\"port\":3000,\"build\":\"make dist\"},{\"name\":\"mudou\",\"port\":3000,\"exposure\":\"PRIVATE\"}]}")
+    var plan3 = diffDeployment(live, wanted3)
+    assert(plan3.get(0) == "= site (igual)", "igual nao marca build mesmo declarado")
+    assert(plan3.get(1).startsWith("+ novo (build)"), "novo com build marca")
+    assert(plan3.get(2).startsWith("+ mudou"), "novo sem build nao marca")
+    var wanted4 = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":9090,\"build\":\"make dist\"}]}")
+    var plan4 = diffDeployment(live, wanted4)
+    assert(plan4.get(0).startsWith("~ site (build)"), "mudado com build marca")
 }
 
 test "deploy: build opcional no manifesto executa antes do publish", "deploy-build" {
