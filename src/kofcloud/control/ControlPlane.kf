@@ -629,12 +629,14 @@ HttpResult handleListDomains(Registry registry, String? authHeader) {
     zone.put("hostname", accountZone(account.handle))
     zone.put("kind", "wildcard")
     zone.put("service", "")
+    zone.put("status", "")
     parts.add(json.encode(zone))
     for (var service in registry.servicesForAccount(account.id)) {
         var entry = mapOf()
         entry.put("hostname", service.hostname)
         entry.put("kind", "service")
         entry.put("service", service.name)
+        entry.put("status", "")
         parts.add(json.encode(entry))
     }
     for (var domain in registry.customDomainsForAccount(account.id)) {

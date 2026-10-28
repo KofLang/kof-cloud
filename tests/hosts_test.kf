@@ -211,3 +211,13 @@ test "text: comandos sem posicional rejeitam sobra", "extra-zero" {
     assert(extraPositional(listOf("--file", "k.json"), 0) == false, "so flag com valor ok")
     assert(extraPositional(listOf("x", "--file", "k.json"), 0) == true, "posicional com flag barra")
 }
+
+test "text: domainListLine mostra status so do custom", "domain-list-line" {
+    // Pura, sem rede (precedente: tokenInventoryLine): wildcard/service nao
+    // tem ciclo PENDING/VERIFIED; custom mostra para o operador saber se
+    // falta o DNS.
+    assert(domainListLine(DomainEntry("mel.kofcloud.io", "wildcard", "", "")) == "wildcard  mel.kofcloud.io", "wildcard sem status")
+    assert(domainListLine(DomainEntry("site.mel.kofcloud.io", "service", "site", "")) == "service  site.mel.kofcloud.io", "service sem status")
+    assert(domainListLine(DomainEntry("api.example.com", "custom", "", "PENDING")) == "custom  api.example.com  PENDING", "custom PENDING")
+    assert(domainListLine(DomainEntry("api.example.com", "custom", "", "VERIFIED")) == "custom  api.example.com  VERIFIED", "custom VERIFIED")
+}

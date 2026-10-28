@@ -221,6 +221,21 @@ test "dominio: control plane registra, lista, verifica e remove", "domains-api" 
     assert(authedBody.indexOf("\"kind\":\"custom\"") >= 0, "custom listado")
     assert(authedBody.indexOf("\"status\":\"PENDING\"") >= 0, "custom PENDING visivel")
     assert(authedBody.indexOf("api.example.com") >= 0, "hostname proprio visivel")
+    // O que a CLI decodifica: DomainEntry com status nos customs (o
+    // domainListLine mostra PENDING/VERIFIED; wildcard/service sem status).
+    var entries = json.decode<List<DomainEntry>>(authedBody)
+    var customSeen = false
+    for (var entry in entries) {
+        if (entry.kind == "custom") {
+            customSeen = true
+            assert(entry.hostname == "api.example.com", "custom certo")
+            assert(entry.status == "PENDING", "custom com status")
+            assert(domainListLine(entry).indexOf("PENDING") >= 0, "linha mostra PENDING")
+        } else {
+            assert(entry.status == "", "wildcard/service sem status")
+        }
+    }
+    assert(customSeen, "custom na lista tipada")
     var suspended = httpPostJson(controlPort, "/v1/services/suspend", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
     assert(statusOf(suspended) == 200, "suspende o servico")
     var relisted = bodyOf(httpGetToken(controlPort, "/v1/domains", accountToken))

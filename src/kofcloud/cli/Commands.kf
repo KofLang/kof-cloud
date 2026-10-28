@@ -19,7 +19,17 @@ import kofcloud.store.Store
 
 // Implementacao dos subcomandos. Cada um devolve o exit code.
 
-record DomainEntry(String hostname, String kind, String service)
+record DomainEntry(String hostname, String kind, String service, String status)
+
+// Uma linha do `domain list`: customs mostram PENDING/VERIFIED (o operador
+// precisa saber se falta o DNS); wildcard/service nao tem ciclo proprio.
+String domainListLine(DomainEntry domain) {
+    var line = domain.kind + "  " + domain.hostname
+    if (domain.status.length > 0) {
+        line = line + "  " + domain.status
+    }
+    return line
+}
 
 record DomainStatus(String hostname, String status, String instruction, String verifiedAt)
 
@@ -934,7 +944,7 @@ Int cmdDomainList(List<String> args) {
         var raw = requireOk(http.get(session.controlUrl + "/v1/domains", authHeader(session.token)))
         var domains = json.decode<List<DomainEntry>>(raw)
         for (var domain in domains) {
-            println(domain.kind + "  " + domain.hostname)
+            println(domainListLine(domain))
         }
         return 0
     } catch (String e) {
