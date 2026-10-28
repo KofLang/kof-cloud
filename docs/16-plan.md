@@ -100,13 +100,15 @@ terminador externo.
 
 **Estado (slice 1 — deploy declarativo): ✅ implementado.** `kofcloud.json`
 (`--file` para outro caminho) declara `services[]` (nome, porta numero ou
-string, address/exposure/protocol opcionais); `kof cloud deploy` publica em lote
+string, address/exposure/protocol/build opcionais); `kof cloud deploy` roda o
+`build` de cada serviço (quando declarado; falhou = não publica aquele) e
+publica em lote
 (idempotente, sem remover o que nao declarou) e `kof cloud down` remove so
-os do manifesto (`--prune` poda órfãos do device). Sem build nem artefato — so
-`publish` em lote sobre as primitivas existentes. Parser manual com erro posicional
+os do manifesto (`--prune` poda órfãos do device). Sem artefato transferível
+— o build roda local, só o publish atravessa a rede. Parser manual com erro posicional
 (Map<String, String> nao aceita numero — ClassCast medido; exposure/protocol/
 address validados, sem default silencioso). Prova:
-`tests/deploy_test.kf` (6 testes). `deploy --check` verifica publicado +
+`tests/deploy_test.kf` (8 testes). `deploy --check` verifica publicado +
 respondendo (sem rollback); `deploy --plan` mostra o diff sem aplicar.
 
 **Estado (slice 3 — daemon user-level): ✅ implementado.** `kof cloud daemon

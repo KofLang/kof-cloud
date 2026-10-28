@@ -27,7 +27,7 @@ completa e os protocolos.
 | 5 — `AUTHENTICATED` com credencial de serviço (`kfs_`, com revogacao por token) | ✅ implementado e testado |
 | 6 — domínio próprio (slice 1: registro + verificação DNS + rota) | ✅ implementado e testado; sem TLS/SNI (externo — ver `docs/12-tls.md`) |
 | 6+ — observabilidade, abuse prevention, limites | ✅ implementados e testados |
-| 7 — deploy (slices 1–4: declarativo, --check, daemon, doctor) | ✅ implementado e testado; sem build/artefato, sem daemon Windows/macOS |
+| 7 — deploy (declarativo, --check/--plan, daemon, doctor + build local) | ✅ implementado e testado; sem artefato transferível, sem daemon Windows/macOS |
 
 O critério de sucesso do pedido foi atingido com o CLI real, em processos
 separados: `login` → `publish site --port 29010` → `connect`, e
@@ -64,7 +64,8 @@ kof run src/Main.kf connect
 ```
 
 Ou declarativo, com `kofcloud.json` na pasta (`{"services":[{"name":"site",
-"port":8080}]}` — ver `docs/09-flows.md` §3.1):
+"port":8080}]}` — `"build": "npm run build"` opcional por serviço, roda
+antes do publish; ver `docs/09-flows.md` §3.2):
 
 ```bash
 kof run src/Main.kf deploy [--file kofcloud.json] [--check] [--plan]   # publica (+ verifica; --plan so mostra)
@@ -108,7 +109,7 @@ domain list
 domain add <hostname> --service <nome>   (dominio proprio, devolve a instrucao CNAME)
 domain verify <hostname>                 (confere o DNS e ativa a rota)
 domain remove <hostname>
-deploy [--file kofcloud.json] [--check] [--plan]  (publica + verifica; --plan so mostra o diff)
+deploy [--file kofcloud.json] [--check] [--plan]  (roda build + publica + verifica; --plan so mostra o diff)
 down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove orfaos)
 doctor [--file kofcloud.json]   (diagnostico: login, control, device, tunel, servicos)
 audit                        (trilha de auditoria da conta)
