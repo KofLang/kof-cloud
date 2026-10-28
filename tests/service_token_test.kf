@@ -1,5 +1,7 @@
+import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.identity.Tokens
+import kofcloud.util.Text
 
 // Fase 5 — credencial de servico (kfs_) para servicos AUTHENTICATED.
 // O token da conta autoriza a EMISSAO; o token emitido autoriza o ACESSO e
@@ -217,6 +219,35 @@ test "token de servico: revoke aceita id curto unico, recusa ambiguo", "token-sh
     assert(registry.serviceByServiceToken(second) != null, "segundo fica")
     // E o wrapper Bool continua valendo true/false.
     assert(registry.revokeServiceToken(mel.id, service.id, secondId) == true, "wrapper revoga por id")
+}
+
+test "token de servico: serializadores puros sem rede", "token-serial" {
+    // shortTokenId: 8 primeiros hex; curto passa direto.
+    assert(shortTokenId("0123456789abcdef") == "01234567", "corta em 8")
+    assert(shortTokenId("abc") == "abc", "curto passa direto")
+    assert(shortTokenId("") == "", "vazio passa direto")
+    // Com TTL e sem TTL: expiresAt so aparece quando > 0.
+    var forever = ServiceToken("svc-1", "acc-1", "0123456789abcdef", 1000, 0)
+    var timed = ServiceToken("svc-1", "acc-1", "0123456789abcdef", 1000, 2000)
+    var foreverJson = serviceTokenJson(forever)
+    var timedJson = serviceTokenJson(timed)
+    var foreverBody = json.decode<Map<String, String>>(foreverJson)
+    assert(mapField(foreverBody, "id") == "01234567", "id curto no inventario")
+    assert(mapField(foreverBody, "serviceId") == "svc-1", "serviceId no inventario")
+    assert(mapField(foreverBody, "expiresAt") == "", "sem TTL: sem expiresAt")
+    assert(foreverJson.indexOf("kfs_") < 0, "nunca vaza o valor")
+    var timedBody = json.decode<Map<String, String>>(timedJson)
+    assert(mapField(timedBody, "expiresAt") == "2000", "com TTL: expiresAt presente")
+    // Lista: envolve em colchetes, vazia vira [].
+    var oneItems = listOf<ServiceToken>()
+    oneItems.add(forever)
+    var oneList = serviceTokenListJson(oneItems)
+    assert(oneList.startsWith("[") && oneList.endsWith("]"), "lista entre colchetes")
+    assert(oneList.indexOf("01234567") >= 0, "lista carrega o id curto")
+    assert(serviceTokenListJson(listOf<ServiceToken>()) == "[]", "vazia vira []")
+    // joinStrings: separador so entre partes.
+    assert(joinStrings(listOf("a", "b", "c"), ",") == "a,b,c", "junta com virgula")
+    assert(joinStrings(listOf<String>(), ",") == "", "vazia vira vazio")
 }
 
 // Contador Prometheus atual (0 quando ausente): cada suite roda no mesmo
