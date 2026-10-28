@@ -230,7 +230,10 @@ test "dominio: control plane registra, lista, verifica e remove", "domains-api" 
             customSeen = true
             assert(entry.hostname == "api.example.com", "custom certo")
             assert(entry.status == "PENDING", "custom com status")
+            assert(entry.service == "site", "custom carrega o servico vinculado")
             assert(domainListLine(entry).indexOf("PENDING") >= 0, "linha mostra PENDING")
+            assert(customDomainsFor(entries, "site").size == 1, "service status acharia este custom")
+            assert(customDomainsFor(entries, "outro").size == 0, "outro servico nao pega")
         } else {
             assert(entry.status == "", "wildcard/service sem status")
         }

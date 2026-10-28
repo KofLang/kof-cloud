@@ -643,7 +643,15 @@ HttpResult handleListDomains(Registry registry, String? authHeader) {
         var custom = mapOf()
         custom.put("hostname", domain.hostname)
         custom.put("kind", "custom")
-        custom.put("service", "")
+        // Nome do servico vinculado (o registro guarda serviceId; a CLI
+        // mostra por nome). Orfao (servico removido fora da poda) vira ""
+        // em vez de quebrar a lista — a poda normal remove junto.
+        var linked = registry.serviceById(domain.serviceId)
+        if (linked == null) {
+            custom.put("service", "")
+        } else {
+            custom.put("service", linked.name)
+        }
         custom.put("status", domain.status)
         parts.add(json.encode(custom))
     }

@@ -33,6 +33,20 @@ String domainListLine(DomainEntry domain) {
 
 record DomainStatus(String hostname, String status, String instruction, String verifiedAt)
 
+// Customs vinculados a UM servico (para o `service status`): puro, sem rede
+// nem HOME — recebe a lista do GET /v1/domains e o nome do servico, devolve
+// so os customs daquele servico (precedente: tokenInventoryLine). Lista
+// vazia quando nada aponta para ele (servico novo, sem dominio proprio).
+List<DomainEntry> customDomainsFor(List<DomainEntry> domains, String serviceName) {
+    var out = listOf<DomainEntry>()
+    for (var domain in domains) {
+        if (domain.kind == "custom" && domain.service == serviceName) {
+            out.add(domain)
+        }
+    }
+    return out
+}
+
 // Falha com dica humana (padrao kof-share `errText`): a primeira linha mantem
 // o codigo estavel da plataforma; a `Hint:` orienta o proximo passo sem
 // revelar segredos ou recursos alheios.
@@ -633,6 +647,18 @@ Int cmdServiceStatus(List<String> args) {
                 } catch (String inner) {
                     // Inventario e diagnostico secundario: nao derruba o
                     // status se falhar (o dado principal ja saiu).
+                }
+                // Dominios proprios vinculados: o operador ve de relance se
+                // o servico tem customs (e se falta DNS em algum). Falha
+                // silenciosa nao derruba o status (mesma regra do inventario).
+                try {
+                    var domainRaw = requireOk(http.get(session.controlUrl + "/v1/domains", authHeader(session.token)))
+                    var domains = json.decode<List<DomainEntry>>(domainRaw)
+                    var customs = customDomainsFor(domains, service.name)
+                    for (var custom in customs) {
+                        println("Dominio: " + domainListLine(custom))
+                    }
+                } catch (String innerDomains) {
                 }
                 return 0
             }

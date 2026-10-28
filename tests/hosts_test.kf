@@ -218,6 +218,24 @@ test "text: domainListLine mostra status so do custom", "domain-list-line" {
     // falta o DNS.
     assert(domainListLine(DomainEntry("mel.kofcloud.io", "wildcard", "", "")) == "wildcard  mel.kofcloud.io", "wildcard sem status")
     assert(domainListLine(DomainEntry("site.mel.kofcloud.io", "service", "site", "")) == "service  site.mel.kofcloud.io", "service sem status")
-    assert(domainListLine(DomainEntry("api.example.com", "custom", "", "PENDING")) == "custom  api.example.com  PENDING", "custom PENDING")
-    assert(domainListLine(DomainEntry("api.example.com", "custom", "", "VERIFIED")) == "custom  api.example.com  VERIFIED", "custom VERIFIED")
+    assert(domainListLine(DomainEntry("api.example.com", "custom", "site", "PENDING")) == "custom  api.example.com  PENDING", "custom PENDING")
+    assert(domainListLine(DomainEntry("api.example.com", "custom", "site", "VERIFIED")) == "custom  api.example.com  VERIFIED", "custom VERIFIED")
+}
+
+test "text: customDomainsFor filtra customs do servico", "custom-domains-for" {
+    // Pura, sem rede (precedente: domainListLine): o `service status`
+    // lista so os customs vinculados aquele servico — wildcard/service e
+    // customs de outro nome ficam de fora.
+    var domains = listOf<DomainEntry>()
+    domains.add(DomainEntry("mel.kofcloud.io", "wildcard", "", ""))
+    domains.add(DomainEntry("site.mel.kofcloud.io", "service", "site", ""))
+    domains.add(DomainEntry("api.example.com", "custom", "site", "PENDING"))
+    domains.add(DomainEntry("loja.example.com", "custom", "loja", "VERIFIED"))
+    var only = customDomainsFor(domains, "site")
+    assert(only.size == 1, "so o custom do servico")
+    assert(only.get(0).hostname == "api.example.com", "o custom certo")
+    assert(domainListLine(only.get(0)).indexOf("PENDING") >= 0, "linha reutiliza domainListLine")
+    assert(customDomainsFor(domains, "loja").size == 1, "outro servico ve o seu")
+    assert(customDomainsFor(domains, "novo").size == 0, "sem custom: vazio")
+    assert(customDomainsFor(listOf<DomainEntry>(), "site").size == 0, "lista vazia: vazio")
 }

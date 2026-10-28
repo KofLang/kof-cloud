@@ -36,7 +36,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | múltiplos serviços | roteamento por `Host` no mesmo túnel | `e2e_multiservice_test.kf` |
 | credencial de serviço | `kfs_` emitido no control plane, validado no Edge; revogacao por token (`token-revoke`) + inventario sem valores (`token-list`) + expiracao opcional (`--ttl`, `KCF062`) | `service_token_test.kf`, `e2e_authenticated_test.kf` |
 | erros estáveis (R6) | `model/Errors.kf`: `KCFnnn` no control plane e no Edge + `Hint:` na CLI | `errors_test.kf` |
-| domínio próprio (slice 1) | `model/CustomDomain.kf` + registro/verificação/roda no registry, `POST /v1/domains[/verify][/remove]`, CLI `domain add/verify/remove/list` (list mostra PENDING/VERIFIED no custom) | `domains_test.kf` |
+| domínio próprio (slice 1) | `model/CustomDomain.kf` + registro/verificação/roda no registry, `POST /v1/domains[/verify][/remove]`, CLI `domain add/verify/remove/list` (list mostra PENDING/VERIFIED no custom) + `service status` mostra os customs vinculados (linha `Dominio: custom <host> <status>`) | `domains_test.kf` |
 | métricas do Edge (slice 1) | `edge/Metrics.kf`: túneis/recusas, sessões, ok/negadas por motivo, bytes, latência via `observability.*` | `metrics_test.kf` |
 | métricas do control plane (slice 2) | `control/Metrics.kf`: lifecycle no Registry + `GET /v1/metrics` sem auth | `metrics_test.kf` |
 | métricas do Agent (slice 3) | `agent/Metrics.kf`: connects, reconnects, fatais por motivo, health, streams, erros locais | `agent_metrics_test.kf` |

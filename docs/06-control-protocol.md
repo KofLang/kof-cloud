@@ -37,7 +37,7 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/heartbeat` | dispositivo | `{deviceId}` → `{ok:true, serverTime}` |
 | `POST` | `/v1/connect` | dispositivo | `{deviceId}` → `{edgeHost,edgePort,tunnelToken}` |
 | `GET` | `/v1/presence` | conta | devices DA CONTA com túnel vivo neste Edge → `["<deviceId>", ...]` (vazio = offline, não erro; 401 sem token; nada de terceiros vaza) |
-| `GET` | `/v1/domains` | conta | domínios/hostnames da conta (wildcard + serviços + próprios; cada entrada com `status` — vazio exceto no custom PENDING/VERIFIED) |
+| `GET` | `/v1/domains` | conta | domínios/hostnames da conta (wildcard + serviços + próprios; cada entrada com `status` — vazio exceto no custom PENDING/VERIFIED; o custom carrega `service` com o nome do vinculado, vazio se órfão) |
 | `POST` | `/v1/domains` | conta | registra domínio próprio `{hostname,service}` → `{hostname,status,instruction,verifiedAt}` (PENDING + CNAME; `verifiedAt` vazio até verificar) |
 | `POST` | `/v1/domains/verify` | conta | `{hostname}` → `{hostname,status,instruction,verifiedAt}` (verifica o DNS e ativa a rota; os 4 campos casam com o `DomainStatus` da CLI — decode tipado exige todos presentes, JSN004) |
 | `POST` | `/v1/domains/remove` | conta | `{hostname}` → `{removed:true}` |
