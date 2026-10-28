@@ -38,8 +38,8 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/connect` | dispositivo | `{deviceId}` → `{edgeHost,edgePort,tunnelToken}` |
 | `GET` | `/v1/presence` | conta | devices DA CONTA com túnel vivo neste Edge → `["<deviceId>", ...]` (vazio = offline, não erro; 401 sem token; nada de terceiros vaza) |
 | `GET` | `/v1/domains` | conta | domínios/hostnames da conta (wildcard + serviços + próprios) |
-| `POST` | `/v1/domains` | conta | registra domínio próprio `{hostname,service}` → `{hostname,status,instruction}` (PENDING + CNAME) |
-| `POST` | `/v1/domains/verify` | conta | `{hostname}` → `{hostname,status,verifiedAt}` (verifica o DNS e ativa a rota) |
+| `POST` | `/v1/domains` | conta | registra domínio próprio `{hostname,service}` → `{hostname,status,instruction,verifiedAt}` (PENDING + CNAME; `verifiedAt` vazio até verificar) |
+| `POST` | `/v1/domains/verify` | conta | `{hostname}` → `{hostname,status,instruction,verifiedAt}` (verifica o DNS e ativa a rota; os 4 campos casam com o `DomainStatus` da CLI — decode tipado exige todos presentes, JSN004) |
 | `POST` | `/v1/domains/remove` | conta | `{hostname}` → `{removed:true}` |
 | `GET` | `/v1/health` | — | liveness do control plane |
 | `GET` | `/v1/metrics` | — | export Prometheus (`observability.metrics()`): contadores do control plane + Edge (mesmo processo no `serve`); sem auth, só agregados |
@@ -126,7 +126,8 @@ X-KofCloud-Token: kfc_...
 {"hostname":"api.example.com","service":"site"}
 
 200 {"hostname":"api.example.com","status":"PENDING",
-     "instruction":"CNAME api.example.com -> site.mel.kofcloud.io"}
+     "instruction":"CNAME api.example.com -> site.mel.kofcloud.io",
+     "verifiedAt":""}
 ```
 
 Verificar (o operador cria o CNAME e chama):
@@ -136,7 +137,9 @@ POST /v1/domains/verify
 X-KofCloud-Token: kfc_...
 {"hostname":"api.example.com"}
 
-200 {"hostname":"api.example.com","status":"VERIFIED","verifiedAt":"..."}
+200 {"hostname":"api.example.com","status":"VERIFIED",
+     "instruction":"CNAME api.example.com -> site.mel.kofcloud.io",
+     "verifiedAt":"..."}
 ```
 
 `connect` (o Agent pede o ponto de entrada do Edge):

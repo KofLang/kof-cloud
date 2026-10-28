@@ -683,6 +683,7 @@ HttpResult handleRegisterDomain(Registry registry, String? authHeader, String bo
         out.put("hostname", domain.hostname)
         out.put("status", domain.status)
         out.put("instruction", domainInstruction(domain, registry))
+        out.put("verifiedAt", domain.verifiedAt)
         return HttpResult(200, json.encode(out))
     } catch (String e) {
         return domainError(e)
@@ -711,8 +712,10 @@ HttpResult handleVerifyDomain(Registry registry, String? authHeader, String body
     out.put("hostname", hostname.trim().toLowerCase())
     out.put("status", domainVerified())
     if (domain != null) {
+        out.put("instruction", domainInstruction(domain, registry))
         out.put("verifiedAt", domain.verifiedAt)
     } else {
+        out.put("instruction", "")
         out.put("verifiedAt", "")
     }
     return HttpResult(200, json.encode(out))

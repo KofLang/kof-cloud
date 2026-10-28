@@ -1,4 +1,5 @@
 import kofcloud.agent.Agent
+import kofcloud.cli.Commands
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.edge.EdgeState
@@ -267,6 +268,12 @@ test "dominio: Edge serve o hostname proprio apos VERIFIED (tunel real)", "domai
 
     var registered = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"shop.example.com\",\"service\":\"site\"}", accountToken)
     assert(statusOf(registered) == 200, "dominio registrado")
+    // O que a CLI decodifica: DomainStatus completo nas duas pontas.
+    var registeredStatus = json.decode<DomainStatus>(bodyOf(registered))
+    assert(registeredStatus.hostname == "shop.example.com", "register hostname")
+    assert(registeredStatus.status == "PENDING", "register PENDING")
+    assert(registeredStatus.instruction.indexOf("site.mel.kofcloud.io") >= 0, "register instruction")
+    assert(registeredStatus.verifiedAt == "", "register sem verifiedAt")
 
     assert(registry.verifyCustomDomainWith(accountId, "shop.example.com", listOf("127.0.0.1")) == "", "verificacao contra 127.0.0.1")
 
@@ -332,20 +339,17 @@ test "dominio: serializadores puros sem rede", "domains-serial" {
     assert(listJson.startsWith("[") && listJson.endsWith("]"), "lista entre colchetes")
     assert(listJson.indexOf("api.example.com") >= 0, "lista carrega o hostname")
     assert(domainListJson(listOf<CustomDomain>(), registry) == "[]", "vazia vira []")
-    // Contrato honesto (documentado em 06-control-protocol.md): os handlers
-    // de dominio emitem SOMENTE o que cada fluxo precisa. `register`
-    // devolve instruction sem verifiedAt; `verify` devolve verifiedAt sem
-    // instruction; nenhum dos dois emite o DomainStatus completo da CLI
-    // (hostname+status+instruction+verifiedAt) — decode tipado com campo
-    // ausente falha (JSN004), por isso a CLI decodifica por fluxo.
-    // Chamados diretos: handlers puros (sem web.app), com token real.
+    // Contrato (documentado em 06-control-protocol.md): ambos os handlers
+    // emitem o DomainStatus completo (hostname+status+instruction+
+    // verifiedAt) que a CLI decodifica — decode tipado com campo ausente
+    // falha (JSN004). Chamados diretos: handlers puros (sem web.app).
     var token = registry.login("mel", "segredo")
     var registration = handleRegisterDomain(registry, token, "{\"hostname\":\"loja.example.com\",\"service\":\"site\"}")
     assert(registration.code == 200, "register 200")
-    var registrationBody = json.decode<Map<String, String>>(registration.body)
-    assert(mapField(registrationBody, "status") == "PENDING", "register PENDING")
-    assert(mapField(registrationBody, "instruction").indexOf(service.hostname) >= 0, "register carrega instruction")
-    assert(mapField(registrationBody, "verifiedAt") == "", "register omite verifiedAt")
+    var registered = json.decode<DomainStatus>(registration.body)
+    assert(registered.status == "PENDING", "register PENDING")
+    assert(registered.instruction.indexOf(service.hostname) >= 0, "register carrega instruction")
+    assert(registered.verifiedAt == "", "register sem verifiedAt")
     // verify sem DNS cai em KCF124 (409): o contrato de campos aparece no
     // caminho feliz do teste domains-verify; aqui o codigo basta.
     var verifyAttempt = handleVerifyDomain(registry, token, "{\"hostname\":\"loja.example.com\"}")
@@ -354,8 +358,8 @@ test "dominio: serializadores puros sem rede", "domains-serial" {
     // Caminho feliz sem rede: verifyCustomDomainWith injeta o DNS
     // (handleVerifyDomain sempre re-resolve via net.resolve real, entao o
     // feliz pelo handler exigiria rede — ver domains-verify). O registro
-    // VERIFIED carrega verifiedAt; o handler emite {hostname,status,
-    // verifiedAt} sem instruction (ControlPlane.kf, 06-control-protocol).
+    // VERIFIED carrega verifiedAt; o handler emite os 4 campos (o feliz
+    // pelo handler e coberto pelo e2e real abaixo).
     registry.setEdgeHosts(listOf("203.0.113.10"))
     assert(registry.verifyCustomDomainWith(mel.id, "loja.example.com", listOf("203.0.113.10")) == "", "DNS injetado aprova")
     var verified = registry.customByHostname("loja.example.com")
