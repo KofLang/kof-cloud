@@ -7,6 +7,7 @@ import kofcloud.edge.Tunnel
 import kofcloud.model.CustomDomain
 import kofcloud.model.Errors
 import kofcloud.store.Store
+import kofcloud.util.Text
 import testkit.Support
 
 // Fase 6 (slice 1) — dominio proprio: registro PENDING com instrucao CNAME,
@@ -301,4 +302,34 @@ test "dominio: Hint orienta o operador sem vazar nada", "domains-hint" {
     assert(errHint("KCF120: invalid custom hostname").indexOf("kofcloud.io") >= 0, "KCF120 orienta o formato")
     assert(errHint("KCF122: domain not found").indexOf("domain list") >= 0, "KCF122 aponta a lista")
     assert(errHint("KCF124: hostname does not resolve to this Edge").indexOf("CNAME") >= 0, "KCF124 sugere o CNAME")
+}
+
+test "dominio: serializadores puros sem rede", "domains-serial" {
+    // customTargetFor + domainInstruction + domainJson/domainListJson, sem
+    // rede nem HOME (precedente: token-serial). Monta conta/device/servico
+    // no registry local e confere o que a API devolveria.
+    var registry = Registry("/tmp/kofcloud-domserial-" + crypto.randomHex(4) + ".json")
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    var domain = registry.registerCustomDomain(mel.id, "api.example.com", service.id)
+    // Alvo: hostname nativo do servico; sem servico, vazio (sem throw).
+    assert(customTargetFor(domain, registry) == service.hostname, "alvo e o hostname nativo")
+    var orphan = CustomDomain("solto.example.com", mel.id, "inexistente", domainPending(), "", 1000)
+    assert(customTargetFor(orphan, registry) == "", "sem servico, sem alvo")
+    // Instrucao CNAME aponta o externo para o nativo.
+    var instruction = domainInstruction(domain, registry)
+    assert(instruction == "CNAME api.example.com -> " + service.hostname, "instrucao CNAME exata")
+    // JSON carrega hostname/status/alvo; lista envolve em colchetes.
+    var oneJson = domainJson(domain, service.hostname)
+    var oneBody = json.decode<Map<String, String>>(oneJson)
+    assert(mapField(oneBody, "hostname") == "api.example.com", "hostname no JSON")
+    assert(mapField(oneBody, "status") == "PENDING", "PENDING no JSON")
+    assert(mapField(oneBody, "target") == service.hostname, "alvo no JSON")
+    var items = listOf<CustomDomain>()
+    items.add(domain)
+    var listJson = domainListJson(items, registry)
+    assert(listJson.startsWith("[") && listJson.endsWith("]"), "lista entre colchetes")
+    assert(listJson.indexOf("api.example.com") >= 0, "lista carrega o hostname")
+    assert(domainListJson(listOf<CustomDomain>(), registry) == "[]", "vazia vira []")
 }

@@ -50,7 +50,7 @@ o run total imprime `25 passed, 0 failed`. Falha = nome do teste + assert
 | limites | `tests/limits_test.kf` | 6 |
 | service token | `tests/service_token_test.kf` | 13 |
 | erros R6 | `tests/errors_test.kf` | 8 |
-| dominios | `tests/domains_test.kf` | 7 |
+| dominios | `tests/domains_test.kf` | 8 |
 | metricas | `tests/metrics_test.kf` | 6 |
 | rate limit | `tests/ratelimit_test.kf` | 2 |
 | agent metrics | `tests/agent_metrics_test.kf` | 3 |
@@ -68,7 +68,7 @@ o run total imprime `25 passed, 0 failed`. Falha = nome do teste + assert
 | e2e multiservico | `tests/e2e_multiservice_test.kf` | 1 |
 | e2e autenticado | `tests/e2e_authenticated_test.kf` | 1 |
 
-Total: 131 testes. Ver `15-tests.md` para a matriz.
+Total: 132 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 
