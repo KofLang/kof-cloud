@@ -117,9 +117,9 @@ test "doctor: fim a fim acusa servico fora do ar e aprova quando sobe", "doctor-
     assert(drifted.get(0).indexOf("deploy") >= 0, "doctor orienta o re-deploy")
 }
 
-// Replica a ordem de checagem de cmdDoctor sem precisar de HOME/sessao:
-// publicado? responde? (login/control/device cobertos pelos testes acima
-// via doctorCheck, que nao precisa de rede quando sem login).
+// Espelho da etapa 5 do doctorCheck sem precisar de HOME/sessao: o doctor
+// real delega ao verifyDeployment (mesma ordem: nao publicado -> drift ->
+// sem resposta); este helper trava a ordem que o doctor imprime.
 List<String> verifyDeploymentLike(String controlUrl, String token, List<ManifestService> wanted) {
     return verifyDeployment(controlUrl, token, wanted)
 }

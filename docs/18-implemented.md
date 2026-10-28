@@ -125,7 +125,9 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   aquele serviço) e `kof cloud down` remove
   só os listados — nada fora do manifesto é tocado; parser manual com erro
   posicional (`deploy_test.kf`, 5 testes). `deploy --check` confirma publicado
-  + respondendo (mesma regra do Agent; sem rollback).
+  + respondendo (mesma regra do Agent; sem rollback). O `doctor` usa o mesmo
+  `verifyDeployment` na etapa de serviços (não publicado → drift → sem
+  resposta), então `--check` e `doctor` acusam igual.
 * **Daemon user-level (Fase 7, slice 3)**: `cli/Daemon.kf` gera
   `kofcloud-agent.service` (mesmo `connect`, `Restart=always`,
   `NoNewPrivileges`, enable manual); `status`/`uninstall`; erro honesto sem

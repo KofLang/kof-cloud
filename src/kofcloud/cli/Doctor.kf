@@ -5,7 +5,6 @@ import kofcloud.cli.Deploy
 import kofcloud.cli.Local
 import kofcloud.model.Errors
 import kofcloud.model.Device
-import kofcloud.model.Service
 import kofcloud.util.Text
 import kofcloud.store.Store
 
@@ -124,31 +123,22 @@ DoctorReport doctorCheck(String manifestPath) {
         lines.add(doctorFailLine("manifesto", manifestPath + " invalido (" + e + ")"))
         return DoctorReport(false, lines)
     }
-    var live = listOf<Service>()
-    try {
-        live = fetchServices(session.controlUrl, session.token)
-    } catch (String e) {
-        lines.add(doctorFailLine("servicos", "nao foi possivel listar (" + e + ")"))
-        return DoctorReport(false, lines)
-    }
-    for (var service in wanted) {
-        var found = false
-        for (var remote in live) {
-            if (remote.name == service.name) {
-                found = true
-            }
-        }
-        if (found == false) {
-            lines.add(doctorFailLine(service.name, "nao publicado — rode: kof cloud deploy"))
-            failed = true
-        } else if (checkLocalService(service.address, service.port) == false) {
-            lines.add(doctorFailLine(service.name, "publicado mas sem resposta em " + service.address + ":" + intToString(service.port)))
-            failed = true
-        } else {
+    // Delega a ordem de checagem ao verifyDeployment (mesma do --check:
+    // nao publicado -> drift de config -> sem resposta local). Antes o
+    // doctor replicava so publicado/resposta e deixava o drift passar em
+    // silencio — agora os dois caminhos acusam igual. Sem fetch proprio:
+    // o verify lista sozinho e devolve os problemas ja ordenados.
+    var problems = verifyDeployment(session.controlUrl, session.token, wanted)
+    if (problems.size == 0) {
+        for (var service in wanted) {
             lines.add(doctorOkLine(service.name + " publicado e respondendo em " + service.address + ":" + intToString(service.port)))
         }
+        return DoctorReport(failed == false, lines)
     }
-    return DoctorReport(failed == false, lines)
+    for (var problem in problems) {
+        lines.add(doctorFailLine("servico", problem))
+    }
+    return DoctorReport(false, lines)
 }
 
 Int cmdDoctor(List<String> args) {
