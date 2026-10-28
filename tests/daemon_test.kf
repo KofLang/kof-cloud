@@ -49,3 +49,14 @@ test "daemon: sem systemctl nao quebra (erro honesto)", "daemon-nosysd" {
     assert(daemonIsActive() == false, "inativo sem systemd")
     assert(daemonSystemctl("is-active " + daemonUnitName()) == false, "falha honesta")
 }
+
+test "daemon: subcomandos rejeitam posicional sobrando", "daemon-extra" {
+    // Puro, sem rede nem HOME: os comandos-folha nao tem posicionais —
+    // qualquer token solto e erro, nao no-op silencioso. (cmdDaemonStatus
+    // precisa de HOME/sistema; aqui cobrimos a decisao, igual aos demais.)
+    assert(extraPositional(listOf("x"), 0) == true, "solto barra")
+    assert(extraPositional(listOf<String>(), 0) == false, "vazio ok")
+    assert(extraPositional(listOf("--control", "http://x"), 0) == false, "flag com valor nao e posicional")
+    assert(flagMissingValue(listOf("--control"), "--control") == true, "flag sem valor barra")
+    assert(flagDuplicated(listOf("--control", "a", "--control", "b"), "--control") == true, "flag repetida barra")
+}

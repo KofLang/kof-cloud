@@ -145,8 +145,8 @@ Int cmdLogin(List<String> args) {
     if (deviceName.length == 0) {
         deviceName = "default"
     }
-    if (handle.length == 0 || password.length == 0) {
-        println("uso: kof cloud login <handle> --password <senha>")
+    if (handle.length == 0 || password.length == 0 || extraPositional(args, 1) || flagMissingValue(args, "--password") || flagMissingValue(args, "--control") || flagMissingValue(args, "--device") || flagDuplicated(args, "--password") || flagDuplicated(args, "--control") || flagDuplicated(args, "--device")) {
+        println("uso: kof cloud login <handle> --password <senha> [--control <url>] [--device <nome>]")
         return 1
     }
 
@@ -305,6 +305,10 @@ Int cmdStatus(List<String> args) {
 // ---- dispositivos ----
 
 Int cmdDeviceList(List<String> args) {
+    if (extraPositional(args, 0)) {
+        println("uso: kof cloud device list")
+        return 1
+    }
     var session = loadSession()
     if (session == null) {
         println("nao logado")
@@ -559,6 +563,10 @@ Int cmdUnpublish(List<String> args) {
 }
 
 Int cmdServiceList(List<String> args) {
+    if (extraPositional(args, 0)) {
+        println("uso: kof cloud service list")
+        return 1
+    }
     var session = loadSession()
     if (session == null) {
         println("nao logado")
@@ -913,6 +921,10 @@ String secondPositional(List<String> args) {
 }
 
 Int cmdDomainList(List<String> args) {
+    if (extraPositional(args, 0)) {
+        println("uso: kof cloud domain list")
+        return 1
+    }
     var session = loadSession()
     if (session == null) {
         println("nao logado")
@@ -1036,6 +1048,10 @@ record AuditEntry(String at, String actor, String action, String target)
 
 // Trilha de auditoria da conta: ultimos eventos dos proprios recursos.
 Int cmdAudit(List<String> args) {
+    if (extraPositional(args, 0)) {
+        println("uso: kof cloud audit")
+        return 1
+    }
     var session = loadSession()
     if (session == null) {
         println("nao logado")
