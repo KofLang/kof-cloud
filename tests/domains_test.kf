@@ -210,11 +210,33 @@ test "dominio: control plane registra, lista, verifica e remove", "domains-api" 
     var listed = httpGetRaw(controlPort, "/v1/domains", "127.0.0.1")
     assert(statusOf(listed) == 401, "listagem exige token")
 
+    // Lista autenticada: wildcard + servico + custom PENDING; suspende o
+    // servico e a lista continua mostrando (visibilidade nao e roteamento:
+    // resolveRoute ja barra SUSPENDED); conta alheia nao ve nada da dona.
+    var authed = httpGetToken(controlPort, "/v1/domains", accountToken)
+    assert(statusOf(authed) == 200, "listagem com token")
+    var authedBody = bodyOf(authed)
+    assert(authedBody.indexOf("\"kind\":\"wildcard\"") >= 0, "wildcard listada")
+    assert(authedBody.indexOf("\"kind\":\"service\"") >= 0, "servico listado")
+    assert(authedBody.indexOf("\"kind\":\"custom\"") >= 0, "custom listado")
+    assert(authedBody.indexOf("\"status\":\"PENDING\"") >= 0, "custom PENDING visivel")
+    assert(authedBody.indexOf("api.example.com") >= 0, "hostname proprio visivel")
+    var suspended = httpPostJson(controlPort, "/v1/services/suspend", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
+    assert(statusOf(suspended) == 200, "suspende o servico")
+    var relisted = bodyOf(httpGetToken(controlPort, "/v1/domains", accountToken))
+    assert(relisted.indexOf("\"kind\":\"service\"") >= 0, "suspenso continua listado")
+    assert(relisted.indexOf("site.mel.kofcloud.io") >= 0, "hostname suspenso visivel")
+    var unsuspended = httpPostJson(controlPort, "/v1/services/unsuspend", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
+    assert(statusOf(unsuspended) == 200, "reverte o suspend")
+
     var again = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"api.example.com\",\"service\":\"site\"}", accountToken)
     assert(statusOf(again) == 200, "re-registro idempotente")
 
     var anaCreated = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
     var anaToken = mapField(json.decode<Map<String, String>>(bodyOf(anaCreated)), "token")
+    var anaListed = bodyOf(httpGetToken(controlPort, "/v1/domains", anaToken))
+    assert(anaListed.indexOf("api.example.com") < 0, "alheio nao ve o custom da dona")
+    assert(anaListed.indexOf("site.mel.kofcloud.io") < 0, "alheio nao ve o servico da dona")
     var anaAttempt = httpPostJson(controlPort, "/v1/domains/verify", "{\"hostname\":\"api.example.com\"}", anaToken)
     assert(statusOf(anaAttempt) == 404, "outra conta nao verifica")
     assert(domainCodeIs(domainErrOf(anaAttempt), "KCF122"), "KCF122 opaco")
