@@ -187,3 +187,18 @@ test "text: flagDuplicated barra repeticao silenciosa", "flag-dup" {
     assert(flagDuplicated(listOf("--port", "8080"), "--ttl") == false, "outra flag nao casa")
     assert(flagDuplicated(listOf("--ttl", "24", "--ttl", "48"), "--ttl") == true, "ttl duplicado barra")
 }
+
+test "text: extraPositional barra posicional sobrando", "extra-positional" {
+    // Pura, sem rede nem HOME: first/secondPositional leriam os N primeiros
+    // em silencio e o resto sumiria — typo que vira acao errada sem aviso.
+    // Valores de flag nao contam como posicionais (lista fechada em
+    // extraPositional, igual as flags que flagValue entende).
+    assert(extraPositional(listOf<String>(), 1) == false, "vazio ok")
+    assert(extraPositional(listOf("site"), 1) == false, "exato ok")
+    assert(extraPositional(listOf("site", "lixo"), 1) == true, "segundo posicional barra")
+    assert(extraPositional(listOf("site", "--port", "8080"), 1) == false, "valor de flag nao conta")
+    assert(extraPositional(listOf("site", "--port", "8080", "lixo"), 1) == true, "extra apos flag barra")
+    assert(extraPositional(listOf("site", "kfs_x", "lixo"), 2) == true, "terceiro posicional barra")
+    assert(extraPositional(listOf("site", "kfs_x"), 2) == false, "dois exatos ok")
+    assert(extraPositional(listOf("site", "--ttl", "24"), 1) == false, "ttl com valor nao conta")
+}

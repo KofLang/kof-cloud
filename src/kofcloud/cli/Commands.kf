@@ -106,6 +106,32 @@ String firstPositional(List<String> args) {
     return ""
 }
 
+// Posicionais alem do esperado (`service token-revoke site kfs_x lixo`):
+// first/secondPositional leriam os N primeiros em silencio e o resto
+// sumiria — typo que vira acao errada sem aviso. Devolve true quando ha
+// mais posicionais que `max`. Puro, sem rede nem HOME.
+// NOTA: valores de flag (`--port 8080`) nao sao posicionais — pula o
+// token seguinte a qualquer flag conhecida com valor.
+Bool extraPositional(List<String> args, Int max) {
+    var count = 0
+    var i = 0
+    while (i < args.size) {
+        var arg = args.get(i)
+        if (arg == "--port" || arg == "--address" || arg == "--exposure" || arg == "--device" || arg == "--ttl" || arg == "--tail" || arg == "--control" || arg == "--control-port" || arg == "--tunnel-port" || arg == "--http-port" || arg == "--state" || arg == "--service" || arg == "--file" || arg == "--password") {
+            i = i + 2
+            continue
+        }
+        if (arg.startsWith("--") == false) {
+            count = count + 1
+            if (count > max) {
+                return true
+            }
+        }
+        i = i + 1
+    }
+    return false
+}
+
 // ---- login / logout ----
 
 Int cmdLogin(List<String> args) {
@@ -427,6 +453,10 @@ Int cmdPublish(List<String> args) {
         println("flag repetida — informe uma so vez: kof cloud publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]")
         return 1
     }
+    if (extraPositional(args, 1)) {
+        println("argumento a mais — uso: kof cloud publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]")
+        return 1
+    }
     var port = parseIntSafe(flagValue(args, "--port"), 0)
     var address = flagValue(args, "--address")
     if (address.length == 0) {
@@ -690,7 +720,7 @@ Int cmdServiceToken(List<String> args) {
         return 1
     }
     var name = firstPositional(args)
-    if (name.length == 0) {
+    if (name.length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud service token <nome> [--ttl <horas>]")
         return 1
     }
@@ -824,7 +854,7 @@ Int cmdServiceTokenRevoke(List<String> args) {
     }
     var name = firstPositional(args)
     var token = secondPositional(args)
-    if (name.length == 0 || token.length == 0) {
+    if (name.length == 0 || token.length == 0 || extraPositional(args, 2)) {
         println("uso: kof cloud service token-revoke <nome> <kfs_...|id>")
         return 1
     }
