@@ -162,3 +162,16 @@ test "text: validateServePorts barra porta fora da faixa", "serve-ports" {
     assert(validateServePorts(8080, 70000, 8081).indexOf("tunnel-port") >= 0, "teto barra no tunel")
     assert(validateServePorts(8080, 7000, -1).indexOf("http-port") >= 0, "negativa barra no http")
 }
+
+test "text: flag sem valor nao vira default silencioso", "flag-missing" {
+    // Pura, sem rede nem HOME: `flagValue` sozinho nao distingue "ausente"
+    // de "presente sem valor" — flagMissingValue fecha o buraco para as
+    // flags cujo default mentiria sobre a intencao (ex.: --ttl solto
+    // viraria "sem expiracao").
+    assert(flagMissingValue(listOf<String>(), "--ttl") == false, "ausente nao e erro")
+    assert(flagMissingValue(listOf("--ttl"), "--ttl") == true, "flag sozinha no fim")
+    assert(flagMissingValue(listOf("--ttl", "--check"), "--ttl") == true, "flag seguida de flag")
+    assert(flagMissingValue(listOf("--ttl", "24"), "--ttl") == false, "flag com valor ok")
+    assert(flagMissingValue(listOf("site", "--port"), "--port") == true, "port sem valor")
+    assert(flagMissingValue(listOf("--port", "8080"), "--other") == false, "outra flag nao casa")
+}

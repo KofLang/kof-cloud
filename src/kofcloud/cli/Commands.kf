@@ -58,6 +58,28 @@ Bool hasFlag(List<String> args, String flag) {
     return false
 }
 
+// Flag presente mas sem valor (ex.: `--ttl` no fim, ou seguido de outra
+// flag). `flagValue` devolveria "" — indistinguivel de "flag ausente" —
+// e o chamador aplicaria o default em silencio, mentindo sobre a intencao
+// do operador. Devolve true so quando a flag esta la E o proximo token
+// nao existe ou tambem e flag.
+Bool flagMissingValue(List<String> args, String flag) {
+    var i = 0
+    while (i < args.size) {
+        if (args.get(i) == flag) {
+            if (i + 1 >= args.size) {
+                return true
+            }
+            if (args.get(i + 1).startsWith("--")) {
+                return true
+            }
+            return false
+        }
+        i = i + 1
+    }
+    return false
+}
+
 String firstPositional(List<String> args) {
     for (var arg in args) {
         if (arg.startsWith("--") == false) {
@@ -377,6 +399,12 @@ Int cmdPublish(List<String> args) {
         return 1
     }
     var name = firstPositional(args)
+    // Flags com valor obrigatorio quando presentes: `--port` solto (sem
+    // valor) nao pode cair no erro generico de uso nem em default.
+    if (flagMissingValue(args, "--port") || flagMissingValue(args, "--address") || flagMissingValue(args, "--exposure") || flagMissingValue(args, "--device")) {
+        println("uso: kof cloud publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]")
+        return 1
+    }
     var port = parseIntSafe(flagValue(args, "--port"), 0)
     var address = flagValue(args, "--address")
     if (address.length == 0) {
@@ -645,6 +673,10 @@ Int cmdServiceToken(List<String> args) {
         return 1
     }
     var ttlRaw = flagValue(args, "--ttl")
+    if (flagMissingValue(args, "--ttl")) {
+        println("uso: kof cloud service token <nome> [--ttl <horas>]")
+        return 1
+    }
     if (validTtlHours(ttlRaw) == false) {
         println("ttl invalido: " + ttlRaw + " (use horas positivas, ex: --ttl 24)")
         return 1
@@ -916,6 +948,10 @@ Int cmdLogs(List<String> args) {
         return 0
     }
     var tailRaw = flagValue(args, "--tail")
+    if (flagMissingValue(args, "--tail")) {
+        println("uso: kof cloud logs [--tail <linhas>]")
+        return 1
+    }
     if (tailRaw.length > 0) {
         var n = parseIntSafe(tailRaw, -1)
         if (n <= 0) {
