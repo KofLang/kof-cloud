@@ -35,6 +35,13 @@ test "deploy: manifesto com port como string (formato da API)", "deploy-str" {
 }
 
 test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
+    // Arquivo inexistente e arquivo vazio caem no mesmo caminho honesto:
+    // readTextOr devolve "" e o cmdDeploy/cmdDown respondem "manifesto nao
+    // encontrado" antes de qualquer parse ou rede.
+    var missing = readTextOr("/tmp/kofcloud-deploy-inexistente-" + crypto.randomHex(8) + ".json", "")
+    assert(missing == "", "inexistente vira vazio")
+    var emptyPath = deployManifest("vazio", "")
+    assert(readTextOr(emptyPath, "") == "", "vazio vira vazio")
     var bad1 = ""
     try {
         parseManifest("")
