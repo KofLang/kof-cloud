@@ -364,7 +364,7 @@ HttpResult handlePublishService(Registry registry, String? authHeader, String bo
     if (exposure != "PUBLIC" && exposure != "AUTHENTICATED" && exposure != "PRIVATE") {
         return HttpResult(400, errorJson(errInvalidExposure()))
     }
-    if (localPort <= 0) {
+    if (localPort <= 0 || localPort > 65535) {
         return HttpResult(400, errorJson(errLocalPort()))
     }
     var device = registry.deviceById(deviceId)

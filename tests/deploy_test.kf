@@ -65,7 +65,7 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     } catch (String e) {
         bad4 = e
     }
-    assert(bad4 == "servico \"site\" sem porta valida", "porta com nome")
+    assert(bad4 == "servico \"site\" sem porta valida (1-65535)", "porta com nome")
 
     var bad5 = ""
     try {
@@ -73,7 +73,7 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     } catch (String e) {
         bad5 = e
     }
-    assert(bad5 == "servico \"b\" sem porta valida", "posicao correta")
+    assert(bad5 == "servico \"b\" sem porta valida (1-65535)", "posicao correta")
 
     var bad6 = ""
     try {
@@ -133,6 +133,16 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     var loopbacks = parseManifest("{\"services\":[{\"name\":\"a\",\"port\":1,\"address\":\"localhost\"},{\"name\":\"b\",\"port\":2,\"address\":\"::1\"}]}")
     assert(loopbacks.get(0).address == "localhost", "localhost passa")
     assert(loopbacks.get(1).address == "::1", "::1 passa")
+
+    // Teto de porta: acima de 65535 falha no parse (antes passava e
+    // quebrava so no relay/health).
+    var bigPort = ""
+    try {
+        parseManifest("{\"services\":[{\"name\":\"site\",\"port\":70000}]}")
+    } catch (String e) {
+        bigPort = e
+    }
+    assert(bigPort == "servico \"site\" sem porta valida (1-65535)", "teto com nome e faixa")
 }
 
 test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {

@@ -63,6 +63,12 @@ test "erros: control plane devolve codigos estaveis", "errors" {
     assert(statusOf(badPort) == 400, "porta invalida -> 400")
     assert(codeIs(errorCodeOf(badPort), "KCF043"), "KCF043 localPort")
 
+    // Teto: porta acima de 65535 tambem e 400 (antes passava e quebrava so
+    // no net.connect do relay).
+    var bigPort = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"99999\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", accountToken)
+    assert(statusOf(bigPort) == 400, "porta gigante -> 400")
+    assert(codeIs(errorCodeOf(bigPort), "KCF043"), "KCF043 com teto")
+
     var badName = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"SITE!\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", accountToken)
     assert(statusOf(badName) == 400, "nome invalido -> 400")
     assert(codeIs(errorCodeOf(badName), "KCF040"), "KCF040 invalid service name")

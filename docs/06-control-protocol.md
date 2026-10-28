@@ -175,7 +175,7 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `400` | `KCF005` password too short | senha curta |
 | `400` | `KCF020` name/publicKey | registro de device sem campos |
 | `400` | `KCF040` invalid service name | nome de serviço fora do formato |
-| `400` | `KCF043` localPort required | publish sem porta |
+| `400` | `KCF043` localPort fora de 1-65535 | publish sem porta ou com porta > 65535 |
 | `400` | `KCF044` serviceId required | endpoint sem serviceId |
 | `400` | `KCF045` exposure inválida | publish com exposure fora de PUBLIC/AUTHENTICATED/PRIVATE |
 | `400` | `KCF046` protocol inválido | publish com protocol fora de `http` (MVP: só HTTP/1.1 pelo túnel) |

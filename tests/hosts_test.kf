@@ -134,6 +134,7 @@ test "text: validatePublishLocal barra exposure/address ruins sem rede", "publis
     assert(validatePublishLocal("site", 8080, "PRIVATE", "localhost") == "", "localhost passa")
     assert(validatePublishLocal("", 8080, "PUBLIC", "127.0.0.1").indexOf("uso:") >= 0, "sem nome pede uso")
     assert(validatePublishLocal("site", 0, "PUBLIC", "127.0.0.1").indexOf("uso:") >= 0, "sem porta pede uso")
+    assert(validatePublishLocal("site", 99999, "PUBLIC", "127.0.0.1").indexOf("1-65535") >= 0, "teto de porta no CLI")
     assert(validatePublishLocal("site", 8080, "PUBLIK", "127.0.0.1").indexOf("exposure invalida") >= 0, "typo nao vira PUBLIC")
     assert(validatePublishLocal("site", 8080, "PUBLIC", "10.0.0.5").indexOf("address invalido") >= 0, "externo barra (SSRF)")
     assert(validatePublishLocal("site", 8080, "PUBLIC", "169.254.169.254").indexOf("127.0.0.1") >= 0, "metadata barra com dica")

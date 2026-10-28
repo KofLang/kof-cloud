@@ -353,8 +353,8 @@ Int cmdDeviceUnsuspend(List<String> args) {
 // pura, testavel sem HOME. Devolve "" quando ok, ou a mensagem de erro
 // (mesmas regras da API KCF045/KCF047 — fail-fast local com dica).
 String validatePublishLocal(String name, Int port, String exposure, String address) {
-    if (name.length == 0 || port <= 0) {
-        return "uso: kof cloud publish <nome> --port <porta>"
+    if (name.length == 0 || port <= 0 || port > 65535) {
+        return "uso: kof cloud publish <nome> --port <porta> (porta 1-65535)"
     }
     if (exposure != "PUBLIC" && exposure != "AUTHENTICATED" && exposure != "PRIVATE") {
         return "exposure invalida: " + exposure + " (use PUBLIC, AUTHENTICATED ou PRIVATE)"

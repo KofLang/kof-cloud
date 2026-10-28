@@ -170,8 +170,8 @@ List<ManifestService> parseManifest(String raw) {
         if (name.length == 0) {
             throw "servico sem nome na posicao " + intToString(index)
         }
-        if (port <= 0) {
-            throw "servico \"" + name + "\" sem porta valida"
+        if (port <= 0 || port > 65535) {
+            throw "servico \"" + name + "\" sem porta valida (1-65535)"
         }
         out.add(ManifestService(name, address, port, exposure, protocol))
         index = index + 1

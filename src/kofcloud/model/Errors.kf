@@ -62,7 +62,7 @@ String errServiceNotYours() {
 }
 
 String errLocalPort() {
-    return "KCF043: localPort required"
+    return "KCF043: localPort must be 1-65535"
 }
 
 String errServiceIdRequired() {
@@ -208,7 +208,7 @@ String errHint(String raw) {
         return "Esse servico nao existe nesta conta — veja `kof cloud service list`."
     }
     if (raw.indexOf("KCF043") >= 0) {
-        return "Informe a porta local: `kof cloud publish <nome> --port <porta>`."
+        return "Informe a porta local (1-65535): `kof cloud publish <nome> --port <porta>`."
     }
     if (raw.indexOf("KCF045") >= 0) {
         return "Exposicao invalida — use PUBLIC, AUTHENTICATED ou PRIVATE (`kof cloud publish <nome> --port <porta> --exposure PRIVATE`)."
