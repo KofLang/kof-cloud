@@ -80,6 +80,23 @@ Bool flagMissingValue(List<String> args, String flag) {
     return false
 }
 
+// Flag repetida (`--port 80 --port 8080`): `flagValue` devolveria a
+// primeira em silencio, ignorando a segunda — ambiguidade que vira
+// surpresa (o operador acha que vale a ultima). Fail-fast: qualquer
+// duplicata e erro antes de qualquer efeito.
+Bool flagDuplicated(List<String> args, String flag) {
+    var seen = false
+    for (var arg in args) {
+        if (arg == flag) {
+            if (seen) {
+                return true
+            }
+            seen = true
+        }
+    }
+    return false
+}
+
 String firstPositional(List<String> args) {
     for (var arg in args) {
         if (arg.startsWith("--") == false) {
@@ -401,8 +418,13 @@ Int cmdPublish(List<String> args) {
     var name = firstPositional(args)
     // Flags com valor obrigatorio quando presentes: `--port` solto (sem
     // valor) nao pode cair no erro generico de uso nem em default.
+    // Duplicada tambem nao: `flagValue` leria a primeira em silencio.
     if (flagMissingValue(args, "--port") || flagMissingValue(args, "--address") || flagMissingValue(args, "--exposure") || flagMissingValue(args, "--device")) {
         println("uso: kof cloud publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]")
+        return 1
+    }
+    if (flagDuplicated(args, "--port") || flagDuplicated(args, "--address") || flagDuplicated(args, "--exposure") || flagDuplicated(args, "--device")) {
+        println("flag repetida — informe uma so vez: kof cloud publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]")
         return 1
     }
     var port = parseIntSafe(flagValue(args, "--port"), 0)
@@ -673,7 +695,7 @@ Int cmdServiceToken(List<String> args) {
         return 1
     }
     var ttlRaw = flagValue(args, "--ttl")
-    if (flagMissingValue(args, "--ttl")) {
+    if (flagMissingValue(args, "--ttl") || flagDuplicated(args, "--ttl")) {
         println("uso: kof cloud service token <nome> [--ttl <horas>]")
         return 1
     }
@@ -1026,6 +1048,16 @@ String validateServePorts(Int controlPort, Int tunnelPort, Int httpPort) {
 
 // Portas: control HTTP, tunel e HTTP publico do edge.
 Int cmdServe(List<String> args) {
+    // Flag solta vira string vazia no parseIntSafe (default silencioso);
+    // duplicada leria a primeira. Ambas rejeitadas antes de validar faixa.
+    if (flagMissingValue(args, "--control-port") || flagMissingValue(args, "--tunnel-port") || flagMissingValue(args, "--http-port")) {
+        println("uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] (portas 1-65535)")
+        return 1
+    }
+    if (flagDuplicated(args, "--control-port") || flagDuplicated(args, "--tunnel-port") || flagDuplicated(args, "--http-port")) {
+        println("flag repetida — informe uma so vez: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N]")
+        return 1
+    }
     var controlPort = parseIntSafe(flagValue(args, "--control-port"), 8080)
     var tunnelPort = parseIntSafe(flagValue(args, "--tunnel-port"), 7000)
     var httpPort = parseIntSafe(flagValue(args, "--http-port"), 8081)
