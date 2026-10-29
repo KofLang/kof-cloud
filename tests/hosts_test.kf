@@ -187,6 +187,8 @@ test "text: flag sem valor nao vira default silencioso", "flag-missing" {
     assert(flagMissingValue(listOf("--ttl", "24"), "--ttl") == false, "flag com valor ok")
     assert(flagMissingValue(listOf("site", "--port"), "--port") == true, "port sem valor")
     assert(flagMissingValue(listOf("--port", "8080"), "--other") == false, "outra flag nao casa")
+    assert(flagMissingValue(listOf("api.example.com", "--service"), "--service") == true, "service solto barra")
+    assert(flagMissingValue(listOf("--tail"), "--tail") == true, "tail solto barra")
 }
 
 test "text: flagDuplicated barra repeticao silenciosa", "flag-dup" {
@@ -199,6 +201,8 @@ test "text: flagDuplicated barra repeticao silenciosa", "flag-dup" {
     assert(flagDuplicated(listOf("--port", "80", "--port"), "--port") == true, "duplicada sem valor tambem")
     assert(flagDuplicated(listOf("--port", "8080"), "--ttl") == false, "outra flag nao casa")
     assert(flagDuplicated(listOf("--ttl", "24", "--ttl", "48"), "--ttl") == true, "ttl duplicado barra")
+    assert(flagDuplicated(listOf("--tail", "10", "--tail", "20"), "--tail") == true, "tail duplicado barra")
+    assert(flagDuplicated(listOf("--service", "a", "--service", "b"), "--service") == true, "service duplicado barra")
 }
 
 test "text: extraPositional barra posicional sobrando", "extra-positional" {

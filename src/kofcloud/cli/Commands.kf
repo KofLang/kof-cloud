@@ -999,6 +999,12 @@ Int cmdDomainAdd(List<String> args) {
         println("nao logado")
         return 1
     }
+    // `--service` solto vira "" (erro generico de uso, sem apontar a
+    // flag); duplicado leria a primeira em silencio. Fail-fast com o uso.
+    if (flagMissingValue(args, "--service") || flagDuplicated(args, "--service")) {
+        println("uso: kof cloud domain add <hostname> --service <nome>")
+        return 1
+    }
     var hostname = firstPositional(args).trim()
     var service = flagValue(args, "--service").trim()
     if (hostname.length == 0 || service.length == 0 || extraPositional(args, 1)) {
@@ -1078,7 +1084,9 @@ Int cmdLogs(List<String> args) {
         return 0
     }
     var tailRaw = flagValue(args, "--tail")
-    if (flagMissingValue(args, "--tail")) {
+    // Solta: sem valor nao ha o que aparar. Duplicada: `flagValue` leria
+    // a primeira em silencio (o operador leria a ultima no comando).
+    if (flagMissingValue(args, "--tail") || flagDuplicated(args, "--tail")) {
         println("uso: kof cloud logs [--tail <linhas>]")
         return 1
     }
