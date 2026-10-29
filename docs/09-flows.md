@@ -87,7 +87,7 @@ com erro posicional — nada com default silencioso perigoso.
 
  1. usuário: kof cloud deploy [--file kofcloud.json] [--check] [--plan]
     com `--plan`: só mostra o diff (`+ novo`, `~ atualiza`, `= igual`,
-    `- fora do manifesto`, com `(build)` em `+`/`~` quando o serviço
+    `- fora do manifesto`, com `(build)` em `+`/`~`/`=` quando o serviço
     declara build) via `diffDeployment` pura — nada aplicado, nada executado
  2. carrega identity + token + manifesto (parse com erro posicional)
  3. para cada serviço: roda `build` (se declarado; falhou = não publica
