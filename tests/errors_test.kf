@@ -158,6 +158,10 @@ test "erros: device resolve por nome ou id (publish --device)", "errors-device" 
     assert(deviceIdByNameOrId(session, nbId) == nbId, "id passa direto")
     // Nome inexistente: "" (o chamador responde erro local honesto).
     assert(deviceIdByNameOrId(session, "fantasma") == "", "nome ruim da vazio")
+    // Trim como o parseManifest: padding resolve igual (CLI e manifesto
+    // aceitam os mesmos nomes; espacos sobrando nao quebram a resolucao).
+    assert(deviceIdByNameOrId(session, "  notebook  ") == nbId, "nome com espaco resolve")
+    assert(deviceIdByNameOrId(session, "  " + nbId + "  ") == nbId, "id com espaco passa direto")
 
     // E o id resolvido opera de verdade: suspende por nome via API (o que
     // os comandos fazem depois de resolver).

@@ -138,6 +138,15 @@ test "text: validatePublishLocal barra exposure/address ruins sem rede", "publis
     assert(validatePublishLocal("site", 8080, "PUBLIK", "127.0.0.1").indexOf("exposure invalida") >= 0, "typo nao vira PUBLIC")
     assert(validatePublishLocal("site", 8080, "PUBLIC", "10.0.0.5").indexOf("address invalido") >= 0, "externo barra (SSRF)")
     assert(validatePublishLocal("site", 8080, "PUBLIC", "169.254.169.254").indexOf("127.0.0.1") >= 0, "metadata barra com dica")
+    // Trim como o parseManifest: padding passa aparado; so-espacos falha
+    // como ausente no nome (fail-fast local). Exposure/address so-espacos
+    // falham NO VALIDADOR PURO (ele nao defaulta — o default vive no
+    // chamador); no fluxo real o cmdPublish apara + defaulta antes
+    // (igual ao parse do manifesto), entao esse caminho nao dispara.
+    assert(validatePublishLocal("  site  ", 8080, " PUBLIC ", " localhost ") == "", "padding passa aparado")
+    assert(validatePublishLocal("   ", 8080, "PUBLIC", "127.0.0.1").indexOf("uso:") >= 0, "nome so-espacos pede uso")
+    assert(validatePublishLocal("site", 8080, "   ", "127.0.0.1").indexOf("exposure invalida") >= 0, "exposure so-espacos falha no puro")
+    assert(validatePublishLocal("site", 8080, "PUBLIC", "   ").indexOf("address invalido") >= 0, "address so-espacos falha no puro")
 }
 
 test "text: validTtlHours aceita vazio e positivos", "ttl-local" {

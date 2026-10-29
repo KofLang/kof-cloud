@@ -462,14 +462,20 @@ Int cmdDeviceUnsuspend(List<String> args) {
 // pura, testavel sem HOME. Devolve "" quando ok, ou a mensagem de erro
 // (mesmas regras da API KCF045/KCF047 — fail-fast local com dica).
 String validatePublishLocal(String name, Int port, String exposure, String address) {
-    if (name.length == 0 || port <= 0 || port > 65535) {
+    // Trim como o parseManifest (manifesto e CLI aceitam os mesmos campos;
+    // espacos sobrando nao devem virar nome com espaco nem exposure
+    // invalida). Pura: apara copias locais, sem tocar os args.
+    var trimmedName = name.trim()
+    var trimmedExposure = exposure.trim()
+    var trimmedAddress = address.trim()
+    if (trimmedName.length == 0 || port <= 0 || port > 65535) {
         return "uso: kof cloud publish <nome> --port <porta> (porta 1-65535)"
     }
-    if (exposure != "PUBLIC" && exposure != "AUTHENTICATED" && exposure != "PRIVATE") {
-        return "exposure invalida: " + exposure + " (use PUBLIC, AUTHENTICATED ou PRIVATE)"
+    if (trimmedExposure != "PUBLIC" && trimmedExposure != "AUTHENTICATED" && trimmedExposure != "PRIVATE") {
+        return "exposure invalida: " + trimmedExposure + " (use PUBLIC, AUTHENTICATED ou PRIVATE)"
     }
-    if (validLocalAddress(address) == false) {
-        return "address invalido: " + address + " (use 127.0.0.1, localhost ou ::1)"
+    if (validLocalAddress(trimmedAddress) == false) {
+        return "address invalido: " + trimmedAddress + " (use 127.0.0.1, localhost ou ::1)"
     }
     return ""
 }
@@ -485,7 +491,7 @@ Int cmdPublish(List<String> args) {
         println("nao logado — rode: kof cloud login <handle> --password <senha>")
         return 1
     }
-    var name = firstPositional(args)
+    var name = firstPositional(args).trim()
     // Flags com valor obrigatorio quando presentes: `--port` solto (sem
     // valor) nao pode cair no erro generico de uso nem em default.
     // Duplicada tambem nao: `flagValue` leria a primeira em silencio.
@@ -501,12 +507,15 @@ Int cmdPublish(List<String> args) {
         println("argumento a mais — uso: kof cloud publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]")
         return 1
     }
-    var port = parseIntSafe(flagValue(args, "--port"), 0)
-    var address = flagValue(args, "--address")
+    var port = parseIntSafe(flagValue(args, "--port").trim(), 0)
+    // Trim como o parseManifest (ausente/vazio/so-espacos = default, igual
+    // ao "ausente defaulta" do manifesto): espacos sobrando nao devem virar
+    // nome com espaco nem exposure invalida.
+    var address = flagValue(args, "--address").trim()
     if (address.length == 0) {
         address = "127.0.0.1"
     }
-    var exposure = flagValue(args, "--exposure")
+    var exposure = flagValue(args, "--exposure").trim()
     if (exposure.length == 0) {
         exposure = "PUBLIC"
     }
@@ -728,11 +737,13 @@ Int cmdServiceUnsuspend(List<String> args) {
 }
 
 // Id do servico pelo nome (para os comandos que operam por serviceId).
-// "" quando nao existe na conta.
+// "" quando nao existe na conta. Apara antes de comparar (mesma regra do
+// parseManifest: "  site  " na CLI resolve o servico "site").
 String serviceIdByName(LocalSession session, String name) {
+    var trimmed = name.trim()
     var services = fetchServices(session.controlUrl, session.token)
     for (var service in services) {
-        if (service.name == name) {
+        if (service.name == trimmed) {
             return service.id
         }
     }
@@ -744,14 +755,15 @@ String serviceIdByName(LocalSession session, String name) {
 // plane valida depois (404 opaco se alheio/inexistente). "" so quando o
 // NOME nao existe — id cru nunca e recusado aqui.
 String deviceIdByNameOrId(LocalSession session, String nameOrId) {
+    var trimmed = nameOrId.trim()
     var devices = fetchDevices(session.controlUrl, session.token)
     for (var device in devices) {
-        if (device.name == nameOrId) {
+        if (device.name == trimmed) {
             return device.id
         }
     }
     for (var device in devices) {
-        if (device.id == nameOrId) {
+        if (device.id == trimmed) {
             return device.id
         }
     }
