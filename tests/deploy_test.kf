@@ -181,6 +181,14 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     var wanted4 = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":9090,\"build\":\"make dist\"}]}")
     var plan4 = diffDeployment(live, wanted4)
     assert(plan4.get(0).startsWith("~ site (build)"), "mudado com build marca")
+    // Artifact aparece junto no plan sem tocar o disco: o operador ve que o
+    // deploy vai conferir um arquivo local (e barrar o publish se sumiu).
+    // Combina com build na mesma linha, na mesma ordem do manifesto.
+    var wanted5 = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"artifact\":\"dist/index.html\"},{\"name\":\"novo\",\"port\":3000,\"build\":\"npm run build\",\"artifact\":\"dist/app.js\"},{\"name\":\"mudou\",\"port\":3000,\"exposure\":\"PRIVATE\"}]}")
+    var plan5 = diffDeployment(live, wanted5)
+    assert(plan5.get(0) == "= site (artifact) (igual)", "igual com artifact marca")
+    assert(plan5.get(1).startsWith("+ novo (build) (artifact)"), "novo com build+artifact marca os dois")
+    assert(plan5.get(2).startsWith("+ mudou"), "novo sem nada nao marca")
 }
 
 test "deploy: build opcional no manifesto executa antes do publish", "deploy-build" {

@@ -92,11 +92,12 @@ Bool checkLocalService(String address, Int port) {
 // "~ site" muda porta/address/exposure, "= site" igual). `live` deve vir
 // filtrado pelo chamador (conta atual; device atual se quiser escopo).
 // Ordem: manifesto primeiro (o que vai acontecer), depois extras.
-// TODA linha de servico declarado com build carrega " (build)" — inclusive
-// "=": o deploy executa o build antes de cada publish (mesmo o idempotente),
-// entao "igual" nao significa "nada vai rodar". O operador ve ANTES de
-// aplicar que um comando local sera executado (o --plan nunca executa nada,
-// so sinaliza).
+// TODA linha de servico declarado com build carrega " (build)" e com
+// artifact carrega " (artifact)" — inclusive "=": o deploy executa o build
+// e confere o artifact antes de cada publish (mesmo o idempotente), entao
+// "igual" nao significa "nada vai acontecer". O operador ve ANTES de
+// aplicar que um comando local sera executado e um arquivo sera conferido
+// (o --plan nunca executa nada, so sinaliza).
 List<String> diffDeployment(List<Service> live, List<ManifestService> wanted) {
     var out = listOf<String>()
     for (var item in wanted) {
@@ -113,6 +114,9 @@ List<String> diffDeployment(List<Service> live, List<ManifestService> wanted) {
         var buildMark = ""
         if (item.build.length > 0) {
             buildMark = " (build)"
+        }
+        if (item.artifact.length > 0) {
+            buildMark = buildMark + " (artifact)"
         }
         if (found == false) {
             out.add("+ " + item.name + buildMark + " (novo: " + item.address + ":" + intToString(item.port) + " " + item.exposure + ")")
