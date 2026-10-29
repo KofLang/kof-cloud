@@ -37,6 +37,14 @@ test "daemon: ajuda documenta device por nome ou id", "daemon-usage" {
     assert(help.indexOf("[--device <nome>]") >= 0, "publish documenta --device por nome")
 }
 
+test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
+    // Regressao: o manifesto ganhou build (passo 1) e artifact (passo 3)
+    // mas o help parou no "--plan so mostra o diff". Puro, sem rede.
+    var help = usageText()
+    assert(help.indexOf("deploy [--file kofcloud.json] [--check] [--plan]") >= 0, "deploy documenta flags")
+    assert(help.indexOf("build/artifact") >= 0, "deploy anuncia build+artifact do manifesto")
+}
+
 test "daemon: paths ficam no espaco do usuario", "daemon-paths" {
     assert(daemonUnitName() == "kofcloud-agent.service", "nome da unit")
     assert(daemonUnitPath().endsWith("/.config/systemd/user/kofcloud-agent.service"), "path user-level")

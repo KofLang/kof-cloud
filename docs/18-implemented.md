@@ -138,7 +138,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 * **Daemon user-level (Fase 7, slice 3)**: `cli/Daemon.kf` gera
   `kofcloud-agent.service` (mesmo `connect`, `Restart=always`,
   `NoNewPrivileges`, enable manual); `status`/`uninstall`; erro honesto sem
-  systemd; só Linux (`daemon_test.kf`, 7 testes).
+  systemd; só Linux (`daemon_test.kf`, 8 testes).
 * **Parada limpa** do agente (`disconnect` via arquivo-sentinela) e da
   plataforma (`serve`, via fechamento do `Listener`).
 * **Hot-reload de serviço (debito quitado)**: refresher via `/v1/connect`
