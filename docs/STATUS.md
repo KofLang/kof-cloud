@@ -9,7 +9,7 @@
 |---|---|---|
 | Fases 1–3 (tunel, publish, hostname) | ✅ verde | `e2e_test.kf` |
 | Fase 4 (multi-servico + limites) | ✅ verde | `e2e_multiservice_test.kf`, `limits_test.kf` |
-| Fase 5 (AUTHENTICATED kfs_ + revoke + token-list + TTL) | ✅ verde | `service_token_test.kf` (11), `e2e_authenticated_test.kf` |
+| Fase 5 (AUTHENTICATED kfs_ + revoke + token-list + TTL) | ✅ verde | `service_token_test.kf` (13), `e2e_authenticated_test.kf` |
 | Fase 6 slice 1 (dominio proprio) | ✅ verde | `domains_test.kf` (sem TLS/SNI — externo) |
 | Observabilidade (3 slices) | ✅ verde | `metrics_test.kf`, `agent_metrics_test.kf` |
 | Abuse prevention (2 slices) | ✅ verde | `ratelimit_test.kf`, `abuse_test.kf` |
@@ -17,7 +17,7 @@
 | Fase 7 slices 1–4 (deploy, --check, daemon, doctor) | ✅ verde | `deploy_test.kf`, `daemon_test.kf`, `doctor_test.kf` |
 | Presença real do túnel | ✅ verde | `presence_test.kf` (1), `hosts_test.kf` (bodyContainsId) |
 | Hot-reload + handshake por stream | ✅ verde (debito quitado) | `reload_test.kf`, `protocol_test.kf` |
-| Fase 7 slice 5+ (build/artefato) | ⏳ nao iniciado | — |
+| Fase 7 slice 5 parcial (build/artefato locais) | ✅ verde | `deploy_test.kf` (passos locais: build antes do publish, artifact fail-fast + aviso; sem artefato transferível) |
 | TLS/SNI no Edge, ACME | ⏳ externo por desenho | `12-tls.md` |
 
 ## Como provar (uma sessao)

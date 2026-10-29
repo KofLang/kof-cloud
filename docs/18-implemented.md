@@ -118,16 +118,19 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   `serviceId` no Edge, `429 KCF108` + `Retry-After` antes do OPEN, liberação
   ao fim do relay, isolamento por serviço, métrica `_service_overloaded`
   (`conns_test.kf`, 2 testes).
-* **Deploy declarativo (Fase 7, slice 1 + slice 5)**: `kofcloud.json` declara
-  `services[]` (nome, porta numero ou string, address/exposure/protocol/build
-  opcionais); `kof cloud deploy` roda o `build` de cada serviço (quando
-  declarado) antes do publish em lote (idempotente; build falhou = não publica
+* **Deploy declarativo (Fase 7, slice 1 + slice 5 parcial)**: `kofcloud.json` declara
+  `services[]` (nome, porta numero ou string, address/exposure/protocol/build/
+  artifact opcionais); `kof cloud deploy` roda o `build` de cada serviço (quando
+  declarado) e confere o `artifact` declarado (ausente = não publica aquele
+  serviço, fail-fast antes do publish) antes do publish em lote (idempotente;
+  build falhou = não publica
   aquele serviço) e `kof cloud down` remove
   só os listados — nada fora do manifesto é tocado; parser manual com erro
   posicional (`deploy_test.kf`, 8 testes). `deploy --plan` mostra o diff sem
   aplicar (`+` novo, `~` atualiza, `=` igual, `-` fora do manifesto; com
-  `(build)` quando o serviço declara build — inclusive no igual, porque o
-  deploy executa o build antes de cada publish, mesmo o idempotente).
+  `(build)`/`(artifact)` quando o serviço declara build/artifact — inclusive no
+  igual, porque o deploy executa o build e confere o artifact antes de cada
+  publish, mesmo o idempotente).
   `deploy --check` confirma publicado + respondendo (mesma regra do Agent;
   sem rollback), acusa drift de config antes da resposta (porta/address/
   exposure/protocol diferentes) e avisa `artefato ausente` quando o manifesto

@@ -119,7 +119,7 @@ rollback); `deploy --plan` mostra o diff sem aplicar (com `(build)`/
 install|status|uninstall`: gera `kofcloud-agent.service` (mesmo `connect`,
 `Restart=always`, `NoNewPrivileges`, enable manual de proposito), erro
 honesto sem systemd. So Linux; Windows/macOS na Fase 8. Prova:
-`tests/daemon_test.kf` (7 testes).
+`tests/daemon_test.kf` (8 testes).
 
 **Estado (hot-reload — debito quitado): ✅ implementado.** O Agent re-busca
 `services[]` via `/v1/connect` a cada `6×healthMs` e troca a tabela DA SESSAO
