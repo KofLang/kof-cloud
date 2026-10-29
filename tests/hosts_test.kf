@@ -270,3 +270,20 @@ test "text: matchServiceName apara antes de comparar", "service-name-match" {
     assert(matchServiceName(services, "outro") == "", "inexistente vazio")
     assert(matchServiceName(listOf<Service>(), "site") == "", "lista vazia: vazio")
 }
+
+test "text: resolveLoginInputs apara sem tocar na senha", "login-trim" {
+    // Pura, sem rede nem HOME (precedente: matchServiceName): o cmdLogin
+    // delega antes dos defaults/guardas; handle/--control/--device com
+    // padding entram limpos, --device so-espacos vira vazio (o chamador
+    // cai no default "default"), e a senha passa intacta (credencial).
+    var padded = resolveLoginInputs("  mel  ", "  http://127.0.0.1:8080  ", "  notebook  ")
+    assert(padded.handle == "mel", "handle aparado")
+    assert(padded.control == "http://127.0.0.1:8080", "control aparado")
+    assert(padded.device == "notebook", "device aparado")
+    var blank = resolveLoginInputs("mel", "http://127.0.0.1:8080", "   ")
+    assert(blank.device == "", "device so-espacos vira vazio (default no chamador)")
+    var clean = resolveLoginInputs("mel", "http://127.0.0.1:8080", "notebook")
+    assert(clean.handle == "mel", "limpo passa direto")
+    assert(clean.control == "http://127.0.0.1:8080", "control limpo passa direto")
+    assert(clean.device == "notebook", "device limpo passa direto")
+}

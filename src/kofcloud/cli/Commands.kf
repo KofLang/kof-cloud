@@ -158,6 +158,19 @@ Bool extraPositional(List<String> args, Int max) {
 
 // ---- login / logout ----
 
+// Entradas do login aparadas (handle/--control/--device; senha intacta de
+// proposito — credencial, espacos podem ser intencionais). Pura, sem rede
+// nem HOME: o default do control/device vive no chamador (control le de
+// config, device cai em "default"), aqui so normaliza. O handle e rotulo
+// DNS (`validLabel`): " mel " nunca validaria na API (400 KCF001); o
+// --device com padding registraria nome sujo que depois nao resolve; e
+// --device so-espacos escapava do default. A senha nunca e aparada.
+record LoginInputs(String handle, String control, String device)
+
+LoginInputs resolveLoginInputs(String handleRaw, String controlRaw, String deviceRaw) {
+    return LoginInputs(handleRaw.trim(), controlRaw.trim(), deviceRaw.trim())
+}
+
 Int cmdLogin(List<String> args) {
     var handle = firstPositional(args)
     var password = flagValue(args, "--password")
@@ -166,6 +179,13 @@ Int cmdLogin(List<String> args) {
         control = defaultControlUrl()
     }
     var deviceName = flagValue(args, "--device")
+    if (deviceName.length == 0) {
+        deviceName = "default"
+    }
+    var inputs = resolveLoginInputs(handle, control, deviceName)
+    handle = inputs.handle
+    control = inputs.control
+    deviceName = inputs.device
     if (deviceName.length == 0) {
         deviceName = "default"
     }
