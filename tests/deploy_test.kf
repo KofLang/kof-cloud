@@ -215,6 +215,17 @@ test "deploy: build opcional no manifesto executa antes do publish", "deploy-bui
     assert(withArtifact.get(0).build == "npm run build", "build intacto")
     var emptyArtifact = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"artifact\":\"\"}]}")
     assert(emptyArtifact.get(0).artifact == "", "vazio vira ausente")
+    // artifactProblem pura (so File().exists(), sem rede/HOME): sem
+    // artifact = "" (sem checagem); caminho existente = ""; inexistente =
+    // problema formatado igual ao do --check (mesma funcao nos dois).
+    assert(artifactProblem("site", "") == "", "sem artifact: nada a apontar")
+    assert(artifactProblem("site", "src/Main.kf") == "", "existente: ok")
+    var ghost = "/nao/existe/kofcloud-artifact-" + crypto.randomHex(4)
+    var flagged = artifactProblem("site", ghost)
+    assert(flagged.indexOf("site") >= 0, "nomeia o servico")
+    assert(flagged.indexOf("artefato ausente") >= 0, "nomeia o problema")
+    assert(flagged.indexOf(ghost) >= 0, "mostra o caminho")
+    assert(flagged.indexOf("deploy") >= 0, "orienta o re-deploy")
 }
 
 test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {

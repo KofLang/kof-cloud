@@ -136,6 +136,19 @@ List<String> diffDeployment(List<Service> live, List<ManifestService> wanted) {
     return out
 }
 
+// Devolve "" quando nao ha nada a apontar (sem artifact declarado ou
+// arquivo presente); senao devolve o problema ja formatado
+// `nome: artefato ausente (caminho) — rode: kof cloud deploy`.
+// Pura na decisao (so IO: File().exists()); usada pelo deploy pos-build
+// (fail-fast) e pelo verifyDeployment (--check/doctor). Precedente:
+// runServiceBuild (BuildResult) e diffDeployment (pura + testavel).
+String artifactProblem(String serviceName, String artifact) {
+    if (artifact.length == 0 || File(artifact).exists()) {
+        return ""
+    }
+    return serviceName + ": artefato ausente (" + artifact + ") — rode: kof cloud deploy"
+}
+
 // Confere que cada servico do manifesto esta publicado (existe no control
 // plane para esta conta), COM A MESMA CONFIG (porta/address/exposure/
 // protocol) e responde localmente. Devolve a lista de problemas
@@ -176,8 +189,11 @@ List<String> verifyDeployment(String controlUrl, String token, List<ManifestServ
             problems.add(service.name + ": publicado com config diferente (" + drift + ") — rode: kof cloud deploy")
         } else if (checkLocalService(service.address, service.port) == false) {
             problems.add(service.name + ": publicado mas sem resposta em " + service.address + ":" + intToString(service.port))
-        } else if (service.artifact.length > 0 && File(service.artifact).exists() == false) {
-            problems.add(service.name + ": artefato ausente (" + service.artifact + ") — rode: kof cloud deploy")
+        } else {
+            var missing = artifactProblem(service.name, service.artifact)
+            if (missing.length > 0) {
+                problems.add(missing)
+            }
         }
     }
     return problems
@@ -485,6 +501,15 @@ Int cmdDeploy(List<String> args) {
                 continue
             }
             println("build ok: " + wanted.name)
+        }
+        // Artefato declarado: confere logo apos o build, antes do publish
+        // (fail-fast — um typo no caminho nao vira servico publicado sem
+        // o arquivo que o --check cobraria depois). Mesma funcao do check.
+        var missing = artifactProblem(wanted.name, wanted.artifact)
+        if (missing.length > 0) {
+            printFail("falha no artefato de " + wanted.name, wanted.artifact + " nao existe")
+            failures = failures + 1
+            continue
         }
         var body = mapOf()
         body.put("deviceId", identity.deviceId)

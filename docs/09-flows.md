@@ -93,6 +93,7 @@ com erro posicional — nada com default silencioso perigoso.
     declara build) via `diffDeployment` pura — nada aplicado, nada executado
  2. carrega identity + token + manifesto (parse com erro posicional)
  3. para cada serviço: roda `build` (se declarado; falhou = não publica
+    esse serviço), confere `artifact` (se declarado e ausente = não publica
     esse serviço) e depois POST /v1/services (igual ao publish, idempotente)
  4. reporta publicados/mantidos/falhas (exit 1 se alguma falhar)
  5. usuário: kof cloud down → unpublish só dos listados (extra sobrevive)
