@@ -568,18 +568,13 @@ Int cmdUnpublish(List<String> args) {
         return 1
     }
     var name = firstPositional(args)
-    if (name.length == 0 || extraPositional(args, 1)) {
+    if (name.trim().length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud unpublish <nome>")
         return 1
     }
     try {
         var services = fetchServices(session.controlUrl, session.token)
-        var target = ""
-        for (var service in services) {
-            if (service.name == name) {
-                target = service.id
-            }
-        }
+        var target = matchServiceName(services, name)
         if (target.length == 0) {
             println("servico nao encontrado: " + name)
             return 1
@@ -628,14 +623,15 @@ Int cmdServiceStatus(List<String> args) {
         return 1
     }
     var name = firstPositional(args)
-    if (name.length == 0 || extraPositional(args, 1)) {
+    if (name.trim().length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud service status <nome>")
         return 1
     }
     try {
         var services = fetchServices(session.controlUrl, session.token)
+        var trimmed = name.trim()
         for (var service in services) {
-            if (service.name == name) {
+            if (service.name == trimmed) {
                 println("Servico: " + service.name)
                 println("Host:    https://" + service.hostname)
                 println("Local:   " + service.localAddress + ":" + intToString(service.localPort))
@@ -736,18 +732,27 @@ Int cmdServiceUnsuspend(List<String> args) {
     }
 }
 
-// Id do servico pelo nome (para os comandos que operam por serviceId).
-// "" quando nao existe na conta. Apara antes de comparar (mesma regra do
-// parseManifest: "  site  " na CLI resolve o servico "site").
-String serviceIdByName(LocalSession session, String name) {
+// Nome de servico aparado para comparacao (os 4 comandos que leem nome
+// posicional: unpublish/status/token/token-revoke + o --service do domain
+// add verificam via `trimmed == service.name`; sem isso, `" site "` nao
+// resolve o servico `site` — mesma regra do publish/resolvers).
+// Pura, sem rede nem HOME.
+String matchServiceName(List<Service> services, String name) {
     var trimmed = name.trim()
-    var services = fetchServices(session.controlUrl, session.token)
     for (var service in services) {
         if (service.name == trimmed) {
             return service.id
         }
     }
     return ""
+}
+
+// Id do servico pelo nome (para os comandos que operam por serviceId).
+// "" quando nao existe na conta. Delega no matchServiceName (mesma regra
+// do parseManifest: "  site  " na CLI resolve o servico "site").
+String serviceIdByName(LocalSession session, String name) {
+    var services = fetchServices(session.controlUrl, session.token)
+    return matchServiceName(services, name)
 }
 
 // Id do dispositivo por NOME ou id (para `--device`). Nome resolve pela
@@ -792,7 +797,7 @@ Int cmdServiceToken(List<String> args) {
         return 1
     }
     var name = firstPositional(args)
-    if (name.length == 0 || extraPositional(args, 1)) {
+    if (name.trim().length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud service token <nome> [--ttl <horas>]")
         return 1
     }
@@ -807,11 +812,12 @@ Int cmdServiceToken(List<String> args) {
     }
     try {
         var services = fetchServices(session.controlUrl, session.token)
+        var trimmed = name.trim()
         var target = ""
         var exposure = ""
         var hostname = ""
         for (var service in services) {
-            if (service.name == name) {
+            if (service.name == trimmed) {
                 target = service.id
                 exposure = service.exposure
                 hostname = service.hostname
@@ -881,7 +887,7 @@ Int cmdServiceTokenList(List<String> args) {
         return 1
     }
     var name = firstPositional(args)
-    if (name.length == 0 || extraPositional(args, 1)) {
+    if (name.trim().length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud service token-list <nome>")
         return 1
     }
@@ -926,18 +932,13 @@ Int cmdServiceTokenRevoke(List<String> args) {
     }
     var name = firstPositional(args)
     var token = secondPositional(args)
-    if (name.length == 0 || token.length == 0 || extraPositional(args, 2)) {
+    if (name.trim().length == 0 || token.length == 0 || extraPositional(args, 2)) {
         println("uso: kof cloud service token-revoke <nome> <kfs_...|id>")
         return 1
     }
     try {
         var services = fetchServices(session.controlUrl, session.token)
-        var target = ""
-        for (var service in services) {
-            if (service.name == name) {
-                target = service.id
-            }
-        }
+        var target = matchServiceName(services, name)
         if (target.length == 0) {
             println("servico nao encontrado: " + name)
             return 1
@@ -997,8 +998,8 @@ Int cmdDomainAdd(List<String> args) {
         println("nao logado")
         return 1
     }
-    var hostname = firstPositional(args)
-    var service = flagValue(args, "--service")
+    var hostname = firstPositional(args).trim()
+    var service = flagValue(args, "--service").trim()
     if (hostname.length == 0 || service.length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud domain add <hostname> --service <nome>")
         return 1
@@ -1027,7 +1028,7 @@ Int cmdDomainVerify(List<String> args) {
         println("nao logado")
         return 1
     }
-    var hostname = firstPositional(args)
+    var hostname = firstPositional(args).trim()
     if (hostname.length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud domain verify <hostname>")
         return 1
@@ -1052,7 +1053,7 @@ Int cmdDomainRemove(List<String> args) {
         println("nao logado")
         return 1
     }
-    var hostname = firstPositional(args)
+    var hostname = firstPositional(args).trim()
     if (hostname.length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud domain remove <hostname>")
         return 1

@@ -231,8 +231,7 @@ test "text: domainListLine mostra status so do custom", "domain-list-line" {
     assert(domainListLine(DomainEntry("api.example.com", "custom", "site", "VERIFIED")) == "custom  api.example.com  VERIFIED", "custom VERIFIED")
 }
 
-test "text: customDomainsFor filtra customs do servico", "custom-domains-for" {
-    // Pura, sem rede (precedente: domainListLine): o `service status`
+test "text: customDomainsFor filtra customs do servico", "custom-domains-for" {    // Pura, sem rede (precedente: domainListLine): o `service status`
     // lista so os customs vinculados aquele servico — wildcard/service e
     // customs de outro nome ficam de fora.
     var domains = listOf<DomainEntry>()
@@ -247,4 +246,19 @@ test "text: customDomainsFor filtra customs do servico", "custom-domains-for" {
     assert(customDomainsFor(domains, "loja").size == 1, "outro servico ve o seu")
     assert(customDomainsFor(domains, "novo").size == 0, "sem custom: vazio")
     assert(customDomainsFor(listOf<DomainEntry>(), "site").size == 0, "lista vazia: vazio")
+}
+
+test "text: matchServiceName apara antes de comparar", "service-name-match" {
+    // Pura, sem rede nem HOME (precedente: customDomainsFor): unpublish/
+    // status/token/token-revoke resolvem por ela; padding resolve, so-espacos
+    // nao casa com nada (o chamador barra vazio como uso antes).
+    var services = listOf<Service>()
+    services.add(Service("id1", "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 1000))
+    services.add(Service("id2", "acc", "dev", "loja", "127.0.0.1", 3000, "http", "loja.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 1000))
+    assert(matchServiceName(services, "site") == "id1", "exato resolve")
+    assert(matchServiceName(services, "  site  ") == "id1", "padding resolve")
+    assert(matchServiceName(services, "loja") == "id2", "segundo resolve")
+    assert(matchServiceName(services, "   ") == "", "so-espacos nao casa")
+    assert(matchServiceName(services, "outro") == "", "inexistente vazio")
+    assert(matchServiceName(listOf<Service>(), "site") == "", "lista vazia: vazio")
 }
