@@ -82,7 +82,9 @@ Campos por serviço: `name` (obrigatório), `port` (número ou string),
 `address` (default 127.0.0.1; só loopback), `exposure` (default PUBLIC),
 `protocol` (default http; único aceito no MVP), `build` (opcional: comando
 de shell rodado antes do publish, ex. `"build": "npm run build"`; ausente
-ou vazio = sem build). Todos validados no parse
+ou vazio = sem build), `artifact` (opcional: caminho local que o `--check`
+confere, ex. `"artifact": "dist/index.html"`; ausente ou vazio = sem
+checagem — aviso de staleness, nunca bloqueio). Todos validados no parse
 com erro posicional — nada com default silencioso perigoso.
 
  1. usuário: kof cloud deploy [--file kofcloud.json] [--check] [--plan]
@@ -97,7 +99,8 @@ com erro posicional — nada com default silencioso perigoso.
     com `--prune`: remove também os órfãos DESTE device fora do manifesto
     (nunca toca serviço de outro device)
  6. com `--check`: publicado E respondendo localmente? (`checkLocalService`,
-    mesma regra do Agent) — sem rollback, só diagnóstico
+    mesma regra do Agent) + artefato declarado existe no disco? (aviso
+    `artefato ausente`, nunca bloqueio) — sem rollback, só diagnóstico
 ```
 
 Sem transferência de artefato neste slice: o build roda na máquina do

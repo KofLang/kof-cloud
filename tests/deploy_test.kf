@@ -207,6 +207,14 @@ test "deploy: build opcional no manifesto executa antes do publish", "deploy-bui
     assert(bad.detail.indexOf("exit 1") >= 0, "exit no motivo")
     var missing = runServiceBuild("/nao/existe/kofcloud-build-" + crypto.randomHex(4))
     assert(missing.ok == false, "inexistente: falha honesta")
+    // Artefato opcional: ausente vira "" (sem checagem, como sem build);
+    // presente e repassado como esta; vazio equivale a ausente.
+    assert(plain.get(0).artifact == "", "sem artifact: vazio")
+    var withArtifact = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"build\":\"npm run build\",\"artifact\":\"dist/index.html\"}]}")
+    assert(withArtifact.get(0).artifact == "dist/index.html", "caminho repassado")
+    assert(withArtifact.get(0).build == "npm run build", "build intacto")
+    var emptyArtifact = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"artifact\":\"\"}]}")
+    assert(emptyArtifact.get(0).artifact == "", "vazio vira ausente")
 }
 
 test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {
@@ -359,6 +367,40 @@ test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-che
     assert(drifted.size == 1, "um problema de drift")
     assert(drifted.get(0).indexOf("config diferente") >= 0, "acusa o drift")
     assert(drifted.get(0).indexOf("deploy") >= 0, "orienta o re-deploy")
+
+    // Artefato declarado mas ausente no disco: mesmo publicado e
+    // respondendo, o check avisa staleness (e o doctor tambem, via o mesmo
+    // verifyDeployment). Sem artifact no manifesto = sem aviso.
+    // Re-publica sem drift para isolar o cenario do artefato (o republicado
+    // tem id novo — re-lista em vez de reusar o driftTarget removido).
+    var relisted = httpGetToken(controlPort, "/v1/services", accountToken)
+    var driftedId = serviceIdByNameIn(relisted, "site")
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + driftedId + "\"}", accountToken)) == 200, "drift removido")
+    var cleanBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19729\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", cleanBody, accountToken)) == 200, "republicado limpo")
+    // Reabre o listener: o verify checa resposta antes do artefato, e o
+    // listener original fechou no fim do cenario anterior.
+    var listener2 = net.listen(19729)
+    var serving2 = spawn {
+        var open = true
+        while (open) {
+            try {
+                var peer = listener2.accept()
+                peer.close()
+            } catch (String e) {
+                open = false
+            }
+        }
+    }
+    assert(waitForPort(19729, 60), "servico local no ar de novo")
+    var staleManifest = "{\"services\":[{\"name\":\"site\",\"port\":19729,\"artifact\":\"/nao/existe/kofcloud-artifact-" + crypto.randomHex(4) + "\"}]}"
+    var stale = verifyDeployment(controlUrl, accountToken, parseManifest(staleManifest))
+    assert(stale.size == 1, "um aviso de artefato")
+    assert(stale.get(0).indexOf("artefato ausente") >= 0, "nomeia o artefato")
+    assert(stale.get(0).indexOf("deploy") >= 0, "orienta o re-deploy")
+    var noArtifact = verifyDeployment(controlUrl, accountToken, services)
+    assert(noArtifact.size == 0, "sem artifact: tudo saudavel")
+    listener2.close()
 }
 
 Int serviceCount(String controlUrl, String token, Int port) {

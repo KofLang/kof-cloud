@@ -20,7 +20,7 @@ import kofcloud.store.Store
 // `address` defaulta para 127.0.0.1 e `exposure` para PUBLIC — os mesmos
 // defaults do `publish`.
 
-record ManifestService(String name, String address, Int port, String exposure, String protocol, String build)
+record ManifestService(String name, String address, Int port, String exposure, String protocol, String build, String artifact)
 
 // Resultado de rodar o build de UM servico: ok=true, comando executado;
 // ok=false traz o motivo ja formatado ("falhou (exit N)" ou "nao executou").
@@ -141,7 +141,9 @@ List<String> diffDeployment(List<Service> live, List<ManifestService> wanted) {
 // protocol) e responde localmente. Devolve a lista de problemas
 // `nome: motivo`; vazia = tudo saudavel. Drift de config e acusado antes
 // do check de resposta (nao adianta o local responder se e outro servico
-// que esta publicado).
+// que esta publicado). Por ultimo, o artefato declarado (quando ha):
+// arquivo local ausente vira aviso de staleness — nunca bloqueio, e nunca
+// antes do publicado/resposta (publicado continua sendo o primario).
 List<String> verifyDeployment(String controlUrl, String token, List<ManifestService> wanted) {
     var problems = listOf<String>()
     var live = listOf<Service>()
@@ -174,6 +176,8 @@ List<String> verifyDeployment(String controlUrl, String token, List<ManifestServ
             problems.add(service.name + ": publicado com config diferente (" + drift + ") — rode: kof cloud deploy")
         } else if (checkLocalService(service.address, service.port) == false) {
             problems.add(service.name + ": publicado mas sem resposta em " + service.address + ":" + intToString(service.port))
+        } else if (service.artifact.length > 0 && File(service.artifact).exists() == false) {
+            problems.add(service.name + ": artefato ausente (" + service.artifact + ") — rode: kof cloud deploy")
         }
     }
     return problems
@@ -229,13 +233,20 @@ List<ManifestService> parseManifest(String raw) {
         // executado como esta — sem sandbox no MVP (mesma confianca do
         // `connect` local). Vazio ("" explicito) equivale a ausente.
         var build = manifestField(entry, "build")
+        // Artefato opcional (Fase 7, slice 5 passo 3): caminho local que o
+        // `deploy --check` (e o `doctor`, via verifyDeployment) confere —
+        // ex.: "dist/index.html" depois de "npm run build". Ausente ou vazio
+        // = sem checagem (comportamento atual, inalterado). E so um aviso de
+        // staleness ("o arquivo sumiu? rode o deploy de novo"), nunca
+        // bloqueio: o check nao sabe reconstruir, so apontar.
+        var artifact = manifestField(entry, "artifact")
         if (name.length == 0) {
             throw "servico sem nome na posicao " + intToString(index)
         }
         if (port <= 0 || port > 65535) {
             throw "servico \"" + name + "\" sem porta valida (1-65535)"
         }
-        out.add(ManifestService(name, address, port, exposure, protocol, build))
+        out.add(ManifestService(name, address, port, exposure, protocol, build, artifact))
         index = index + 1
     }
     if (out.size == 0) {

@@ -129,10 +129,12 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   `(build)` quando o serviço declara build — inclusive no igual, porque o
   deploy executa o build antes de cada publish, mesmo o idempotente).
   `deploy --check` confirma publicado + respondendo (mesma regra do Agent;
-  sem rollback) e acusa drift de config antes da resposta (porta/address/
-  exposure/protocol diferentes). O `doctor` usa o mesmo
+  sem rollback), acusa drift de config antes da resposta (porta/address/
+  exposure/protocol diferentes) e avisa `artefato ausente` quando o manifesto
+  declara `artifact` mas o arquivo sumiu do disco (staleness, nunca bloqueio).
+  O `doctor` usa o mesmo
   `verifyDeployment` na etapa de serviços (não publicado → drift → sem
-  resposta), então `--check` e `doctor` acusam igual.
+  resposta → artefato), então `--check` e `doctor` acusam igual.
 * **Daemon user-level (Fase 7, slice 3)**: `cli/Daemon.kf` gera
   `kofcloud-agent.service` (mesmo `connect`, `Restart=always`,
   `NoNewPrivileges`, enable manual); `status`/`uninstall`; erro honesto sem
