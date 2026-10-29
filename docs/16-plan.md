@@ -66,7 +66,7 @@ túnel.
 plane (`POST /v1/services/token`) e validada no Edge; o token da conta não
 autoriza acesso público; o Edge remove a credencial antes de repassar ao
 serviço local; `401` com `WWW-Authenticate: Bearer`. CLI: `kof cloud service
-token <nome>` (revogacao: `kof cloud service token-revoke <nome> <kfs_>` → `POST /v1/services/token/revoke`, 404 opaco se alheio; inventario: `kof cloud service token-list <nome>` → `POST /v1/services/tokens`, so id curto + emissao, nunca o valor; expiracao opcional `--ttl <horas>`, expirado vira 401 e some do inventario). Prova: `tests/service_token_test.kf` (11 testes) +
+token <nome>` (revogacao por token ou id curto: `kof cloud service token-revoke <nome> <kfs_|id-curto>` → `POST /v1/services/token/revoke`, 404 opaco se alheio, 409 `KCF063` em ambiguidade; inventario: `kof cloud service token-list <nome>` → `POST /v1/services/tokens`, so id curto + emissao, nunca o valor; expiracao opcional `--ttl <horas>`, expirado vira 401 e some do inventario). Prova: `tests/service_token_test.kf` (13 testes) +
 `tests/e2e_authenticated_test.kf`.
 
 **Endurecimento (padrão kof-share R6): ✅ implementado.** Erros estáveis
@@ -75,8 +75,9 @@ opaco entre contas (existente-alheio indistinguível de inexistente);
 owner-gate em `POST /v1/services/status` (só a conta dona altera); CLI com
 `Hint:` humana (`printFail`); validação de `publish` devolve o HTTP certo por
 família (400 validação, 404 dono/recurso, 429 limite). Prova:
-`tests/errors_test.kf` (5 testes: códigos do control plane, 404 opaco,
-limites/owner-gate no registry, códigos do Edge, Hint).
+`tests/errors_test.kf` (8 testes: códigos do control plane, 404 opaco,
+limites/owner-gate no registry, códigos do Edge, Hint + trava de regressao
+100% + revoke/TTL + nome|id + fail-fast de flags).
 
 ## Fase 6 — domínio próprio
 
@@ -88,8 +89,8 @@ indistinguível de "resolveu para outro lugar"), rota ativa só depois de
 VERIFIED, poda junto com serviço/dispositivo. Dono verificado antes do DNS
 (sem trabalho de rede para conta alheia). CLI: `domain add --service`,
 `domain verify`, `domain remove`; erros `KCF120`–`KCF124` com `Hint:`.
-Prova: `tests/domains_test.kf` (7 testes: validação, registro/idempotência,
-verificação sem rede, rota/poda, API, Edge via túnel real, Hint).
+Prova: `tests/domains_test.kf` (8 testes: validação, registro/idempotência,
+verificação sem rede, rota/poda, API com service preenchido, Edge via túnel real, Hint + serializadores).
 
 Falta (fatiado de propósito): TLS por SNI no Edge (o Kof não expõe — ver
 `12-tls.md`) e automação de DNS por provedor (Cloudflare/Route53). Sem isso,
@@ -115,7 +116,7 @@ respondendo (sem rollback); `deploy --plan` mostra o diff sem aplicar.
 install|status|uninstall`: gera `kofcloud-agent.service` (mesmo `connect`,
 `Restart=always`, `NoNewPrivileges`, enable manual de proposito), erro
 honesto sem systemd. So Linux; Windows/macOS na Fase 8. Prova:
-`tests/daemon_test.kf` (3 testes).
+`tests/daemon_test.kf` (7 testes).
 
 **Estado (hot-reload — debito quitado): ✅ implementado.** O Agent re-busca
 `services[]` via `/v1/connect` a cada `6×healthMs` e troca a tabela DA SESSAO
