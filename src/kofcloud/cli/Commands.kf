@@ -931,9 +931,9 @@ Int cmdServiceTokenRevoke(List<String> args) {
         println("nao logado")
         return 1
     }
-    var name = firstPositional(args)
-    var token = secondPositional(args)
-    if (name.trim().length == 0 || token.length == 0 || extraPositional(args, 2)) {
+    var name = firstPositional(args).trim()
+    var token = secondPositional(args).trim()
+    if (name.length == 0 || token.length == 0 || extraPositional(args, 2)) {
         println("uso: kof cloud service token-revoke <nome> <kfs_...|id>")
         return 1
     }

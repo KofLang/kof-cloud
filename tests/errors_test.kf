@@ -406,6 +406,19 @@ test "erros: revoke e TTL invalidos viajam como KCF061/KCF062", "errors-token" {
     var ghost = httpPostJson(controlPort, "/v1/services/token/revoke", "{\"serviceId\":\"" + serviceId + "\",\"token\":\"kfs_inexistente\"}", accountToken)
     assert(statusOf(ghost) == 404, "revoke de fantasma -> 404 opaco")
 
+    // Padding colado no token (copiar-colar com espaco) tambem e 404
+    // opaco: o servidor compara o hash exato (e o prefixo curto), entao
+    // " kfs_..." nunca casa — indistinguivel de token alheio. Por isso
+    // o CLI apara o token antes de enviar (mesma paridade de trim do
+    // nome); aqui o protocolo mostra o comportamento sem o trim.
+    var issued = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
+    assert(statusOf(issued) == 200, "token emitido")
+    var realToken = mapField(json.decode<Map<String, String>>(bodyOf(issued)), "token")
+    var padded = httpPostJson(controlPort, "/v1/services/token/revoke", "{\"serviceId\":\"" + serviceId + "\",\"token\":\" " + realToken + " \"}", accountToken)
+    assert(statusOf(padded) == 404, "revoke com padding -> 404 opaco")
+    var exact = httpPostJson(controlPort, "/v1/services/token/revoke", "{\"serviceId\":\"" + serviceId + "\",\"token\":\"" + realToken + "\"}", accountToken)
+    assert(statusOf(exact) == 200, "revoke exato -> 200")
+
     // TTL zero e lixo: 400 KCF062 (na borda, igual ao e2e autenticado).
     var zeroTtl = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"0\"}", accountToken)
     assert(statusOf(zeroTtl) == 400, "TTL zero -> 400")
