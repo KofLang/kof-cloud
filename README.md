@@ -65,7 +65,8 @@ kof run src/Main.kf connect
 
 Ou declarativo, com `kofcloud.json` na pasta (`{"services":[{"name":"site",
 "port":8080}]}` — `"build": "npm run build"` opcional por serviço, roda
-antes do publish; ver `docs/09-flows.md` §3.2):
+antes do publish; `"artifact": "dist/index.html"` opcional, conferido no
+deploy e no `--check`; ver `docs/09-flows.md` §3.2):
 
 ```bash
 kof run src/Main.kf deploy [--file kofcloud.json] [--check] [--plan]   # publica (+ verifica; --plan so mostra)

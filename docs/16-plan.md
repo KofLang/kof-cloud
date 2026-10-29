@@ -99,18 +99,21 @@ terminador externo.
 
 ## Fase 7 — deploy
 
-**Estado (slice 1 — deploy declarativo): ✅ implementado.** `kofcloud.json`
-(`--file` para outro caminho) declara `services[]` (nome, porta numero ou
-string, address/exposure/protocol/build opcionais); `kof cloud deploy` roda o
-`build` de cada serviço (quando declarado; falhou = não publica aquele) e
-publica em lote
+**Estado (slice 1 — deploy declarativo + slice 5 parcial): ✅ implementado.**
+`kofcloud.json` (`--file` para outro caminho) declara `services[]` (nome,
+porta numero ou string, address/exposure/protocol/build/artifact opcionais);
+`kof cloud deploy` roda o `build` de cada serviço (quando declarado; falhou
+= não publica aquele), confere o `artifact` declarado (ausente = não publica
+aquele, fail-fast antes do publish) e publica em lote
 (idempotente, sem remover o que nao declarou) e `kof cloud down` remove so
 os do manifesto (`--prune` poda órfãos do device). Sem artefato transferível
 — o build roda local, só o publish atravessa a rede. Parser manual com erro posicional
 (Map<String, String> nao aceita numero — ClassCast medido; exposure/protocol/
 address validados, sem default silencioso). Prova:
 `tests/deploy_test.kf` (8 testes). `deploy --check` verifica publicado +
-respondendo (sem rollback); `deploy --plan` mostra o diff sem aplicar.
+respondendo + artefato (aviso `artefato ausente`, nunca bloqueio; sem
+rollback); `deploy --plan` mostra o diff sem aplicar (com `(build)`/
+`(artifact)` inclusive no igual).
 
 **Estado (slice 3 — daemon user-level): ✅ implementado.** `kof cloud daemon
 install|status|uninstall`: gera `kofcloud-agent.service` (mesmo `connect`,
@@ -134,9 +137,11 @@ processo local) e o `doctor` ganhou a camada do tunel. Prova:
 `tests/presence_test.kf` (vivo listado, morto some, 401 sem token, filtro
 por conta).
 
-Falta fatiado (Fase 7): build/artefato (passo 1 ✅: campo `build` opcional por
-serviço no manifesto, executado antes do publish, falha não publica;
-falta: artefato transferível, cache, build remoto), auto-update. `kof cloud doctor` (somente-leitura: login, control plane,
+Falta fatiado (Fase 7): build/artefato (passos locais ✅: campo `build`
+opcional executado antes do publish, campo `artifact` opcional conferido no
+deploy (fail-fast) e no `--check`/doctor (aviso); plano marca `(build)`/
+`(artifact)`. Falta: artefato transferível, cache, build remoto),
+auto-update. `kof cloud doctor` (somente-leitura: login, control plane,
 device, servicos do manifesto) responde "onde quebrou" sem alterar nada.
 
 ## Débitos de limites (antes do deploy)
