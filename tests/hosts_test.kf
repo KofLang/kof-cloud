@@ -151,14 +151,18 @@ test "text: validatePublishLocal barra exposure/address ruins sem rede", "publis
 
 test "text: validTtlHours aceita vazio e positivos", "ttl-local" {
     // Pura, sem rede nem HOME: o cmdServiceToken chama antes de buscar
-    // servicos (fail-fast local, mesma regra do KCF062 na API).
+    // servicos (fail-fast local, mesma regra do KCF062 na API). Trim como o
+    // parseManifest: padding passa aparado; so-espacos = ausente (sem TTL).
     assert(validTtlHours("") == true, "ausente = sem expiracao")
     assert(validTtlHours("24") == true, "horas ok")
     assert(validTtlHours("1") == true, "minimo ok")
+    assert(validTtlHours("  24  ") == true, "padding passa aparado")
+    assert(validTtlHours("   ") == true, "so-espacos = sem expiracao")
     assert(validTtlHours("0") == false, "zero recusa")
+    assert(validTtlHours("  0  ") == false, "zero com padding recusa")
     assert(validTtlHours("-5") == false, "negativo recusa")
     assert(validTtlHours("lixo") == false, "texto recusa")
-    assert(validTtlHours("  ") == false, "branco recusa")
+    assert(validTtlHours("  lixo  ") == false, "texto com padding recusa")
 }
 
 test "text: validateServePorts barra porta fora da faixa", "serve-ports" {

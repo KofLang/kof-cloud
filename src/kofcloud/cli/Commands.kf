@@ -775,14 +775,15 @@ String deviceIdByNameOrId(LocalSession session, String nameOrId) {
     return ""
 }
 
-// TTL do `service token --ttl` valido? Vazio = sem expiracao (ok);
-// senao, inteiro positivo (mesma regra do KCF062 na API). Pura, sem
-// rede nem HOME — o cmdServiceToken usa antes de qualquer fetch.
+// TTL do `service token --ttl` valido? Vazio ou so-espacos = sem expiracao
+// (ok); senao, inteiro positivo aparado (mesma regra do KCF062 na API).
+// Pura, sem rede nem HOME — o cmdServiceToken usa antes de qualquer fetch.
 Bool validTtlHours(String ttlRaw) {
-    if (ttlRaw.length == 0) {
+    var trimmed = ttlRaw.trim()
+    if (trimmed.length == 0) {
         return true
     }
-    return parseIntSafe(ttlRaw, -1) > 0
+    return parseIntSafe(trimmed, -1) > 0
 }
 
 // Emite uma credencial kfs_ para um servico AUTHENTICATED. O token da conta
@@ -807,7 +808,7 @@ Int cmdServiceToken(List<String> args) {
         return 1
     }
     if (validTtlHours(ttlRaw) == false) {
-        println("ttl invalido: " + ttlRaw + " (use horas positivas, ex: --ttl 24)")
+        println("ttl invalido: " + ttlRaw.trim() + " (use horas positivas, ex: --ttl 24)")
         return 1
     }
     try {
@@ -832,15 +833,15 @@ Int cmdServiceToken(List<String> args) {
         }
         var body = mapOf()
         body.put("serviceId", target)
-        if (ttlRaw.length > 0) {
-            body.put("ttlHours", ttlRaw)
+        if (ttlRaw.trim().length > 0) {
+            body.put("ttlHours", ttlRaw.trim())
         }
         var raw = requireOk(http.post(session.controlUrl + "/v1/services/token", json.encode(body), jsonHeader(session.token)))
         var token = mapField(json.decode<Map<String, String>>(raw), "token")
         println("Token de acesso (" + name + "):")
         println(token)
-        if (ttlRaw.length > 0) {
-            println("Expira em " + ttlRaw + "h — depois disso, 401 ate emitir outro.")
+        if (ttlRaw.trim().length > 0) {
+            println("Expira em " + ttlRaw.trim() + "h — depois disso, 401 ate emitir outro.")
         }
         println("")
         println("Uso:")
@@ -1081,8 +1082,8 @@ Int cmdLogs(List<String> args) {
         println("uso: kof cloud logs [--tail <linhas>]")
         return 1
     }
-    if (tailRaw.length > 0) {
-        var n = parseIntSafe(tailRaw, -1)
+    if (tailRaw.trim().length > 0) {
+        var n = parseIntSafe(tailRaw.trim(), -1)
         if (n <= 0) {
             println("uso: kof cloud logs [--tail <linhas>]")
             return 1
@@ -1169,9 +1170,9 @@ Int cmdServe(List<String> args) {
         println("flag repetida — informe uma so vez: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N]")
         return 1
     }
-    var controlPort = parseIntSafe(flagValue(args, "--control-port"), 8080)
-    var tunnelPort = parseIntSafe(flagValue(args, "--tunnel-port"), 7000)
-    var httpPort = parseIntSafe(flagValue(args, "--http-port"), 8081)
+    var controlPort = parseIntSafe(flagValue(args, "--control-port").trim(), 8080)
+    var tunnelPort = parseIntSafe(flagValue(args, "--tunnel-port").trim(), 7000)
+    var httpPort = parseIntSafe(flagValue(args, "--http-port").trim(), 8081)
     var statePath = flagValue(args, "--state")
     if (statePath.length == 0) {
         statePath = kofcloudHome() + "/control-state.json"
