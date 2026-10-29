@@ -81,9 +81,9 @@ kofcloud.json:
 Campos por serviço: `name` (obrigatório), `port` (número ou string),
 `address` (default 127.0.0.1; só loopback), `exposure` (default PUBLIC),
 `protocol` (default http; único aceito no MVP), `build` (opcional: comando
-de shell rodado antes do publish, ex. `"build": "npm run build"`; ausente
-ou vazio = sem build), `artifact` (opcional: caminho local que o `--check`
-confere, ex. `"artifact": "dist/index.html"`; ausente ou vazio = sem
+de shell rodado antes do publish, ex. `"build": "npm run build"`; ausente,
+vazio ou só-espaços = sem build), `artifact` (opcional: caminho local que o `--check`
+confere, ex. `"artifact": "dist/index.html"`; ausente, vazio ou só-espaços = sem
 checagem — aviso de staleness, nunca bloqueio). Todos validados no parse
 com erro posicional — nada com default silencioso perigoso.
 

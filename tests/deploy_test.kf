@@ -223,6 +223,12 @@ test "deploy: build opcional no manifesto executa antes do publish", "deploy-bui
     assert(withArtifact.get(0).build == "npm run build", "build intacto")
     var emptyArtifact = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"artifact\":\"\"}]}")
     assert(emptyArtifact.get(0).artifact == "", "vazio vira ausente")
+    // So-espacos equivale a ausente (trim no parse): nao marca (build)/
+    // (artifact) no plan, nao executa shell vazio, nao barra o publish.
+    var blankBuild = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"build\":\"   \"}]}")
+    assert(blankBuild.get(0).build == "", "build so-espacos vira ausente")
+    var blankArtifact = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"artifact\":\"   \"}]}")
+    assert(blankArtifact.get(0).artifact == "", "artifact so-espacos vira ausente")
     // artifactProblem pura (so File().exists(), sem rede/HOME): sem
     // artifact = "" (sem checagem); caminho existente = ""; inexistente =
     // problema formatado igual ao do --check (mesma funcao nos dois).

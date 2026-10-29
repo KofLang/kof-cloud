@@ -251,15 +251,19 @@ List<ManifestService> parseManifest(String raw) {
         // `deploy` ANTES do publish (ex.: "npm run build", "make dist").
         // Ausente = sem build (comportamento atual, inalterado); presente e
         // executado como esta — sem sandbox no MVP (mesma confianca do
-        // `connect` local). Vazio ("" explicito) equivale a ausente.
-        var build = manifestField(entry, "build")
+        // `connect` local). Vazio ou so-espacos ("", "   ") equivale a
+        // ausente (trim no parse: shell ignora espacos sobrando, e o plan
+        // nao deve marcar "(build)" por espacos).
+        var build = manifestField(entry, "build").trim()
         // Artefato opcional (Fase 7, slice 5 passo 3): caminho local que o
         // `deploy --check` (e o `doctor`, via verifyDeployment) confere —
-        // ex.: "dist/index.html" depois de "npm run build". Ausente ou vazio
-        // = sem checagem (comportamento atual, inalterado). E so um aviso de
-        // staleness ("o arquivo sumiu? rode o deploy de novo"), nunca
-        // bloqueio: o check nao sabe reconstruir, so apontar.
-        var artifact = manifestField(entry, "artifact")
+        // ex.: "dist/index.html" depois de "npm run build". Ausente, vazio
+        // ou so-espacos = sem checagem (comportamento atual, inalterado).
+        // E so um aviso de staleness ("o arquivo sumiu? rode o deploy de
+        // novo"), nunca bloqueio: o check nao sabe reconstruir, so apontar.
+        // Trim no parse: caminho com espaco sobrando nunca existiria no
+        // disco e barraria o publish a toa (fail-fast do passo 5).
+        var artifact = manifestField(entry, "artifact").trim()
         if (name.length == 0) {
             throw "servico sem nome na posicao " + intToString(index)
         }
