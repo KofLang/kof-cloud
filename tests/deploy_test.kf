@@ -150,6 +150,24 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
         bigPort = e
     }
     assert(bigPort == "servico \"site\" sem porta valida (1-65535)", "teto com nome e faixa")
+
+    // Espacos sobrando sao aparados (manifesto escrito a mao): nome,
+    // porta-string, address, exposure e protocol com padding passam
+    // aparados; nome so-espacos falha como sem nome (posicional), em vez
+    // de publicar um servico em branco.
+    var padded = parseManifest("{\"services\":[{\"name\":\"  site  \",\"port\":\" 8080 \",\"address\":\" localhost \",\"exposure\":\" PRIVATE \",\"protocol\":\" http \"}]}")
+    assert(padded.get(0).name == "site", "nome aparado")
+    assert(padded.get(0).port == 8080, "porta string com espaco aceita")
+    assert(padded.get(0).address == "localhost", "address aparado")
+    assert(padded.get(0).exposure == "PRIVATE", "exposure aparada")
+    assert(padded.get(0).protocol == "http", "protocol aparado")
+    var blankName = ""
+    try {
+        parseManifest("{\"services\":[{\"name\":\"   \",\"port\":8080}]}")
+    } catch (String e) {
+        blankName = e
+    }
+    assert(blankName == "servico sem nome na posicao 0", "nome so-espacos falha")
 }
 
 test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {

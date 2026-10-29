@@ -84,7 +84,9 @@ Campos por serviço: `name` (obrigatório), `port` (número ou string),
 de shell rodado antes do publish, ex. `"build": "npm run build"`; ausente,
 vazio ou só-espaços = sem build), `artifact` (opcional: caminho local que o `--check`
 confere, ex. `"artifact": "dist/index.html"`; ausente, vazio ou só-espaços = sem
-checagem — aviso de staleness, nunca bloqueio). Todos validados no parse
+checagem — aviso de staleness, nunca bloqueio). Campos de texto com
+trim (espaços sobrando em `name`/`port`/`address`/`exposure`/`protocol` são
+aparados; `name` só-espaços falha como sem nome). Todos validados no parse
 com erro posicional — nada com default silencioso perigoso.
 
  1. usuário: kof cloud deploy [--file kofcloud.json] [--check] [--plan]

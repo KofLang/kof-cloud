@@ -221,9 +221,15 @@ List<ManifestService> parseManifest(String raw) {
     var out = listOf<ManifestService>()
     var index = 0
     for (var entry in splitManifestObjects(servicesRaw)) {
-        var name = manifestField(entry, "name")
-        var port = parseIntSafe(manifestField(entry, "port"), 0)
-        var address = manifestField(entry, "address")
+        // Trim nos campos de texto: JSON permite "  site  " e o manifesto e
+        // escrito a mao — espacos sobrando nao devem virar nome com espaco,
+        // nem " PUBLIC " falhar como exposure invalida quando o usuario
+        // claramente quis dizer PUBLIC. Mesma regra do build/artifact
+        // (commit do trim): aparado no parse, erro posicional honesto segue
+        // mostrando o valor aparado.
+        var name = manifestField(entry, "name").trim()
+        var port = parseIntSafe(manifestField(entry, "port").trim(), 0)
+        var address = manifestField(entry, "address").trim()
         if (address.length == 0) {
             address = "127.0.0.1"
         }
@@ -233,7 +239,7 @@ List<ManifestService> parseManifest(String raw) {
         if (validLocalAddress(address) == false) {
             throw "servico \"" + name + "\" com address invalido: " + address
         }
-        var exposure = manifestField(entry, "exposure")
+        var exposure = manifestField(entry, "exposure").trim()
         if (exposure.length == 0) {
             exposure = "PUBLIC"
         }
@@ -245,7 +251,7 @@ List<ManifestService> parseManifest(String raw) {
         }
         // Mesma regra da API (KCF046): o tunel do MVP so fala HTTP. Falha
         // posicional no parse, antes de publicar qualquer coisa.
-        var protocol = manifestField(entry, "protocol")
+        var protocol = manifestField(entry, "protocol").trim()
         if (protocol.length == 0) {
             protocol = "http"
         }
