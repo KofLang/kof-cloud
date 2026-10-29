@@ -162,6 +162,10 @@ test "erros: device resolve por nome ou id (publish --device)", "errors-device" 
     // aceitam os mesmos nomes; espacos sobrando nao quebram a resolucao).
     assert(deviceIdByNameOrId(session, "  notebook  ") == nbId, "nome com espaco resolve")
     assert(deviceIdByNameOrId(session, "  " + nbId + "  ") == nbId, "id com espaco passa direto")
+    // So-espacos nao resolve nada (""): os guardas do device revoke/suspend/
+    // unsuspend pedem `uso` antes de qualquer fetch, igual aos comandos de
+    // servico (unpublish/status/token/token-revoke ja faziam com trim).
+    assert(deviceIdByNameOrId(session, "   ") == "", "so-espacos nao resolve")
 
     // E o id resolvido opera de verdade: suspende por nome via API (o que
     // os comandos fazem depois de resolver).

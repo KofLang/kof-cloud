@@ -361,7 +361,7 @@ Int cmdDeviceRevoke(List<String> args) {
         return 1
     }
     var deviceArg = firstPositional(args)
-    if (deviceArg.length == 0) {
+    if (deviceArg.trim().length == 0) {
         println("uso: kof cloud device revoke <nome|deviceId>")
         return 1
     }
@@ -395,7 +395,7 @@ Int cmdDeviceSuspend(List<String> args) {
         return 1
     }
     var deviceArg = firstPositional(args)
-    if (deviceArg.length == 0) {
+    if (deviceArg.trim().length == 0) {
         println("uso: kof cloud device suspend <nome|deviceId>")
         return 1
     }
@@ -429,7 +429,7 @@ Int cmdDeviceUnsuspend(List<String> args) {
         return 1
     }
     var deviceArg = firstPositional(args)
-    if (deviceArg.length == 0) {
+    if (deviceArg.trim().length == 0) {
         println("uso: kof cloud device unsuspend <nome|deviceId>")
         return 1
     }
@@ -683,7 +683,7 @@ Int cmdServiceSuspend(List<String> args) {
         return 1
     }
     var name = firstPositional(args)
-    if (name.length == 0 || extraPositional(args, 1)) {
+    if (name.trim().length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud service suspend <nome>")
         return 1
     }
@@ -711,7 +711,7 @@ Int cmdServiceUnsuspend(List<String> args) {
         return 1
     }
     var name = firstPositional(args)
-    if (name.length == 0 || extraPositional(args, 1)) {
+    if (name.trim().length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud service unsuspend <nome>")
         return 1
     }
