@@ -25,11 +25,13 @@ record ManifestService(String name, String address, Int port, String exposure, S
 // Resultado de rodar o build de UM servico: ok=true, comando executado;
 // ok=false traz o motivo ja formatado ("falhou (exit N)" ou "nao executou").
 // Pura na decisao (so IO: executa o comando via process.run). Comando vazio
-// (sem "build" no manifesto) = skip honesto, nao executa nada.
+// ou so-espacos (sem "build" no manifesto, ou "build": "   ") = skip honesto,
+// nao executa nada. Defesa em profundidade com o trim do parseManifest:
+// quem chamar direto com espacos recebe o mesmo skip, sem tocar o shell.
 record BuildResult(Bool ok, String detail)
 
 BuildResult runServiceBuild(String buildCmd) {
-    if (buildCmd.length == 0) {
+    if (buildCmd.trim().length == 0) {
         return BuildResult(true, "sem build")
     }
     try {
@@ -112,10 +114,10 @@ List<String> diffDeployment(List<Service> live, List<ManifestService> wanted) {
             }
         }
         var buildMark = ""
-        if (item.build.length > 0) {
+        if (item.build.trim().length > 0) {
             buildMark = " (build)"
         }
-        if (item.artifact.length > 0) {
+        if (item.artifact.trim().length > 0) {
             buildMark = buildMark + " (artifact)"
         }
         if (found == false) {
@@ -140,17 +142,20 @@ List<String> diffDeployment(List<Service> live, List<ManifestService> wanted) {
     return out
 }
 
-// Devolve "" quando nao ha nada a apontar (sem artifact declarado ou
-// arquivo presente); senao devolve o problema ja formatado
-// `nome: artefato ausente (caminho) — rode: kof cloud deploy`.
+// Devolve "" quando nao ha nada a apontar (sem artifact declarado, vazio
+// ou so-espacos, ou arquivo presente); senao devolve o problema ja
+// formatado `nome: artefato ausente (caminho) — rode: kof cloud deploy`.
 // Pura na decisao (so IO: File().exists()); usada pelo deploy pos-build
 // (fail-fast) e pelo verifyDeployment (--check/doctor). Precedente:
 // runServiceBuild (BuildResult) e diffDeployment (pura + testavel).
+// O trim espelha o parseManifest: caminho so-espacos nunca existiria no
+// disco e barraria o publish a toa — trata como ausente, sem checar.
 String artifactProblem(String serviceName, String artifact) {
-    if (artifact.length == 0 || File(artifact).exists()) {
+    var trimmed = artifact.trim()
+    if (trimmed.length == 0 || File(trimmed).exists()) {
         return ""
     }
-    return serviceName + ": artefato ausente (" + artifact + ") — rode: kof cloud deploy"
+    return serviceName + ": artefato ausente (" + trimmed + ") — rode: kof cloud deploy"
 }
 
 // Confere que cada servico do manifesto esta publicado (existe no control
@@ -501,7 +506,9 @@ Int cmdDeploy(List<String> args) {
         // Build antes do publish (Fase 7, slice 5): gera o artefato local
         // antes de expor. Falhou = nao publica esse servico (fail-fast por
         // servico: os demais seguem; o parcial aparece no relatorio).
-        if (wanted.build.length > 0) {
+        // Mesmo com o trim do parse, checa espacos aqui (defesa em
+        // profundidade: ManifestService pode vir de outra via no futuro).
+        if (wanted.build.trim().length > 0) {
             var built = runServiceBuild(wanted.build)
             if (built.ok == false) {
                 printFail("falha no build de " + wanted.name, built.detail)

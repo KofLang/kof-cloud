@@ -229,6 +229,12 @@ test "deploy: build opcional no manifesto executa antes do publish", "deploy-bui
     assert(blankBuild.get(0).build == "", "build so-espacos vira ausente")
     var blankArtifact = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"artifact\":\"   \"}]}")
     assert(blankArtifact.get(0).artifact == "", "artifact so-espacos vira ausente")
+    // Defesa em profundidade (puras toleram direto, sem passar pelo parse):
+    // so-espacos comporta-se como ausente em run/build, plan e check.
+    var blankSkipped = runServiceBuild("   ")
+    assert(blankSkipped.ok == true, "build direto so-espacos: skip")
+    assert(blankSkipped.detail == "sem build", "build direto so-espacos: motivo")
+    assert(artifactProblem("site", "   ") == "", "artifact direto so-espacos: nada a apontar")
     // artifactProblem pura (so File().exists(), sem rede/HOME): sem
     // artifact = "" (sem checagem); caminho existente = ""; inexistente =
     // problema formatado igual ao do --check (mesma funcao nos dois).
