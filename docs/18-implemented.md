@@ -77,7 +77,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   PENDING com instrução CNAME, verificado por `net.resolve` contra os destinos
   esperados do Edge (comparação exata; NXDOMAIN/falha = `KCF124` opaco), rota
   ativa só após VERIFIED; conta alheia recebe o mesmo `404` opaco; poda junto
-  com serviço/dispositivo; persistido no estado (`domains_test.kf`, 7 testes).
+  com serviço/dispositivo; persistido no estado (`domains_test.kf`, 8 testes).
   Sem TLS/SNI neste slice (terminador externo — ver `12-tls.md`).
 * **Observabilidade mínima (slice 1)**: `edge/Metrics.kf` conta túneis
   aceitos/recusados por motivo, sessões abertas, requisições ok/negadas por
@@ -118,20 +118,25 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   `serviceId` no Edge, `429 KCF108` + `Retry-After` antes do OPEN, liberação
   ao fim do relay, isolamento por serviço, métrica `_service_overloaded`
   (`conns_test.kf`, 2 testes).
-* **Deploy declarativo (Fase 7, slice 1 + slice 5 passo 1)**: `kofcloud.json` declara
+* **Deploy declarativo (Fase 7, slice 1 + slice 5)**: `kofcloud.json` declara
   `services[]` (nome, porta numero ou string, address/exposure/protocol/build
   opcionais); `kof cloud deploy` roda o `build` de cada serviço (quando
   declarado) antes do publish em lote (idempotente; build falhou = não publica
   aquele serviço) e `kof cloud down` remove
   só os listados — nada fora do manifesto é tocado; parser manual com erro
-  posicional (`deploy_test.kf`, 5 testes). `deploy --check` confirma publicado
-  + respondendo (mesma regra do Agent; sem rollback). O `doctor` usa o mesmo
+  posicional (`deploy_test.kf`, 8 testes). `deploy --plan` mostra o diff sem
+  aplicar (`+` novo, `~` atualiza, `=` igual, `-` fora do manifesto; com
+  `(build)` quando o serviço declara build — inclusive no igual, porque o
+  deploy executa o build antes de cada publish, mesmo o idempotente).
+  `deploy --check` confirma publicado + respondendo (mesma regra do Agent;
+  sem rollback) e acusa drift de config antes da resposta (porta/address/
+  exposure/protocol diferentes). O `doctor` usa o mesmo
   `verifyDeployment` na etapa de serviços (não publicado → drift → sem
   resposta), então `--check` e `doctor` acusam igual.
 * **Daemon user-level (Fase 7, slice 3)**: `cli/Daemon.kf` gera
   `kofcloud-agent.service` (mesmo `connect`, `Restart=always`,
   `NoNewPrivileges`, enable manual); `status`/`uninstall`; erro honesto sem
-  systemd; só Linux (`daemon_test.kf`, 3 testes).
+  systemd; só Linux (`daemon_test.kf`, 7 testes).
 * **Parada limpa** do agente (`disconnect` via arquivo-sentinela) e da
   plataforma (`serve`, via fechamento do `Listener`).
 * **Hot-reload de serviço (debito quitado)**: refresher via `/v1/connect`
