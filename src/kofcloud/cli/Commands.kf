@@ -1186,6 +1186,19 @@ String validateServePorts(Int controlPort, Int tunnelPort, Int httpPort) {
     return ""
 }
 
+// Caminho do estado do `serve --state`: ausente, vazio ou so-espacos =
+// default (`~/.kofcloud/control-state.json`); senao, o valor aparado.
+// Pura, sem HOME nem rede — o default vive aqui como o chamador ja fazia
+// inline (precedente: resolveLoginInputs/resolveDaemonControl). Sem isso,
+// `--state "   "` pulava o default (length > 0) e virava path invalido.
+String resolveStatePath(String flagRaw) {
+    var trimmed = flagRaw.trim()
+    if (trimmed.length == 0) {
+        return kofcloudHome() + "/control-state.json"
+    }
+    return trimmed
+}
+
 // Portas: control HTTP, tunel e HTTP publico do edge.
 Int cmdServe(List<String> args) {
     // Flag solta vira string vazia no parseIntSafe (default silencioso);
@@ -1201,10 +1214,7 @@ Int cmdServe(List<String> args) {
     var controlPort = parseIntSafe(flagValue(args, "--control-port").trim(), 8080)
     var tunnelPort = parseIntSafe(flagValue(args, "--tunnel-port").trim(), 7000)
     var httpPort = parseIntSafe(flagValue(args, "--http-port").trim(), 8081)
-    var statePath = flagValue(args, "--state")
-    if (statePath.length == 0) {
-        statePath = kofcloudHome() + "/control-state.json"
-    }
+    var statePath = resolveStatePath(flagValue(args, "--state"))
     var tunnelSecret = config.str("kofcloud.tunnelSecret", "")
     var maxBytes = parseIntSafe(config.str("kofcloud.maxBodyBytes", "16777216"), 16777216)
 

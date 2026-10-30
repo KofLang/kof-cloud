@@ -287,3 +287,13 @@ test "text: resolveLoginInputs apara sem tocar na senha", "login-trim" {
     assert(clean.control == "http://127.0.0.1:8080", "control limpo passa direto")
     assert(clean.device == "notebook", "device limpo passa direto")
 }
+
+test "text: resolveStatePath apara e cai no default", "serve-state" {
+    // Pura (precedente: resolveLoginInputs): --state ausente/vazio/
+    // so-espacos = default; padding apara; caminho limpo passa direto.
+    var def = kofcloudHome() + "/control-state.json"
+    assert(resolveStatePath("") == def, "ausente cai no default")
+    assert(resolveStatePath("   ") == def, "so-espacos cai no default")
+    assert(resolveStatePath("  /tmp/estado.json  ") == "/tmp/estado.json", "padding apara")
+    assert(resolveStatePath("/tmp/estado.json") == "/tmp/estado.json", "limpo passa direto")
+}
