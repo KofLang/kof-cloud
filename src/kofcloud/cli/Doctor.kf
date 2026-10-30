@@ -146,7 +146,11 @@ Int cmdDoctor(List<String> args) {
         println("uso: kof cloud doctor [--file kofcloud.json]")
         return 1
     }
-    var file = flagValue(args, "--file")
+    // Mesma regra do deploy/down: ausente/vazio/so-espacos = manifesto
+    // padrao; senao, o valor aparado (resolveManifestPath, em Deploy.kf).
+    // Sem isso, `--file "   "` pulava o default no doctorCheck e lia path
+    // invalido (reportava "manifesto ausente" em vez do kofcloud.json).
+    var file = resolveManifestPath(flagValue(args, "--file"))
     var report = doctorCheck(file)
     for (var line in report.lines) {
         println(line)
