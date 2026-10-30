@@ -50,12 +50,16 @@ String defaultManifestPath() {
 }
 
 // Resolve o caminho do manifesto: --file quando dado, senao o default.
-// Pura, testavel sem HOME/rede (precedente: diffDeployment).
+// Pura, testavel sem HOME/rede (precedente: diffDeployment). Ausente,
+// vazio ou so-espacos = default; senao, o valor aparado (precedente:
+// resolveStatePath no serve). Sem isso, `--file "   "` pulava o default
+// e virava path invalido ("nao encontrado") em vez do manifesto padrao.
 String resolveManifestPath(String flagPath) {
-    if (flagPath.length == 0) {
+    var trimmed = flagPath.trim()
+    if (trimmed.length == 0) {
         return defaultManifestPath()
     }
-    return flagPath
+    return trimmed
 }
 
 // Resultado de carregar o manifesto: ok=true traz services; ok=false

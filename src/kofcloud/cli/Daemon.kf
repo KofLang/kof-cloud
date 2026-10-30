@@ -67,9 +67,12 @@ String daemonKofBin() {
 
 // Qual URL o daemon aponta: --control quando dado, senao a da sessao.
 // Pura, testavel sem HOME/rede (precedente: resolveManifestPath).
+// So-espacos = ausente (cai na sessao); senao, o valor aparado, para a
+// unit nunca gravar URL com espaco colado (precedente: resolveStatePath).
 String resolveDaemonControl(String sessionControlUrl, String flagControl) {
-    if (flagControl.length > 0) {
-        return flagControl
+    var trimmed = flagControl.trim()
+    if (trimmed.length > 0) {
+        return trimmed
     }
     return sessionControlUrl
 }

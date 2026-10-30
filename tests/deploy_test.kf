@@ -503,6 +503,8 @@ test "deploy: loadManifestFile distingue ausente, invalido e valido", "deploy-lo
     // Pura na decisao (so IO: ler + parsear) — cobre o caminho que
     // cmdDeploy/cmdDown usam antes de qualquer rede/sessao.
     assert(resolveManifestPath("") == "kofcloud.json", "vazio vira default")
+    assert(resolveManifestPath("   ") == "kofcloud.json", "so-espacos vira default")
+    assert(resolveManifestPath("  /tmp/x.json  ") == "/tmp/x.json", "padding apara")
     assert(resolveManifestPath("/tmp/x.json") == "/tmp/x.json", "flag passa direto")
     var missing = loadManifestFile("/tmp/kofcloud-deploy-ausente-" + crypto.randomHex(8) + ".json")
     assert(missing.ok == false, "inexistente falha")

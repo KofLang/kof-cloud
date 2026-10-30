@@ -78,4 +78,6 @@ test "daemon: resolve controle da sessao salvo flag", "daemon-control" {
     assert(resolveDaemonControl("http://sessao:8080", "") == "http://sessao:8080", "sem flag usa sessao")
     assert(resolveDaemonControl("http://sessao:8080", "http://flag:9000") == "http://flag:9000", "flag vence sessao")
     assert(resolveDaemonControl("", "http://flag:9000") == "http://flag:9000", "flag sozinha vale")
+    assert(resolveDaemonControl("http://sessao:8080", "   ") == "http://sessao:8080", "so-espacos cai na sessao")
+    assert(resolveDaemonControl("http://sessao:8080", "  http://flag:9000  ") == "http://flag:9000", "padding apara")
 }
