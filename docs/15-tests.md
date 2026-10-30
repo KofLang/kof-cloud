@@ -61,7 +61,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | E2 | múltiplos serviços | `tests/e2e_multiservice_test.kf` | 3 hostnames no mesmo túnel, cada um na sua porta; derrubar um não afeta os outros |
 | E3 | AUTHENTICATED | `tests/e2e_authenticated_test.kf` | 401 sem credencial (com `WWW-Authenticate`), 401 com token inválido, 401 com token da conta, 200 com `kfs_` do serviço; PUBLIC segue livre; revoke via HTTP (alheio 404, **id curto único 200**); inventario sem valores (alheio/inexistente 404); TTL futuro autoriza, TTL inválido/zero 400 `KCF062`, inventario marca `expiresAt` |
 | E4 | control plane (HTTP real) | `tests/control_test.kf` (2 testes) | ciclo conta → device → publish → list → revoke + 401 sem token |
-| E5 | erros R6 fim a fim | `tests/errors_test.kf` (5 testes, `errors-edge`) | códigos no Edge via túnel real (KCF100/101/102, offline, conteúdo) |
+| E5 | erros R6 fim a fim | `tests/errors_test.kf` (8 testes, tag `errors-edge` para o e2e) | códigos no Edge via túnel real (KCF100/101/102, offline, conteúdo) |
 | E6 | domínio próprio fim a fim | `tests/domains_test.kf` (`domains-e2e`) | hostname próprio roteia junto do nativo após VERIFIED |
 | E7 | métricas fim a fim | `tests/metrics_test.kf` (`metrics-e2e`) | contagem ok/negada + bytes com túnel real |
 | E8 | rate limit fim a fim | `tests/ratelimit_test.kf` (`ratelimit`) | 4º pedido → 429 mesmo com serviço saudável |
