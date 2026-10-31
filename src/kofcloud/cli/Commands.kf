@@ -1226,7 +1226,7 @@ Int cmdServe(List<String> args) {
     var portsError = validateServePorts(controlPort, tunnelPort, httpPort)
     if (portsError.length > 0) {
         println(portsError)
-        println("uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] (portas 1-65535)")
+        println("uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] (portas 1-65535)")
         return 1
     }
 
