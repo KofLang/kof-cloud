@@ -58,3 +58,10 @@ O Kof **não tem ACME**. Então:
 `TLS001` — **TLS em socket cru e ACME não existem no Kof.** O Edge valida o
 caminho HTTPS apenas via `web.app().listenSecure` no target JVM. Ver
 `12-kof-apis.md` §Lacunas e `16-limitations.md`.
+
+> **Plano a jusante:** o endurecimento de TLS do próprio Kof (SNI por
+> hostname, hot-reload de certificado, cliente `kof.http` verificador,
+> ACME DNS-01) está desenhado em `Kof4j/docs/development/future/PLAN-TLS-HARDENING.md`
+> (só plano, zero código; promoção exige decisão da mantenedora). Quando as
+> fatias 1–4 pousarem na JVM, a Fase 9 do KofCloud (slices 1–3 em
+> `16-plan.md`) ganha o primitivo que falta hoje.
