@@ -29,10 +29,6 @@ String sessionPath() {
     return kofcloudHome() + "/session.json"
 }
 
-String servicesPath() {
-    return kofcloudHome() + "/services.json"
-}
-
 // O Kof nao expoe sinais nem watch de arquivo (docs/17-limitations.md L3).
 // `disconnect` escreve este arquivo e o agente o observa por polling no
 // heartbeat — o mecanismo honesto disponivel para pedir parada.
@@ -74,10 +70,6 @@ void saveIdentity(LocalIdentity identity) {
 
 void saveSession(LocalSession session) {
     writeTextTo(sessionPath(), json.encode(session))
-}
-
-Bool loggedIn() {
-    return loadIdentity() != null && loadSession() != null
 }
 
 // O control plane roda sobre `web.app()`, e o runtime do Kof reserva o header
