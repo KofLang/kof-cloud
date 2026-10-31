@@ -75,7 +75,7 @@ class Registry {
     Int activeDeviceCount(String accountId) {
         var count = 0
         for (var device in this.devices) {
-            if (device.accountId == accountId && device.status == "ACTIVE") {
+            if (device.accountId == accountId && deviceIsActive(device)) {
                 count = count + 1
             }
         }

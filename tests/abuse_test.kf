@@ -5,6 +5,7 @@ import kofcloud.edge.EdgeState
 import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
 import kofcloud.model.Audit
+import kofcloud.model.Device
 import kofcloud.store.Store
 import testkit.Support
 
@@ -109,6 +110,11 @@ test "suspensao: dispositivo recusado no tunel, nada removido", "abuse-device" {
     if (gone != null) {
         assert(gone.status == "REVOKED", "revogado vence suspensao")
     }
+    // deviceIsActive delega no construtor (fonte unica do literal):
+    // ativo recem-registrado, inativo suspenso.
+    var fresh = registry.registerDevice(mel, "nb2", "pk2")
+    assert(deviceIsActive(fresh) == true, "novo device e ativo")
+    assert(deviceIsActive(Device("x", mel.id, "y", "pk", deviceSuspended(), 0, 0)) == false, "suspenso nao e ativo")
 }
 
 test "suspensao: Edge recusa tunel suspenso e esconde rota; audit via HTTP", "abuse-e2e" {

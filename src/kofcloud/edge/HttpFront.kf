@@ -3,6 +3,7 @@ package kofcloud.edge
 import kofcloud.edge.Http
 import kofcloud.edge.Metrics
 import kofcloud.edge.Relay
+import kofcloud.model.Device
 import kofcloud.model.Errors
 import kofcloud.model.Service
 
@@ -92,7 +93,7 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         return
     }
     var ownerStatus = owner.status
-    if (ownerStatus != "ACTIVE") {
+    if (ownerStatus != deviceActive()) {
         state.unbind(service.deviceId, session.sessionId)
         session.close()
         var gone = errorResponse(503, errDeviceOffline())
