@@ -296,4 +296,11 @@ test "text: resolveStatePath apara e cai no default", "serve-state" {
     assert(resolveStatePath("   ") == def, "so-espacos cai no default")
     assert(resolveStatePath("  /tmp/estado.json  ") == "/tmp/estado.json", "padding apara")
     assert(resolveStatePath("/tmp/estado.json") == "/tmp/estado.json", "limpo passa direto")
+    // Guardas do cmdServe (precedente: flag-missing/flag-dup): --state
+    // solto ou repetido barra antes de qualquer listener, igual as portas.
+    assert(flagMissingValue(listOf("--state"), "--state") == true, "state solto barra")
+    assert(flagMissingValue(listOf("--state", "--control-port"), "--state") == true, "state seguido de flag barra")
+    assert(flagMissingValue(listOf("--state", "/tmp/x.json"), "--state") == false, "state com valor ok")
+    assert(flagDuplicated(listOf("--state", "a", "--state", "b"), "--state") == true, "state repetido barra")
+    assert(flagDuplicated(listOf("--state", "a"), "--state") == false, "state unico ok")
 }

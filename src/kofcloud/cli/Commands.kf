@@ -1203,12 +1203,14 @@ String resolveStatePath(String flagRaw) {
 Int cmdServe(List<String> args) {
     // Flag solta vira string vazia no parseIntSafe (default silencioso);
     // duplicada leria a primeira. Ambas rejeitadas antes de validar faixa.
-    if (flagMissingValue(args, "--control-port") || flagMissingValue(args, "--tunnel-port") || flagMissingValue(args, "--http-port")) {
-        println("uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] (portas 1-65535)")
+    // --state segue a mesma regra (precedente: --file/--control/--device):
+    // solto caia no default em silencio, duplicado lia a primeira.
+    if (flagMissingValue(args, "--control-port") || flagMissingValue(args, "--tunnel-port") || flagMissingValue(args, "--http-port") || flagMissingValue(args, "--state")) {
+        println("uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] (portas 1-65535)")
         return 1
     }
-    if (flagDuplicated(args, "--control-port") || flagDuplicated(args, "--tunnel-port") || flagDuplicated(args, "--http-port")) {
-        println("flag repetida — informe uma so vez: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N]")
+    if (flagDuplicated(args, "--control-port") || flagDuplicated(args, "--tunnel-port") || flagDuplicated(args, "--http-port") || flagDuplicated(args, "--state")) {
+        println("flag repetida — informe uma so vez: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>]")
         return 1
     }
     var controlPort = parseIntSafe(flagValue(args, "--control-port").trim(), 8080)

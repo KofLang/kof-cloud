@@ -46,6 +46,7 @@ test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
     assert(help.indexOf("deploy [--file kofcloud.json] [--check] [--plan]") >= 0, "deploy documenta flags")
     assert(help.indexOf("build/artifact") >= 0, "deploy anuncia build+artifact do manifesto")
     assert(help.indexOf("(build)/(artifact)") >= 0, "plan anuncia marcas por linha")
+    assert(help.indexOf("serve [--control-port 8080] [--tunnel-port 7000] [--http-port 8081] [--state <arquivo>]") >= 0, "serve anuncia --state (README ja documentava)")
 }
 
 test "daemon: paths ficam no espaco do usuario", "daemon-paths" {
