@@ -41,9 +41,9 @@ String statusSuspended() {
 }
 
 Bool statusIsSuspended(String status) {
-    return status == "SUSPENDED"
+    return status == statusSuspended()
 }
 
 Bool statusIsRoutable(String status) {
-    return status == "ONLINE" || status == "DEGRADED" || status == "UNKNOWN"
+    return status == statusOnline() || status == statusDegraded() || status == statusUnknown()
 }

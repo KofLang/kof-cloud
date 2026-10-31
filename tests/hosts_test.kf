@@ -55,11 +55,16 @@ test "exposicao: PRIVATE nao e roteavel" {
     assert(exposureName(exposureFrom("qualquer")) == "PUBLIC", "default public")
 }
 
-test "status: OFFLINE nao roteia, ONLINE e UNKNOWN roteiam" {
+test "status: OFFLINE nao roteia, ONLINE e UNKNOWN roteiam", "status-routable" {
     assert(statusIsRoutable("ONLINE") == true, "online")
     assert(statusIsRoutable("UNKNOWN") == true, "unknown ainda tenta")
     assert(statusIsRoutable("DEGRADED") == true, "degraded")
     assert(statusIsRoutable("OFFLINE") == false, "offline")
+    // Os predicados delegam nos construtores (fonte unica do literal):
+    // statusDegraded() tinha zero chamadores antes disso.
+    assert(statusIsRoutable(statusDegraded()) == true, "helper degradado roteia")
+    assert(statusIsRoutable(statusOnline()) == true, "helper online roteia")
+    assert(statusIsSuspended(statusSuspended()) == true, "helper suspenso casa")
 }
 
 test "text: parseIntSafe aceita digito e recusa lixo" {
