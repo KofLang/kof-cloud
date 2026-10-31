@@ -112,6 +112,7 @@ domain verify <hostname>                 (confere o DNS e ativa a rota)
 domain remove <hostname>
 deploy [--file kofcloud.json] [--check] [--plan]  (roda build + publica + verifica; --plan so mostra o diff e marca (build)/(artifact))
 down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove orfaos)
+daemon install|status|uninstall   (systemd --user, sem root)
 doctor [--file kofcloud.json]   (diagnostico: login, control, device, tunel, servicos)
 audit                        (trilha de auditoria da conta)
 logs [--tail <linhas>]      (log local do agent, ultimas N linhas; teto 256 KiB)
