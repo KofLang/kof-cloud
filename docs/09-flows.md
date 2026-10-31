@@ -116,8 +116,11 @@ kof cloud doctor [--file kofcloud.json]
   1. login local presente? (senao: FALHA e para)
   2. GET /v1/health com o token? (control alcancavel + autenticado?)
   3. device registrado no control plane?
-  4. para cada servico do manifesto (se houver kofcloud.json):
-     publicado? responde localmente?
+  4. para cada servico do manifesto (se houver kofcloud.json),
+     via verifyDeployment (mesma ordem do deploy --check):
+     nao publicado? config diferente do publicado (porta/address/
+     exposure/protocol)? responde localmente? artefato declarado
+     ausente no disco (aviso, nunca bloqueio)?
   ok em tudo -> exit 0; qualquer FALHA -> exit 1 + Hint do proximo passo
 ```
 
