@@ -54,6 +54,20 @@ test "metricas: recusas de tunel contam por motivo", "metrics-tunnel" {
     var after = metricValue(exposition, "kofcloud_edge_tunnel_refused_total")
     assert(after == before + 1, "recusa contada")
     assert(metricHas(exposition, "kofcloud_edge_tunnel_refused_total_revoked_device"), "motivo contado")
+    // Mapeamento motivo→sufixo travado: cada motivo do refuseTunnel tem
+    // seu contador; AUTH_FAILED cai no fallback _auth (sem sufixo proprio).
+    noteTunnelRefused("VERSION_UNSUPPORTED")
+    assert(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_version"), "versao")
+    noteTunnelRefused("DEVICE_UNKNOWN")
+    assert(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_unknown_device"), "desconhecido")
+    noteTunnelRefused("DEVICE_SUSPENDED")
+    assert(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_suspended_device"), "suspenso")
+    noteTunnelRefused("LINE_OVERFLOW")
+    assert(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_line_overflow"), "overflow")
+    noteTunnelRefused("IDLE_TIMEOUT")
+    assert(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_idle_timeout"), "idle")
+    noteTunnelRefused("AUTH_FAILED")
+    assert(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_auth"), "auth cai no fallback")
     noteTunnelClosed(0)
     assert(metricValue(observability.metrics(), "kofcloud_edge_tunnel_sessions_open") == 0, "gauge zera ao fechar")
 }
