@@ -45,6 +45,14 @@ test "metricas do agent: funcoes contam sem dado de cliente", "agent-metrics" {
     assert(agentMetricHas(exposition, "kofcloud_agent_health_reports_total"), "health reports")
     assert(agentMetricHas(exposition, "kofcloud_agent_streams_served_total"), "streams servidos")
     assert(agentMetricHas(exposition, "kofcloud_agent_local_errors_total"), "erros locais")
+    // isFatal decide sem reconectar: os 5 motivos do refuseTunnel sao
+    // fatais; motivo desconhecido nao e (fail-open para retry).
+    assert(isFatal("DEVICE_REVOKED") == true, "revogado e fatal")
+    assert(isFatal("DEVICE_SUSPENDED") == true, "suspenso e fatal")
+    assert(isFatal("AUTH_FAILED") == true, "auth e fatal")
+    assert(isFatal("DEVICE_UNKNOWN") == true, "desconhecido e fatal")
+    assert(isFatal("VERSION_UNSUPPORTED") == true, "versao e fatal")
+    assert(isFatal("OUTRO") == false, "desconhecido nao e fatal")
 }
 
 test "metricas do agent: fluxo real conta connect, stream e health", "agent-metrics-e2e" {
