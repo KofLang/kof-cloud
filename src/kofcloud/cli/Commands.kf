@@ -33,6 +33,15 @@ String deviceNotFoundLine(String name) {
     return "dispositivo nao encontrado: " + name
 }
 
+// Guarda de sessao da CLI (fonte unica): comandos que exigem login repetiam
+// `println("nao logado")` bare em ~20 pontos enquanto outros ja davam a dica
+// de login — o operador sem sessao recebia mensagens diferentes pelo mesmo
+// estado. Todos os pontos agora usam a forma com dica (precedente:
+// serviceNotFoundLine/deviceNotFoundLine).
+String notLoggedInLine() {
+    return "nao logado — rode: kof cloud login <handle> --password <senha>"
+}
+
 // Uma linha do `domain list`: customs mostram PENDING/VERIFIED (o operador
 // precisa saber se falta o DNS); wildcard/service nao tem ciclo proprio.
 String domainListLine(DomainEntry domain) {
@@ -278,11 +287,11 @@ Int cmdConnect(List<String> args) {
     var identity = loadIdentity()
     var session = loadSession()
     if (identity == null) {
-        println("nao logado — rode: kof cloud login <handle> --password <senha>")
+        println(notLoggedInLine())
         return 1
     }
     if (session == null) {
-        println("nao logado — rode: kof cloud login <handle> --password <senha>")
+        println(notLoggedInLine())
         return 1
     }
     File(stopPath()).delete()
@@ -367,7 +376,7 @@ Int cmdDeviceList(List<String> args) {
     }
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     try {
@@ -389,7 +398,7 @@ Int cmdDeviceList(List<String> args) {
 Int cmdDeviceRevoke(List<String> args) {
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     var deviceArg = firstPositional(args)
@@ -423,7 +432,7 @@ Int cmdDeviceRevoke(List<String> args) {
 Int cmdDeviceSuspend(List<String> args) {
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     var deviceArg = firstPositional(args)
@@ -457,7 +466,7 @@ Int cmdDeviceSuspend(List<String> args) {
 Int cmdDeviceUnsuspend(List<String> args) {
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     var deviceArg = firstPositional(args)
@@ -516,11 +525,11 @@ Int cmdPublish(List<String> args) {
     var identity = loadIdentity()
     var session = loadSession()
     if (identity == null) {
-        println("nao logado — rode: kof cloud login <handle> --password <senha>")
+        println(notLoggedInLine())
         return 1
     }
     if (session == null) {
-        println("nao logado — rode: kof cloud login <handle> --password <senha>")
+        println(notLoggedInLine())
         return 1
     }
     var name = firstPositional(args).trim()
@@ -596,7 +605,7 @@ Int cmdPublish(List<String> args) {
 Int cmdUnpublish(List<String> args) {
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     var name = firstPositional(args)
@@ -629,7 +638,7 @@ Int cmdServiceList(List<String> args) {
     }
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     try {
@@ -651,7 +660,7 @@ Int cmdServiceList(List<String> args) {
 Int cmdServiceStatus(List<String> args) {
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     var name = firstPositional(args)
@@ -711,7 +720,7 @@ Int cmdServiceStatus(List<String> args) {
 Int cmdServiceSuspend(List<String> args) {
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     var name = firstPositional(args)
@@ -739,7 +748,7 @@ Int cmdServiceSuspend(List<String> args) {
 Int cmdServiceUnsuspend(List<String> args) {
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     var name = firstPositional(args)
@@ -826,7 +835,7 @@ Bool validTtlHours(String ttlRaw) {
 Int cmdServiceToken(List<String> args) {
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     var name = firstPositional(args)
@@ -916,7 +925,7 @@ String tokenInventoryLine(List<ServiceTokenEntry> entries) {
 Int cmdServiceTokenList(List<String> args) {
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     var name = firstPositional(args)
@@ -960,7 +969,7 @@ Int cmdServiceTokenList(List<String> args) {
 Int cmdServiceTokenRevoke(List<String> args) {
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     var name = firstPositional(args).trim()
@@ -1009,7 +1018,7 @@ Int cmdDomainList(List<String> args) {
     }
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     try {
@@ -1028,7 +1037,7 @@ Int cmdDomainList(List<String> args) {
 Int cmdDomainAdd(List<String> args) {
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     // `--service` solto vira "" (erro generico de uso, sem apontar a
@@ -1064,7 +1073,7 @@ Int cmdDomainAdd(List<String> args) {
 Int cmdDomainVerify(List<String> args) {
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     var hostname = firstPositional(args).trim()
@@ -1089,7 +1098,7 @@ Int cmdDomainVerify(List<String> args) {
 Int cmdDomainRemove(List<String> args) {
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     var hostname = firstPositional(args).trim()
@@ -1144,7 +1153,7 @@ Int cmdAudit(List<String> args) {
     }
     var session = loadSession()
     if (session == null) {
-        println("nao logado")
+        println(notLoggedInLine())
         return 1
     }
     try {
