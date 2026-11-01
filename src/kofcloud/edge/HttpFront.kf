@@ -5,6 +5,7 @@ import kofcloud.edge.Metrics
 import kofcloud.edge.Relay
 import kofcloud.model.Device
 import kofcloud.model.Errors
+import kofcloud.model.Exposure
 import kofcloud.model.Service
 
 import kofcloud.util.Hosts
@@ -61,7 +62,7 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         noteHttpFinished("denied", "KCF100", raw.length, notFound.length, time.now() - started)
         return
     }
-    if (service.exposure == "AUTHENTICATED") {
+    if (exposureRequiresAuth(service.exposure)) {
         var provided = bearerFrom(headerValue(request.headers, "authorization"))
         if (state.authorize(service, provided) == false) {
             var deny = unauthorizedResponse(errAuthRequired())
@@ -109,7 +110,7 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         noteHttpFinished("denied", "KCF103", raw.length, down.length, time.now() - started)
         return
     }
-    var dropCredential = service.exposure == "AUTHENTICATED"
+    var dropCredential = exposureRequiresAuth(service.exposure)
     var forwarded = serializeRequest(request, "edge", dropCredential)
     // Vaga de relay por servico: o recurso caro (tunel + servico local).
     // Recusar AQUI (antes do OPEN) nao consome stream nem toca no Agent.

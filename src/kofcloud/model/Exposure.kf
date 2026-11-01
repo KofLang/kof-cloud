@@ -25,3 +25,11 @@ String exposureName(Exposure exposure) {
 Bool exposureIsRoutable(Exposure exposure) {
     return exposure != Exposure.PRIVATE
 }
+
+// So AUTHENTICATED exige credencial kfs_ antes do tunel (o Edge valida e
+// remove antes de repassar ao servico local). Recebe a string do modelo
+// (Service.exposure viaja como string — ver Service.kf) para os pontos que
+// so tem a string em maos (HttpFront); quem ja tem o enum usa o `switch`.
+Bool exposureRequiresAuth(String name) {
+    return exposureFrom(name) == Exposure.AUTHENTICATED
+}

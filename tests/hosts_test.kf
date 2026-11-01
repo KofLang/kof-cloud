@@ -53,6 +53,12 @@ test "exposicao: PRIVATE nao e roteavel" {
     assert(exposureIsRoutable(Exposure.PRIVATE) == false, "private")
     assert(exposureName(exposureFrom("PRIVATE")) == "PRIVATE", "round trip")
     assert(exposureName(exposureFrom("qualquer")) == "PUBLIC", "default public")
+    // exposureRequiresAuth recebe a string do modelo (Service.exposure
+    // viaja como string) — fonte unica do literal AUTHENTICATED para os
+    // pontos que so tem a string (HttpFront: gate 401 + dropCredential).
+    assert(exposureRequiresAuth("AUTHENTICATED") == true, "autenticado exige")
+    assert(exposureRequiresAuth("PUBLIC") == false, "publico nao exige")
+    assert(exposureRequiresAuth("PRIVATE") == false, "privado nao exige")
 }
 
 test "status: OFFLINE nao roteia, ONLINE e UNKNOWN roteiam", "status-routable" {
