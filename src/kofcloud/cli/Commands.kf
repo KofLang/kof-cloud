@@ -22,6 +22,17 @@ import kofcloud.store.Store
 
 record DomainEntry(String hostname, String kind, String service, String status)
 
+// Mensagens "nao encontrado" da CLI (fonte unica): 7 pontos de servico e 4
+// de dispositivo imprimiam o mesmo literal. Helpers puros para travar o
+// formato em teste (precedente: domainListLine/tokenInventoryLine).
+String serviceNotFoundLine(String name) {
+    return "servico nao encontrado: " + name
+}
+
+String deviceNotFoundLine(String name) {
+    return "dispositivo nao encontrado: " + name
+}
+
 // Uma linha do `domain list`: customs mostram PENDING/VERIFIED (o operador
 // precisa saber se falta o DNS); wildcard/service nao tem ciclo proprio.
 String domainListLine(DomainEntry domain) {
@@ -390,7 +401,7 @@ Int cmdDeviceRevoke(List<String> args) {
     try {
         deviceId = deviceIdByNameOrId(session, deviceArg)
         if (deviceId.length == 0) {
-            println("dispositivo nao encontrado: " + deviceArg)
+            println(deviceNotFoundLine(deviceArg))
             return 1
         }
     } catch (String e) {
@@ -424,7 +435,7 @@ Int cmdDeviceSuspend(List<String> args) {
     try {
         deviceId = deviceIdByNameOrId(session, deviceArg)
         if (deviceId.length == 0) {
-            println("dispositivo nao encontrado: " + deviceArg)
+            println(deviceNotFoundLine(deviceArg))
             return 1
         }
     } catch (String e) {
@@ -458,7 +469,7 @@ Int cmdDeviceUnsuspend(List<String> args) {
     try {
         deviceId = deviceIdByNameOrId(session, deviceArg)
         if (deviceId.length == 0) {
-            println("dispositivo nao encontrado: " + deviceArg)
+            println(deviceNotFoundLine(deviceArg))
             return 1
         }
     } catch (String e) {
@@ -548,7 +559,7 @@ Int cmdPublish(List<String> args) {
         // direto e o control plane valida (404 opaco se alheio).
         deviceId = deviceIdByNameOrId(session, overrideDevice)
         if (deviceId.length == 0) {
-            println("dispositivo nao encontrado: " + overrideDevice)
+            println(deviceNotFoundLine(overrideDevice))
             return 1
         }
     }
@@ -597,7 +608,7 @@ Int cmdUnpublish(List<String> args) {
         var services = fetchServices(session.controlUrl, session.token)
         var target = matchServiceName(services, name)
         if (target.length == 0) {
-            println("servico nao encontrado: " + name)
+            println(serviceNotFoundLine(name))
             return 1
         }
         var body = mapOf()
@@ -689,7 +700,7 @@ Int cmdServiceStatus(List<String> args) {
                 return 0
             }
         }
-        println("servico nao encontrado: " + name)
+        println(serviceNotFoundLine(name))
         return 1
     } catch (String e) {
         printFail("falha", e)
@@ -711,7 +722,7 @@ Int cmdServiceSuspend(List<String> args) {
     try {
         var target = serviceIdByName(session, name)
         if (target.length == 0) {
-            println("servico nao encontrado: " + name)
+            println(serviceNotFoundLine(name))
             return 1
         }
         var body = mapOf()
@@ -739,7 +750,7 @@ Int cmdServiceUnsuspend(List<String> args) {
     try {
         var target = serviceIdByName(session, name)
         if (target.length == 0) {
-            println("servico nao encontrado: " + name)
+            println(serviceNotFoundLine(name))
             return 1
         }
         var body = mapOf()
@@ -846,7 +857,7 @@ Int cmdServiceToken(List<String> args) {
             }
         }
         if (target.length == 0) {
-            println("servico nao encontrado: " + name)
+            println(serviceNotFoundLine(name))
             return 1
         }
         if (exposureRequiresAuth(exposure) == false) {
@@ -916,7 +927,7 @@ Int cmdServiceTokenList(List<String> args) {
     try {
         var target = serviceIdByName(session, name)
         if (target.length == 0) {
-            println("servico nao encontrado: " + name)
+            println(serviceNotFoundLine(name))
             return 1
         }
         var body = mapOf()
@@ -962,7 +973,7 @@ Int cmdServiceTokenRevoke(List<String> args) {
         var services = fetchServices(session.controlUrl, session.token)
         var target = matchServiceName(services, name)
         if (target.length == 0) {
-            println("servico nao encontrado: " + name)
+            println(serviceNotFoundLine(name))
             return 1
         }
         var body = mapOf()

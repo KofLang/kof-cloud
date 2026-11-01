@@ -303,6 +303,14 @@ test "text: customDomainsFor filtra customs do servico", "custom-domains-for" { 
     assert(customDomainsFor(listOf<DomainEntry>(), "site").size == 0, "lista vazia: vazio")
 }
 
+test "text: notFoundLine trava mensagens da CLI", "not-found-line" {
+    // Puras, sem rede (precedente: domainListLine): fonte unica das 11
+    // mensagens "nao encontrado" (7 servico + 4 dispositivo) — se o texto
+    // mudar, muda num lugar so e este teste acusa.
+    assert(serviceNotFoundLine("site") == "servico nao encontrado: site", "servico exato")
+    assert(deviceNotFoundLine("dev1") == "dispositivo nao encontrado: dev1", "dispositivo exato")
+}
+
 test "text: matchServiceName apara antes de comparar", "service-name-match" {
     // Pura, sem rede nem HOME (precedente: customDomainsFor): unpublish/
     // status/token/token-revoke resolvem por ela; padding resolve, so-espacos
