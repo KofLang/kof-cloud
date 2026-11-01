@@ -123,3 +123,20 @@ String trimLogHead(String text, Int maxBytes) {
     }
     return text.substring(at + 1)
 }
+
+// Extrai o token de um header `Authorization` (ou do valor ja isolado):
+// com prefixo `Bearer ` (case-insensitive), devolve o resto aparado; sem
+// prefixo, devolve o valor aparado como esta (compat: a CLI manda o token
+// cru em `X-KofCloud-Token` e alguns clientes mandam sem esquema). Fonte
+// unica para o control plane (`bearerToken`) e o Edge (`bearerFrom`), que
+// tinham o mesmo corpo duplicado.
+String bearerValue(String authorization) {
+    if (authorization.length == 0) {
+        return ""
+    }
+    var lower = authorization.toLowerCase()
+    if (lower.startsWith("bearer ")) {
+        return authorization.substring(7).trim()
+    }
+    return authorization.trim()
+}

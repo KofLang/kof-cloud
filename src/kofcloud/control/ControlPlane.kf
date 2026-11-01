@@ -32,15 +32,14 @@ Map<String, String> decodeBody(String bodyText) {
     return json.decode<Map<String, String>>(bodyText)
 }
 
+// O Kof nao tem overload com default: os handlers chamam bearerToken com o
+// header (nullable) e ele delega no bearerValue (fonte unica do parsing,
+// em util.Text) — o null vira "" aqui, antes do parsing.
 String bearerToken(String? authHeader) {
     if (authHeader == null) {
         return ""
     }
-    var lower = authHeader.toLowerCase()
-    if (lower.startsWith("bearer ")) {
-        return authHeader.substring(7).trim()
-    }
-    return authHeader.trim()
+    return bearerValue(authHeader)
 }
 
 // As chaves precisam casar com os campos dos records `Device`/`Service`:

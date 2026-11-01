@@ -161,13 +161,8 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     noteHttpFinished("ok", "", raw.length, responseBytes.length, time.now() - started)
 }
 
+// Parsing do `Authorization` no Edge: delega no bearerValue (fonte unica,
+// em util.Text) — mesma regra do control plane (`bearerToken`).
 String bearerFrom(String authorization) {
-    if (authorization.length == 0) {
-        return ""
-    }
-    var lower = authorization.toLowerCase()
-    if (lower.startsWith("bearer ")) {
-        return authorization.substring(7).trim()
-    }
-    return authorization.trim()
+    return bearerValue(authorization)
 }

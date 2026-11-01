@@ -113,6 +113,18 @@ test "text: bodyContainsId casa id exato entre aspas" {
     assert(bodyContainsId("[]", "abc-123") == false, "lista vazia")
 }
 
+test "text: bearerValue extrai o token do Authorization" {
+    // Fonte unica do parsing (control plane + Edge delegam): Bearer com
+    // qualquer caixa, valor cru sem esquema, vazio e padding.
+    assert(bearerValue("Bearer abc123") == "abc123", "bearer minusculo")
+    assert(bearerValue("BEARER abc123") == "abc123", "bearer maiusculo")
+    assert(bearerValue("bearer abc123") == "abc123", "bearer exato")
+    assert(bearerValue("abc123") == "abc123", "cru passa direto")
+    assert(bearerValue("") == "", "vazio vira vazio")
+    assert(bearerValue("Bearer   abc123  ") == "abc123", "padding aparado")
+    assert(bearerValue("Bearer ") == "", "so esquema vira vazio")
+}
+
 test "text: tailLines devolve as ultimas linhas", "logs-tail" {
     var log = "l1\nl2\nl3\n"
     assert(tailLines(log, 2) == "l2\nl3\n", "duas ultimas")
