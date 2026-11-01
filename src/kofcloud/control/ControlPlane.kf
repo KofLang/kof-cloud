@@ -42,14 +42,6 @@ String bearerToken(String? authHeader) {
     return authHeader.trim()
 }
 
-String accountJson(Account account) {
-    var out = mapOf()
-    out.put("accountId", account.id)
-    out.put("handle", account.handle)
-    out.put("email", account.email)
-    return json.encode(out)
-}
-
 // As chaves precisam casar com os campos dos records `Device`/`Service`:
 // json.decode exige TODO campo presente (JSN004) e o Agent/CLI decodificam
 // essas respostas de volta para os tipos. Chaves extras sao ignoradas, entao
