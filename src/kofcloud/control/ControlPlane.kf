@@ -7,6 +7,7 @@ import kofcloud.model.Audit
 import kofcloud.model.CustomDomain
 import kofcloud.model.Device
 import kofcloud.model.Errors
+import kofcloud.model.Exposure
 import kofcloud.model.Service
 import kofcloud.util.Text
 import kofcloud.util.Hosts
@@ -353,7 +354,7 @@ HttpResult handlePublishService(Registry registry, String? authHeader, String bo
     if (exposure.length == 0) {
         exposure = "PUBLIC"
     }
-    if (exposure != "PUBLIC" && exposure != "AUTHENTICATED" && exposure != "PRIVATE") {
+    if (exposureIsKnown(exposure) == false) {
         return HttpResult(400, errorJson(errInvalidExposure()))
     }
     if (localPort <= 0 || localPort > 65535) {

@@ -3,6 +3,7 @@ package kofcloud.cli
 import kofcloud.cli.Commands
 import kofcloud.cli.Local
 import kofcloud.model.Errors
+import kofcloud.model.Exposure
 import kofcloud.model.Service
 import kofcloud.util.Hosts
 import kofcloud.util.Text
@@ -250,7 +251,7 @@ List<ManifestService> parseManifest(String raw) {
         // Sem default silencioso para valor desconhecido: `exposureFrom`
         // cairia para PUBLIC e um typo ("PUBLIK") exporia o que devia ser
         // PRIVATE. Falha posicional, como nome e porta.
-        if (exposure != "PUBLIC" && exposure != "AUTHENTICATED" && exposure != "PRIVATE") {
+        if (exposureIsKnown(exposure) == false) {
             throw "servico \"" + name + "\" com exposure invalida: " + exposure
         }
         // Mesma regra da API (KCF046): o tunel do MVP so fala HTTP. Falha

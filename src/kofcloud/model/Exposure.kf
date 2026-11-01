@@ -33,3 +33,10 @@ Bool exposureIsRoutable(Exposure exposure) {
 Bool exposureRequiresAuth(String name) {
     return exposureFrom(name) == Exposure.AUTHENTICATED
 }
+
+// Fonte unica do vocabulario valido (PUBLIC/AUTHENTICATED/PRIVATE) para os
+// pontos que validam entrada crua (API, manifesto, CLI): evita que um typo
+// num literal ("PUBLIK") passe batido em um dos tres sem passar nos outros.
+Bool exposureIsKnown(String name) {
+    return name == "PUBLIC" || name == "AUTHENTICATED" || name == "PRIVATE"
+}

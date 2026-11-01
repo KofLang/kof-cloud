@@ -11,6 +11,7 @@ import kofcloud.edge.Tunnel
 import kofcloud.identity.Keys
 import kofcloud.model.Device
 import kofcloud.model.Errors
+import kofcloud.model.Exposure
 import kofcloud.model.Service
 import kofcloud.util.Hosts
 import kofcloud.util.Limits
@@ -491,7 +492,7 @@ String validatePublishLocal(String name, Int port, String exposure, String addre
     if (trimmedName.length == 0 || port <= 0 || port > 65535) {
         return "uso: kof cloud publish <nome> --port <porta> (porta 1-65535)"
     }
-    if (trimmedExposure != "PUBLIC" && trimmedExposure != "AUTHENTICATED" && trimmedExposure != "PRIVATE") {
+    if (exposureIsKnown(trimmedExposure) == false) {
         return "exposure invalida: " + trimmedExposure + " (use PUBLIC, AUTHENTICATED ou PRIVATE)"
     }
     if (validLocalAddress(trimmedAddress) == false) {
@@ -848,7 +849,7 @@ Int cmdServiceToken(List<String> args) {
             println("servico nao encontrado: " + name)
             return 1
         }
-        if (exposure != "AUTHENTICATED") {
+        if (exposureRequiresAuth(exposure) == false) {
             println("aviso: " + name + " esta " + exposure + " — o token so e exigido em AUTHENTICATED")
         }
         var body = mapOf()

@@ -59,6 +59,14 @@ test "exposicao: PRIVATE nao e roteavel" {
     assert(exposureRequiresAuth("AUTHENTICATED") == true, "autenticado exige")
     assert(exposureRequiresAuth("PUBLIC") == false, "publico nao exige")
     assert(exposureRequiresAuth("PRIVATE") == false, "privado nao exige")
+    // exposureIsKnown e a fonte unica do vocabulario para os 3 pontos que
+    // validam entrada crua (API, manifesto, CLI): delegam no predicado em
+    // vez de repetir os 3 literais (um typo num deles passaria nos outros).
+    assert(exposureIsKnown("PUBLIC") == true, "public conhecido")
+    assert(exposureIsKnown("AUTHENTICATED") == true, "autenticado conhecido")
+    assert(exposureIsKnown("PRIVATE") == true, "privado conhecido")
+    assert(exposureIsKnown("PUBLIK") == false, "typo recusado")
+    assert(exposureIsKnown("") == false, "vazio recusado")
 }
 
 test "status: OFFLINE nao roteia, ONLINE e UNKNOWN roteiam", "status-routable" {
