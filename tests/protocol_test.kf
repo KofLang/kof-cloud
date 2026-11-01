@@ -74,13 +74,19 @@ test "tunnel: hello carrega versao e identidade" {
     assert(frameField(frame, "token") == "tok-1", "token")
 }
 
-test "tunnel: welcome distingue aceito de recusado" {
+test "tunnel: welcome distingue aceito de recusado", "welcome-reasons" {
     var ok = welcomeFrame(true, "", "sess-1", "srv-pub", 15000)
     assert(frameBool(ok, "ok") == true, "aceito")
     assert(frameField(ok, "sessionId") == "sess-1", "sessao")
     var no = welcomeFrame(false, "DEVICE_REVOKED", "", "", 0)
     assert(frameBool(no, "ok") == false, "recusado")
     assert(frameField(no, "reason") == "DEVICE_REVOKED", "motivo")
+    // Todos os motivos de recusa do handshake viajam no mesmo campo
+    // (Edge recusa em Tunnel.kf; Agent decide fatal em isFatal).
+    for (var reason in listOf("VERSION_UNSUPPORTED", "DEVICE_UNKNOWN", "AUTH_FAILED", "DEVICE_SUSPENDED")) {
+        var refused = welcomeFrame(false, reason, "", "", 0)
+        assert(frameField(refused, "reason") == reason, reason + " preservado")
+    }
 }
 
 test "session: abre stream e roteia payload" {
@@ -104,7 +110,7 @@ test "session: streams sao independentes" {
     assert(session.nextFromStream(b) == "para-b", "b recebe o seu")
 }
 
-test "opened: handshake por stream distingue aceito de recusado" {
+test "opened: handshake por stream distingue aceito de recusado", "opened-reasons" {
     var ok = openedFrame("7", true, "")
     assert(frameKind(ok) == "OPENED", "tipo")
     assert(openedAccepted(openedMarker(ok)), "aceito")
@@ -112,4 +118,12 @@ test "opened: handshake por stream distingue aceito de recusado" {
     assert(openedAccepted(openedMarker(no)) == false, "recusado")
     assert(openedReason(openedMarker(no)) == "SERVICE_UNKNOWN", "motivo preservado")
     assert(openedReason("!OPEN:ok") == "", "aceito nao tem motivo")
+    // Códigos de erro de stream/sessao viajam nos mesmos campos
+    // (RESET.code no relay/idle; GOAWAY.code no encerramento).
+    var reset = resetFrame("3", "IDLE_TIMEOUT")
+    assert(frameKind(reset) == "RESET", "tipo reset")
+    assert(frameField(reset, "code") == "IDLE_TIMEOUT", "codigo preservado")
+    var goaway = goawayFrame("SHUTDOWN")
+    assert(frameKind(goaway) == "GOAWAY", "tipo goaway")
+    assert(frameField(goaway, "code") == "SHUTDOWN", "codigo goaway")
 }

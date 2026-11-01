@@ -41,6 +41,20 @@ Agent ──── net.connect(edgeHost, edgePort) ────► Edge
 
 `s` = `streamId` (Int, ≥ 1, único por sessão, alocado por quem abre).
 
+## Motivos e códigos (valores no fio, estáveis)
+
+| Campo | Valores | Quem emite | Quem consome |
+|---|---|---|---|
+| `WELCOME.reason` | `VERSION_UNSUPPORTED`, `DEVICE_UNKNOWN`, `AUTH_FAILED`, `DEVICE_SUSPENDED`, `DEVICE_REVOKED` | Edge (`Tunnel.kf`, via `refuseTunnel`) | Agent (`isFatal`: todos fatais, sem reconexão; métrica `noteAgentFatal`) |
+| `OPENED.reason` | `SERVICE_UNKNOWN`, `LIMIT_EXCEEDED` | Agent (serviço fora da tabela / sem vaga) | Edge (fecha o stream, `502` sem consumir vaga) |
+| `RESET.code` | `IDLE_TIMEOUT`, `LIMIT_EXCEEDED` | Edge (sweeper) / Agent (health local) | ambos (encerra o stream, sessão continua) |
+| `GOAWAY.code` | livre (ex.: `SHUTDOWN`) | Edge | Agent (encerra sem throw) |
+
+Exceção à regra: `LINE_OVERFLOW` nunca viaja no fio — é só motivo interno
+de métrica (`noteTunnelRefused`) quando o Edge derruba a conexão sem
+`WELCOME`. Todos os valores acima têm trava em `protocol_test.kf`
+(`welcome-reasons`, `opened-reasons`).
+
 ## Handshake
 
 1. Agent conecta e envia `HELLO{v, deviceId, token, caps}`.
