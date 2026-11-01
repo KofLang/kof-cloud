@@ -757,7 +757,7 @@ class Registry {
             }
         }
         var custom = this.customByHostname(hostname)
-        if (custom != null && custom.status == domainVerified()) {
+        if (custom != null && domainIsVerified(custom)) {
             var service = this.serviceById(custom.serviceId)
             if (service != null && service.accountId == custom.accountId) {
                 if (statusIsSuspended(service.status)) {

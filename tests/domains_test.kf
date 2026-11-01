@@ -360,6 +360,10 @@ test "dominio: serializadores puros sem rede", "domains-serial" {
     var device = registry.registerDevice(mel, "nb", "pk")
     var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
     var domain = registry.registerCustomDomain(mel.id, "api.example.com", service.id)
+    // domainIsVerified delega no construtor (fonte unica do literal):
+    // recem-registrado e PENDING, VERIFIED apos verify.
+    assert(domainIsVerified(domain) == false, "recem-registrado nao e verificado")
+    assert(domainIsVerified(CustomDomain("x.example.com", mel.id, service.id, domainVerified(), "", 1000)) == true, "VERIFIED passa")
     // Alvo: hostname nativo do servico; sem servico, vazio (sem throw).
     assert(customTargetFor(domain, registry) == service.hostname, "alvo e o hostname nativo")
     var orphan = CustomDomain("solto.example.com", mel.id, "inexistente", domainPending(), "", 1000)
