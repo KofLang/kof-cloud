@@ -11,10 +11,6 @@ String auditActorAccount(String handle) {
     return "account:" + handle
 }
 
-String auditActorEdge() {
-    return "edge"
-}
-
 // Acoes registradas (vocabulario fechado do slice; cresce por adicao).
 String auditAccountCreated() {
     return "account.created"
@@ -58,14 +54,6 @@ String auditServiceSuspended() {
 
 String auditServiceUnsuspended() {
     return "service.unsuspended"
-}
-
-String auditTunnelAccepted() {
-    return "tunnel.accepted"
-}
-
-String auditTunnelRefused() {
-    return "tunnel.refused"
 }
 
 String auditDomainRegistered() {
