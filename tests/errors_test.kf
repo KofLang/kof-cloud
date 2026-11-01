@@ -334,8 +334,53 @@ test "erros: Hint orienta sem vazar segredo ou recurso alheio", "errors-hint" {
 }
 
 test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" {
-    // Lista canonica = todos os codigos que Errors.kf emite (KCF123 e
-    // reservado, nunca emitido; KCF005 sai de errPasswordTooShort()).
+    // Camada 1 — os construtores reais emitem o codigo e tem Hint (amarra o
+    // corpo de cada err*(): trocar o codigo dentro do construtor quebra).
+    // Os 35 construtores de Errors.kf; os 2 parametrizados recebem valor
+    // ficticio (nunca viaja — so prova que a saida casa com a dica).
+    var emitted = listOf<String>()
+    emitted.add(errInvalidHandle())
+    emitted.add(errHandleTaken())
+    emitted.add(errInvalidCredentials())
+    emitted.add(errUnauthorized())
+    emitted.add(errPasswordTooShort())
+    emitted.add(errDeviceFields())
+    emitted.add(errDeviceNotFound())
+    emitted.add(errDeviceNotYours())
+    emitted.add(errInvalidServiceName())
+    emitted.add(errServiceNotFound())
+    emitted.add(errServiceNotYours())
+    emitted.add(errLocalPort())
+    emitted.add(errServiceIdRequired())
+    emitted.add(errInvalidExposure())
+    emitted.add(errInvalidProtocol())
+    emitted.add(errInvalidAddress())
+    emitted.add(errServiceTokenForbidden())
+    emitted.add(errServiceTokenRequired())
+    emitted.add(errInvalidTtl())
+    emitted.add(errAmbiguousToken())
+    emitted.add(errLimitDevices())
+    emitted.add(errLimitServices())
+    emitted.add(errNoRoute())
+    emitted.add(errAuthRequired())
+    emitted.add(errDeviceOffline())
+    emitted.add(errServiceDown("svc", "OFFLINE"))
+    emitted.add(errTunnel("boom"))
+    emitted.add(errEmptyUpstream())
+    emitted.add(errTooManyStreams())
+    emitted.add(errRateLimited())
+    emitted.add(errServiceOverloaded())
+    emitted.add(errInvalidCustomHostname())
+    emitted.add(errDomainTaken())
+    emitted.add(errDomainNotFound())
+    emitted.add(errDomainUnreachable())
+    assert(emitted.size == 35, "35 construtores emitem codigo")
+    for (var msg in emitted) {
+        assert(errHint(msg).length > 0, msg + " via construtor tem Hint")
+    }
+    // Camada 2 — lista canonica por codigo (amarra o errHint(): codigo novo
+    // sem ramo de dica quebra aqui).
+    // KCF123 e reservado, nunca emitido.
     // Se um codigo novo for adicionado sem Hint, este teste quebra de
     // proposito — Hint sem teste apodrece em silencio (licao KCF005).
     var codes = listOf<String>()
