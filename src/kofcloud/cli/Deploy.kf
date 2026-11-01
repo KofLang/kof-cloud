@@ -260,7 +260,7 @@ List<ManifestService> parseManifest(String raw) {
         if (protocol.length == 0) {
             protocol = "http"
         }
-        if (protocol != "http") {
+        if (protocolIsSupported(protocol) == false) {
             throw "servico \"" + name + "\" com protocol invalido: " + protocol
         }
         // Build opcional (Fase 7, slice 5): comando de shell rodado pelo

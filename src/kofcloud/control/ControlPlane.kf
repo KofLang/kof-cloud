@@ -347,7 +347,7 @@ HttpResult handlePublishService(Registry registry, String? authHeader, String bo
     if (protocol.length == 0) {
         protocol = "http"
     }
-    if (protocol != "http") {
+    if (protocolIsSupported(protocol) == false) {
         return HttpResult(400, errorJson(errInvalidProtocol()))
     }
     var exposure = mapField(body, "exposure")

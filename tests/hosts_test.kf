@@ -67,6 +67,12 @@ test "exposicao: PRIVATE nao e roteavel" {
     assert(exposureIsKnown("PRIVATE") == true, "privado conhecido")
     assert(exposureIsKnown("PUBLIK") == false, "typo recusado")
     assert(exposureIsKnown("") == false, "vazio recusado")
+    // protocolIsSupported e a fonte unica do protocolo do tunel (so http):
+    // API e manifesto delegam (KCF046) em vez de repetir o literal.
+    assert(protocolIsSupported("http") == true, "http suportado")
+    assert(protocolIsSupported("tcp") == false, "tcp recusado")
+    assert(protocolIsSupported("HTTP") == false, "maiusculo recusado")
+    assert(protocolIsSupported("") == false, "vazio recusado")
 }
 
 test "status: OFFLINE nao roteia, ONLINE e UNKNOWN roteiam", "status-routable" {

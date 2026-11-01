@@ -40,3 +40,10 @@ Bool exposureRequiresAuth(String name) {
 Bool exposureIsKnown(String name) {
     return name == "PUBLIC" || name == "AUTHENTICATED" || name == "PRIVATE"
 }
+
+// Fonte unica do protocolo suportado pelo tunel do MVP (so HTTP/1.1 — o
+// relay nao fala TCP generico). API e manifesto delegam aqui (KCF046);
+// evita que uma ponta aceite "HTTP" maiusculo e a outra recuse.
+Bool protocolIsSupported(String name) {
+    return name == "http"
+}
