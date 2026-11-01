@@ -9,7 +9,9 @@ import kofcloud.util.Text
 
 record HttpRequest(String method, String path, String version, List<String> headers, Byte[] body)
 
-record HttpResponse(Int status, List<String> headers, Byte[] body)
+// O Edge nunca faz parse de resposta: o relay repassa os bytes do Agent para
+// o cliente sem inspecionar (sem status de resposta no Edge). Parsing de
+// request/response vive aqui; o resto do Edge só usa request.
 
 String headerValue(List<String> headers, String name) {
     var needle = name.toLowerCase() + ":"
@@ -133,33 +135,6 @@ Byte[] serializeRequest(HttpRequest request, String clientIp, Bool dropCredentia
     out = out + "X-Forwarded-For: " + clientIp + "\r\n"
     out = out + "\r\n"
     return bytesConcat(bytesFromString(out), request.body)
-}
-
-HttpResponse parseResponse(Byte[] raw) {
-    var headEnd = bytesIndexOf(raw, "\r\n\r\n", 0)
-    var head = ""
-    var body = bytesEmpty()
-    if (headEnd < 0) {
-        head = bytesToString(raw)
-    } else {
-        head = bytesToString(bytesSlice(raw, 0, headEnd))
-        body = bytesSlice(raw, headEnd + 4, raw.length)
-    }
-    var lines = splitLines(head)
-    var status = 502
-    if (lines.size > 0) {
-        var parts = lines.get(0).split(" ")
-        if (parts.length >= 2) {
-            status = parseIntSafe(parts[1], 502)
-        }
-    }
-    var headers = listOf<String>()
-    var i = 1
-    while (i < lines.size) {
-        headers.add(lines.get(i))
-        i = i + 1
-    }
-    return HttpResponse(status, headers, body)
 }
 
 // 401 de servico AUTHENTICATED: anuncia o esquema para o cliente.
