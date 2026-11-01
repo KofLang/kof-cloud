@@ -304,6 +304,8 @@ test "erros: Edge devolve codigos estaveis (rota, auth, offline, conteudo)", "er
 test "erros: Hint orienta sem vazar segredo ou recurso alheio", "errors-hint" {
     assert(errHint("KCF004: missing or invalid account token").indexOf("login") >= 0, "KCF004 sugere login")
     assert(errHint("KCF005: password too short").indexOf("4 caracteres") >= 0, "KCF005 sugere tamanho")
+    assert(errPasswordTooShort().indexOf("KCF005") >= 0, "KCF005 sai do construtor, nao de literal inline")
+    assert(errHint(errPasswordTooShort()).indexOf("4 caracteres") >= 0, "KCF005 via construtor tem Hint")
     assert(errHint("KCF043: localPort required").indexOf("--port") >= 0, "KCF043 sugere flag")
     assert(errHint("KCF044: serviceId required").indexOf("service list") >= 0, "KCF044 sugere lista")
     assert(errHint("KCF022: not the owner of device").indexOf("outra conta") >= 0, "KCF022 sem revelar dono")
@@ -333,7 +335,7 @@ test "erros: Hint orienta sem vazar segredo ou recurso alheio", "errors-hint" {
 
 test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" {
     // Lista canonica = todos os codigos que Errors.kf emite (KCF123 e
-    // reservado, nunca emitido; KCF005 e inline no handler, mas emitido).
+    // reservado, nunca emitido; KCF005 sai de errPasswordTooShort()).
     // Se um codigo novo for adicionado sem Hint, este teste quebra de
     // proposito — Hint sem teste apodrece em silencio (licao KCF005).
     var codes = listOf<String>()

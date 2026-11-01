@@ -210,7 +210,8 @@ interno vira o mesmo `404 KCF041` na borda, para não revelar recurso alheio).
 `handleRegisterDevice` responde `429` apenas para limite; erro de validação é
 `400`. Códigos internos que nunca cruzam a borda com identidade própria:
 `KCF022`/`KCF060` (vira `404` opaco), `KCF061` (vira `400` sem serviceId/token
-no corpo), `KCF005` (inline no handler de contas, sem construtor dedicado).
+no corpo). Todo `KCFnnn` emitido sai de um construtor `err*()` em
+`model/Errors.kf` — nenhum literal inline fora dele.
 `KCF123` é reservado (faixa KCF120–KCF139, domínio próprio): nunca emitido,
 sem `Hint:` por desenho — a trava `errors-hint-all` quebra se alguém emitir
 sem dica e se o reservado ganhar dica.

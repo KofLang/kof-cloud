@@ -33,6 +33,10 @@ String errUnauthorized() {
     return "KCF004: missing or invalid account token"
 }
 
+String errPasswordTooShort() {
+    return "KCF005: password too short"
+}
+
 // ---- dispositivo ----
 
 String errDeviceFields() {

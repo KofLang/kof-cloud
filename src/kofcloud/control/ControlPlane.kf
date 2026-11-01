@@ -190,7 +190,7 @@ HttpResult handleCreateAccount(Registry registry, String bodyText) {
         return HttpResult(400, errorJson(errInvalidHandle()))
     }
     if (password.length < 4) {
-        return HttpResult(400, errorJson("KCF005: password too short"))
+        return HttpResult(400, errorJson(errPasswordTooShort()))
     }
     if (registry.accountByHandle(handle) != null) {
         return HttpResult(409, errorJson(errHandleTaken()))
