@@ -6,6 +6,13 @@ String kofcloudDomain() {
     return "kofcloud.io"
 }
 
+// Default quando o address vem ausente/vazio (API, manifesto e CLI aplicam
+// a mesma regra): loopback local. Fonte unica junto do validLocalAddress,
+// para que o default nunca saia da lista fechada anti-SSRF.
+String defaultLocalAddress() {
+    return "127.0.0.1"
+}
+
 String serviceHostname(String serviceName, String handle) {
     return serviceName + "." + handle + "." + kofcloudDomain()
 }

@@ -236,7 +236,7 @@ List<ManifestService> parseManifest(String raw) {
         var port = parseIntSafe(manifestField(entry, "port").trim(), 0)
         var address = manifestField(entry, "address").trim()
         if (address.length == 0) {
-            address = "127.0.0.1"
+            address = defaultLocalAddress()
         }
         // So loopback: o Agent conecta nesse endereco a cada request —
         // qualquer outro valor o transformaria num escaneador da rede
@@ -246,7 +246,7 @@ List<ManifestService> parseManifest(String raw) {
         }
         var exposure = manifestField(entry, "exposure").trim()
         if (exposure.length == 0) {
-            exposure = "PUBLIC"
+            exposure = defaultExposure()
         }
         // Sem default silencioso para valor desconhecido: `exposureFrom`
         // cairia para PUBLIC e um typo ("PUBLIK") exporia o que devia ser
@@ -258,7 +258,7 @@ List<ManifestService> parseManifest(String raw) {
         // posicional no parse, antes de publicar qualquer coisa.
         var protocol = manifestField(entry, "protocol").trim()
         if (protocol.length == 0) {
-            protocol = "http"
+            protocol = defaultProtocol()
         }
         if (protocolIsSupported(protocol) == false) {
             throw "servico \"" + name + "\" com protocol invalido: " + protocol

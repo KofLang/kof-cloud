@@ -37,6 +37,9 @@ test "address: so loopback publica (anti-SSRF)", "hosts-loopback" {
     assert(validLocalAddress("example.com") == false, "hostname externo recusa")
     assert(validLocalAddress("") == false, "vazio recusa (default e antes)")
     assert(validLocalAddress("127.0.0.2") == false, "quase-loopback recusa")
+    // defaultLocalAddress e a fonte unica do default (API, manifesto e CLI):
+    // tem que estar dentro da lista fechada anti-SSRF.
+    assert(validLocalAddress(defaultLocalAddress()) == true, "default e loopback valido")
 }
 
 test "host: extrai o servico do hostname da conta" {
@@ -73,6 +76,13 @@ test "exposicao: PRIVATE nao e roteavel" {
     assert(protocolIsSupported("tcp") == false, "tcp recusado")
     assert(protocolIsSupported("HTTP") == false, "maiusculo recusado")
     assert(protocolIsSupported("") == false, "vazio recusado")
+    // Defaults single-source: os 3 pontos (API, manifesto, CLI) defaultam
+    // pelo construtor; os asserts travam o valor e a consistencia interna
+    // (default sempre passa na propria validacao).
+    assert(defaultExposure() == "PUBLIC", "default exposure")
+    assert(exposureIsKnown(defaultExposure()) == true, "default exposure valido")
+    assert(defaultProtocol() == "http", "default protocol")
+    assert(protocolIsSupported(defaultProtocol()) == true, "default protocol valido")
 }
 
 test "status: OFFLINE nao roteia, ONLINE e UNKNOWN roteiam", "status-routable" {

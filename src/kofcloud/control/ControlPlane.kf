@@ -337,7 +337,7 @@ HttpResult handlePublishService(Registry registry, String? authHeader, String bo
     var deviceId = mapField(body, "deviceId")
     var localAddress = mapField(body, "localAddress")
     if (localAddress.length == 0) {
-        localAddress = "127.0.0.1"
+        localAddress = defaultLocalAddress()
     }
     if (validLocalAddress(localAddress) == false) {
         return HttpResult(400, errorJson(errInvalidAddress()))
@@ -345,14 +345,14 @@ HttpResult handlePublishService(Registry registry, String? authHeader, String bo
     var localPort = parseIntSafe(mapField(body, "localPort"), 0)
     var protocol = mapField(body, "protocol")
     if (protocol.length == 0) {
-        protocol = "http"
+        protocol = defaultProtocol()
     }
     if (protocolIsSupported(protocol) == false) {
         return HttpResult(400, errorJson(errInvalidProtocol()))
     }
     var exposure = mapField(body, "exposure")
     if (exposure.length == 0) {
-        exposure = "PUBLIC"
+        exposure = defaultExposure()
     }
     if (exposureIsKnown(exposure) == false) {
         return HttpResult(400, errorJson(errInvalidExposure()))

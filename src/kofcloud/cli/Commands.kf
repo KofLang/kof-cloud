@@ -534,11 +534,11 @@ Int cmdPublish(List<String> args) {
     // nome com espaco nem exposure invalida.
     var address = flagValue(args, "--address").trim()
     if (address.length == 0) {
-        address = "127.0.0.1"
+        address = defaultLocalAddress()
     }
     var exposure = flagValue(args, "--exposure").trim()
     if (exposure.length == 0) {
-        exposure = "PUBLIC"
+        exposure = defaultExposure()
     }
     var deviceId = identity.deviceId
     var overrideDevice = flagValue(args, "--device")
@@ -564,7 +564,7 @@ Int cmdPublish(List<String> args) {
     body.put("name", name)
     body.put("localAddress", address)
     body.put("localPort", intToString(port))
-    body.put("protocol", "http")
+    body.put("protocol", defaultProtocol())
     body.put("exposure", exposure)
     try {
         var raw = requireOk(http.post(session.controlUrl + "/v1/services", json.encode(body), jsonHeader(session.token)))

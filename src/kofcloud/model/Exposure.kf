@@ -47,3 +47,14 @@ Bool exposureIsKnown(String name) {
 Bool protocolIsSupported(String name) {
     return name == "http"
 }
+
+// Defaults quando o campo vem ausente/vazio (API, manifesto e CLI aplicam a
+// mesma regra): exposure PUBLIC, protocol http. Fonte unica para que mudar
+// o default nao exija caçar os 3 pontos.
+String defaultExposure() {
+    return "PUBLIC"
+}
+
+String defaultProtocol() {
+    return "http"
+}
