@@ -35,8 +35,10 @@ identidade criptográfica e de revogação.
 |---|---|---|
 | `identity.json` | `deviceId`, `accountId`, `handle`, chave privada X25519 (hex) | **sim** |
 | `session.json` | token de conta, expiração | **sim** |
-| `services.json` | serviços publicados localmente | não |
 | `agent.log` | log operacional | não |
+
+(Os serviços publicados vivem na sessao viva do Agent — via `/v1/connect`
++ refresher — e no control plane; nao ha `services.json` local.)
 
 Regras:
 

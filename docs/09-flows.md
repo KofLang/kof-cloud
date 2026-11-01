@@ -49,7 +49,7 @@ reconecta e os serviços continuam rodando.
  3. POST /v1/services {deviceId,name,localPort,protocol,exposure}
  4. control plane gera hostname = site.<handle>.kofcloud.io
  5. control plane devolve o serviço
- 6. Agent grava services.json e envia STATUS/refresh ao Edge pela sessão viva
+ 6. Agent guarda services na sessao viva e envia STATUS/refresh ao Edge
  7. Edge passa a rotear Host: site.<handle>.kofcloud.io → este dispositivo
 ```
 
