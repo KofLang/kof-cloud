@@ -99,10 +99,6 @@ class TunnelSession {
         this.streamStartedMs.remove(streamId)
     }
 
-    Bool hasStream(String streamId) {
-        return this.inboxes.get(streamId) != null
-    }
-
     Int streamCount() {
         return this.inboxes.size
     }
@@ -151,10 +147,6 @@ class TunnelSession {
     // Enfileira um frame para o escritor do tunel drenar.
     void send(Map<String, String> frame) {
         this.outbox.send(encodeFrame(frame))
-    }
-
-    void sendRaw(String encodedFrameLine) {
-        this.outbox.send(encodedFrameLine)
     }
 
     void close() {
