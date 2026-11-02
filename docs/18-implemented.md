@@ -48,6 +48,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | diagnostico doctor | somente-leitura em camadas (login, control, device, servicos, tunel) + `--file` | `doctor_test.kf` |
 | daemon user-level (slice 3) | `cli/Daemon.kf`: unit systemd `--user` + install/status/uninstall | `daemon_test.kf` |
 | presenca real do tunel | espelho bind/unbind no Registry + `GET /v1/presence` filtrado por conta + `status` ONLINE/OFFLINE confirmado | `presence_test.kf` |
+| eventos do Agent | `agent/Events.kf`: `agentEvent` emite para `log.*` **e** `agent-runtime.log` (teto 256 KiB); `logs --runtime` | `agent_events_test.kf` |
 | idle timeout (tunel + stream) | `lastActivityMs` + sweepers Edge/Agent, EOF limpo vira throw (reconecta) | `idle_test.kf` |
 
 ## Comportamentos provados
@@ -73,6 +74,9 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   serviço `kfs_` **antes** do túnel (`e2e_authenticated_test.kf`), com o token
   da conta recusado e a credencial removida antes de chegar ao serviço local.
 * **Revogação de dispositivo** derruba a sessão e remove as rotas dele.
+* **Observabilidade local do Agent**: os eventos reais do túnel ficam
+  consultáveis depois do processo terminar (`logs --runtime`), sem depender de
+  stdout — e sem gravar segredo (`agent_events_test.kf`).
 * **Domínio próprio (Fase 6, slice 1)**: hostname externo registrado como
   PENDING com instrução CNAME, verificado por `net.resolve` contra os destinos
   esperados do Edge (comparação exata; NXDOMAIN/falha = `KCF124` opaco), rota

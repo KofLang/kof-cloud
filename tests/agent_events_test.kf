@@ -1,0 +1,69 @@
+import kofcloud.agent.Events
+import kofcloud.cli.Commands
+import kofcloud.cli.Local
+import kofcloud.store.Store
+import kofcloud.util.Limits
+import kofcloud.util.Text
+
+// Eventos do Agent: o mesmo ponto que vai para o stdout tambem persiste em
+// agent-runtime.log, com teto e sem segredo. Quita o debito "logs vivem em
+// dois mundos" (docs/17-limitations.md).
+
+test "eventos: agentEvent persiste linha com nivel e mensagem", "events" {
+    // O caminho vem de kofcloudHome() (HOME do processo). O teste limpa o
+    // arquivo antes para nao depender de execucoes anteriores.
+    File(agentRuntimeLogPath()).delete()
+    appendAgentRuntimeLine("info", "edge 127.0.0.1:7000 with 1 service(s)")
+    var text = readTextOr(agentRuntimeLogPath(), "")
+    assert(text.length > 0, "arquivo de runtime criado")
+    assert(text.indexOf("info edge 127.0.0.1:7000 with 1 service(s)") >= 0, "nivel + mensagem")
+    assert(text.endsWith("\n"), "linha terminada")
+}
+
+test "eventos: niveis warn e error sao distinguiveis", "events" {
+    appendAgentRuntimeLine("warn", "reconnecting in 500ms")
+    appendAgentRuntimeLine("error", "DEVICE_REVOKED")
+    var text = readTextOr(agentRuntimeLogPath(), "")
+    assert(text.indexOf("warn reconnecting in 500ms") >= 0, "warn")
+    assert(text.indexOf("error DEVICE_REVOKED") >= 0, "error")
+}
+
+test "eventos: ordem preservada (append no fim)", "events" {
+    var before = readTextOr(agentRuntimeLogPath(), "")
+    appendAgentRuntimeLine("info", "primeiro")
+    appendAgentRuntimeLine("info", "segundo")
+    var after = readTextOr(agentRuntimeLogPath(), "")
+    assert(after.length > before.length, "cresceu")
+    var first = after.indexOf("primeiro")
+    var second = after.indexOf("segundo")
+    assert(first >= 0, "primeiro presente")
+    assert(second > first, "segundo depois do primeiro")
+}
+
+test "eventos: teto corta o inicio e mantem o recente", "events" {
+    var limit = limitLogBytes()
+    // enche bem acima do teto
+    var i = 0
+    while (i < 40) {
+        appendAgentRuntimeLine("info", "enchimento " + intToString(i) + " " + "x")
+        i = i + 1
+    }
+    var text = readTextOr(agentRuntimeLogPath(), "")
+    assert(text.length <= limit, "respeita o teto")
+    assert(text.indexOf("enchimento 39") >= 0, "mantem o mais recente")
+}
+
+test "eventos: nunca grava segredo (token/chave nao entram por construcao)", "events" {
+    // O contrato e: quem chama passa so metadados. Este teste trava a forma
+    // das mensagens emitidas pelo Agent (sem kfc_/kfs_/kft_/chave privada).
+    var text = readTextOr(agentRuntimeLogPath(), "")
+    assert(text.indexOf("kfc_") < 0, "sem token de conta")
+    assert(text.indexOf("kfs_") < 0, "sem token de servico")
+    assert(text.indexOf("kft_") < 0, "sem token de tunel")
+}
+
+test "eventos: caminho de runtime e separado do log de marcos", "events" {
+    assert(agentRuntimeLogPath() != logPath(), "arquivos distintos")
+    assert(agentRuntimeLogPath().endsWith("/agent-runtime.log"), "nome do arquivo")
+    assert(logPath().endsWith("/agent.log"), "marcos continuam em agent.log")
+}

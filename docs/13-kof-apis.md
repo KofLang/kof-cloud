@@ -166,3 +166,17 @@ de serviços mora na sessão), nunca em Map solto passado por parâmetro.
 | KEM/assinatura pós-quântica (ML-KEM/ML-DSA) | ausente (só X25519/Ed25519) | X25519+HKDF+AES-GCM clássicos; híbrido quando o primitivo existir (Fase 11) |
 | socket Unix | ausente | loopback TCP |
 | relay UDP | parcial | HTTP/HTTPS apenas |
+
+### L16 — O handler do `web.app()` corrompe binário ⚠️ **bloqueia TLS no Edge**
+
+Medido: um handler que devolve `String` construída byte-a-byte (`0x00 0xC8
+0xFF 0x0A`) chega ao cliente como `00 C3 88 C3 BF 0A` — os bytes altos passam
+por UTF-8 e cada um vira dois. Não há API para devolver bytes crus de um
+handler (o retorno é `String`).
+
+**Consequência:** um proxy que precisa repassar bytes arbitrários (HTML comprimido,
+imagens, PNG) **não pode** usar `web.app()` como front. E `listenSecure`
+(só existe em `web.app()`, JVM) não serve para o Edge público — por isso a
+Fase 9 slice 1 (HTTPS com PEM do operador) está bloqueada, a menos que exista
+TLS em socket cru (L2) ou uma API de resposta binária. É por isso que o Edge
+continua com parser HTTP próprio sobre `net.listen`.

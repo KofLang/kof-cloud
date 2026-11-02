@@ -1,0 +1,52 @@
+package kofcloud.agent
+
+import kofcloud.cli.Local
+import kofcloud.cli.Commands
+import kofcloud.store.Store
+import kofcloud.util.Text
+
+// Eventos do Agent: fonte unica do que acontece no tunel.
+//
+// Antes, os eventos reais (connect, reconnect, recusa fatal, health, streams)
+// viviam so em `log.*` (stdout) e em `observability.*` (memoria do processo) —
+// `kof cloud logs` lia apenas os marcos de sessao gravados pela CLI. Agora o
+// mesmo ponto emite para os dois lados: `log.*` (operador olhando o processo)
+// e o arquivo de runtime (operador olhando depois, via `logs --runtime`).
+//
+// Nunca entra aqui conteudo de requisicao, credencial ou chave: so metadados
+// operacionais (docs/21-observability.md).
+
+String agentRuntimeLogPath() {
+    return kofcloudHome() + "/agent-runtime.log"
+}
+
+// `level`: "info" | "warn" | "error". `message` ja vem sem segredo.
+void agentEvent(String level, String message) {
+    if (level == "error") {
+        log.error("agent: " + message)
+    } else if (level == "warn") {
+        log.warn("agent: " + message)
+    } else {
+        log.info("agent: " + message)
+    }
+    appendAgentRuntimeLine(level, message)
+}
+
+// Grava uma linha no arquivo de runtime, com teto anti-crescimento (corta o
+// inicio, mantendo o recente). Falha de escrita nunca derruba o Agent: o
+// evento ja foi para o stdout.
+void appendAgentRuntimeLine(String level, String message) {
+    var path = agentRuntimeLogPath()
+    var line = longToString(time.now()) + " " + level + " " + message + "\n"
+    try {
+        var file = File(path)
+        if (file.exists()) {
+            var capped = trimLogHead(readTextOr(path, "") + line, limitLogBytes())
+            writeTextTo(path, capped)
+        } else {
+            writeTextTo(path, line)
+        }
+    } catch (String e) {
+        // Sem filesystem gravavel: o stdout continua sendo a fonte.
+    }
+}

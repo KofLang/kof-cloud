@@ -54,14 +54,14 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   conexões simultâneas por serviço e validação de entrada (nome/porta/
   exposure/protocol/address loopback) — todos com enforcement. Ver
   `03-device.md` e `08-multiplexing.md`.
-* **Logs vivem em dois mundos (sem fio entre eles).** `kof cloud logs` lê
-  `~/.kofcloud/agent.log`, onde a CLI grava só marcos de sessão (`connect`,
-  `disconnect`) com teto de 256 KiB (`logs --tail`). Os eventos reais do
-  túnel (connects, reconnects, recusas fatais, health) vivem no processo
-  do Agent — em `observability.*` (memória do processo) e `log.*`
-  (stdout) — e nunca chegam ao arquivo. Juntar os dois exigiria o Agent
-  escrever no filesystem do usuário ou IPC novo entre processos: desenho
-  futuro, não débito esquecido.
+* **Logs em dois arquivos, por desenho (débito quitado).** `kof cloud logs`
+  lê `~/.kofcloud/agent.log` (marcos de sessão gravados pela CLI: `connect`,
+  `disconnect`). `kof cloud logs --runtime` lê
+  `~/.kofcloud/agent-runtime.log`, onde o Agent grava os eventos reais
+  (connect, reconnect, recusa fatal, mudança de health, GOAWAY, parada) pelo
+  mesmo ponto que emite para o stdout (`agent/Events.kf`). Cada arquivo tem
+  teto próprio (256 KiB, corta o início). Nenhum dos dois recebe conteúdo de
+  requisição, credencial ou chave.
 * **Contador por serviço é aproximado sob corrida** (check-then-act sem lock;
   o Kof não expõe mutex, L3): pode estourar em poucas unidades, nunca recusa
   a menos. Contadores internos usam `Map<String, String>` porque

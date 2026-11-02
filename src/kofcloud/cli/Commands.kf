@@ -1138,10 +1138,22 @@ Int cmdDomainRemove(List<String> args) {
     }
 }
 
+// `logs` (marcos de sessao, gravados pela CLI) e `logs --runtime` (eventos
+// reais do Agent: connect, reconnect, recusa fatal, health, streams). Os dois
+// arquivos tem teto proprio; `--tail` vale para o escolhido.
 Int cmdLogs(List<String> args) {
-    var text = readTextOr(logPath(), "")
+    var runtime = hasFlag(args, "--runtime")
+    var path = logPath()
+    if (runtime) {
+        path = agentRuntimeLogPath()
+    }
+    var text = readTextOr(path, "")
     if (text.length == 0) {
-        println("sem logs")
+        if (runtime) {
+            println("sem eventos de runtime (o Agent ainda nao rodou neste host)")
+        } else {
+            println("sem logs")
+        }
         return 0
     }
     var tailRaw = flagValue(args, "--tail")

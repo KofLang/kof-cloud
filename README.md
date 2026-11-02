@@ -115,7 +115,7 @@ down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove o
 daemon install|status|uninstall   (systemd --user, sem root)
 doctor [--file kofcloud.json]   (diagnostico: login, control, device, tunel, servicos)
 audit                        (trilha de auditoria da conta)
-logs [--tail <linhas>]      (log local do agent, ultimas N linhas; teto 256 KiB)
+logs [--tail <linhas>] [--runtime]   (marcos de sessao; --runtime = eventos reais do Agent; teto 256 KiB por arquivo)
 serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>]
 ```
 

@@ -257,6 +257,13 @@ testável, na ordem):
 (JVM-only); sem ACME e sem ES256 (só Ed25519) — por isso sem Let's Encrypt
 automático ainda. Ver `12-tls.md` e `13-kof-apis.md` L2.
 
+**Slice 1 está bloqueado por medição, não por falta de plano:** o handler do
+`web.app()` devolve `String` e corrompe bytes altos (UTF-8: `0xC8 0xFF` →
+`C3 88 C3 BF` — `13-kof-apis.md` L16). Um proxy sobre `web.app()` destruiria
+respostas binárias. Para destravar: TLS em socket cru (capacidade do Kof) ou
+API de resposta binária no `web.app()`. Enquanto isso, TLS segue no terminador
+externo (`12-tls.md`).
+
 ## Fase 10 — WAF + proteção da aplicação (cloud robusta)
 
 **Motivação:** hoje o Edge roteia sem inspecionar — SQLi/XSS/RCE passam

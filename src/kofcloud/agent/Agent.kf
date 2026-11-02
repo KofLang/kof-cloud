@@ -1,6 +1,7 @@
 package kofcloud.agent
 
 import kofcloud.agent.Backoff
+import kofcloud.agent.Events
 import kofcloud.agent.Health
 import kofcloud.agent.Metrics
 import kofcloud.agent.Relay
@@ -73,12 +74,12 @@ void runAgent(AgentConfig config, Bool once) {
                 if (isFatal(e)) {
                     noteAgentFatal(e)
                 }
-                log.error("agent: " + e)
+                agentEvent("error", e)
                 running = false
             } else {
                 noteAgentReconnect()
                 var delay = backoffDelay(attempt, defaultBackoffBase(), defaultBackoffMax())
-                log.warn("agent: " + e + " — reconnecting in " + intToString(delay) + "ms")
+                agentEvent("warn", e + " — reconnecting in " + intToString(delay) + "ms")
                 time.sleep(delay)
                 attempt = attempt + 1
             }
@@ -94,7 +95,7 @@ Bool isFatal(String reason) {
 
 void connectAndServe(AgentConfig config) {
     var endpoint = fetchEdge(config)
-    log.info("agent: edge " + endpoint.host + ":" + intToString(endpoint.port) + " with " + intToString(endpoint.services.size) + " service(s)")
+    agentEvent("info", "edge " + endpoint.host + ":" + intToString(endpoint.port) + " with " + intToString(endpoint.services.size) + " service(s)")
 
     var conn = net.connect(endpoint.host, endpoint.port)
     var pair = generateKeyPair()
@@ -180,11 +181,11 @@ void connectAndServe(AgentConfig config) {
     // idle do sweeper do Edge — vira throw e o runAgent reconecta com backoff
     // (o HELLO seguinte decide: ACTIVE reconecta, SUSPENDED/REVOKED e fatal).
     if (goaway) {
-        log.warn("agent: edge asked to go away")
+        agentEvent("warn", "edge asked to go away")
         return
     }
     if (config.stopFile.length > 0 && File(config.stopFile).exists()) {
-        log.warn("agent: tunnel closed")
+        agentEvent("info", "stopped by request")
         return
     }
     throw "edge closed connection"
@@ -327,6 +328,7 @@ void agentHealth(TunnelSession session, List<Service> services, Int healthMs) {
                     last.put(service.name, status)
                     session.send(statusFrame(service.name, status))
                     noteHealthReport()
+                    agentEvent("info", "service " + service.name + " -> " + status)
                 }
             }
         }
