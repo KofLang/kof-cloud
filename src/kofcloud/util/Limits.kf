@@ -63,6 +63,14 @@ Int limitIdleSweepMs() {
     return config.int("kofcloud.limits.idleSweepMs", 5000)
 }
 
+// Intervalo do health check local do Agent (ms): a cada passo o Agent
+// reconecta TCP nos servicos e reporta mudanca ao Edge; o refresher da
+// tabela re-busca os servicos a cada 6 passos. Fonte unica para que o
+// ciclo de health e o de refresh andem juntos.
+Int limitHealthMs() {
+    return config.int("kofcloud.limits.healthMs", 5000)
+}
+
 Int sendChunkBytes() {
     var size = config.int("kofcloud.limits.sendChunkBytes", 16384)
     if (size <= 0) {

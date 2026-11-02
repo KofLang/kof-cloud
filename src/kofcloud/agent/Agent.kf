@@ -139,7 +139,7 @@ void connectAndServe(AgentConfig config) {
     var sweeper = spawn { agentIdleSweeper(session) }
     var healthMs = config.healthMs
     if (healthMs <= 0) {
-        healthMs = 5000
+        healthMs = limitHealthMs()
     }
     var health = spawn { agentHealth(session, endpoint.services, healthMs) }
     var refresher = spawn { agentRefresher(session, config, healthMs * 6) }

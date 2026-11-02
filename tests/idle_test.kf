@@ -22,6 +22,9 @@ test "idle: touch so em frame util; PING nao renova", "idle" {
     // Mesmo passo nos dois sweepers (Edge + Agent): mudar num so lado
     // dessincronizava a deteccao de tunel zumbi.
     assert(limitIdleSweepMs() == 5000, "sweep default 5 s")
+    // Health local e refresh da tabela andam juntos (refresh = 6xhealth):
+    // o fallback do Agent recai aqui quando a config vem sem health.
+    assert(limitHealthMs() == 5000, "health default 5 s")
     var session = TunnelSession("s1", "d1", "a1", "")
     var t0 = session.lastActivityMs
     assert(t0 > 0, "atividade inicial marcada")
