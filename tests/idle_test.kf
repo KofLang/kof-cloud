@@ -19,6 +19,9 @@ test "idle: touch so em frame util; PING nao renova", "idle" {
     // Fonte unica do heartbeat (Edge anuncia, connect ecoa, Agent recai):
     // mudar no Limits muda os tres juntos.
     assert(limitHeartbeatMs() == 15000, "heartbeat default 15 s")
+    // Mesmo passo nos dois sweepers (Edge + Agent): mudar num so lado
+    // dessincronizava a deteccao de tunel zumbi.
+    assert(limitIdleSweepMs() == 5000, "sweep default 5 s")
     var session = TunnelSession("s1", "d1", "a1", "")
     var t0 = session.lastActivityMs
     assert(t0 > 0, "atividade inicial marcada")

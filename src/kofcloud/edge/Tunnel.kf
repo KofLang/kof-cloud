@@ -163,7 +163,7 @@ void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
 void tunnelIdleSweeper(EdgeState state, TunnelSession session, String deviceId, String sessionId) {
     var open = true
     while (open) {
-        time.sleep(5000)
+        time.sleep(limitIdleSweepMs())
 
         if (session.open == false) {
             open = false

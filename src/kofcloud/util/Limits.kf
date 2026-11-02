@@ -56,6 +56,13 @@ Int limitHeartbeatMs() {
     return config.int("kofcloud.limits.heartbeatMs", 15000)
 }
 
+// Passo da varredura de ociosidade (ms): Edge e Agent verificam a cada
+// passo se a sessao passou do idle ou se ha streams presos. Fonte unica
+// para os dois sweepers varrerem no mesmo ritmo.
+Int limitIdleSweepMs() {
+    return config.int("kofcloud.limits.idleSweepMs", 5000)
+}
+
 Int sendChunkBytes() {
     var size = config.int("kofcloud.limits.sendChunkBytes", 16384)
     if (size <= 0) {

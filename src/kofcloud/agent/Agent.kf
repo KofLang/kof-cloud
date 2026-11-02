@@ -286,7 +286,7 @@ void agentWatchdog(TunnelSession session, String stopFile) {
 void agentIdleSweeper(TunnelSession session) {
     var open = true
     while (open) {
-        time.sleep(5000)
+        time.sleep(limitIdleSweepMs())
         if (session.open == false) {
             open = false
         } else {
