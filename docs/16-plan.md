@@ -75,7 +75,7 @@ opaco entre contas (existente-alheio indistinguível de inexistente);
 owner-gate em `POST /v1/services/status` (só a conta dona altera); CLI com
 `Hint:` humana (`printFail`); validação de `publish` devolve o HTTP certo por
 família (400 validação, 404 dono/recurso, 429 limite). Prova:
-`tests/errors_test.kf` (8 testes: códigos do control plane, 404 opaco,
+`tests/errors_test.kf` (10 testes: códigos do control plane, 404 opaco,
 limites/owner-gate no registry, códigos do Edge, Hint + trava de regressao
 100% + revoke/TTL + nome|id + fail-fast de flags).
 
@@ -89,7 +89,7 @@ indistinguível de "resolveu para outro lugar"), rota ativa só depois de
 VERIFIED, poda junto com serviço/dispositivo. Dono verificado antes do DNS
 (sem trabalho de rede para conta alheia). CLI: `domain add --service`,
 `domain verify`, `domain remove`; erros `KCF120`–`KCF124` com `Hint:`.
-Prova: `tests/domains_test.kf` (8 testes: validação, registro/idempotência,
+Prova: `tests/domains_test.kf` (9 testes: validação, registro/idempotência,
 verificação sem rede, rota/poda, API com service preenchido, Edge via túnel real, Hint + serializadores).
 
 Falta (fatiado de propósito): TLS por SNI no Edge (o Kof não expõe — ver
