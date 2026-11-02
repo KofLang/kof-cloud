@@ -8,8 +8,8 @@ package kofcloud.util
 // Protegem as duas pontas: a infraestrutura KofCloud e a maquina do usuario.
 // O que e aplicado hoje: dispositivos ativos por conta, servicos por
 // dispositivo, streams simultaneos por tunel, requisicoes por hostname no
-// Edge e bytes por frame DATA no tunel. Limite de conexoes por servico e
-// idle timeout ainda NAO sao aplicados (docs/17-limitations.md).
+// Edge, bytes por frame DATA no tunel, conexoes simultaneas por servico
+// (429 KCF108 antes do OPEN) e idle timeout de tunel/stream (IDLE_TIMEOUT).
 
 Int limitDevices() {
     return config.int("kofcloud.limits.devices", 5)
