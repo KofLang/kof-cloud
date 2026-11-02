@@ -21,6 +21,9 @@ import testkit.Support
 test "frames: encodeChunks fatia e recompoe", "frames" {
     assert(limitFrameBytes() == 1048576, "default 1 MiB")
     assert(maxTunnelLineBytes() == 1048576 * 2 + 4096, "teto com margem UTF-8+JSON")
+    // Fonte unica do teto de corpo do relay: o serve passa ao
+    // HttpFront/relay a partir daqui.
+    assert(limitMaxBodyBytes() == 16777216, "teto de corpo 16 MiB")
 
     // 1.5 MiB = 2 chunks (1 MiB + 0.5 MiB). Maior que isso e o proprio
     // bytesToString (O(n^2), ver 17-limitations) domina o tempo do teste.

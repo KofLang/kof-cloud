@@ -1259,7 +1259,7 @@ Int cmdServe(List<String> args) {
     var httpPort = parseIntSafe(flagValue(args, "--http-port").trim(), defaultHttpPort())
     var statePath = resolveStatePath(flagValue(args, "--state"))
     var tunnelSecret = config.str("kofcloud.tunnelSecret", "")
-    var maxBytes = parseIntSafe(config.str("kofcloud.maxBodyBytes", "16777216"), 16777216)
+    var maxBytes = limitMaxBodyBytes()
 
     // Fail-fast: valida as tres portas ANTES de abrir qualquer listener —
     // sem isso, --control-port abc caia no default 8080 em silencio e porta

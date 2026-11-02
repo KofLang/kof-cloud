@@ -121,3 +121,10 @@ Int limitServiceConns() {
 Int limitLogBytes() {
     return config.int("kofcloud.limits.logBytes", 262144)
 }
+
+// Teto do corpo HTTP que o Edge aceita/acumula no relay (bytes). Fonte
+// unica: o `serve` passa ao HttpFront/relay; sem isso o config default e
+// o fallback do parse andariam separados.
+Int limitMaxBodyBytes() {
+    return config.int("kofcloud.maxBodyBytes", 16777216)
+}
