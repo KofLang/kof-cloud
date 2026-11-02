@@ -37,7 +37,7 @@ EdgeEndpoint fetchEdge(AgentConfig config) {
     var map = json.decode<Map<String, String>>(raw)
     var services = json.decode<List<Service>>(mapField(map, "services"))
     var host = mapField(map, "edgeHost")
-    var port = parseIntSafe(mapField(map, "edgePort"), 7000)
+    var port = parseIntSafe(mapField(map, "edgePort"), defaultTunnelPort())
     if (config.edgeHost.length > 0) {
         host = config.edgeHost
     }

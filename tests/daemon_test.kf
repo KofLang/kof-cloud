@@ -1,5 +1,7 @@
 import kofcloud.cli.Daemon
 import kofcloud.cli.Usage
+import kofcloud.util.Hosts
+import kofcloud.util.Text
 
 // Daemon user-level (Fase 7, slice 3): unit systemd gerada localmente.
 // Tudo aqui e puro (texto + paths); systemctl real so no CLI do usuario.
@@ -46,7 +48,8 @@ test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
     assert(help.indexOf("deploy [--file kofcloud.json] [--check] [--plan]") >= 0, "deploy documenta flags")
     assert(help.indexOf("build/artifact") >= 0, "deploy anuncia build+artifact do manifesto")
     assert(help.indexOf("(build)/(artifact)") >= 0, "plan anuncia marcas por linha")
-    assert(help.indexOf("serve [--control-port 8080] [--tunnel-port 7000] [--http-port 8081] [--state <arquivo>]") >= 0, "serve anuncia --state (README ja documentava)")
+    var serveLine = "serve [--control-port " + intToString(defaultControlPort()) + "] [--tunnel-port " + intToString(defaultTunnelPort()) + "] [--http-port " + intToString(defaultHttpPort()) + "] [--state <arquivo>]"
+    assert(help.indexOf(serveLine) >= 0, "serve anuncia portas da fonte unica + --state")
     assert(help.indexOf("daemon install|status|uninstall") >= 0, "daemon documentado (README omitia ate este commit)")
 }
 

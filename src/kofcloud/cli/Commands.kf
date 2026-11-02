@@ -1254,9 +1254,9 @@ Int cmdServe(List<String> args) {
         println("flag repetida — informe uma so vez: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>]")
         return 1
     }
-    var controlPort = parseIntSafe(flagValue(args, "--control-port").trim(), 8080)
-    var tunnelPort = parseIntSafe(flagValue(args, "--tunnel-port").trim(), 7000)
-    var httpPort = parseIntSafe(flagValue(args, "--http-port").trim(), 8081)
+    var controlPort = parseIntSafe(flagValue(args, "--control-port").trim(), defaultControlPort())
+    var tunnelPort = parseIntSafe(flagValue(args, "--tunnel-port").trim(), defaultTunnelPort())
+    var httpPort = parseIntSafe(flagValue(args, "--http-port").trim(), defaultHttpPort())
     var statePath = resolveStatePath(flagValue(args, "--state"))
     var tunnelSecret = config.str("kofcloud.tunnelSecret", "")
     var maxBytes = parseIntSafe(config.str("kofcloud.maxBodyBytes", "16777216"), 16777216)

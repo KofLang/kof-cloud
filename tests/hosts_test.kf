@@ -1,5 +1,6 @@
 
 import kofcloud.cli.Commands
+import kofcloud.cli.Local
 import kofcloud.model.Exposure
 import kofcloud.model.Service
 import kofcloud.util.Hosts
@@ -214,13 +215,18 @@ test "text: validTtlHours aceita vazio e positivos", "ttl-local" {
 
 test "text: validateServePorts barra porta fora da faixa", "serve-ports" {
     // Pura, sem rede nem HOME: o cmdServe chama antes de abrir qualquer
-    // listener (fail-fast, sem bind parcial).
-    assert(validateServePorts(8080, 7000, 8081) == "", "defaults passam")
+    // listener (fail-fast, sem bind parcial). Os defaults vêm da fonte
+    // unica (Hosts): mudar la muda aqui sem caçar literal.
+    assert(defaultControlPort() == 8080, "control default travado")
+    assert(defaultTunnelPort() == 7000, "tunel default travado")
+    assert(defaultHttpPort() == 8081, "http default travado")
+    assert(validateServePorts(defaultControlPort(), defaultTunnelPort(), defaultHttpPort()) == "", "defaults passam")
     assert(validateServePorts(1, 1, 1).length == 0, "minimo passa")
     assert(validateServePorts(65535, 65535, 65535).length == 0, "maximo passa")
-    assert(validateServePorts(0, 7000, 8081).indexOf("control-port") >= 0, "zero barra no control")
-    assert(validateServePorts(8080, 70000, 8081).indexOf("tunnel-port") >= 0, "teto barra no tunel")
-    assert(validateServePorts(8080, 7000, -1).indexOf("http-port") >= 0, "negativa barra no http")
+    assert(validateServePorts(0, defaultTunnelPort(), defaultHttpPort()).indexOf("control-port") >= 0, "zero barra no control")
+    assert(validateServePorts(defaultControlPort(), 70000, defaultHttpPort()).indexOf("tunnel-port") >= 0, "teto barra no tunel")
+    assert(validateServePorts(defaultControlPort(), defaultTunnelPort(), -1).indexOf("http-port") >= 0, "negativa barra no http")
+    assert(defaultControlUrl() == "http://127.0.0.1:" + intToString(defaultControlPort()), "controlUrl usa o default")
 }
 
 test "text: flag sem valor nao vira default silencioso", "flag-missing" {

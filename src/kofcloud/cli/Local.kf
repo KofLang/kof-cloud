@@ -1,5 +1,6 @@
 package kofcloud.cli
 
+import kofcloud.util.Hosts
 import kofcloud.util.Text
 import kofcloud.store.Store
 
@@ -37,7 +38,7 @@ String stopPath() {
 }
 
 String defaultControlUrl() {
-    return config.str("kofcloud.controlUrl", "http://127.0.0.1:8080")
+    return config.str("kofcloud.controlUrl", "http://127.0.0.1:" + intToString(defaultControlPort()))
 }
 
 LocalIdentity? loadIdentity() {

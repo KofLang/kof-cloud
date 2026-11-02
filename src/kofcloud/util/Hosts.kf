@@ -13,6 +13,22 @@ String defaultLocalAddress() {
     return "127.0.0.1"
 }
 
+// Portas default do `serve` (control plane HTTP, tunel, HTTP publico do
+// edge). Fonte unica: o `cmdServe` usa como fallback do parse, o help
+// anuncia os mesmos valores e o Agent recai no mesmo tunel quando o
+// control plane nao informa a porta. Mudar aqui muda os tres juntos.
+Int defaultControlPort() {
+    return 8080
+}
+
+Int defaultTunnelPort() {
+    return 7000
+}
+
+Int defaultHttpPort() {
+    return 8081
+}
+
 String serviceHostname(String serviceName, String handle) {
     return serviceName + "." + handle + "." + kofcloudDomain()
 }
