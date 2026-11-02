@@ -23,3 +23,7 @@ String deviceSuspended() {
 Bool deviceIsActive(Device device) {
     return device.status == deviceActive()
 }
+
+Bool deviceIsSuspended(Device device) {
+    return device.status == deviceSuspended()
+}

@@ -110,11 +110,14 @@ test "suspensao: dispositivo recusado no tunel, nada removido", "abuse-device" {
     if (gone != null) {
         assert(gone.status == "REVOKED", "revogado vence suspensao")
     }
-    // deviceIsActive delega no construtor (fonte unica do literal):
-    // ativo recem-registrado, inativo suspenso.
+    // deviceIsActive/deviceIsSuspended delegam nos construtores (fonte unica
+    // dos literais): ativo recem-registrado, inativo suspenso.
     var fresh = registry.registerDevice(mel, "nb2", "pk2")
     assert(deviceIsActive(fresh) == true, "novo device e ativo")
+    assert(deviceIsSuspended(fresh) == false, "novo device nao e suspenso")
     assert(deviceIsActive(Device("x", mel.id, "y", "pk", deviceSuspended(), 0, 0)) == false, "suspenso nao e ativo")
+    assert(deviceIsSuspended(Device("x", mel.id, "y", "pk", deviceSuspended(), 0, 0)) == true, "suspenso casa")
+    assert(deviceIsSuspended(Device("x", mel.id, "y", "pk", deviceActive(), 0, 0)) == false, "ativo nao casa")
 }
 
 test "suspensao: Edge recusa tunel suspenso e esconde rota; audit via HTTP", "abuse-e2e" {
