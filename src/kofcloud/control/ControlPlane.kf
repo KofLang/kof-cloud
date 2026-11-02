@@ -664,16 +664,29 @@ HttpResult handleListDomains(Registry registry, String? authHeader) {
 
 // ---- dominio proprio (Fase 6) ----
 
-// Mapeia excecao do Registry para HTTP mantendo a opacidade: inexistente e
-// alheio respondem o mesmo 404; formato invalido e 400; conflito e 409.
-HttpResult domainError(String e) {
+// HTTP do erro de dominio por familia: formato -> 400, conflito -> 409,
+// resto (inexistente/alheio) -> 404 opaco. Pura para a trava testar sem
+// rede; o domainError delega (fonte unica do mapeamento).
+Int domainHttpStatus(String e) {
     if (e.indexOf("KCF120") >= 0) {
-        return HttpResult(400, errorJson(e))
+        return 400
     }
     if (e.indexOf("KCF121") >= 0) {
-        return HttpResult(409, errorJson(e))
+        return 409
     }
-    return HttpResult(404, errorJson(errDomainNotFound()))
+    return 404
+}
+
+// Mapeia excecao do Registry para HTTP mantendo a opacidade (ver
+// domainHttpStatus). No 404 o corpo e reescrito para KCF122: o registry
+// lanca KCF041/KCF042 (servico ausente/alheio) como defesa em profundidade,
+// e a borda nunca revela recurso de outra conta.
+HttpResult domainError(String e) {
+    var status = domainHttpStatus(e)
+    if (status == 404) {
+        return HttpResult(404, errorJson(errDomainNotFound()))
+    }
+    return HttpResult(status, errorJson(e))
 }
 
 HttpResult handleRegisterDomain(Registry registry, String? authHeader, String bodyText) {

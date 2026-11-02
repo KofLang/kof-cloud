@@ -351,6 +351,17 @@ test "dominio: Hint orienta o operador sem vazar nada", "domains-hint" {
     assert(errHint("KCF124: hostname does not resolve to this Edge").indexOf("CNAME") >= 0, "KCF124 sugere o CNAME")
 }
 
+test "dominio: domainHttpStatus mapeia familia -> HTTP (trava pura)", "domains-status" {
+    // Fonte unica do mapeamento que o domainError usa na borda: formato
+    // 400, conflito 409, resto 404 opaco. Mudar um ramo sem atualizar a
+    // trava quebra aqui de proposito (precedente: errors-publish-status).
+    assert(domainHttpStatus(errInvalidCustomHostname()) == 400, "KCF120 -> 400")
+    assert(domainHttpStatus(errDomainTaken()) == 409, "KCF121 -> 409")
+    assert(domainHttpStatus(errDomainNotFound()) == 404, "KCF122 -> 404 opaco")
+    assert(domainHttpStatus(errServiceNotYours()) == 404, "KCF042 -> 404 opaco")
+    assert(domainHttpStatus("KCF999: algo estranho") == 404, "desconhecido -> 404 opaco")
+}
+
 test "dominio: serializadores puros sem rede", "domains-serial" {
     // customTargetFor + domainInstruction + domainJson/domainListJson, sem
     // rede nem HOME (precedente: token-serial). Monta conta/device/servico
