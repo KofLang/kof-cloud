@@ -533,6 +533,18 @@ HttpResult handleListServiceTokens(Registry registry, String? authHeader, String
     return HttpResult(200, serviceTokenListJson(registry.serviceTokensFor(account.id, serviceId)))
 }
 
+// Erro do revoke de token por outcome: "revoked" nao e erro (o handler
+// responde 200 direto); "ambiguous" -> 409 KCF063 (pede o kfs_ completo);
+// resto ("", nao encontrado/sem dono) -> 404 com corpo reescrito para KCF041
+// opaco (nunca confirma nem nega a existencia de token alheio). Pura para
+// a trava testar sem rede; o handler delega (fonte unica do mapeamento).
+HttpResult revokeTokenError(String outcome) {
+    if (outcome == "ambiguous") {
+        return HttpResult(409, errorJson(errAmbiguousToken()))
+    }
+    return HttpResult(404, errorJson(errServiceNotFound()))
+}
+
 // Revoga UMA credencial de servico (ex.: vazou). O corpo leva o serviceId
 // (dono) + o proprio token kfs_ a revogar OU o id curto do inventario
 // (quando unico no servico). Inexistente, de outro servico ou de outra
@@ -555,10 +567,7 @@ HttpResult handleRevokeServiceToken(Registry registry, String? authHeader, Strin
         out.put("revoked", "true")
         return HttpResult(200, json.encode(out))
     }
-    if (outcome == "ambiguous") {
-        return HttpResult(409, errorJson(errAmbiguousToken()))
-    }
-    return HttpResult(404, errorJson(errServiceNotFound()))
+    return revokeTokenError(outcome)
 }
 
 HttpResult handleReportStatus(Registry registry, String? authHeader, String bodyText) {

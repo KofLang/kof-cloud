@@ -491,3 +491,20 @@ test "erros: revoke e TTL invalidos viajam como KCF061/KCF062", "errors-token" {
     assert(statusOf(junkTtl) == 400, "TTL lixo -> 400")
     assert(codeIs(errorCodeOf(junkTtl), "KCF062"), "KCF062 lixo")
 }
+
+test "erros: revokeTokenError mapeia outcome -> HTTP+corpo (trava pura)", "errors-revoke-status" {
+    // Fonte unica do mapeamento que o handleRevokeServiceToken usa:
+    // "ambiguous" -> 409 com KCF063, resto -> 404 com corpo reescrito para
+    // KCF041 opaco (nunca vaza se o token existe). Mudar um ramo sem
+    // atualizar a trava quebra aqui de proposito (precedente:
+    // errors-publish-status, domains-status).
+    var ambiguous = revokeTokenError("ambiguous")
+    assert(ambiguous.code == 409, "ambiguous -> 409")
+    assert(codeIs(ambiguous.body, "KCF063"), "409 carrega KCF063")
+    var missing = revokeTokenError("")
+    assert(missing.code == 404, "vazio -> 404 opaco")
+    assert(codeIs(missing.body, "KCF041"), "404 carrega KCF041 opaco")
+    var other = revokeTokenError("algo-estranho")
+    assert(other.code == 404, "desconhecido -> 404 opaco")
+    assert(codeIs(other.body, "KCF041"), "404 desconhecido tambem opaco")
+}
