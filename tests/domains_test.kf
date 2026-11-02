@@ -360,6 +360,14 @@ test "dominio: domainHttpStatus mapeia familia -> HTTP (trava pura)", "domains-s
     assert(domainHttpStatus(errDomainNotFound()) == 404, "KCF122 -> 404 opaco")
     assert(domainHttpStatus(errServiceNotYours()) == 404, "KCF042 -> 404 opaco")
     assert(domainHttpStatus("KCF999: algo estranho") == 404, "desconhecido -> 404 opaco")
+    // verifyDomainError responde o HTTP certo E o corpo certo: 404 reescreve
+    // para KCF122 opaco (nunca vaza o detalhe), 409 repassa a falha (KCF124).
+    var verifyGone = verifyDomainError(errDomainNotFound())
+    assert(verifyGone.code == 404, "verify: KCF122 -> 404")
+    assert(verifyGone.body.indexOf("KCF122") >= 0, "verify: 404 carrega KCF122 opaco")
+    var verifyDns = verifyDomainError(errDomainUnreachable())
+    assert(verifyDns.code == 409, "verify: KCF124 -> 409")
+    assert(verifyDns.body.indexOf("KCF124") >= 0, "verify: 409 repassa KCF124")
 }
 
 test "dominio: serializadores puros sem rede", "domains-serial" {

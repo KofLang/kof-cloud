@@ -717,6 +717,18 @@ HttpResult handleRegisterDomain(Registry registry, String? authHeader, String bo
     }
 }
 
+// HTTP do erro do verify por familia: inexistente/alheio (KCF122) -> 404
+// opaco, resto (KCF124, DNS nao aponta) -> 409. Pura para a trava testar
+// sem rede; o handler delega (fonte unica do mapeamento).
+// No 404 o corpo e reescrito para KCF122 opaco: a borda nunca revela se o
+// hostname existe em outra conta.
+HttpResult verifyDomainError(String failure) {
+    if (failure.indexOf("KCF122") >= 0) {
+        return HttpResult(404, errorJson(errDomainNotFound()))
+    }
+    return HttpResult(409, errorJson(failure))
+}
+
 HttpResult handleVerifyDomain(Registry registry, String? authHeader, String bodyText) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
@@ -729,10 +741,7 @@ HttpResult handleVerifyDomain(Registry registry, String? authHeader, String body
     }
     var failure = registry.verifyCustomDomain(account.id, hostname)
     if (failure.length > 0) {
-        if (failure.indexOf("KCF122") >= 0) {
-            return HttpResult(404, errorJson(errDomainNotFound()))
-        }
-        return HttpResult(409, errorJson(failure))
+        return verifyDomainError(failure)
     }
     var domain = registry.customByHostname(hostname)
     var out = mapOf()
