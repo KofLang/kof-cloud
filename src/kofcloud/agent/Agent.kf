@@ -47,7 +47,7 @@ EdgeEndpoint fetchEdge(AgentConfig config) {
     return EdgeEndpoint(
         host,
         port,
-        parseIntSafe(mapField(map, "heartbeatMs"), 15000),
+        parseIntSafe(mapField(map, "heartbeatMs"), limitHeartbeatMs()),
         services
     )
 }
@@ -130,7 +130,7 @@ void connectAndServe(AgentConfig config) {
     }
     var heartbeatMs = frameInt(welcome, "heartbeatMs")
     if (heartbeatMs <= 0) {
-        heartbeatMs = 15000
+        heartbeatMs = limitHeartbeatMs()
     }
 
     var writer = spawn { agentWriter(conn, session) }

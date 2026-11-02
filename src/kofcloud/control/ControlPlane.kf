@@ -11,6 +11,7 @@ import kofcloud.model.Exposure
 import kofcloud.model.Service
 import kofcloud.util.Text
 import kofcloud.util.Hosts
+import kofcloud.util.Limits
 import kofcloud.protocol.Version
 
 // Control Plane: HTTP/JSON sobre web.app(). O handler-scoped `status()` so
@@ -627,7 +628,7 @@ HttpResult handleConnect(Registry registry, String? authHeader, String bodyText,
     var out = mapOf()
     out.put("edgeHost", edgeHost)
     out.put("edgePort", intToString(edgePort))
-    out.put("heartbeatMs", config.str("kofcloud.heartbeatMs", "15000"))
+    out.put("heartbeatMs", intToString(limitHeartbeatMs()))
     out.put("services", serviceListJson(registry.servicesForDevice(deviceId)))
     return HttpResult(200, json.encode(out))
 }

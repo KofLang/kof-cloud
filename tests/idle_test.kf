@@ -16,6 +16,9 @@ import testkit.Support
 test "idle: touch so em frame util; PING nao renova", "idle" {
     assert(limitTunnelIdleMs() == 120000, "default 120 s")
     assert(limitStreamIdleMs() == 30000, "default 30 s")
+    // Fonte unica do heartbeat (Edge anuncia, connect ecoa, Agent recai):
+    // mudar no Limits muda os tres juntos.
+    assert(limitHeartbeatMs() == 15000, "heartbeat default 15 s")
     var session = TunnelSession("s1", "d1", "a1", "")
     var t0 = session.lastActivityMs
     assert(t0 > 0, "atividade inicial marcada")

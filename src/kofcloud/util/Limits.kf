@@ -49,6 +49,13 @@ Int limitStreamIdleMs() {
     return config.int("kofcloud.limits.streamIdleMs", 30000)
 }
 
+// Intervalo do heartbeat do tunel (PING/PONG, ms). Fonte unica: o Edge
+// anuncia no WELCOME e no /v1/connect, e o Agent recai no mesmo valor
+// quando o fio vem sem heartbeat valido. Mesmo valor nos tres pontos.
+Int limitHeartbeatMs() {
+    return config.int("kofcloud.limits.heartbeatMs", 15000)
+}
+
 Int sendChunkBytes() {
     var size = config.int("kofcloud.limits.sendChunkBytes", 16384)
     if (size <= 0) {
