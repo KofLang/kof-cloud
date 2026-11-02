@@ -6,44 +6,58 @@ kof-cloud/
 ├── src/
 │   ├── Main.kf                    entrada da CLI: `kof cloud …`
 │   └── kofcloud/
-│   ├── protocol/                  enquadramento e protocolos (sem I/O)
-│   │   ├── Version.kf             PROTOCOL_VERSION
-│   │   ├── Bytes.kf               base64, concatenação, limites
-│   │   ├── Frame.kf               frame JSON por linha
-│   │   ├── LineCodec.kf           buffer + split por \n
-│   │   ├── Control.kf             mensagens do Control Protocol
-│   │   └── Tunnel.kf              mensagens do Tunnel Protocol
-│   ├── model/                     tipos de domínio (records)
+│   ├── protocol/                  enquadramento e protocolo do túnel (sem I/O)
+│   │   ├── Version.kf             versão do protocolo + terminador de linha
+│   │   ├── Bytes.kf               bytes ↔ string, base64, slice/concat
+│   │   ├── Frame.kf               frame JSON por linha (kind/field/int/bool)
+│   │   ├── LineCodec.kf           buffer + split por \n (fail-closed)
+│   │   ├── Payload.kf             encode/decode + fatiamento em chunks
+│   │   ├── Session.kf             TunnelSession: streams, filas, idle
+│   │   └── Tunnel.kf              HELLO/WELCOME/PING/OPEN/DATA/END/RESET/GOAWAY
+│   ├── model/                     tipos de domínio (records + literais)
 │   │   ├── Account.kf
-│   │   ├── Device.kf
-│   │   ├── Service.kf
-│   │   └── Exposure.kf
+│   │   ├── Device.kf              ACTIVE/REVOKED/SUSPENDED + predicados
+│   │   ├── Service.kf             status + exposure + predicados
+│   │   ├── Exposure.kf            PUBLIC/AUTHENTICATED/PRIVATE + defaults
+│   │   ├── CustomDomain.kf        PENDING/VERIFIED + verificação DNS
+│   │   ├── Audit.kf               nomes dos eventos da trilha
+│   │   └── Errors.kf              erros estáveis KCFnnn + Hint
 │   ├── identity/
-│   │   ├── Keys.kf                par X25519, handshake, session key
-│   │   └── Tokens.kf              geração/verificação de token
+│   │   ├── Keys.kf                X25519/HKDF/AES-GCM, session key
+│   │   └── Tokens.kf              geração/verificação de token (hash opaco)
 │   ├── store/
 │   │   └── Store.kf               persistência JSON (control plane + agent)
 │   ├── control/
-│   │   ├── Registry.kf            estado em memória (contas, devices, serviços)
-│   │   └── ControlPlane.kf        HTTP `/v1/…` sobre `web.app()`
+│   │   ├── Registry.kf            estado em memória (contas, devices,
+│   │   │                         serviços, tokens, domínios, presença)
+│   │   ├── ControlPlane.kf        HTTP `/v1/…` sobre `web.app()`
+│   │   └── Metrics.kf             contadores de lifecycle
 │   ├── edge/
-│   │   ├── Router.kf              Host → serviço
-│   │   ├── Streams.kf             streamId, filas, ciclo de vida
-│   │   ├── TunnelSession.kf       handshake + leitura/escrita de frames
-│   │   ├── TunnelListener.kf      aceita Agents
-│   │   └── HttpFront.kf           listener HTTP/1.1 público
+│   │   ├── EdgeState.kf           rotas + sessões vivas + limites
+│   │   ├── Tunnel.kf              listener de túneis + handshake + sweeper
+│   │   ├── Http.kf                parsing/leitura de HTTP/1.1 cru
+│   │   ├── HttpFront.kf           roteamento por Host + relay público
+│   │   ├── Relay.kf               request/response por stream (com OPENED)
+│   │   └── Metrics.kf             túneis/recusas, ok/negadas, bytes, latência
 │   ├── agent/
-│   │   ├── Agent.kf               connect / reconnect / loop de frames
+│   │   ├── Agent.kf               connect/reconnect, pinger, sweeper,
+│   │   │                         health, refresher, watchdog
+│   │   ├── Backoff.kf             backoff exponencial + jitter
+│   │   ├── Health.kf              health check TCP dos serviços locais
 │   │   ├── Relay.kf               relay de um stream ↔ localhost
-│   │   └── Health.kf              health check dos serviços
+│   │   └── Metrics.kf             connects/reconnects/fatais/streams
 │   ├── cli/
 │   │   ├── Cli.kf                 dispatcher de subcomandos
-│   │   ├── Command.kf             interface
-│   │   ├── Usage.kf               ajuda
-│   │   └── commands/              um arquivo por subcomando
+│   │   ├── Commands.kf            login…serve (maioria dos comandos)
+│   │   ├── Deploy.kf              deploy/down (manifesto, build, --check/--plan)
+│   │   ├── Doctor.kf              doctor (diagnóstico em camadas)
+│   │   ├── Daemon.kf              daemon install/status/uninstall (systemd)
+│   │   ├── Local.kf               sessão/identidade/paths locais
+│   │   └── Usage.kf               ajuda
 │   └── util/
-│       ├── Hosts.kf               parsing/validação de hostname
-│       └── Text.kf                helpers de string
+│       ├── Hosts.kf               hostnames + portas default do serve
+│       ├── Limits.kf              limites/tetos configuráveis (fonte única)
+│       └── Text.kf                parse seguro, tailLines, bearer, uso
 └── tests/                         suites (mesmo módulo raiz)
 ```
 
