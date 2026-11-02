@@ -206,12 +206,23 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `429` | `KCF108` too many connections | Edge: sem vaga de relay por serviço (`Retry-After`; antes do OPEN) |
 
 Owner-gate: `POST /v1/services/status` só aceita a conta dona (`KCF042`
-interno vira o mesmo `404 KCF041` na borda, para não revelar recurso alheio).
+interno vira o mesmo `404 KCF041` na borda, para não revelar recurso alheio;
+contrato em 2 camadas: `errors-reg` trava o motivo interno, `errors-xacct`
+trava o corpo opaco via HTTP).
 `handleRegisterDevice` responde `429` apenas para limite; erro de validação é
 `400`. Códigos internos que nunca cruzam a borda com identidade própria:
 `KCF022`/`KCF060` (vira `404` opaco), `KCF061` (vira `400` sem serviceId/token
 no corpo). Todo `KCFnnn` emitido sai de um construtor `err*()` em
 `model/Errors.kf` — nenhum literal inline fora dele.
+Família outcome→HTTP single-source (cada uma com função pura + trava que
+quebra ao mudar um ramo ou vazar o detalhe): `publishHttpStatus`/
+`publishError` (limite 429, validação 400, resto 404 opaco),
+`domainHttpStatus`/`domainError` (formato 400, conflito 409, resto 404 opaco),
+`verifyDomainError` (KCF122→404 opaco, resto→409) e `revokeTokenError`
+(ambiguous→409 com KCF063, resto→404 opaco; casa por outcome, sem
+`indexOf`). Auditoria: `grep 'indexOf("KCF'
+src/kofcloud/control/ControlPlane.kf` só acusa 5 linhas — todas nos corpos
+de `publishHttpStatus` (2), `domainHttpStatus` (2) e `verifyDomainError` (1).
 `KCF123` é reservado (faixa KCF120–KCF139, domínio próprio): nunca emitido,
 sem `Hint:` por desenho — a trava `errors-hint-all` quebra se alguém emitir
 sem dica e se o reservado ganhar dica.

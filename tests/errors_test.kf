@@ -223,6 +223,16 @@ test "erros: limites e owner-gate no registry viajam como KCF080/KCF081/KCF022/K
         }
     }
     assert(codeIs(tokenDenied, "KCF060"), "KCF060 emissao negada a nao dona")
+
+    // Contrato interno-vs-borda do owner-gate do status: o registry devolve
+    // o motivo real (KCF041 inexistente, KCF042 alheio); a borda reescreve
+    // ambos para KCF041 opaco (travado via HTTP no errors-xacct). Se o
+    // registry passar a devolver outra coisa, este teste quebra — e se a
+    // borda passar a repassar o KCF042, o errors-xacct quebra.
+    if (site != null) {
+        assert(codeIs(registry.reportServiceStatus(mel.id, "fantasma", "ONLINE"), "KCF041"), "status: inexistente e KCF041")
+        assert(codeIs(registry.reportServiceStatus(ana.id, site.id, "OFFLINE"), "KCF042"), "status: alheio e KCF042 interno")
+    }
 }
 
 test "erros: publishHttpStatus mapeia familia -> HTTP (trava pura)", "errors-publish-status" {
