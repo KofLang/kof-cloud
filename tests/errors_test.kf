@@ -33,6 +33,14 @@ test "erros: control plane devolve codigos estaveis", "errors" {
     assert(statusOf(badHandle) == 400, "handle invalido -> 400")
     assert(codeIs(errorCodeOf(badHandle), "KCF001"), "KCF001 invalid handle")
 
+    // Senha curta: o handler barra antes de criar (400 KCF005). Sem esta
+    // trava, o ramo `password.length < 4` poderia sumir ou mudar de codigo
+    // sem quebrar nada — o construtor e a Hint ja estao travados, mas o fio
+    // (status+corpo via HTTP) nao estava.
+    var shortPass = httpPostJson(19500, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"abc\"}", "")
+    assert(statusOf(shortPass) == 400, "senha curta -> 400")
+    assert(codeIs(errorCodeOf(shortPass), "KCF005"), "KCF005 password too short")
+
     var created = httpPostJson(19500, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"mel@example.com\",\"password\":\"segredo\"}", "")
     assert(statusOf(created) == 200, "conta criada")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
