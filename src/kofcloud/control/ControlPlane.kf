@@ -374,16 +374,28 @@ HttpResult handlePublishService(Registry registry, String? authHeader, String bo
     }
 }
 
-// Erros do publish com o HTTP certo por familia: limite -> 429, nome -> 400,
-// dono/recurso -> 404 opaco (nao revela recurso alheio).
-HttpResult publishError(String e) {
+// HTTP do erro do publish por familia: limite -> 429, validacao -> 400,
+// resto (dono/recurso) -> 404 opaco (nao revela recurso alheio). Pura para
+// a trava testar sem rede; o publishError delega (fonte unica do mapeamento).
+Int publishHttpStatus(String e) {
     if (e.indexOf("KCF080") >= 0 || e.indexOf("KCF081") >= 0) {
-        return HttpResult(429, errorJson(e))
+        return 429
     }
     if (e.indexOf("KCF040") >= 0 || e.indexOf("KCF043") >= 0) {
-        return HttpResult(400, errorJson(e))
+        return 400
     }
-    return HttpResult(404, errorJson(errDeviceNotFound()))
+    return 404
+}
+
+// Erros do publish com o HTTP certo por familia (ver publishHttpStatus).
+// No 404 o corpo e reescrito para KCF021 opaco: o registry lanca KCF022
+// (device alheio) como defesa em profundidade, e a borda nunca revela dono.
+HttpResult publishError(String e) {
+    var status = publishHttpStatus(e)
+    if (status == 404) {
+        return HttpResult(404, errorJson(errDeviceNotFound()))
+    }
+    return HttpResult(status, errorJson(e))
 }
 
 HttpResult handleListServices(Registry registry, String? authHeader) {

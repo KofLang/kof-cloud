@@ -225,6 +225,19 @@ test "erros: limites e owner-gate no registry viajam como KCF080/KCF081/KCF022/K
     assert(codeIs(tokenDenied, "KCF060"), "KCF060 emissao negada a nao dona")
 }
 
+test "erros: publishHttpStatus mapeia familia -> HTTP (trava pura)", "errors-publish-status" {
+    // Fonte unica do mapeamento que o publishError usa na borda: limite
+    // 429, validacao 400, resto (dono/recurso) 404 opaco. Mudar um ramo
+    // sem atualizar a trava quebra aqui de proposito.
+    assert(publishHttpStatus(errLimitDevices()) == 429, "KCF080 -> 429")
+    assert(publishHttpStatus(errLimitServices()) == 429, "KCF081 -> 429")
+    assert(publishHttpStatus(errInvalidServiceName()) == 400, "KCF040 -> 400")
+    assert(publishHttpStatus(errLocalPort()) == 400, "KCF043 -> 400")
+    assert(publishHttpStatus(errDeviceNotYours()) == 404, "KCF022 -> 404 opaco")
+    assert(publishHttpStatus(errDeviceNotFound()) == 404, "KCF021 -> 404 opaco")
+    assert(publishHttpStatus("KCF999: algo estranho") == 404, "desconhecido -> 404 opaco")
+}
+
 test "erros: Edge devolve codigos estaveis (rota, auth, offline, conteudo)", "errors-edge" {
     var localSvc = 19520
     var controlPort = 19521
