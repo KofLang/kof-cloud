@@ -83,7 +83,7 @@ Bool validCustomHostname(String hostname) {
 }
 
 String kofcloudDomainSuffix() {
-    return ".kofcloud.io"
+    return "." + kofcloudDomain()
 }
 
 // Divide por ponto LITERAL. `String.split` trata o padrao como regex (ponto

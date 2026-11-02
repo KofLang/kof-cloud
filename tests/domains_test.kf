@@ -7,6 +7,7 @@ import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
 import kofcloud.model.CustomDomain
 import kofcloud.model.Errors
+import kofcloud.util.Hosts
 import kofcloud.store.Store
 import kofcloud.util.Text
 import testkit.Support
@@ -60,6 +61,10 @@ test "dominio: validacao de hostname externo", "domains" {
     assert(validCustomHostname("api..example.com") == false, "ponto duplo")
     assert(validCustomHostname("api.exa mple.com") == false, "espaco")
     assert(validCustomHostname("-api.example.com") == false, "hifen na ponta")
+    // kofcloudDomainSuffix delega em kofcloudDomain (fonte unica do dominio):
+    // o sufixo reservado e sempre "." + dominio, nunca um segundo literal.
+    assert(kofcloudDomainSuffix() == "." + kofcloudDomain(), "sufixo deriva do dominio")
+    assert(kofcloudDomainSuffix() == ".kofcloud.io", "sufixo travado")
 }
 
 test "dominio: registro e idempotencia no registry", "domains-reg" {
