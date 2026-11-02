@@ -93,8 +93,7 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         noteHttpFinished("denied", "KCF102", raw.length, gone.length, time.now() - started)
         return
     }
-    var ownerStatus = owner.status
-    if (ownerStatus != deviceActive()) {
+    if (deviceIsActive(owner) == false) {
         state.unbind(service.deviceId, session.sessionId)
         session.close()
         var gone = errorResponse(503, errDeviceOffline())

@@ -118,6 +118,8 @@ test "suspensao: dispositivo recusado no tunel, nada removido", "abuse-device" {
     assert(deviceIsActive(Device("x", mel.id, "y", "pk", deviceSuspended(), 0, 0)) == false, "suspenso nao e ativo")
     assert(deviceIsSuspended(Device("x", mel.id, "y", "pk", deviceSuspended(), 0, 0)) == true, "suspenso casa")
     assert(deviceIsSuspended(Device("x", mel.id, "y", "pk", deviceActive(), 0, 0)) == false, "ativo nao casa")
+    assert(deviceIsActive(Device("x", mel.id, "y", "pk", deviceRevoked(), 0, 0)) == false, "revogado nao e ativo")
+    assert(deviceIsSuspended(Device("x", mel.id, "y", "pk", deviceRevoked(), 0, 0)) == false, "revogado nao e suspenso")
 }
 
 test "suspensao: Edge recusa tunel suspenso e esconde rota; audit via HTTP", "abuse-e2e" {
