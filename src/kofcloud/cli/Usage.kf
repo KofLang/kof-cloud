@@ -1,9 +1,14 @@
 package kofcloud.cli
 
+import kofcloud.cli.Deploy
 import kofcloud.util.Hosts
 import kofcloud.util.Text
 
-// Texto de ajuda da CLI.
+// Texto de ajuda da CLI. As linhas do manifesto montam o nome do arquivo
+// a partir de defaultManifestPath() — precedente: a linha do serve ja
+// monta as portas a partir de defaultControlPort()/defaultTunnelPort()/
+// defaultHttpPort(). Sem isso, mudar o default deixava o help mentindo
+// (o deploy-usage trava as duas familias).
 
 String usageText() {
     var out = "kof cloud — conecte sua maquina a internet\n"
@@ -32,10 +37,10 @@ String usageText() {
     out = out + "  domain add <hostname> --service <nome>\n"
     out = out + "  domain verify <hostname>\n"
     out = out + "  domain remove <hostname>\n"
-    out = out + "  deploy [--file kofcloud.json] [--check] [--plan]  (publica + verifica; --plan so mostra o diff e marca (build)/(artifact); manifesto aceita build/artifact por servico)\n"
-    out = out + "  down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove orfaos do device)\n"
+    out = out + "  deploy [--file " + defaultManifestPath() + "] [--check] [--plan]  (publica + verifica; --plan so mostra o diff e marca (build)/(artifact); manifesto aceita build/artifact por servico)\n"
+    out = out + "  down [--file " + defaultManifestPath() + "] [--prune]  (remove os do manifesto; --prune remove orfaos do device)\n"
     out = out + "  daemon install|status|uninstall   (systemd --user, sem root)\n"
-    out = out + "  doctor [--file kofcloud.json]       (diagnostico: login, control, device, tunel, servicos)\n"
+    out = out + "  doctor [--file " + defaultManifestPath() + "]       (diagnostico: login, control, device, tunel, servicos)\n"
     out = out + "  audit                     (trilha de auditoria da conta)\n"
     out = out + "  logs [--tail <linhas>]  (log local do agent, teto 256 KiB)\n"
     out = out + "\n"

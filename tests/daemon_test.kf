@@ -1,4 +1,5 @@
 import kofcloud.cli.Daemon
+import kofcloud.cli.Deploy
 import kofcloud.cli.Usage
 import kofcloud.util.Hosts
 import kofcloud.util.Text
@@ -45,7 +46,14 @@ test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
     // O plan tambem marca (build)/(artifact) por linha — o help promete
     // isso desde o passo 6, para o operador nao ser surpreendido.
     var help = usageText()
-    assert(help.indexOf("deploy [--file kofcloud.json] [--check] [--plan]") >= 0, "deploy documenta flags")
+    // O nome do manifesto vem da fonte unica (precedente: serveLine monta
+    // as portas da fonte; mutacao no default quebra aqui e no help).
+    var deployLine = "deploy [--file " + defaultManifestPath() + "] [--check] [--plan]"
+    assert(help.indexOf(deployLine) >= 0, "deploy documenta flags")
+    var downLine = "down [--file " + defaultManifestPath() + "] [--prune]"
+    assert(help.indexOf(downLine) >= 0, "down documenta flags do manifesto")
+    var doctorLine = "doctor [--file " + defaultManifestPath() + "]"
+    assert(help.indexOf(doctorLine) >= 0, "doctor documenta --file do manifesto")
     assert(help.indexOf("build/artifact") >= 0, "deploy anuncia build+artifact do manifesto")
     assert(help.indexOf("(build)/(artifact)") >= 0, "plan anuncia marcas por linha")
     var serveLine = "serve [--control-port " + intToString(defaultControlPort()) + "] [--tunnel-port " + intToString(defaultTunnelPort()) + "] [--http-port " + intToString(defaultHttpPort()) + "] [--state <arquivo>]"
