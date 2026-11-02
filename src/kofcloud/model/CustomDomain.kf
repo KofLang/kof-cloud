@@ -17,7 +17,7 @@ String domainVerified() {
 }
 
 Bool domainIsVerified(CustomDomain domain) {
-    return domain.status == "VERIFIED"
+    return domain.status == domainVerified()
 }
 
 // Hostname externo valido: um ou mais rotulos DNS separados por ponto
