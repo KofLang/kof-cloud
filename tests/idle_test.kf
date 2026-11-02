@@ -25,6 +25,12 @@ test "idle: touch so em frame util; PING nao renova", "idle" {
     // Health local e refresh da tabela andam juntos (refresh = 6xhealth):
     // o fallback do Agent recai aqui quando a config vem sem health.
     assert(limitHealthMs() == 5000, "health default 5 s")
+    // Fonte unica do refresh: o spawn e o fallback do refresher passam
+    // pela mesma funcao (sem isso o `* 6` do chamador e o `30000` do
+    // fallback andariam separados).
+    assert(limitRefreshMs(5000) == 30000, "refresh = 6x health")
+    assert(limitRefreshMs(0) == 30000, "refresh invalido recai no default")
+    assert(limitRefreshMs(-1) == 30000, "refresh negativo recai no default")
     var session = TunnelSession("s1", "d1", "a1", "")
     var t0 = session.lastActivityMs
     assert(t0 > 0, "atividade inicial marcada")

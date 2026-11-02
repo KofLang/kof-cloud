@@ -71,6 +71,19 @@ Int limitHealthMs() {
     return config.int("kofcloud.limits.healthMs", 5000)
 }
 
+// Intervalo do refresher da tabela de servicos (ms): re-busca os servicos
+// via /v1/connect e troca a tabela DA SESSAO. Por desenho e 6x o health —
+// os dois ciclos andam juntos; health zerado/invalido recai no default.
+// Fonte unica para o spawn (connectAndServe) e o fallback dentro do
+// refresher — sem isso o `* 6` do chamador e o `30000` do fallback
+// andariam separados.
+Int limitRefreshMs(Int healthMs) {
+    if (healthMs <= 0) {
+        healthMs = limitHealthMs()
+    }
+    return healthMs * 6
+}
+
 Int sendChunkBytes() {
     var size = config.int("kofcloud.limits.sendChunkBytes", 16384)
     if (size <= 0) {

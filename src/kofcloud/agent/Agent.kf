@@ -142,7 +142,7 @@ void connectAndServe(AgentConfig config) {
         healthMs = limitHealthMs()
     }
     var health = spawn { agentHealth(session, endpoint.services, healthMs) }
-    var refresher = spawn { agentRefresher(session, config, healthMs * 6) }
+    var refresher = spawn { agentRefresher(session, config, limitRefreshMs(healthMs)) }
 
     reportAllStatuses(session, endpoint.services)
 
@@ -342,10 +342,7 @@ void agentHealth(TunnelSession session, List<Service> services, Int healthMs) {
 // servico novo entra e o proximo OPEN ja roteia. Falha de rede = ignora e
 // tenta no proximo ciclo (nunca derruba o tunel por causa do refresh).
 void agentRefresher(TunnelSession session, AgentConfig config, Int refreshMs) {
-    var gap = refreshMs
-    if (gap <= 0) {
-        gap = 30000
-    }
+    var gap = limitRefreshMs(refreshMs)
     var open = true
     while (open) {
         time.sleep(gap)
