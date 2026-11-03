@@ -148,6 +148,41 @@ String bearerValue(String authorization) {
 // unico dado que chega a metrica/log. O Edge em modo detectar CONTA e
 // segue com o relay; com enforce ligado (`EdgeState.setWafEnforce(true)`)
 // casa vira `403 KCF109` antes do relay.
+// Teto de inspecao do corpo pelo WAF. Acima disso o corpo NAO e inspecionado
+// (o teto de corpo do Edge, `httpBodyBytes`, e outro limite: 1 MiB). 64 KiB
+// cobre formularios e JSON de API sem varrer uploads grandes a cada request.
+Int wafBodyInspectBytes() {
+    return 65536
+}
+
+// Assinatura sobre o CORPO (slice 1, parte que faltava): o desenho prometia
+// "corpo pequeno" e so metodo+path era inspecionado. O corpo e JSON-escapado
+// antes de casar, para que `"q":"UNION SELECT"` (com aspas e dois-pontos no
+// meio) case igual a `q=UNION SELECT` na query. Corpo acima de
+// `wafBodyInspectBytes()` nao e inspecionado (devolve "").
+String wafDetectBodySignature(String body) {
+    if (body.length == 0 || body.length > wafBodyInspectBytes()) {
+        return ""
+    }
+    var target = body.toLowerCase()
+    if (target.indexOf("union select") >= 0 || target.indexOf("union%20select") >= 0) {
+        return "sqli-union"
+    }
+    if (target.indexOf("or 1=1") >= 0 || target.indexOf("or%201%3d1") >= 0) {
+        return "sqli-tautology"
+    }
+    if (target.indexOf("<script") >= 0 || target.indexOf("%3cscript") >= 0) {
+        return "xss-script"
+    }
+    if (target.indexOf("../") >= 0 || target.indexOf("..%2f") >= 0 || target.indexOf("..%5c") >= 0) {
+        return "traversal"
+    }
+    if (target.indexOf("%00") >= 0) {
+        return "nullbyte"
+    }
+    return ""
+}
+
 String wafDetectSignature(String method, String path) {
     var target = (method + " " + path).toLowerCase()
     if (target.indexOf("..%2f") >= 0 || target.indexOf("..%5c") >= 0 || target.indexOf("../") >= 0 || target.indexOf("..\\") >= 0) {

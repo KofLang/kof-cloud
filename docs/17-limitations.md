@@ -58,9 +58,12 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 * **WAF ainda é parcial (Fase 10).** Prontos: teto de corpo (slice 2a),
   timeout de upstream (slice 2b) e slice 1 completo (detectar com
   `would-block` + enforce via `serve --waf=enforce` → `403 KCF109` +
-  `blocked` antes do relay). Falta o enforcement da allowlist de
-  métodos/paths (slice 3: fundação KCF111 pronta — construtor + Hint +
-  métrica `_waf_allow_denied` travados — sem emissor no HttpFront ainda).
+  `blocked` antes do relay; corpo de até 64 KiB também é inspecionado). Falta
+  o enforcement da allowlist de métodos/paths (slice 3: fundação KCF111
+  pronta — construtor + Hint + métrica `_waf_allow_denied` — sem emissor no
+  HttpFront ainda). As assinaturas são literais: no corpo, a barra invertida
+  do JSON não é normalizada, então traversal JSON-escapado não casa ali (casa
+  na query crua).
   O timeout usa polling (`limitIdleSweepMs`) e o prazo é medido
   desde o último DATA — a granularidade é a do passo de varredura, não exata.
   O teto usa o

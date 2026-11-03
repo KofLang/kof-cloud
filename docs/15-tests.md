@@ -48,6 +48,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U23b | enforce WAF núcleo (slice 1-enforce) | `tests/waf_detect_test.kf` (1 teste: `wafenforce`) + locks em `metrics_test.kf`/`errors_test.kf` | `setWafEnforce(true)` → ataque 403 KCF109 + `blocked` sem chegar ao local (contador no peer prova), legítimo 200 antes e depois, métricas `_traversal` + `_waf_denied`; mapeamento KCF109→sufixo travado + KCF109 na lista canônica de Hint |
 | U23c | flag WAF no serve (slice 1-flag) | `tests/hosts_test.kf` (1 teste: `serve-waf`) + lock ajuda em `daemon_test.kf` | `resolveWafMode` pura (ausente/vazio/so-espacos = detectar, padding, lixo = "?" com erro no cmdServe) + guardas fail-fast (--waf solto/repetido); ajuda monta a linha do serve com `[--waf detectar\|enforce]` |
 | U24 | timeout de upstream (WAF slice 2b) | `tests/waf_timeout_test.kf` (2 testes: `waftimeout-unit` + `waftimeout`) | `errUpstreamTimeout` KCF112 com Hint; e2e com serviço mudo e prazo curto: 504 + vaga liberada (2º pedido também 504, não 429) + métrica `_timeout` |
+| U25 | WAF corpo pequeno (slice 1) | `tests/waf_detect_test.kf` (`wafbody-unit` + `wafdetect-body`) | `wafDetectBodySignature` sobre o corpo (SQLi/XSS/traversal/null), JSON legítimo limpo, corpo acima de 64 KiB não inspecionado; e2e POST: legítimo 200 sem contar (baseline, métrica é global), SQLi no corpo detectar `would-block` + métrica, enforce `403 KCF109` + `blocked` |
 
 ## Integração
 

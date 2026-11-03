@@ -122,11 +122,17 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         return
     }
     var dropCredential = exposureRequiresAuth(service.exposure)
-    // WAF slice 1: inspeciona metodo+path. Default (detectar): CONTA e segue
+    // WAF slice 1: inspeciona metodo+path e corpo pequeno. Default (detectar): CONTA e segue
     // com o relay (nenhum legitimo quebra por construcao). Enforce: casa ->
     // `403 KCF109` antes do relay (sem stream, sem Agent). So o nome do
     // padrao chega a metrica (nunca corpo, path ou hostname).
     var signature = wafDetectSignature(request.method, request.path)
+    if (signature.length == 0) {
+        // Corpo pequeno tambem e inspecionado (o desenho do slice 1 prometia
+        // "corpo pequeno"; so metodo+path deixava POST de formulario passar).
+        // Acima de wafBodyInspectBytes() o corpo nao e varrido.
+        signature = wafDetectBodySignature(bytesToString(request.body))
+    }
     if (signature.length > 0) {
         noteWafDetected(signature)
         if (state.wafEnforcing()) {

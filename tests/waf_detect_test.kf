@@ -276,3 +276,113 @@ Int metricValue(String exposition, String name) {
     }
     return -1
 }
+
+test "waf detectar: corpo pequeno tambem e inspecionado", "wafbody-unit" {
+    // O desenho do slice 1 prometia "corpo pequeno"; so metodo+path deixava
+    // POST de formulario/JSON passar sem inspecao.
+    assert(wafDetectBodySignature("q=UNION SELECT * FROM users") == "sqli-union", "union no corpo")
+    assert(wafDetectBodySignature("{\"u\":\"x' OR 1=1--\"}") == "sqli-tautology", "tautologia em JSON")
+    assert(wafDetectBodySignature("{\"q\":\"<script>alert(1)</script>\"}") == "xss-script", "xss em JSON")
+    assert(wafDetectBodySignature("file=../../etc/passwd") == "traversal", "traversal no corpo")
+    assert(wafDetectBodySignature("a=%00b") == "nullbyte", "null byte no corpo")
+    // Legitimo nao casa.
+    assert(wafDetectBodySignature("{\"name\":\"Mel\",\"page\":2}") == "", "json legitimo")
+    assert(wafDetectBodySignature("") == "", "corpo vazio")
+    // Acima do teto de inspecao nao e varrido (nao vira falso positivo caro).
+    var big = ""
+    var i = 0
+    while (i < wafBodyInspectBytes() + 10) {
+        big = big + "a"
+        i = i + 1
+    }
+    assert(wafDetectBodySignature(big + " UNION SELECT") == "", "corpo grande nao inspecionado")
+    assert(wafBodyInspectBytes() > 0, "teto positivo")
+}
+
+test "waf detectar: ataque no corpo (POST) conta e marca would-block", "wafdetect-body" {
+    var localSvc = 19811
+    var controlPort = 19812
+    var tunnelPort = 19813
+    var httpPort = 19814
+
+    var localListener = net.listen(localSvc)
+    var localServer = spawn {
+        var serving = true
+        while (serving) {
+            try {
+                var peer = localListener.accept()
+                var worker = spawn { serveDetectPeer(peer) }
+            } catch (String e) {
+                serving = false
+            }
+        }
+    }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-wafbody-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-wafbody-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-wafbody-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent online")
+
+    var host = "site.mel.kofcloud.io"
+    // A metrica e global do processo: outros testes WAF podem ja ter contado.
+    // A prova e "nao aumentou", nao "esta em zero".
+    var baseline = metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total")
+    // POST legitimo antes: 200, sem contagem.
+    var ok = httpPostRaw(httpPort, "/submit", host, listOf<String>("Content-Type: application/json"), "{\"name\":\"Mel\"}")
+    assert(statusOf(ok) == 200, "POST legitimo 200")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total") == baseline, "legitimo nao conta")
+
+    // POST com SQLi no corpo: modo detectar CONTA e marca would-block.
+    var evil = httpPostRaw(httpPort, "/submit", host, listOf<String>("Content-Type: application/json"), "{\"q\":\"x' OR 1=1--\"}")
+    assert(statusOf(evil) == 200, "detectar nao bloqueia o corpo")
+    assert(responseHeader(evil, "X-KofCloud-WAF") == "would-block", "marca would-block")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total_sqli_tautology") >= 1, "padrao do corpo contado")
+
+    // Enforce: o mesmo POST vira 403 KCF109 sem chegar ao servico local.
+    edgeState.setWafEnforce(true)
+    var blocked = httpPostRaw(httpPort, "/submit", host, listOf<String>("Content-Type: application/json"), "{\"q\":\"<script>alert(1)</script>\"}")
+    assert(statusOf(blocked) == 403, "enforce bloqueia corpo")
+    assert(bodyOf(blocked).indexOf("KCF109") >= 0, "KCF109")
+    assert(responseHeader(blocked, "X-KofCloud-WAF") == "blocked", "marca blocked")
+
+    // Parada limpa.
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+    localListener.close()
+}

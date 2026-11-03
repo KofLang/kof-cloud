@@ -278,7 +278,14 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   o Edge (`HttpFront`) conta por padrão (`_traversal`, `_nullbyte`,
   `_sqli_union`, `_sqli_tautology`, `_xss_script`, `_other`) e segue com o
   relay (nunca bloqueia). `KCF109` existe com Hint (o enforce futuro usa
-  esse código). Prova: `tests/waf_detect_test.kf` (2 testes).
+  esse código). **Corpo pequeno ✅:** `wafDetectBodySignature` inspeciona até
+  `wafBodyInspectBytes()` (64 KiB) do corpo — o desenho prometia "corpo
+  pequeno" e só método+path era visto; JSON escapado não engana
+  (`"q":"x' OR 1=1--"` casa `sqli-tautology`), corpo acima do teto não é
+  varrido. Honestidade: as assinaturas são literais, então a barra invertida
+  do JSON não é normalizada (traversal JSON-escapado não casa no corpo).
+  Prova: `tests/waf_detect_test.kf` (`wafdetect-unit`, `wafdetect`,
+  `wafbody-unit`, `wafdetect-body`).
 * **Slice 2a — teto de corpo por requisição ✅.** `kofcloud.limits.httpBodyBytes`
   (default 1 MiB); o Edge recusa antes do relay quando o `Content-Length`
   declarado passa → `413 KCF110` + métrica `_body_too_large`. Não consome
