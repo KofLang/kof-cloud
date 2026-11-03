@@ -4,7 +4,6 @@ import kofcloud.protocol.Bytes
 
 import kofcloud.identity.Keys
 import kofcloud.util.Limits
-import kofcloud.util.Limits
 
 // Codificacao do campo `d` de um frame DATA.
 //
