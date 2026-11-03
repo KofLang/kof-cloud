@@ -333,7 +333,11 @@ Desenho fatiado:
   (método: só verbos exatos em maiúsculas) / `400 KCF114` (path: absoluto
   `/...`, sem espaço). Prova: `tests/waf_allow_test.kf` (4 testes:
   normalização de métodos e paths, `splitList`, e2e — 403 por path e por
-  método, path permitido 200, serviço sem política não barra).
+  método, path permitido 200, serviço sem política não barra). O deploy
+  declarativo cobre os campos: `kofcloud.json` aceita `allowMethods`/
+  `allowPaths` (mesma normalização da API, malformado falha no parse),
+  `cmdDeploy` envia no publish, e `diffDeployment`/`verifyDeployment`
+  (`--plan`/`--check`/`doctor`) acusam drift de política.
 
 **Regra de ouro:** WAF nunca vaza conteúdo em log/métrica (só padrão que
 casou + hostname) e nunca quebra o legítimo por default (slice 1 começa

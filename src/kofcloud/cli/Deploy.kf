@@ -19,9 +19,12 @@ import kofcloud.store.Store
 //   {"services": [{"name": "site", "port": 8080,
 //                  "address": "127.0.0.1", "exposure": "PUBLIC"}]}
 // `address` defaulta para 127.0.0.1 e `exposure` para PUBLIC — os mesmos
-// defaults do `publish`.
+// defaults do `publish`. `allowMethods`/`allowPaths` (Fase 10 slice 3) sao
+// opcionais e seguem a mesma regra da API: ausentes = sem restricao,
+// presentes sao normalizados (`normalizeAllowMethods`/`normalizeAllowPaths`)
+// e politica malformada falha no parse antes de publicar qualquer coisa.
 
-record ManifestService(String name, String address, Int port, String exposure, String protocol, String build, String artifact)
+record ManifestService(String name, String address, Int port, String exposure, String protocol, String build, String artifact, String allowMethods, String allowPaths)
 
 // Resultado de rodar o build de UM servico: ok=true, comando executado;
 // ok=false traz o motivo ja formatado ("falhou (exit N)" ou "nao executou").
@@ -113,7 +116,7 @@ List<String> diffDeployment(List<Service> live, List<ManifestService> wanted) {
         for (var service in live) {
             if (service.name == item.name) {
                 found = true
-                if (service.localPort == item.port && service.localAddress == item.address && service.exposure == item.exposure && service.protocol == item.protocol) {
+                if (service.localPort == item.port && service.localAddress == item.address && service.exposure == item.exposure && service.protocol == item.protocol && service.allowMethods == item.allowMethods && service.allowPaths == item.allowPaths) {
                     same = true
                 }
             }
@@ -165,7 +168,7 @@ String artifactProblem(String serviceName, String artifact) {
 
 // Confere que cada servico do manifesto esta publicado (existe no control
 // plane para esta conta), COM A MESMA CONFIG (porta/address/exposure/
-// protocol) e responde localmente. Devolve a lista de problemas
+// protocol/allowMethods/allowPaths) e responde localmente. Devolve a lista de problemas
 // `nome: motivo`; vazia = tudo saudavel. Drift de config e acusado antes
 // do check de resposta (nao adianta o local responder se e outro servico
 // que esta publicado). Por ultimo, o artefato declarado (quando ha):
@@ -194,6 +197,10 @@ List<String> verifyDeployment(String controlUrl, String token, List<ManifestServ
                     drift = "exposure " + remote.exposure + " != " + service.exposure
                 } else if (remote.protocol != service.protocol) {
                     drift = "protocol " + remote.protocol + " != " + service.protocol
+                } else if (remote.allowMethods != service.allowMethods) {
+                    drift = "allowMethods " + remote.allowMethods + " != " + service.allowMethods
+                } else if (remote.allowPaths != service.allowPaths) {
+                    drift = "allowPaths " + remote.allowPaths + " != " + service.allowPaths
                 }
             }
         }
@@ -280,13 +287,30 @@ List<ManifestService> parseManifest(String raw) {
         // Trim no parse: caminho com espaco sobrando nunca existiria no
         // disco e barraria o publish a toa (fail-fast do passo 5).
         var artifact = manifestField(entry, "artifact").trim()
+        // Allowlist WAF (Fase 10 slice 3): mesma regra da API (`POST
+        // /v1/services` — `ControlPlane.kf` normaliza com as mesmas funcoes).
+        // Ausente/vazio = sem restricao (servico legado passa); presente e
+        // normalizado (espacos aparados, repeticao removida); malformado
+        // falha posicional no parse (metodo fora da comparacao exata nunca
+        // casaria — nao publica uma regra morta). KCF113/KCF114 continuam
+        // sendo o erro da API para quem publica fora do deploy.
+        var allowMethodsRaw = manifestField(entry, "allowMethods").trim()
+        var allowMethods = normalizeAllowMethods(allowMethodsRaw, httpVerbs())
+        if (allowMethods.length == 0 && allowMethodsRaw.length > 0) {
+            throw "servico \"" + name + "\" com allowMethods invalido: " + allowMethodsRaw
+        }
+        var allowPathsRaw = manifestField(entry, "allowPaths").trim()
+        var allowPaths = normalizeAllowPaths(allowPathsRaw)
+        if (allowPaths.length == 0 && allowPathsRaw.length > 0) {
+            throw "servico \"" + name + "\" com allowPaths invalido: " + allowPathsRaw
+        }
         if (name.length == 0) {
             throw "servico sem nome na posicao " + intToString(index)
         }
         if (port <= 0 || port > 65535) {
             throw "servico \"" + name + "\" sem porta valida (1-65535)"
         }
-        out.add(ManifestService(name, address, port, exposure, protocol, build, artifact))
+        out.add(ManifestService(name, address, port, exposure, protocol, build, artifact, allowMethods, allowPaths))
         index = index + 1
     }
     if (out.size == 0) {
@@ -544,6 +568,8 @@ Int cmdDeploy(List<String> args) {
         body.put("localPort", intToString(wanted.port))
         body.put("protocol", wanted.protocol)
         body.put("exposure", wanted.exposure)
+        body.put("allowMethods", wanted.allowMethods)
+        body.put("allowPaths", wanted.allowPaths)
         try {
             var created = requireOk(http.post(session.controlUrl + "/v1/services", json.encode(body), jsonHeader(session.token)))
             var service = json.decode<Service>(created)

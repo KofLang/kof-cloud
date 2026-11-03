@@ -168,6 +168,30 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
         blankName = e
     }
     assert(blankName == "servico sem nome na posicao 0", "nome so-espacos falha")
+
+    // Allowlist WAF (Fase 10 slice 3): ausente vira "" (sem restricao, como
+    // servico legado); presente e normalizado com as mesmas funcoes da API;
+    // malformado falha posicional no parse (nao publica regra morta).
+    var noPolicy = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
+    assert(noPolicy.get(0).allowMethods == "", "sem allowMethods: vazio")
+    assert(noPolicy.get(0).allowPaths == "", "sem allowPaths: vazio")
+    var withPolicy = parseManifest("{\"services\":[{\"name\":\"api\",\"port\":3000,\"allowMethods\":\"GET, POST,GET\",\"allowPaths\":\"/api/*, /health\"}]}")
+    assert(withPolicy.get(0).allowMethods == "GET,POST", "metodos normalizados (trim + dedup)")
+    assert(withPolicy.get(0).allowPaths == "/api/*,/health", "paths normalizados (trim)")
+    var badMethods = ""
+    try {
+        parseManifest("{\"services\":[{\"name\":\"api\",\"port\":3000,\"allowMethods\":\"get, POST\"}]}")
+    } catch (String e) {
+        badMethods = e
+    }
+    assert(badMethods == "servico \"api\" com allowMethods invalido: get, POST", "metodo minusculo falha")
+    var badPaths = ""
+    try {
+        parseManifest("{\"services\":[{\"name\":\"api\",\"port\":3000,\"allowPaths\":\"api/*\"}]}")
+    } catch (String e) {
+        badPaths = e
+    }
+    assert(badPaths == "servico \"api\" com allowPaths invalido: api/*", "path relativo falha")
 }
 
 test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
@@ -207,6 +231,19 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     assert(plan5.get(0) == "= site (artifact) (igual)", "igual com artifact marca")
     assert(plan5.get(1).startsWith("+ novo (build) (artifact)"), "novo com build+artifact marca os dois")
     assert(plan5.get(2).startsWith("+ mudou"), "novo sem nada nao marca")
+    // Allowlist: servico sem politica contra live sem politica segue "=";
+    // so-mudanca-de-politica vira "~" (vai atualizar); live sem politica
+    // contra manifesto com politica tambem vira "~" (publicar por cima e
+    // idempotente — publishService retorna o existente — entao o plan
+    // promete atualizar mas o deploy mantem o existente; ver deploy-check).
+    var wanted6 = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"allowMethods\":\"GET\",\"allowPaths\":\"/api/*\"}]}")
+    var plan6 = diffDeployment(live, wanted6)
+    assert(plan6.get(0).startsWith("~ site"), "politica nova vira update")
+    assert(plan6.size == 2, "mudado + extra")
+    var livePolicy = listOf<Service>()
+    livePolicy.add(Service("id-site", "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "GET", "/api/*"))
+    var plan7 = diffDeployment(livePolicy, wanted6)
+    assert(plan7.get(0) == "= site (igual)", "politica igual segue igual")
 }
 
 test "deploy: build opcional no manifesto executa antes do publish", "deploy-build" {
@@ -449,6 +486,25 @@ test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-che
     assert(stale.get(0).indexOf("deploy") >= 0, "orienta o re-deploy")
     var noArtifact = verifyDeployment(controlUrl, accountToken, services)
     assert(noArtifact.size == 0, "sem artifact: tudo saudavel")
+
+    // Drift de politica WAF: remove e republica sem allowlist (o publish e
+    // idempotente — re-publicar retorna o existente; drift real vem de
+    // remove+publish). O check acusa allowMethods/allowPaths antes da
+    // resposta, como porta/exposure/protocol. Politica igual = saudavel.
+    var relistedPolicy = httpGetToken(controlPort, "/v1/services", accountToken)
+    var policyId = serviceIdByNameIn(relistedPolicy, "site")
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + policyId + "\"}", accountToken)) == 200, "removido p/ drift de politica")
+    var bareBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19729\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", bareBody, accountToken)) == 200, "republicado sem politica")
+    var policyManifest = "{\"services\":[{\"name\":\"site\",\"port\":19729,\"allowMethods\":\"GET\",\"allowPaths\":\"/api/*\"}]}"
+    var driftedPolicy = verifyDeployment(controlUrl, accountToken, parseManifest(policyManifest))
+    assert(driftedPolicy.size == 1, "um problema de drift de politica")
+    assert(driftedPolicy.get(0).indexOf("config diferente") >= 0, "acusa o drift")
+    assert(driftedPolicy.get(0).indexOf("allowMethods") >= 0, "nomeia o campo")
+    assert(driftedPolicy.get(0).indexOf("deploy") >= 0, "orienta o re-deploy")
+    var bareManifest = "{\"services\":[{\"name\":\"site\",\"port\":19729}]}"
+    var bareOk = verifyDeployment(controlUrl, accountToken, parseManifest(bareManifest))
+    assert(bareOk.size == 0, "sem politica nos dois lados: saudavel")
     listener2.close()
 }
 

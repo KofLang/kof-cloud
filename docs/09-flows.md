@@ -80,7 +80,9 @@ kofcloud.json:
 
 Campos por serviço: `name` (obrigatório), `port` (número ou string),
 `address` (default 127.0.0.1; só loopback), `exposure` (default PUBLIC),
-`protocol` (default http; único aceito no MVP), `build` (opcional: comando
+`protocol` (default http; único aceito no MVP), `allowMethods`/`allowPaths`
+(opcionais: allowlist WAF — ausente/vazio = sem restrição; mesma normalização
+da API, malformado falha no parse antes de publicar), `build` (opcional: comando
 de shell rodado antes do publish, ex. `"build": "npm run build"`; ausente,
 vazio ou só-espaços = sem build), `artifact` (opcional: caminho local que o `--check`
 confere, ex. `"artifact": "dist/index.html"`; ausente, vazio ou só-espaços = sem
@@ -119,7 +121,7 @@ kof cloud doctor [--file kofcloud.json]
   4. para cada servico do manifesto (se houver kofcloud.json),
      via verifyDeployment (mesma ordem do deploy --check):
      nao publicado? config diferente do publicado (porta/address/
-     exposure/protocol)? responde localmente? artefato declarado
+     exposure/protocol/allowMethods/allowPaths)? responde localmente? artefato declarado
      ausente no disco (aviso, nunca bloqueio)?
   ok em tudo -> exit 0; qualquer FALHA -> exit 1 + Hint do proximo passo
 ```
