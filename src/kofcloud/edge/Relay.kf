@@ -4,6 +4,7 @@ import kofcloud.protocol.Bytes
 import kofcloud.protocol.Payload
 import kofcloud.protocol.Session
 import kofcloud.protocol.Tunnel
+import kofcloud.util.Limits
 
 // Relay de uma requisicao publica por um stream do tunel.
 //
@@ -12,42 +13,76 @@ import kofcloud.protocol.Tunnel
 // Esperar o OPENED fecha um buraco real: antes, OPEN recusado (Agent sem o
 // servico — ex. publicado apos o connect) deixava o relay bloqueado para
 // sempre esperando resposta, prendendo a vaga de conexao junto.
-Byte[] relayThroughTunnel(TunnelSession session, String serviceName, Byte[] requestBytes, Int maxBytes) {
+//
+// Timeout de upstream (WAF 2b): `receive` bloqueia e nao ha recv com prazo no
+// Kof — um deadline checado antes do receive nunca dispara. Mesmo mecanismo
+// do sweeper de idle: uma task watchdog entrega `RESET IDLE_TIMEOUT` na fila
+// DO stream quando passa `timeoutMs` sem DATA; isso acorda o receive. O
+// `open` compartilhado impede o watchdog de tocar a fila depois que o relay
+// terminou (sessao anti-orphan, como no sweeper do tunel).
+record RelayResult(Byte[] bytes, Bool timedOut)
+
+RelayResult relayThroughTunnel(TunnelSession session, String serviceName, Byte[] requestBytes, Int maxBytes, Int timeoutMs, Bool[] finished) {
     var streamId = session.openStream()
     if (streamId.length == 0) {
         throw "LIMIT_EXCEEDED"
     }
     session.send(openFrame(streamId, serviceName))
-    var handshake = session.nextFromStream(streamId)
-    if (handshake == streamResetMarker()) {
-        session.closeStream(streamId)
-        throw "stream reset by agent"
+    if (timeoutMs > 0) {
+        var watchdog = spawn { relayWatchdog(session, streamId, timeoutMs, finished) }
     }
-    if (handshake == streamEndMarker() || openedAccepted(handshake) == false) {
-        session.closeStream(streamId)
-        throw "OPEN_REJECTED:" + openedReason(handshake)
-    }
-    for (var chunk in encodeChunks(requestBytes, session.sessionKey)) {
-        session.send(dataFrame(streamId, chunk))
-    }
-    session.send(endFrame(streamId))
-
-    var acc = bytesEmpty()
-    var open = true
-    while (open) {
-        var item = session.nextFromStream(streamId)
-        if (item == streamEndMarker()) {
-            open = false
-        } else if (item == streamResetMarker()) {
-            session.closeStream(streamId)
+    try {
+        var handshake = session.nextFromStream(streamId)
+        if (handshake == streamResetMarker()) {
             throw "stream reset by agent"
-        } else {
-            acc = bytesConcat(acc, decodePayload(item, session.sessionKey))
-            if (acc.length > maxBytes) {
+        }
+        if (handshake == streamEndMarker() || openedAccepted(handshake) == false) {
+            throw "OPEN_REJECTED:" + openedReason(handshake)
+        }
+        for (var chunk in encodeChunks(requestBytes, session.sessionKey)) {
+            session.send(dataFrame(streamId, chunk))
+        }
+        session.send(endFrame(streamId))
+
+        var acc = bytesEmpty()
+        var open = true
+        while (open) {
+            var item = session.nextFromStream(streamId)
+            if (item == streamEndMarker()) {
                 open = false
+            } else if (item == streamResetMarker()) {
+                open = false
+                throw "stream reset by agent"
+            } else if (item == streamTimeoutMarker()) {
+                finished[0] = true
+                return RelayResult(acc, true)
+            } else {
+                acc = bytesConcat(acc, decodePayload(item, session.sessionKey))
+                session.markStreamProgress(streamId)
+                if (acc.length > maxBytes) {
+                    open = false
+                }
             }
         }
+        return RelayResult(acc, false)
+    } finally {
+        finished[0] = true
+        session.closeStream(streamId)
     }
-    session.closeStream(streamId)
-    return acc
+}
+
+// Entrega RESET no stream se ele ficar `timeoutMs` sem progresso. Polling
+// curto (mesmo passo do sweeper): cada DATA renova o prazo. Sai quando o
+// relay sinaliza `finished` (nada e entregue depois disso).
+void relayWatchdog(TunnelSession session, String streamId, Int timeoutMs, Bool[] finished) {
+    var running = true
+    while (running) {
+        time.sleep(limitIdleSweepMs())
+        if (finished[0]) {
+            running = false
+        } else if (session.streamIdleFor(streamId) > timeoutMs) {
+            session.deliver(streamId, streamTimeoutMarker())
+            running = false
+        }
+    }
 }

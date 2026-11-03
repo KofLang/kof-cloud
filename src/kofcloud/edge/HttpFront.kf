@@ -133,9 +133,29 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         return
     }
     var responseBytes = bytesEmpty()
+    var relayFinished = new Bool[1]
+    relayFinished[0] = false
     try {
         noteStreamOpened()
-        responseBytes = relayThroughTunnel(session, service.name, forwarded, maxBytes)
+        var relayed = relayThroughTunnel(session, service.name, forwarded, maxBytes, state.upstreamTimeoutMs(), relayFinished)
+        if (relayed.timedOut) {
+            state.releaseServiceConn(service.id)
+            if (relayed.bytes.length > 0) {
+                // Resposta parcial: entrega o que veio (o Connection: close do
+                // Edge delimita o corpo) — corpo curto, nunca 502 com bytes de
+                // resposta no meio.
+                conn.send(relayed.bytes)
+                conn.close()
+                noteHttpFinished("upstream_error", "KCF105", raw.length, relayed.bytes.length, time.now() - started)
+                return
+            }
+            var timedOut = errorResponse(504, errUpstreamTimeout())
+            conn.send(timedOut)
+            conn.close()
+            noteHttpFinished("upstream_error", "KCF112", raw.length, timedOut.length, time.now() - started)
+            return
+        }
+        responseBytes = relayed.bytes
     } catch (String e) {
         state.releaseServiceConn(service.id)
         if (e == "LIMIT_EXCEEDED") {

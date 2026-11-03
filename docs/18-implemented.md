@@ -48,6 +48,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | diagnostico doctor | somente-leitura em camadas (login, control, device, servicos, tunel) + `--file` | `doctor_test.kf` |
 | daemon user-level (slice 3) | `cli/Daemon.kf`: unit systemd `--user` + install/status/uninstall | `daemon_test.kf` |
 | presenca real do tunel | espelho bind/unbind no Registry + `GET /v1/presence` filtrado por conta + `status` ONLINE/OFFLINE confirmado | `presence_test.kf` |
+| timeout de upstream (WAF 2b) | watchdog entrega RESET no stream → `504 KCF112` (ou parcial) + métrica `_timeout` | `waf_timeout_test.kf` |
 | teto de corpo (WAF 2a) | `kofcloud.limits.httpBodyBytes` → `413 KCF110` antes do relay + métrica `_body_too_large` | `waf_body_test.kf` |
 | eventos do Agent | `agent/Events.kf`: `agentEvent` emite para `log.*` **e** `agent-runtime.log` (teto 256 KiB); `logs --runtime` | `agent_events_test.kf` |
 | idle timeout (tunel + stream) | `lastActivityMs` + sweepers Edge/Agent, EOF limpo vira throw (reconecta) | `idle_test.kf` |
@@ -79,6 +80,10 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   `kofcloud.limits.httpBodyBytes` (1 MiB) é recusado no Edge com `413 KCF110`
   antes de consumir stream ou tocar no Agent; exatamente no teto passa
   (`waf_body_test.kf`).
+* **Timeout de upstream**: um serviço local que aceita a conexão e nunca
+  responde não pendura o Edge — após `kofcloud.limits.tunnelIdleMs` o cliente
+  recebe `504 KCF112` (ou o corpo parcial, se já havia bytes) e a vaga de
+  conexão é liberada (`waf_timeout_test.kf`).
 * **Observabilidade local do Agent**: os eventos reais do túnel ficam
   consultáveis depois do processo terminar (`logs --runtime`), sem depender de
   stdout — e sem gravar segredo (`agent_events_test.kf`).

@@ -106,6 +106,12 @@ String streamCloseMarker() {
     return "!CLOSE!"
 }
 
+// Entregue pela task watchdog do Edge: acorda o relay bloqueado em receive
+// quando o servico local nao respondeu dentro do prazo.
+String streamTimeoutMarker() {
+    return "!TIMEOUT!"
+}
+
 // Resultado do handshake por stream, transportado como item da inbox (nao
 // vai ao fio como DATA). "!OPEN:ok" = aceito; "!OPEN:nao" = recusado com o
 // motivo em seguida (ex: "!OPEN:nao:SERVICE_UNKNOWN"). Base64 nunca produz

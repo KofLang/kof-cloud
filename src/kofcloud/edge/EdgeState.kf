@@ -19,6 +19,7 @@ class EdgeState {
     Map<String, String> serviceConns
     Int serviceConnLimit
     Int bodyLimit
+    Int upstreamWaitMs
 
     constructor(registry: Registry) {
         this.registry = registry
@@ -31,6 +32,16 @@ class EdgeState {
         this.serviceConns = mapOf()
         this.serviceConnLimit = limitServiceConns()
         this.bodyLimit = limitHttpBodyBytes()
+        this.upstreamWaitMs = limitTunnelIdleMs()
+    }
+
+    // Permite aos testes fixarem o timeout de upstream sem config de processo.
+    void setUpstreamTimeoutMs(Int ms) {
+        this.upstreamWaitMs = ms
+    }
+
+    Int upstreamTimeoutMs() {
+        return this.upstreamWaitMs
     }
 
     // Permite aos testes fixarem o teto de corpo sem config de processo.

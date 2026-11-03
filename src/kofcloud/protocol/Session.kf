@@ -94,6 +94,22 @@ class TunnelSession {
         this.streamStartedMs.put(streamId, time.now())
     }
 
+    // Renova o relogio do stream a cada DATA (o watchdog de upstream mede a
+    // espera desde o ultimo progresso, nao desde a abertura).
+    void markStreamProgress(String streamId) {
+        if (this.streamStartedMs.get(streamId) != null) {
+            this.streamStartedMs.put(streamId, time.now())
+        }
+    }
+
+    Long streamIdleFor(String streamId) {
+        var started = this.streamStartedMs.get(streamId)
+        if (started == null) {
+            return 0
+        }
+        return time.now() - started
+    }
+
     void closeStream(String streamId) {
         this.inboxes.remove(streamId)
         this.streamStartedMs.remove(streamId)

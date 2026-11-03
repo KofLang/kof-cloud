@@ -270,7 +270,7 @@ externo (`12-tls.md`).
 direto para o serviço local. Cloud robusta filtra o óbvio na borda sem
 quebrar o legítimo (fail-open com log vs fail-closed configurável).
 
-**Estado: slice 2 parcial ✅ (teto de corpo); sl. 1 e 3 pendentes.**
+**Estado: slice 2 ✅ (corpo + timeout); sl. 1 e 3 pendentes.**
 
 * **Slice 2a — teto de corpo por requisição ✅.** `kofcloud.limits.httpBodyBytes`
   (default 1 MiB); o Edge recusa antes do relay quando o `Content-Length`
@@ -278,7 +278,14 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   stream nem toca no Agent; corpo exatamente no teto passa. Corpo sem
   `Content-Length` (transfer-encoding de requisição) está fora do MVP do
   Edge e não é medido. Prova: `tests/waf_body_test.kf` (2 testes).
-* **Slice 2b — timeout de upstream:** pendente.
+* **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
+  (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
+  tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task
+  watchdog entrega `RESET IDLE_TIMEOUT` na fila **do stream** quando passa o
+  prazo sem DATA, acordando o relay. Nada chegou → `504 KCF112` + métrica
+  `_timeout`; já havia resposta parcial → entrega o parcial (corpo curto,
+  nunca 502 com bytes no meio). A vaga de conexão por serviço é liberada.
+  Prova: `tests/waf_timeout_test.kf` (2 testes).
 
 Desenho fatiado:
 

@@ -1,0 +1,118 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.model.Errors
+import kofcloud.store.Store
+import testkit.Support
+
+// WAF slice 2b (Fase 10): timeout de upstream.
+// O Edge nao pode ficar pendurado esperando um servico local que nunca
+// responde — a vaga de conexao por servico e o stream ficariam presos.
+// Regra: o limite e medido entre DATA frames; se nada chegou -> 504 KCF112;
+// se ja havia resposta parcial -> entrega o parcial (corpo curto).
+
+test "waf timeout: codigo e Hint", "waftimeout-unit" {
+    assert(errUpstreamTimeout().indexOf("KCF112") >= 0, "codigo KCF112")
+    assert(errHint(errUpstreamTimeout()).indexOf("tunnelIdleMs") >= 0, "Hint aponta o teto")
+}
+
+test "waf timeout: servico mudo vira 504 KCF112 e libera a vaga", "waftimeout" {
+    var localSvc = 19771
+    var controlPort = 19772
+    var tunnelPort = 19773
+    var httpPort = 19774
+
+    // Servico local que aceita a conexao e NUNCA responde. As conexoes ficam
+    // abertas ate o fim do teste (e sao fechadas la), senao o processo nao sai.
+    var mute = net.listen(localSvc)
+    var held = listOf<Conn>()
+    var muteTask = spawn {
+        var open = true
+        while (open) {
+            try {
+                var c = mute.accept()
+                held.add(c)
+            } catch (String e) {
+                open = false
+            }
+        }
+    }
+    assert(waitForPort(localSvc, 60), "servico mudo no ar")
+
+    var registry = Registry("/tmp/kofcloud-wt-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    edgeState.setUpstreamTimeoutMs(400)
+    var edgeStop = "/tmp/kofcloud-wt-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-wt-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent online")
+
+    var host = "site.mel.kofcloud.io"
+    var started = time.now()
+    var timedOut = httpGetRaw(httpPort, "/", host)
+    var elapsed = time.now() - started
+    assert(statusOf(timedOut) == 504, "servico mudo -> 504")
+    assert(bodyOf(timedOut).indexOf("KCF112") >= 0, "KCF112 no corpo")
+    assert(elapsed < 20000, "nao pendurou (elapsed=" + intToString(elapsed) + "ms)")
+
+    // A vaga de conexao por servico foi liberada: o proximo pedido tambem
+    // chega ao servico (e tambem estoura), em vez de dar 429 KCF108.
+    var again = httpGetRaw(httpPort, "/", host)
+    assert(statusOf(again) == 504, "segundo pedido tambem 504 (vaga liberada)")
+
+    assert(metricValue(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_timeout") >= 1, "timeout contado")
+
+    // Parada limpa.
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    mute.close()
+    for (var c in held) {
+        c.close()
+    }
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}
+
+Int metricValue(String exposition, String name) {
+    for (var line in exposition.split("\n")) {
+        var trimmed = line.trim()
+        if (trimmed.startsWith(name + " ")) {
+            return parseIntSafe(trimmed.substring(name.length + 1).trim(), -1)
+        }
+    }
+    return -1
+}
