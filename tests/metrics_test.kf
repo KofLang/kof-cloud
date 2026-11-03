@@ -52,6 +52,8 @@ test "metricas: nomes e saidas no formato Prometheus", "metrics" {
     assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_service_overloaded"), "sobrecarga")
     noteHttpFinished("denied", "KCF109", 10, 20, 1)
     assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_waf_denied"), "waf")
+    noteHttpFinished("denied", "KCF111", 10, 20, 1)
+    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_waf_allow_denied"), "allowlist")
     noteHttpFinished("denied", "KCF106", 10, 20, 1)
     assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_other"), "streams cai no fallback")
     assert(metricHas(exposition, "kofcloud_edge_http_request_bytes_total"), "bytes de pedido")

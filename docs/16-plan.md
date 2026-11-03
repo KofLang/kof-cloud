@@ -314,9 +314,13 @@ Desenho fatiado:
 * **Slice 2 — limites de corpo/tempo por rota.** Teto de request body por
   serviço (`kofcloud.limits.httpBodyBytes`, default 1 MiB; excedeu →
   `413 KCF110`) + timeout de upstream (502 após N s, sem pendurar o stream).
-* **Slice 3 — allowlist por serviço.** `exposure: AUTHENTICATED` ganha
+* **Slice 3 — allowlist por serviço (fundação ✅, enforcement pendente).** `exposure: AUTHENTICATED` ganha
   `allowMethods: [GET, POST]` e `allowPaths: ["/api/*"]` opcionais no
   manifesto/API; fora da lista → `403 KCF111`. Fail-closed por desenho.
+  Fundação pronta: construtor `errWafAllowDenied()` + Hint (aponta a métrica
+  `_waf_allow_denied`) + sufixo de métrica em `noteHttpFinished`, tudo travado
+  em teste (`errors-hint`, `errors-hint-all`, `metrics`); o HttpFront ainda não
+  emite KCF111 (sem mudança de comportamento).
 
 **Regra de ouro:** WAF nunca vaza conteúdo em log/métrica (só padrão que
 casou + hostname) e nunca quebra o legítimo por default (slice 1 começa
