@@ -27,7 +27,7 @@ completa e os protocolos.
 | 5 — `AUTHENTICATED` com credencial de serviço (`kfs_`, com revogacao por token) | ✅ implementado e testado |
 | 6 — domínio próprio (slice 1: registro + verificação DNS + rota) | ✅ implementado e testado; sem TLS/SNI (externo — ver `docs/12-tls.md`) |
 | 6+ — observabilidade, abuse prevention, limites | ✅ implementados e testados |
-| 7 — deploy (declarativo, --check/--plan, daemon, doctor + build local) | ✅ implementado e testado; sem artefato transferível, sem daemon Windows/macOS |
+| 7 — deploy (declarativo, --check/--plan, daemon, doctor + build local) | ✅ implementado e testado; sem artefato transferível, com artefato de daemon por SO (systemd/launchd/Windows, ativação manual) |
 
 O critério de sucesso do pedido foi atingido com o CLI real, em processos
 separados: `login` → `publish site --port 29010` → `connect`, e
@@ -112,7 +112,7 @@ domain verify <hostname>                 (confere o DNS e ativa a rota)
 domain remove <hostname>
 deploy [--file kofcloud.json] [--check] [--plan]  (roda build + publica + verifica; --plan so mostra o diff e marca (build)/(artifact))
 down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove orfaos)
-daemon install|status|uninstall   (systemd --user, sem root)
+daemon install|status|uninstall   (artefato por SO — systemd/launchd/Windows — sem root, ativação manual)
 doctor [--file kofcloud.json]   (diagnostico: login, control, device, tunel, servicos)
 audit                        (trilha de auditoria da conta)
 logs [--tail <linhas>] [--runtime]   (marcos de sessao; --runtime = eventos reais do Agent; teto 256 KiB por arquivo)

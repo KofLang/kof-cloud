@@ -160,10 +160,11 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   O `doctor` usa o mesmo
   `verifyDeployment` na etapa de serviços (não publicado → drift → sem
   resposta → artefato), então `--check` e `doctor` acusam igual.
-* **Daemon user-level (Fase 7, slice 3)**: `cli/Daemon.kf` gera
-  `kofcloud-agent.service` (mesmo `connect`, `Restart=always`,
-  `NoNewPrivileges`, enable manual); `status`/`uninstall`; erro honesto sem
-  systemd; só Linux (`daemon_test.kf`, 8 testes).
+* **Daemon user-level (Fase 7, slice 3 + Fase 13 slice 1)**: `cli/Daemon.kf` gera
+  o artefato do SO (`daemonUnitText` systemd no Linux, `daemonLaunchdPlist`
+  no macOS, `daemonWindowsScript` no Windows; mesmo `connect`,
+  `Restart=always`, `NoNewPrivileges`, enable/ativacao manual); `status`/
+  `uninstall`; erro honesto sem systemd (`daemon_test.kf`, 13 testes).
 * **Parada limpa** do agente (`disconnect` via arquivo-sentinela) e da
   plataforma (`serve`, via fechamento do `Listener`).
 * **Hot-reload de serviço (debito quitado)**: refresher via `/v1/connect`
@@ -179,7 +180,8 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 * **DNS** como serviço — o wildcard por conta é configuração externa de DNS
   (ver `11-dns.md`); o KofCloud já emite o hostname correto.
 * **WebSocket** público, **HTTP/2/3**, **domínio próprio automatizado**,
-  **deploy com build/artefato**, **daemon Windows/macOS**, **painel web**.
+  **deploy com artefato transferível**, **painel web completo** (só o slice 1
+  existe), **daemon: tray + auto-update** (slices 2–3 da Fase 13).
 * **Múltiplos nós** de control plane/edge (sem consenso; registro único em
   memória + arquivo).
 * **TLS/HTTPS na borda (Fase 9)** — slices: PEM do operador via

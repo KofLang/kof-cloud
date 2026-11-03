@@ -118,8 +118,9 @@ rollback); `deploy --plan` mostra o diff sem aplicar (com `(build)`/
 **Estado (slice 3 — daemon user-level): ✅ implementado.** `kof cloud daemon
 install|status|uninstall`: gera `kofcloud-agent.service` (mesmo `connect`,
 `Restart=always`, `NoNewPrivileges`, enable manual de proposito), erro
-honesto sem systemd. So Linux; Windows/macOS na Fase 8. Prova:
-`tests/daemon_test.kf` (8 testes).
+honesto sem systemd; artefato por SO na Fase 13 slice 1 (systemd continua o
+padrao no Linux). Prova:
+`tests/daemon_test.kf` (8 testes + 5 da Fase 13 slice 1 — ver U28).
 
 **Estado (hot-reload — debito quitado): ✅ implementado.** O Agent re-busca
 `services[]` via `/v1/connect` a cada `6×healthMs` e troca a tabela DA SESSAO

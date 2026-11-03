@@ -131,17 +131,21 @@ Somente leitura: nao publica, nao remove, nao revoga, nao emite token.
 ## 3.2 Daemon user-level (`kof cloud daemon`)
 
 ```
-kof cloud daemon install   → grava ~/.config/systemd/user/kofcloud-agent.service
+kof cloud daemon install   → grava o artefato do SO (Linux: ~/.config/systemd/user/kofcloud-agent.service;
+                             macOS: ~/Library/LaunchAgents/io.kofcloud.agent.plist;
+                             Windows: script `sc create` — pede Administrador)
                              (ExecStart = mesmo `connect`, Restart=always,
-                              NoNewPrivileges, WantedBy=default.target)
-                             + systemctl --user daemon-reload (se houver)
-kof cloud daemon status    → is-active (ou INATIVO + como subir)
-kof cloud daemon uninstall → stop + remove a unit + reload
+                              NoNewPrivileges no systemd, WantedBy=default.target)
+                             + recarrega o gerenciador (systemctl/launchctl, se houver)
+                             + imprime a ativacao (nunca ativa sozinho)
+kof cloud daemon status    → ativo (ou INATIVO + como subir)
+kof cloud daemon uninstall → para + remove o artefato + recarrega
 ```
 
-Escopo: só Linux com systemd --user, sem root, enable manual de propósito
-(o Kof não mexe em serviços sem consentimento). Sem systemd: erro honesto
-(`connect` em tmux/screen). Windows/macOS: Fase 8.
+Escopo: artefato por SO (Fase 13 slice 1: systemd/launchd/Windows),
+ativacao sempre manual de proposito (o KofCloud nao mexe em servicos sem
+consentimento). Sem gerenciador: erro honesto (`connect` em
+tmux/screen).
 Nada fora do manifesto é tocado — deploy nunca remove.
 
 ## 4. Requisição pública (ponta a ponta)

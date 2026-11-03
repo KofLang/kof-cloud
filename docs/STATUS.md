@@ -60,7 +60,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | idle | `tests/idle_test.kf` | 4 |
 | conexoes | `tests/conns_test.kf` | 2 |
 | deploy | `tests/deploy_test.kf` | 8 |
-| daemon | `tests/daemon_test.kf` | 8 |
+| daemon | `tests/daemon_test.kf` | 13 |
 | doctor | `tests/doctor_test.kf` | 5 |
 | hot-reload | `tests/reload_test.kf` | 1 |
 | control plane | `tests/control_test.kf` | 2 |
@@ -75,7 +75,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | allowlist WAF (Fase 10 slice 3) | `tests/waf_allow_test.kf` | 4 |
 | painel somente-leitura | `tests/panel_test.kf` | 3 |
 
-Total: 168 testes. Ver `15-tests.md` para a matriz.
+Total: 173 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 
