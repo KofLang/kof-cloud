@@ -7,6 +7,7 @@ import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
 import kofcloud.store.Store
 import testkit.Support
+import kofcloud.util.Limits
 
 // Observabilidade minima do Agent (slice 3 — fecha): connects, reconnects,
 // recusas fatais por motivo, health reports, streams servidos e erros
@@ -81,7 +82,7 @@ test "metricas do agent: fluxo real conta connect, stream e health", "agent-metr
     var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
-    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
     assert(waitForPort(controlPort, 60), "control no ar")
     assert(waitForPort(tunnelPort, 60), "tunel no ar")
     assert(waitForPort(httpPort, 60), "http no ar")
@@ -166,7 +167,7 @@ test "metricas do agent: recusa fatal conta por motivo", "agent-metrics-fatal" {
     var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
-    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
     assert(waitForPort(controlPort, 60), "control no ar")
     assert(waitForPort(tunnelPort, 60), "tunel no ar")
 

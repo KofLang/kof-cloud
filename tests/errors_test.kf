@@ -9,6 +9,7 @@ import kofcloud.edge.Tunnel
 import kofcloud.model.Errors
 import kofcloud.store.Store
 import testkit.Support
+import kofcloud.util.Limits
 
 // R6 — erros estaveis: todo erro da plataforma viaja como "KCFnnn: ...".
 // Codigos nunca sao removidos nem renumerados; a CLI traduz para Hint.
@@ -276,7 +277,7 @@ test "erros: Edge devolve codigos estaveis (rota, auth, offline, conteudo)", "er
     var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
-    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
     assert(waitForPort(controlPort, 60), "control no ar")
     assert(waitForPort(tunnelPort, 60), "tunel no ar")
     assert(waitForPort(httpPort, 60), "http no ar")

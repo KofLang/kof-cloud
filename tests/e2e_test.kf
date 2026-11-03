@@ -7,6 +7,7 @@ import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
 import kofcloud.store.Store
 import testkit.Support
+import kofcloud.util.Limits
 
 // E2E: conta -> device -> connect -> publish -> HTTP publico -> tunel ->
 // localhost -> resposta. Portas dedicadas 19080-19083.
@@ -36,7 +37,7 @@ test "e2e: publicar um servico local e alcancar pela borda" {
     var edgeStop = "/tmp/kofcloud-e2e-edge-stop-" + crypto.randomHex(4) + ".txt"
     File(edgeStop).delete()
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
-    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
     assert(waitForPort(controlPort, 60), "control plane no ar")
     assert(waitForPort(tunnelPort, 60), "tunel no ar")
     assert(waitForPort(httpPort, 60), "http publico no ar")
