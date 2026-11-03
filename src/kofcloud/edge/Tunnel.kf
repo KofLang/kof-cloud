@@ -12,6 +12,7 @@ import kofcloud.protocol.Session
 import kofcloud.protocol.Tunnel
 import kofcloud.protocol.Version
 import kofcloud.util.Limits
+import kofcloud.util.Limits
 import kofcloud.util.Text
 
 // Listener de tuneis: aceita Agents. Cada conexao vira uma TunnelSession.
@@ -54,7 +55,7 @@ void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
     var helloLine = ""
     var alive = true
     while (helloLine == "" && alive) {
-        var chunk = conn.receive(8192)
+        var chunk = conn.receive(receiveChunkBytes())
         if (chunk.length == 0) {
             alive = false
         } else {
@@ -128,7 +129,7 @@ void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
     var reader = LineCodec()
     var open = true
     while (open) {
-        var chunk = conn.receive(8192)
+        var chunk = conn.receive(receiveChunkBytes())
         if (chunk.length == 0) {
             open = false
         } else {

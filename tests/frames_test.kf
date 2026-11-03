@@ -24,6 +24,13 @@ test "frames: encodeChunks fatia e recompoe", "frames" {
     // Fonte unica do teto de corpo do relay: o serve passa ao
     // HttpFront/relay a partir daqui.
     assert(limitMaxBodyBytes() == 16777216, "teto de corpo 16 MiB")
+    // Fonte unica do bloco de leitura crua do socket do TUNEL e do HTTP
+    // publico: os 6 `receive(n)` do fio (HELLO + loop no Edge, WELCOME +
+    // loop no Agent, headers + corpo no readRequestBytes) leem daqui —
+    // `receive` nao respeita fronteira de frame, entao o bloco so muda o
+    // numero de chamadas por linha, nunca a corretude. O relay local
+    // (16384, socket do servico) fica de fora de proposito.
+    assert(receiveChunkBytes() == 8192, "bloco de leitura 8 KiB")
 
     // 1.5 MiB = 2 chunks (1 MiB + 0.5 MiB). Maior que isso e o proprio
     // bytesToString (O(n^2), ver 17-limitations) domina o tempo do teste.

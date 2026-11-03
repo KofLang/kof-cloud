@@ -1,6 +1,7 @@
 package kofcloud.edge
 
 import kofcloud.protocol.Bytes
+import kofcloud.util.Limits
 import kofcloud.util.Text
 
 // Parsing/serializacao minima de HTTP/1.1. O Edge precisa repassar bytes com
@@ -34,7 +35,7 @@ Byte[] readRequestBytes(Conn conn, Int maxBytes) {
     var acc = bytesEmpty()
     var headEnd = -1
     while (headEnd < 0) {
-        var chunk = conn.receive(8192)
+        var chunk = conn.receive(receiveChunkBytes())
         if (chunk.length == 0) {
             return acc
         }
@@ -48,7 +49,7 @@ Byte[] readRequestBytes(Conn conn, Int maxBytes) {
     var headers = splitLines(head)
     var total = headEnd + 4 + contentLengthOf(headers)
     while (acc.length < total) {
-        var chunk = conn.receive(8192)
+        var chunk = conn.receive(receiveChunkBytes())
         if (chunk.length == 0) {
             break
         }

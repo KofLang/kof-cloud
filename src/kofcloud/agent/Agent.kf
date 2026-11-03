@@ -107,7 +107,7 @@ void connectAndServe(AgentConfig config) {
     var codec = LineCodec()
     var welcomeLine = ""
     while (welcomeLine == "") {
-        var chunk = conn.receive(8192)
+        var chunk = conn.receive(receiveChunkBytes())
         if (chunk.length == 0) {
             conn.close()
             throw "edge closed during handshake"
@@ -150,7 +150,7 @@ void connectAndServe(AgentConfig config) {
     var open = true
     var goaway = false
     while (open) {
-        var chunk = conn.receive(8192)
+        var chunk = conn.receive(receiveChunkBytes())
         if (chunk.length == 0) {
             open = false
         } else {

@@ -141,3 +141,17 @@ Int limitLogBytes() {
 Int limitMaxBodyBytes() {
     return config.int("kofcloud.maxBodyBytes", 16777216)
 }
+
+// Tamanho de cada leitura crua de socket do TUNEL e do HTTP publico
+// (bytes). Fonte unica dos 6 pontos que leem o fio em blocos
+// (`conn.receive(n)`: HELLO + loop do tunel no Edge, WELCOME + loop no
+// Agent, headers + corpo no `readRequestBytes` do Edge): `receive`
+// devolve "o que chegou" sem respeitar fronteira de frame, entao o tamanho
+// do bloco nao muda corretude (o LineCodec acumula ate o `\n`); so muda
+// quantas chamadas sao feitas por linha. Sem fonte unica, afinar o bloco
+// exigiria caçar os 6 literais `8192` espalhados. Fora do alcance de
+// proposito: o `local.receive(16384)` do relay (socket do servico local,
+// nao o fio) continua proprio — bloco maior ali favorece resposta local.
+Int receiveChunkBytes() {
+    return config.int("kofcloud.limits.receiveChunkBytes", 8192)
+}
