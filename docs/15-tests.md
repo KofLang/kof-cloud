@@ -43,6 +43,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U19 | hot-reload + handshake por stream | `tests/reload_test.kf` (1 teste) + `tests/protocol_test.kf` (OPENED aceito/recusado) | servico publicado depois do connect roteia sem reconnect; OPEN recusado responde 502 sem travar o relay |
 | U20 | diagnostico doctor | `tests/doctor_test.kf` (5 testes) | para na primeira camada sem login, manifesto com caminho no erro, **ajuda lista o tunel**, **camada do tunel pura (presente/ausente/erro sem rede nem HOME)**, fim a fim acusa/aprova servico **+ drift de config pelo caminho do doctor (doctorCheck delega ao verifyDeployment: nao publicado → drift → sem resposta, igual ao --check)** + `--file` segue `resolveManifestPath` (mesma regra do deploy/down: ausente/vazio/so-espacos = default, padding aparado) |
 | U21 | presenca real do tunel | `tests/presence_test.kf` (1 teste) | tunel vivo listado em /v1/presence, morto some; 401 sem token, filtro por conta, sem vazar device alheio |
+| U22 | teto de corpo (WAF slice 2a) | `tests/waf_body_test.kf` (2 testes: `wafbody-unit` + `wafbody`) | `limitHttpBodyBytes` positivo + `errBodyTooLarge` com KCF110 e Hint; Content-Length acima do teto → 413 antes do relay (sem stream, sem Agent), no teto passa |
 
 ## Integração
 
@@ -70,6 +71,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | E11 | idle + reconexão | `tests/idle_test.kf` (`idle-e2e`) | sweeper derruba, Agent reconecta sozinho, túnel novo serve |
 | E12 | concorrência por serviço | `tests/conns_test.kf` (`conns`) | limite 1 com tráfego real simultâneo |
 | E13 | deploy fim a fim | `tests/deploy_test.kf` (`deploy-e2e`) | publica sem duplicar, down preserva o extra |
+| E14 | teto de corpo fim a fim | `tests/waf_body_test.kf` (`wafbody`) | 413 KCF110 + metrica antes do relay; corpo no teto chega ao servico local |
 
 Não há camada `integration_*` separada: os arquivos `control_test.kf`,
 `errors_test.kf`, `metrics_test.kf` etc. já sobem HTTP/TCP real (são E2E na
