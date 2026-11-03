@@ -100,14 +100,18 @@ test "waf detectar: ataque conta mas passa; legitimo nao conta", "wafdetect" {
     assert(bodyOf(httpGetRaw(httpPort, "/", host)) == "svc-detect", "GET segue funcionando")
     assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total") == -1, "nada contado antes do ataque")
 
-    // Ataque em modo detectar: CONTA mas passa (200, chega no servico).
+    // Ataque em modo detectar: CONTA mas passa (200, chega no servico),
+    // marcado com would-block (o enforce bloquearia sem quebrar nada hoje).
     var evil = httpGetRaw(httpPort, "/files/../../etc/passwd", host)
     assert(statusOf(evil) == 200, "detectar nao bloqueia")
+    assert(responseHeader(evil, "X-KofCloud-WAF") == "would-block", "detectar marca would-block")
     assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total") >= 1, "deteccao contada")
     assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total_traversal") >= 1, "padrao traversal contado")
 
-    // Legitimo depois do ataque: segue 200, sem contar de novo.
-    assert(bodyOf(httpGetRaw(httpPort, "/", host)) == "svc-detect", "legitimo segue 200")
+    // Legitimo depois do ataque: segue 200, sem contar de novo e sem marca.
+    var clean = httpGetRaw(httpPort, "/", host)
+    assert(bodyOf(clean) == "svc-detect", "legitimo segue 200")
+    assert(responseHeader(clean, "X-KofCloud-WAF") == "", "legitimo sem marca")
 
     // Parada limpa.
     writeTextTo(agentStop, "stop")
@@ -193,6 +197,7 @@ test "waf enforce: ataque vira 403 KCF109 sem tocar no relay; legitimo passa", "
     var evil = httpGetRaw(httpPort, "/files/../../etc/passwd", host)
     assert(statusOf(evil) == 403, "enforce bloqueia")
     assert(bodyOf(evil).indexOf("KCF109") >= 0, "KCF109 no corpo")
+    assert(responseHeader(evil, "X-KofCloud-WAF") == "blocked", "enforce marca blocked")
     assert(reached[0] == seenBefore, "ataque nao chegou ao local")
     assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total_traversal") >= 1, "padrao contado")
     assert(metricValue(observability.metrics(), "kofcloud_edge_http_denied_total_waf_denied") >= 1, "negada contada")

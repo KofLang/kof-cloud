@@ -359,6 +359,26 @@ test "text: resolveLoginInputs apara sem tocar na senha", "login-trim" {
     assert(clean.device == "notebook", "device limpo passa direto")
 }
 
+test "text: resolveWafMode so aceita detectar|enforce", "serve-waf" {
+    // Pura, sem rede nem HOME (precedente: resolveStatePath): --waf
+    // ausente/vazio/so-espacos = detectar; padding apara; lixo vira "?"
+    // (o cmdServe barra com uso, sem default mentiroso). O fio ate o
+    // EdgeState (setWafEnforce) e o e2e `waf-flag` provam o efeito.
+    assert(resolveWafMode("") == "detectar", "ausente cai no detectar")
+    assert(resolveWafMode("   ") == "detectar", "so-espacos cai no detectar")
+    assert(resolveWafMode("  enforce  ") == "enforce", "padding apara")
+    assert(resolveWafMode("detectar") == "detectar", "detectar passa")
+    assert(resolveWafMode("enforce") == "enforce", "enforce passa")
+    assert(resolveWafMode("ENFORCE") == "?", "caixa importa (fail-closed no parse)")
+    assert(resolveWafMode("block") == "?", "lixo vira interrogação")
+    // Guardas do cmdServe (precedente: serve-state): --waf solto ou
+    // repetido barra antes de qualquer listener, igual as portas.
+    assert(flagMissingValue(listOf("--waf"), "--waf") == true, "waf solto barra")
+    assert(flagMissingValue(listOf("--waf", "--state"), "--waf") == true, "waf seguido de flag barra")
+    assert(flagMissingValue(listOf("--waf", "enforce"), "--waf") == false, "waf com valor ok")
+    assert(flagDuplicated(listOf("--waf", "a", "--waf", "b"), "--waf") == true, "waf repetido barra")
+}
+
 test "text: resolveStatePath apara e cai no default", "serve-state" {
     // Pura (precedente: resolveLoginInputs): --state ausente/vazio/
     // so-espacos = default; padding apara; caminho limpo passa direto.

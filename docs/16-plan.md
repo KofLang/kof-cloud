@@ -270,7 +270,7 @@ externo (`12-tls.md`).
 direto para o serviço local. Cloud robusta filtra o óbvio na borda sem
 quebrar o legítimo (fail-open com log vs fail-closed configurável).
 
-**Estado: slices 1 (detectar + enforce-núcleo) + 2 ✅; sl. 1-flag e 3 pendentes.**
+**Estado: slices 1 + 2 ✅ (detectar, enforce, flag, corpo, timeout); slice 3 pendente.**
 
 * **Slice 1-detectar — assinaturas mínimas em modo detectar ✅.**
   `wafDetectSignature` pura (método+path, minúsculas; `../`/`..%2f`/`..%5c`,
@@ -296,18 +296,21 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
 
 Desenho fatiado:
 
-* **Slice 1 — regras básicas por padrão (modo detectar ✅ / enforce-núcleo ✅ / flag `--waf` pendente).** Assinaturas
+* **Slice 1 — regras básicas por padrão ✅ (detectar + enforce + flag).** Assinaturas
   mínimas em método/path/query/corpo pequeno (traversal `../`, null byte,
   `UNION SELECT`/`OR 1=1` canônicos, `<script` em query): casa → conta
-  (detectar ✅) e, com enforce ligado (`EdgeState.setWafEnforce(true)` ✅),
-  `403 KCF109` antes do relay (sem stream, sem Agent)
+  (detectar ✅) e, com enforce ligado (`serve --waf=enforce` ✅, via
+  `EdgeState.setWafEnforce`), `403 KCF109` antes do relay (sem stream, sem
+  Agent) + header `X-KofCloud-WAF: blocked`
   + métrica `_waf_denied` + log só com padrão+hostname (nunca corpo).
-  Default **detectar** (conta e segue); falta só expor no `serve`
-  (`--waf=enforce` + header `X-KofCloud-WAF: would-block` no detectar);
+  Default **detectar** (conta e segue, resposta marcada com
+  `X-KofCloud-WAF: would-block` ✅).
   Prova do detectar: `tests/waf_detect_test.kf` (unit das assinaturas + e2e:
-  ataque 200 contado por padrão, legítimo 200 sem contar). Prova do
-  enforce-núcleo: e2e `wafenforce` (ataque 403 KCF109 sem chegar ao local,
-  legítimo 200 antes e depois, métricas `_traversal` + `_waf_denied`).
+  ataque 200 contado por padrão e marcado, legítimo 200 sem contar nem
+  marcar). Prova do enforce-núcleo: e2e `wafenforce` (ataque 403 KCF109 +
+  `blocked` sem chegar ao local, legítimo 200 antes e depois, métricas
+  `_traversal` + `_waf_denied`). Prova da flag: `serve-waf`
+  (`resolveWafMode` pura + guardas fail-fast no `cmdServe`).
 * **Slice 2 — limites de corpo/tempo por rota.** Teto de request body por
   serviço (`kofcloud.limits.httpBodyBytes`, default 1 MiB; excedeu →
   `413 KCF110`) + timeout de upstream (502 após N s, sem pendurar o stream).

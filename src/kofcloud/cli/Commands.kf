@@ -51,7 +51,23 @@ String usoServiceTokenLine() {
 }
 
 String usoServeLine() {
-    return "uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] (portas 1-65535)"
+    return "uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--waf detectar|enforce] (portas 1-65535)"
+}
+
+// Modo WAF do `serve --waf`: ausente, vazio ou so-espacos = detectar
+// (conta e segue); "enforce" liga o 403; qualquer outro valor e erro
+// (fail-fast, sem default mentiroso). Pura, sem rede nem HOME — o chamador
+// aplica no EdgeState. Precedente: resolveStatePath (mesma regra de
+// ausente/vazio/so-espacos = default, valor aparado).
+String resolveWafMode(String flagRaw) {
+    var trimmed = flagRaw.trim()
+    if (trimmed.length == 0) {
+        return "detectar"
+    }
+    if (trimmed == "detectar" || trimmed == "enforce") {
+        return trimmed
+    }
+    return "?"
 }
 
 String usoLogsLine() {
@@ -182,7 +198,7 @@ Bool extraPositional(List<String> args, Int max) {
     var i = 0
     while (i < args.size) {
         var arg = args.get(i)
-        if (arg == "--port" || arg == "--address" || arg == "--exposure" || arg == "--device" || arg == "--ttl" || arg == "--tail" || arg == "--control" || arg == "--control-port" || arg == "--tunnel-port" || arg == "--http-port" || arg == "--state" || arg == "--service" || arg == "--file" || arg == "--password") {
+        if (arg == "--port" || arg == "--address" || arg == "--exposure" || arg == "--device" || arg == "--ttl" || arg == "--tail" || arg == "--control" || arg == "--control-port" || arg == "--tunnel-port" || arg == "--http-port" || arg == "--state" || arg == "--waf" || arg == "--service" || arg == "--file" || arg == "--password") {
             i = i + 2
             continue
         }
@@ -1258,18 +1274,19 @@ Int cmdServe(List<String> args) {
     // duplicada leria a primeira. Ambas rejeitadas antes de validar faixa.
     // --state segue a mesma regra (precedente: --file/--control/--device):
     // solto caia no default em silencio, duplicado lia a primeira.
-    if (flagMissingValue(args, "--control-port") || flagMissingValue(args, "--tunnel-port") || flagMissingValue(args, "--http-port") || flagMissingValue(args, "--state")) {
+    if (flagMissingValue(args, "--control-port") || flagMissingValue(args, "--tunnel-port") || flagMissingValue(args, "--http-port") || flagMissingValue(args, "--state") || flagMissingValue(args, "--waf")) {
         println(usoServeLine())
         return 1
     }
-    if (flagDuplicated(args, "--control-port") || flagDuplicated(args, "--tunnel-port") || flagDuplicated(args, "--http-port") || flagDuplicated(args, "--state")) {
-        println("flag repetida — informe uma so vez: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>]")
+    if (flagDuplicated(args, "--control-port") || flagDuplicated(args, "--tunnel-port") || flagDuplicated(args, "--http-port") || flagDuplicated(args, "--state") || flagDuplicated(args, "--waf")) {
+        println("flag repetida — informe uma so vez: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--waf detectar|enforce]")
         return 1
     }
     var controlPort = parseIntSafe(flagValue(args, "--control-port").trim(), defaultControlPort())
     var tunnelPort = parseIntSafe(flagValue(args, "--tunnel-port").trim(), defaultTunnelPort())
     var httpPort = parseIntSafe(flagValue(args, "--http-port").trim(), defaultHttpPort())
     var statePath = resolveStatePath(flagValue(args, "--state"))
+    var wafMode = resolveWafMode(flagValue(args, "--waf"))
     var tunnelSecret = config.str("kofcloud.tunnelSecret", "")
     var maxBytes = limitMaxBodyBytes()
 
@@ -1282,14 +1299,21 @@ Int cmdServe(List<String> args) {
         println(usoServeLine())
         return 1
     }
+    if (wafMode == "?") {
+        println("waf invalido: " + flagValue(args, "--waf").trim() + " (use detectar|enforce)")
+        println(usoServeLine())
+        return 1
+    }
 
     var registry = Registry(statePath)
     var edgeState = EdgeState(registry)
+    edgeState.setWafEnforce(wafMode == "enforce")
 
     println("kofcloud control plane  -> http://127.0.0.1:" + intToString(controlPort))
     println("kofcloud edge tunnel    -> 127.0.0.1:" + intToString(tunnelPort))
     println("kofcloud edge public    -> http://127.0.0.1:" + intToString(httpPort))
     println("estado: " + statePath)
+    println("waf: " + wafMode)
 
     var platformStop = kofcloudHome() + "/platform-stop"
     File(platformStop).delete()

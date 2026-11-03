@@ -43,7 +43,7 @@ o run total imprime `27 passed, 0 failed`. Falha = nome do teste + assert
 | Suite | Arquivo | Testes |
 |---|---|---|
 | framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 11 |
-| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state | `tests/hosts_test.kf` | 26 |
+| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf | `tests/hosts_test.kf` | 27 |
 | identidade/cifra/tokens | `tests/identity_test.kf` | 7 |
 | backoff | `tests/backoff_test.kf` | 3 |
 | registry | `tests/registry_test.kf` | 7 |
@@ -72,7 +72,7 @@ o run total imprime `27 passed, 0 failed`. Falha = nome do teste + assert
 | detectar WAF | `tests/waf_detect_test.kf` | 3 |
 | timeout de upstream (WAF) | `tests/waf_timeout_test.kf` | 2 |
 
-Total: 157 testes. Ver `15-tests.md` para a matriz.
+Total: 158 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

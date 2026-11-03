@@ -177,6 +177,39 @@ Byte[] errorResponse(Int status, String message) {
     return bytesFromString(out)
 }
 
+// Marca a resposta do relay no modo detectar: insere
+// `X-KofCloud-WAF: would-block` no fim dos headers. So bytes: localiza o
+// `\r\n\r\n`, cola o header, preserva o corpo intacto (o corpo nunca vira
+// String — `bytesToString` e O(n2)). Sem terminador (resposta crua) ou com
+// o header ja presente (servico local ecoando), devolve intacto.
+Byte[] withWafWouldBlock(Byte[] response) {
+    var end = bytesIndexOf(response, "\r\n\r\n", 0)
+    if (end < 0) {
+        return response
+    }
+    var head = bytesToString(bytesSlice(response, 0, end))
+    if (head.toLowerCase().indexOf("x-kofcloud-waf:") >= 0) {
+        return response
+    }
+    var marked = bytesFromString(head + "\r\nX-KofCloud-WAF: would-block")
+    return bytesConcat(marked, bytesSlice(response, end, response.length))
+}
+
+// 403 do enforce WAF: mesmo corpo do errorResponse(403), mas o cliente
+// precisa saber que o bloqueio veio do Edge (e nao do servico local).
+// Header fixo, sem dado do pedido — so o fato de que bloqueou.
+Byte[] wafDeniedResponse(String message) {
+    var body = message + "\n"
+    var out = "HTTP/1.1 403 Forbidden\r\n"
+    out = out + "X-KofCloud-WAF: blocked\r\n"
+    out = out + "Content-Type: text/plain; charset=utf-8\r\n"
+    out = out + "Content-Length: " + intToString(body.length) + "\r\n"
+    out = out + "Connection: close\r\n"
+    out = out + "\r\n"
+    out = out + body
+    return bytesFromString(out)
+}
+
 String statusReason(Int status) {
     if (status == 400) {
         return "Bad Request"

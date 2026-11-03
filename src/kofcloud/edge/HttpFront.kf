@@ -130,7 +130,7 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     if (signature.length > 0) {
         noteWafDetected(signature)
         if (state.wafEnforcing()) {
-            var denied = errorResponse(403, errWafDenied())
+            var denied = wafDeniedResponse(errWafDenied())
             conn.send(denied)
             conn.close()
             noteHttpFinished("denied", "KCF109", raw.length, denied.length, time.now() - started)
@@ -201,6 +201,12 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         conn.close()
         noteHttpFinished("upstream_error", "", raw.length, empty.length, time.now() - started)
         return
+    }
+    // Modo detectar com assinatura casada: a resposta do relay segue, mas
+    // marcada (`would-block`) — o operador ve o que o enforce bloquearia
+    // sem quebrar nada hoje. Sem assinatura, bytes intactos.
+    if (signature.length > 0) {
+        responseBytes = withWafWouldBlock(responseBytes)
     }
     conn.send(responseBytes)
     conn.close()

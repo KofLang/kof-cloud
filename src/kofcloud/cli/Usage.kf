@@ -44,7 +44,7 @@ String usageText() {
     out = out + "  audit                     (trilha de auditoria da conta)\n"
     out = out + "  logs [--tail <linhas>] [--runtime]  (marcos de sessao; --runtime = eventos reais do Agent)\n"
     out = out + "\n"
-    out = out + "  serve [--control-port " + intToString(defaultControlPort()) + "] [--tunnel-port " + intToString(defaultTunnelPort()) + "] [--http-port " + intToString(defaultHttpPort()) + "] [--state <arquivo>]\n"
+    out = out + "  serve [--control-port " + intToString(defaultControlPort()) + "] [--tunnel-port " + intToString(defaultTunnelPort()) + "] [--http-port " + intToString(defaultHttpPort()) + "] [--state <arquivo>] [--waf detectar|enforce]\n"
     out = out + "        sobe a plataforma (control plane + edge) localmente\n"
     return out
 }

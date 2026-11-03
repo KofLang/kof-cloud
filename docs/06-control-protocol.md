@@ -204,7 +204,7 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `429` | `KCF106` too many concurrent streams | Edge: `LIMIT_EXCEEDED` no túnel (antes de tocar o Agent) |
 | `429` | `KCF107` too many requests | Edge: rate limit por hostname (`Retry-After`; antes de rotear) |
 | `429` | `KCF108` too many connections | Edge: sem vaga de relay por serviço (`Retry-After`; antes do OPEN) |
-| `403` | `KCF109` blocked by edge protection | Edge: assinatura WAF casou com enforce ligado (`setWafEnforce(true)`; antes do relay, sem stream, só o nome do padrão na métrica `_waf_denied`) |
+| `403` | `KCF109` blocked by edge protection | Edge: assinatura WAF casou com enforce ligado (`serve --waf=enforce`, via `setWafEnforce(true)` no EdgeState; antes do relay, sem stream, só o nome do padrão na métrica `_waf_denied`) + header `X-KofCloud-WAF: blocked`; no detectar a resposta do relay segue marcada com `X-KofCloud-WAF: would-block` |
 
 Owner-gate: `POST /v1/services/status` só aceita a conta dona (`KCF042`
 interno vira o mesmo `404 KCF041` na borda, para não revelar recurso alheio;

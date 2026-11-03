@@ -55,12 +55,11 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   (`httpBodyBytes`, 413) e validação de entrada (nome/porta/exposure/protocol/
   address loopback) — todos com enforcement. Ver `03-device.md` e
   `08-multiplexing.md`.
-* **WAF ainda é parcial (Fase 10).** Existem o teto de corpo (slice 2a),
-  o timeout de upstream (slice 2b), o detectar de assinaturas e o
-  enforce-núcleo (casa → `403 KCF109` antes do relay, via
-  `EdgeState.setWafEnforce(true)`); falta expor no `serve`
-  (flag `--waf=enforce` + header `X-KofCloud-WAF: would-block` no detectar)
-  e a allowlist de métodos/paths (slice 3). O timeout usa polling (`limitIdleSweepMs`) e o prazo é medido
+* **WAF ainda é parcial (Fase 10).** Prontos: teto de corpo (slice 2a),
+  timeout de upstream (slice 2b) e slice 1 completo (detectar com
+  `would-block` + enforce via `serve --waf=enforce` → `403 KCF109` +
+  `blocked` antes do relay). Falta a allowlist de métodos/paths (slice 3).
+  O timeout usa polling (`limitIdleSweepMs`) e o prazo é medido
   desde o último DATA — a granularidade é a do passo de varredura, não exata.
   O teto usa o
   `Content-Length` **declarado**, e o corpo inteiro já foi lido antes da

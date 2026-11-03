@@ -56,8 +56,8 @@ test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
     assert(help.indexOf(doctorLine) >= 0, "doctor documenta --file do manifesto")
     assert(help.indexOf("build/artifact") >= 0, "deploy anuncia build+artifact do manifesto")
     assert(help.indexOf("(build)/(artifact)") >= 0, "plan anuncia marcas por linha")
-    var serveLine = "serve [--control-port " + intToString(defaultControlPort()) + "] [--tunnel-port " + intToString(defaultTunnelPort()) + "] [--http-port " + intToString(defaultHttpPort()) + "] [--state <arquivo>]"
-    assert(help.indexOf(serveLine) >= 0, "serve anuncia portas da fonte unica + --state")
+    var serveLine = "serve [--control-port " + intToString(defaultControlPort()) + "] [--tunnel-port " + intToString(defaultTunnelPort()) + "] [--http-port " + intToString(defaultHttpPort()) + "] [--state <arquivo>] [--waf detectar|enforce]"
+    assert(help.indexOf(serveLine) >= 0, "serve anuncia portas da fonte unica + --state + --waf")
     assert(help.indexOf("daemon install|status|uninstall") >= 0, "daemon documentado (README omitia ate este commit)")
 }
 

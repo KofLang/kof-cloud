@@ -116,7 +116,7 @@ daemon install|status|uninstall   (systemd --user, sem root)
 doctor [--file kofcloud.json]   (diagnostico: login, control, device, tunel, servicos)
 audit                        (trilha de auditoria da conta)
 logs [--tail <linhas>] [--runtime]   (marcos de sessao; --runtime = eventos reais do Agent; teto 256 KiB por arquivo)
-serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>]
+serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>] [--waf detectar|enforce]
 ```
 
 ## Testes
