@@ -149,6 +149,16 @@ Int limitMaxBodyBytes() {
     return config.int("kofcloud.maxBodyBytes", 16777216)
 }
 
+// Teto do corpo que o WAF inspeciona por assinatura (bytes). Acima disso o
+// corpo NAO e varrido (o teto de corpo do Edge, `httpBodyBytes` 1 MiB, e outro
+// limite). Fonte unica do `wafBodyInspectBytes()` em `util.Text` — 64 KiB
+// cobre formularios e JSON de API sem varrer uploads grandes a cada request.
+// Afinavel por config mas NAO recai em default quando zerado: teto zerado
+// desliga a inspecao de corpo (fail-open do detectar), nao vira 64 KiB.
+Int limitWafBodyInspectBytes() {
+    return config.int("kofcloud.limits.wafBodyInspectBytes", 65536)
+}
+
 // Tamanho de cada leitura crua de socket do TUNEL e do HTTP publico
 // (bytes). Fonte unica dos 6 pontos que leem o fio em blocos
 // (`conn.receive(n)`: HELLO + loop do tunel no Edge, WELCOME + loop no

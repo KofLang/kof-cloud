@@ -50,7 +50,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | presenca real do tunel | espelho bind/unbind no Registry + `GET /v1/presence` filtrado por conta + `status` ONLINE/OFFLINE confirmado | `presence_test.kf` |
 | timeout de upstream (WAF 2b) | watchdog entrega RESET no stream → `504 KCF112` (ou parcial) + métrica `_timeout` | `waf_timeout_test.kf` |
 | teto de corpo (WAF 2a) | `kofcloud.limits.httpBodyBytes` → `413 KCF110` antes do relay + métrica `_body_too_large` | `waf_body_test.kf` |
-| detectar WAF — corpo pequeno | `wafDetectBodySignature` (até 64 KiB, JSON-escapado já casa) no mesmo caminho de contagem/enforce do path | `waf_detect_test.kf` (`wafbody-unit`, `wafdetect-body`) |
+| detectar WAF — corpo pequeno | `wafDetectBodySignature` (até 64 KiB, JSON-escapado já casa) no mesmo caminho de contagem/enforce do path; teto fonte-única (`limitWafBodyInspectBytes`, `kofcloud.limits.wafBodyInspectBytes`, default 64 KiB travado) | `waf_detect_test.kf` (`wafbody-unit`, `wafdetect-body`) |
 | detectar WAF (slice 1-detectar) | `wafDetectSignature` pura (método+path) + contagem por padrão no `HttpFront` (relay segue, resposta marcada `would-block`) | `waf_detect_test.kf` (`wafdetect-unit` + `wafdetect`) |
 | enforce WAF núcleo (slice 1-enforce) | `EdgeState.setWafEnforce(true)` → casa vira `403 KCF109` + `blocked` antes do relay (sem stream, sem Agent) + métrica `_waf_denied` | `waf_detect_test.kf` (`wafenforce`: ataque não chega ao local, legítimo 200 antes/depois) |
 | flag WAF no serve (slice 1-flag) | `serve --waf detectar|enforce` (`resolveWafMode` pura + fail-fast: solta/repetida/lixo barra; fio no EdgeState; linha `waf:` no banner) | `hosts_test.kf` (`serve-waf`) + locks ajuda (`daemon_test.kf`) |

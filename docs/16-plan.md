@@ -282,7 +282,9 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   `wafBodyInspectBytes()` (64 KiB) do corpo — o desenho prometia "corpo
   pequeno" e só método+path era visto; JSON escapado não engana
   (`"q":"x' OR 1=1--"` casa `sqli-tautology`), corpo acima do teto não é
-  varrido. Honestidade: as assinaturas são literais, então a barra invertida
+  varrido. Teto fonte-única: `wafBodyInspectBytes()` delega em
+  `limitWafBodyInspectBytes()` (`kofcloud.limits.wafBodyInspectBytes`, default
+  64 KiB, travado com mutação). Honestidade: as assinaturas são literais, então a barra invertida
   do JSON não é normalizada (traversal JSON-escapado não casa no corpo).
   Prova: `tests/waf_detect_test.kf` (`wafdetect-unit`, `wafdetect`,
   `wafbody-unit`, `wafdetect-body`).

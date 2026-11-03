@@ -324,6 +324,10 @@ test "waf detectar: corpo pequeno tambem e inspecionado", "wafbody-unit" {
     }
     assert(wafDetectBodySignature(big + " UNION SELECT") == "", "corpo grande nao inspecionado")
     assert(wafBodyInspectBytes() > 0, "teto positivo")
+    // Fonte unica: o teto delega no Limits (default 64 KiB, afinavel por
+    // config). Trava o casamento + o comportamento fail-open do zerado.
+    assert(wafBodyInspectBytes() == limitWafBodyInspectBytes(), "teto do Limits")
+    assert(limitWafBodyInspectBytes() == 65536, "default 64 KiB")
 }
 
 test "waf detectar: ataque no corpo (POST) conta e marca would-block", "wafdetect-body" {
