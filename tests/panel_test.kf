@@ -1,0 +1,57 @@
+import kofcloud.control.ControlPlane
+import kofcloud.control.Panel
+import kofcloud.control.Registry
+import kofcloud.store.Store
+import testkit.Support
+
+// Fase 12 slice 1 — painel somente-leitura.
+// A pagina e estatica e NAO tem endpoint privilegiado: ela chama a API /v1
+// com o token que o usuario cola. O HTML nunca contem token.
+
+test "painel: HTML estatico sem token e sem framework", "panel-unit" {
+    var html = panelHtml()
+    assert(html.indexOf("<!doctype html>") == 0, "documento HTML")
+    assert(html.indexOf("/v1/devices") >= 0, "le devices")
+    assert(html.indexOf("/v1/presence") >= 0, "le presence")
+    assert(html.indexOf("/v1/services") >= 0, "le services")
+    assert(html.indexOf("/v1/domains") >= 0, "le domains")
+    // Nenhum token embutido: o kfc_ e digitado e vive so na memoria da aba.
+    assert(html.indexOf("kfc_") < 0, "sem token no HTML")
+    assert(html.indexOf("localStorage") < 0, "nao persiste token")
+    // Sem framework: nenhum <script src> externo.
+    assert(html.indexOf("<script src") < 0, "sem dependencia externa")
+    assert(panelVersion().length > 0, "versao presente")
+    assert(panelContentType().indexOf("text/html") >= 0, "content-type")
+}
+
+test "painel: rota /panel so existe com --panel e serve o HTML", "panel" {
+    var controlPort = 19821
+    var registry = Registry("/tmp/kofcloud-panel-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    control.enablePanel()
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+
+    var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
+    assert(statusOf(page) == 200, "painel 200")
+    assert(bodyOf(page).indexOf("<!doctype html>") == 0, "corpo e o HTML")
+    assert(bodyOf(page).indexOf("kfc_") < 0, "sem token no corpo servido")
+
+    // A API continua exigindo token: o painel nao abre porta dos fundos.
+    var semToken = httpGetRaw(controlPort, "/v1/devices", "127.0.0.1")
+    assert(statusOf(semToken) == 401, "API segue autenticada")
+
+    // Rota inexistente nao vira painel.
+    var outra = httpGetRaw(controlPort, "/painel", "127.0.0.1")
+    assert(statusOf(outra) == 404, "sem rota /painel")
+}
+
+test "painel: sem --panel a rota nao existe", "panel-off" {
+    var controlPort = 19822
+    var registry = Registry("/tmp/kofcloud-paneloff-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+    var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
+    assert(statusOf(page) == 404, "sem a flag, /panel e 404")
+}

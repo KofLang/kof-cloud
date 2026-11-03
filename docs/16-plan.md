@@ -367,15 +367,19 @@ Ver `13-kof-apis.md` (tabela de cripto).
 domínios/tokens pelo terminal afasta quem não é técnico — e gestão visual
 é o que transforma "túnel" em "nuvem" na cabeça do usuário.
 
-**Estado: ⏳ não iniciado.** Desenho fatiado (cada slice é um incremento
-testável; o painel consome só a API pública `/v1` — nenhum endpoint novo
-privilegiado, mesma auth `X-KofCloud-Token`):
+**Estado: slice 1 ✅; slices 2 e 3 pendentes.** Desenho fatiado (cada slice é
+um incremento testável; o painel consome só a API pública `/v1` — nenhum
+endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
 
-* **Slice 1 — painel somente-leitura.** `serve` ganha `--panel` que expõe
-  página estática (status da conta, devices online via `/v1/presence`,
-  serviços + hostnames, domínios VERIFIED/PENDING). Sem escritas, sem
-  login novo (cola o `kfc_` existente). Prova: teste serve a página e os
-  dados batem com a API.
+* **Slice 1 — painel somente-leitura ✅.** `serve --panel` liga `GET /panel`
+  no control plane (`control/Panel.kf`): uma página estática (HTML + `fetch`,
+  sem framework nem `<script src>`), que pede o `kfc_` da conta e renderiza
+  devices (com túnel ONLINE/OFFLINE via `/v1/presence`), serviços com
+  hostname/exposição/status e domínios com status. O HTML **não contém
+  token**, o token vive só na memória da aba (não é persistido) e a API
+  continua exigindo auth — sem a flag a rota nem existe (`404`). Prova:
+  `tests/panel_test.kf` (3 testes).
+
 * **Slice 2 — gestão completa.** Criar conta, registrar device, publish/
   unpublish, add/verify/remove domínio, emitir/revogar/listar `kfs_`,
   suspend/unsuspend — tudo pelo painel, chamando os mesmos endpoints da

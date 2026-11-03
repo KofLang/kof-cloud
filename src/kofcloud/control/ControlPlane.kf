@@ -1,6 +1,7 @@
 package kofcloud.control
 
 import kofcloud.control.Metrics
+import kofcloud.control.Panel
 import kofcloud.control.Registry
 import kofcloud.model.Account
 import kofcloud.model.Audit
@@ -787,20 +788,34 @@ HttpResult handleRemoveDomain(Registry registry, String? authHeader, String body
 class ControlPlane {
     Registry registry
     Int port
+    Bool panelEnabled
     String edgeHost
     Int edgePort
 
     constructor(registry: Registry, port: Int, edgeHost: String, edgePort: Int) {
         this.registry = registry
         this.port = port
+        this.panelEnabled = false
         this.edgeHost = edgeHost
         this.edgePort = edgePort
+    }
+
+    // Liga o painel somente-leitura (Fase 12 slice 1). Chamado pelo `serve`
+    // quando `--panel` esta presente; sem a flag a rota nem existe.
+    void enablePanel() {
+        this.panelEnabled = true
     }
 
     void start() {
         var reg = this.registry
         var self = this
         var app = web.app()
+
+        if (this.panelEnabled) {
+            app.get("/panel") {
+                return panelHtml()
+            }
+        }
 
         app.get("/v1/health") {
             var result = handleHealth()

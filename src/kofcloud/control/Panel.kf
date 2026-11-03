@@ -1,0 +1,106 @@
+package kofcloud.control
+
+// Painel somente-leitura (Fase 12, slice 1).
+//
+// Uma pagina estatica servida pelo proprio control plane em `/panel`. Ela NAO
+// tem endpoint privilegiado: depois de colar o `kfc_` da conta, o JavaScript
+// da propria pagina chama a API publica `/v1` (mesma auth `X-KofCloud-Token`
+// da CLI) e so renderiza. Nenhuma escrita, nenhum login novo.
+//
+// Regras do desenho:
+//  * o HTML nunca contem token — o `kfc_` e digitado e vive so na memoria da
+//    pagina (variavel local, nunca em localStorage/URL/log);
+//  * o painel nunca mostra `kfs_` (a lista de credenciais nem traz valores);
+//  * sem framework: HTML + fetch, servido como String pelo `web.app()`.
+
+// Versao do painel (aparece no rodape; ajuda a saber o que esta no ar).
+String panelVersion() {
+    return "1"
+}
+
+// O HTML e uma constante: um unico lugar para revisar. Nenhum dado de conta
+// entra aqui — tudo vem de fetch no navegador.
+String panelHtml() {
+    return "<!doctype html>
+<html lang=\"pt-BR\"><head><meta charset=\"utf-8\">
+<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
+<title>KofCloud — painel</title>
+<style>
+body{font:14px system-ui,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}
+header{padding:18px 24px;border-bottom:1px solid #2a2d35;display:flex;gap:12px;align-items:center}
+header h1{font-size:16px;margin:0;font-weight:600}
+header .tag{color:#8a8f98;font-size:12px}
+main{padding:24px;display:grid;gap:24px;max-width:1100px}
+section{background:#161920;border:1px solid #2a2d35;border-radius:10px;padding:16px}
+section h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#8a8f98;margin:0 0 12px}
+input{background:#0f1115;border:1px solid #2a2d35;color:#e6e6e6;border-radius:6px;padding:8px 10px;width:340px}
+button{background:#2f6feb;border:0;color:#fff;border-radius:6px;padding:8px 14px;cursor:pointer}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #22252c;font-family:ui-monospace,monospace;font-size:13px}
+.on{color:#3fb950}.off{color:#8a8f98}.pend{color:#d29922}.err{color:#f85149}
+.muted{color:#8a8f98}
+footer{padding:16px 24px;color:#5b606a;font-size:12px}
+</style></head><body>
+<header><h1>KofCloud</h1><span class=\"tag\">painel somente leitura</span></header>
+<main>
+<section>
+  <h2>Conta</h2>
+  <input id=\"tok\" type=\"password\" placeholder=\"cole aqui o token da conta\" autocomplete=\"off\">
+  <button onclick=\"carregar()\">Carregar</button>
+  <span id=\"msg\" class=\"muted\"></span>
+  <p class=\"muted\">O token (o mesmo do <code>kof cloud login</code>) fica so na memoria desta aba. Nada e gravado.</p>
+</section>
+<section><h2>Dispositivos</h2><div id=\"devs\"></div></section>
+<section><h2>Servicos</h2><div id=\"svcs\"></div></section>
+<section><h2>Dominios</h2><div id=\"doms\"></div></section>
+</main>
+<footer>KofCloud painel v" + panelVersion() + " — le /v1/devices, /v1/presence, /v1/services e /v1/domains</footer>
+<script>
+var TOKEN = '';  // so na memoria da aba; nunca persistido
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>\"']/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]; }); }
+function api(path, metodo){
+  return fetch(path, {method: metodo || 'GET', headers: {'X-KofCloud-Token': TOKEN}})
+    .then(function(r){ if(!r.ok) throw new Error(r.status + ' em ' + path); return r.json(); });
+}
+function tabela(cabecalho, linhas){
+  var h = '<table><tr>' + cabecalho.map(function(c){return '<th>'+esc(c)+'</th>';}).join('') + '</tr>';
+  linhas.forEach(function(l){
+    h += '<tr>' + l.map(function(c){return '<td>'+c+'</td>';}).join('') + '</tr>';
+  });
+  return h + '</table>';
+}
+function carregar(){
+  TOKEN = document.getElementById('tok').value.trim();
+  var msg = document.getElementById('msg');
+  if(!TOKEN){ msg.className='err'; msg.textContent='informe o token'; return; }
+  msg.className='muted'; msg.textContent='carregando...';
+  Promise.all([api('/v1/devices'), api('/v1/presence'), api('/v1/services'), api('/v1/domains')])
+    .then(function(r){
+      var devs = r[0], online = r[1], svcs = r[2], doms = r[3];
+      document.getElementById('devs').innerHTML = tabela(['nome','id','status','tunel'], devs.map(function(d){
+        var vivo = online.indexOf(d.id) >= 0;
+        return [esc(d.name), esc(d.id), esc(d.status),
+                vivo ? '<span class=\"on\">ONLINE</span>' : '<span class=\"off\">OFFLINE</span>'];
+      }));
+      document.getElementById('svcs').innerHTML = tabela(['nome','hostname','exposicao','status'], svcs.map(function(s){
+        var st = s.status === 'ONLINE' ? '<span class=\"on\">' : (s.status === 'OFFLINE' ? '<span class=\"off\">' : '<span class=\"pend\">');
+        return [esc(s.name), 'https://'+esc(s.hostname), esc(s.exposure), st + esc(s.status) + '</span>'];
+      }));
+      document.getElementById('doms').innerHTML = tabela(['hostname','tipo','servico','status'], doms.map(function(d){
+        var st = d.status === 'ACTIVE' ? '<span class=\"on\">' : '<span class=\"pend\">';
+        return [esc(d.hostname), esc(d.kind), esc(d.service), st + esc(d.status || '-') + '</span>'];
+      }));
+      msg.textContent = '';
+    })
+    .catch(function(e){ TOKEN=''; msg.className='err'; msg.textContent='falha: ' + e.message; });
+}
+</script>
+</body></html>"
+}
+
+// Handlers estaticos do painel: pagina + 404 para chamadas de API vindas da
+// pagina (a pagina so chama /v1, entao isto e so preguica de rota).
+String panelContentType() {
+    return "text/html; charset=utf-8"
+}

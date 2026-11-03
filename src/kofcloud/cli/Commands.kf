@@ -51,7 +51,7 @@ String usoServiceTokenLine() {
 }
 
 String usoServeLine() {
-    return "uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--waf detectar|enforce] (portas 1-65535)"
+    return "uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--waf detectar|enforce] [--panel] (portas 1-65535)"
 }
 
 // Modo WAF do `serve --waf`: ausente, vazio ou so-espacos = detectar
@@ -1287,6 +1287,7 @@ Int cmdServe(List<String> args) {
     var httpPort = parseIntSafe(flagValue(args, "--http-port").trim(), defaultHttpPort())
     var statePath = resolveStatePath(flagValue(args, "--state"))
     var wafMode = resolveWafMode(flagValue(args, "--waf"))
+    var panel = hasFlag(args, "--panel")
     var tunnelSecret = config.str("kofcloud.tunnelSecret", "")
     var maxBytes = limitMaxBodyBytes()
 
@@ -1314,10 +1315,16 @@ Int cmdServe(List<String> args) {
     println("kofcloud edge public    -> http://127.0.0.1:" + intToString(httpPort))
     println("estado: " + statePath)
     println("waf: " + wafMode)
+    if (panel) {
+        println("painel: http://127.0.0.1:" + intToString(controlPort) + "/panel")
+    }
 
     var platformStop = kofcloudHome() + "/platform-stop"
     File(platformStop).delete()
     var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    if (panel) {
+        control.enablePanel()
+    }
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, tunnelSecret, platformStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, maxBytes, platformStop) }
