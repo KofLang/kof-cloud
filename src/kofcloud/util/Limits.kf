@@ -155,3 +155,21 @@ Int limitMaxBodyBytes() {
 Int receiveChunkBytes() {
     return config.int("kofcloud.limits.receiveChunkBytes", 8192)
 }
+
+// Passo do polling do arquivo-sentinela no Edge (ms): o `serve` nao tem
+// sinal nem watch de arquivo (L3), entao um watcher verifica a cada passo
+// se o stopFile apareceu e fecha o listener (o `accept` lanca e o serve
+// encerra). Curto porque a parada pedida pelo `disconnect` deve ser
+// percebida rapido; o custo e uma checagem de arquivo por passo.
+Int stopFilePollMs() {
+    return config.int("kofcloud.limits.stopFilePollMs", 100)
+}
+
+// Passo do polling do arquivo-sentinela no Agent (ms): o watchdog verifica
+// a cada passo se o stopFile apareceu e fecha a sessao (saida limpa, sem
+// backoff). Separado do passo do Edge de proposito: o Edge vigia um
+// listener parado no `accept` (passo curto e barato), o Agent vigia uma
+// sessao viva com mais tarefas concorrentes (passo um pouco maior).
+Int agentStopPollMs() {
+    return config.int("kofcloud.limits.agentStopPollMs", 250)
+}

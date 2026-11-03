@@ -42,7 +42,7 @@ void serveTunnel(EdgeState state, Int port, String tunnelSecret, String stopFile
 void listenerWatcher(Listener listener, String stopFile) {
     var open = true
     while (open) {
-        time.sleep(100)
+        time.sleep(stopFilePollMs())
         if (File(stopFile).exists()) {
             listener.close()
             open = false

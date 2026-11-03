@@ -271,7 +271,7 @@ void agentWatchdog(TunnelSession session, String stopFile) {
     }
     var open = true
     while (open) {
-        time.sleep(250)
+        time.sleep(agentStopPollMs())
         if (session.open == false) {
             open = false
         } else if (File(stopFile).exists()) {

@@ -31,6 +31,11 @@ test "idle: touch so em frame util; PING nao renova", "idle" {
     assert(limitRefreshMs(5000) == 30000, "refresh = 6x health")
     assert(limitRefreshMs(0) == 30000, "refresh invalido recai no default")
     assert(limitRefreshMs(-1) == 30000, "refresh negativo recai no default")
+    // Polling do stopFile: Edge vigia o listener parado no accept (passo
+    // curto), Agent vigia a sessao viva (passo um pouco maior) — valores
+    // distintos de proposito, cada lado na sua fonte (last sleep cru).
+    assert(stopFilePollMs() == 100, "poll do stopFile no Edge 100 ms")
+    assert(agentStopPollMs() == 250, "poll do stopFile no Agent 250 ms")
     var session = TunnelSession("s1", "d1", "a1", "")
     var t0 = session.lastActivityMs
     assert(t0 > 0, "atividade inicial marcada")
