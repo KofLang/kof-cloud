@@ -53,12 +53,12 @@ test "registry: limite de servicos por dispositivo" {
     registry.setLimits(10, 2)
     var account = registry.createAccount("mel", "m@e.com", "segredo")
     var device = registry.registerDevice(account, "nb", "pk")
-    registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
-    registry.publishService(account, device.id, "api", "127.0.0.1", 3000, "http", "PUBLIC")
+    registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    registry.publishService(account, device.id, "api", "127.0.0.1", 3000, "http", "PUBLIC", "", "")
     var blocked = false
     var reason = ""
     try {
-        registry.publishService(account, device.id, "files", "127.0.0.1", 9000, "http", "PUBLIC")
+        registry.publishService(account, device.id, "files", "127.0.0.1", 9000, "http", "PUBLIC", "", "")
     } catch (String e) {
         blocked = true
         reason = e
@@ -74,8 +74,8 @@ test "registry: limite de servicos e por dispositivo, nao por conta" {
     var account = registry.createAccount("mel", "m@e.com", "segredo")
     var d1 = registry.registerDevice(account, "d1", "pk1")
     var d2 = registry.registerDevice(account, "d2", "pk2")
-    registry.publishService(account, d1.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
-    var other = registry.publishService(account, d2.id, "api", "127.0.0.1", 3000, "http", "PUBLIC")
+    registry.publishService(account, d1.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    var other = registry.publishService(account, d2.id, "api", "127.0.0.1", 3000, "http", "PUBLIC", "", "")
     assert(other.name == "api", "cada dispositivo tem sua cota")
 }
 

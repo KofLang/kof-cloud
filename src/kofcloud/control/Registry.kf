@@ -547,7 +547,9 @@ class Registry {
 
     // ---- servicos ----
 
-    Service publishService(Account account, String deviceId, String name, String localAddress, Int localPort, String protocol, String exposure) {
+    // `allowMethods`/`allowPaths`: politica WAF opcional (CSV). Ausentes =
+    // sem restricao, que e o comportamento de quem nao declara allowlist.
+    Service publishService(Account account, String deviceId, String name, String localAddress, Int localPort, String protocol, String exposure, String allowMethods, String allowPaths) {
         if (validServiceName(name) == false) {
             throw errInvalidServiceName()
         }
@@ -568,7 +570,7 @@ class Registry {
         var service = Service(
             uuid.v4(), account.id, deviceId, name, localAddress, localPort, protocol,
             serviceHostname(name, account.handle), exposureName(exposureFrom(exposure)),
-            statusUnknown(), time.now()
+            statusUnknown(), time.now(), allowMethods, allowPaths
         )
         this.services.add(service)
         this.audit(auditActorAccount(account.handle), auditServicePublished(), account.id + "/" + service.id)
@@ -694,7 +696,8 @@ class Registry {
                 updated.add(Service(
                     service.id, service.accountId, service.deviceId, service.name,
                     service.localAddress, service.localPort, service.protocol,
-                    service.hostname, service.exposure, status, service.createdAt
+                    service.hostname, service.exposure, status, service.createdAt,
+                    service.allowMethods, service.allowPaths
                 ))
                 found = true
             } else {

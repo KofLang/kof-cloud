@@ -174,8 +174,8 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     // Puro: duas listas, nenhuma rede, nenhum HOME. Cobre novo/igual/
     // diferente/extra numa chamada so (precedente: doctorTunnelLine).
     var live = listOf<Service>()
-    live.add(Service("id-site", "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0))
-    live.add(Service("id-veterano", "acc", "dev", "veterano", "127.0.0.1", 9000, "http", "veterano.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0))
+    live.add(Service("id-site", "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", ""))
+    live.add(Service("id-veterano", "acc", "dev", "veterano", "127.0.0.1", 9000, "http", "veterano.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", ""))
     var wanted = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"mudou\",\"port\":3000,\"exposure\":\"PRIVATE\"}]}")
     var plan = diffDeployment(live, wanted)
     assert(plan.size == 3, "tres linhas: igual, novo, extra")

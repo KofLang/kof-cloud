@@ -1,0 +1,130 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.model.Errors
+import kofcloud.store.Store
+import kofcloud.util.Text
+import testkit.Support
+
+// WAF slice 3 (Fase 10): allowlist de metodos/paths por servico.
+// Declarada no publish; vazia = sem restricao (fail-closed so para quem
+// declarou). Negacao no Edge: 403 KCF111 antes do relay.
+
+test "allowlist: normaliza e valida metodos", "wafallow-unit" {
+    assert(normalizeAllowMethods("GET,POST", httpVerbs()) == "GET,POST", "lista valida")
+    assert(normalizeAllowMethods(" GET , POST ", httpVerbs()) == "GET,POST", "espacos aparados")
+    assert(normalizeAllowMethods("GET,GET", httpVerbs()) == "GET", "sem repeticao")
+    assert(normalizeAllowMethods("get", httpVerbs()) == "", "minusculo e invalido (comparacao exata)")
+    assert(normalizeAllowMethods("GET,,POST", httpVerbs()) == "", "item vazio invalido")
+    assert(normalizeAllowMethods("TRACE", httpVerbs()) == "", "verbo fora da lista")
+    assert(normalizeAllowMethods("", httpVerbs()) == "", "vazio")
+    assert(errInvalidAllowMethod().indexOf("KCF113") >= 0, "codigo KCF113")
+    assert(errHint(errInvalidAllowMethod()).length > 0, "Hint KCF113")
+}
+
+test "allowlist: normaliza e valida paths", "wafallow-unit" {
+    assert(normalizeAllowPaths("/api/*,/health") == "/api/*,/health", "lista valida")
+    assert(normalizeAllowPaths(" /api/* ") == "/api/*", "espacos aparados")
+    assert(normalizeAllowPaths("/api/*,/api/*") == "/api/*", "sem repeticao")
+    assert(normalizeAllowPaths("api/*") == "", "sem barra inicial e invalido")
+    assert(normalizeAllowPaths("/a b") == "", "com espaco e invalido")
+    assert(normalizeAllowPaths("") == "", "vazio")
+    assert(errInvalidAllowPath().indexOf("KCF114") >= 0, "codigo KCF114")
+    assert(errHint(errInvalidAllowPath()).length > 0, "Hint KCF114")
+}
+
+test "allowlist: splitList reconstroi a lista salva", "wafallow-unit" {
+    assert(splitList("").size == 0, "vazio = sem restricao")
+    assert(splitList("GET,POST").size == 2, "dois itens")
+    assert(splitList("GET").get(0) == "GET", "valor")
+}
+
+test "allowlist: servico declarado barra metodo/path fora da lista (403 KCF111)", "wafallow" {
+    var localSvc = 19841
+    var controlPort = 19842
+    var tunnelPort = 19843
+    var httpPort = 19844
+
+    var app = web.app()
+    app.get("/api/users") { return "users" }
+    app.get("/health") { return "ok" }
+    var server = spawn { app.listen(localSvc) }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-allow-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-allow-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-allow-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+
+    // Politica malformada nao publica (400 com codigo estavel).
+    var badBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"bad\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\",\"allowMethods\":\"get\"}"
+    var bad = httpPostJson(controlPort, "/v1/services", badBody, accountToken)
+    assert(statusOf(bad) == 400, "metodo invalido -> 400")
+    assert(bodyOf(bad).indexOf("KCF113") >= 0, "KCF113 no corpo")
+
+    // Servico com allowlist.
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"api\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\",\"allowMethods\":\"GET\",\"allowPaths\":\"/api/*,/health\"}"
+    var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
+    assert(statusOf(published) == 200, "servico com allowlist publicado")
+    assert(bodyOf(published).indexOf("\"allowMethods\":\"GET\"") >= 0, "politica no JSON")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent online")
+
+    var host = "api.mel.kofcloud.io"
+    var ok = httpGetRaw(httpPort, "/api/users", host)
+    assert(statusOf(ok) == 200, "path permitido -> 200")
+    assert(bodyOf(ok) == "users", "chegou no servico")
+    assert(statusOf(httpGetRaw(httpPort, "/health", host)) == 200, "path exato permitido")
+
+    var wrongPath = httpGetRaw(httpPort, "/admin", host)
+    assert(statusOf(wrongPath) == 403, "path fora da lista -> 403")
+    assert(bodyOf(wrongPath).indexOf("KCF111") >= 0, "KCF111 no corpo")
+    assert(responseHeader(wrongPath, "X-KofCloud-WAF") == "blocked", "marcado blocked")
+
+    var wrongMethod = httpPostRaw(httpPort, "/api/users", host, listOf<String>(), "{}")
+    assert(statusOf(wrongMethod) == 403, "metodo fora da lista -> 403")
+    assert(bodyOf(wrongMethod).indexOf("KCF111") >= 0, "KCF111 no metodo tambem")
+
+    // Servico sem politica continua livre (fail-closed so para quem declarou).
+    var freeBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"livre\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", freeBody, accountToken)) == 200, "servico livre publicado")
+    assert(statusOf(httpGetRaw(httpPort, "/admin", "livre.mel.kofcloud.io")) != 403, "sem politica nao barra")
+
+    // Parada limpa.
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}

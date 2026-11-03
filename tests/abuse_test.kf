@@ -38,7 +38,7 @@ test "suspensao: servico sai da rota e volta; health nao dessuspende", "abuse" {
     var mel = registry.createAccount("mel", "m@e.com", "segredo")
     var ana = registry.createAccount("ana", "a@e.com", "segredo")
     var device = registry.registerDevice(mel, "nb", "pk")
-    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
     assert(registry.resolveRoute(service.hostname) != null, "rota antes")
 
     assert(registry.suspendService(ana.id, service.id) == false, "alheio nao suspende")

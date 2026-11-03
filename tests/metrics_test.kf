@@ -246,7 +246,7 @@ test "metricas: contadores do control plane tambem valem sem HTTP", "metrics-reg
     var registry = Registry("/tmp/kofcloud-metreg-" + crypto.randomHex(4) + ".json")
     var mel = registry.createAccount("mel", "m@e.com", "segredo")
     var device = registry.registerDevice(mel, "nb", "pk")
-    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
     registry.issueServiceToken(mel.id, service.id)
     registry.registerCustomDomain(mel.id, "loja.example.com", service.id)
     registry.verifyCustomDomainWith(mel.id, "loja.example.com", listOf("10.0.0.1"))

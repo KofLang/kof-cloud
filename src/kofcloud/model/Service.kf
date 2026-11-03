@@ -14,7 +14,10 @@ record Service(
     String hostname,
     String exposure,
     String status,
-    Long createdAt
+    Long createdAt,
+    // Allowlist WAF (Fase 10 slice 3). Listas vazias = sem restricao.
+    String allowMethods,
+    String allowPaths
 )
 
 String statusOnline() {

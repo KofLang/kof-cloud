@@ -73,7 +73,7 @@ test "dominio: registro e idempotencia no registry", "domains-reg" {
     var mel = registry.createAccount("mel", "m@e.com", "segredo")
     var ana = registry.createAccount("ana", "a@e.com", "segredo")
     var device = registry.registerDevice(mel, "nb", "pk")
-    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
 
     var first = registry.registerCustomDomain(mel.id, "API.Example.com", service.id)
     assert(first.hostname == "api.example.com", "normaliza minusculas")
@@ -99,7 +99,7 @@ test "dominio: registro e idempotencia no registry", "domains-reg" {
     assert(domainCodeIs(badService, "KCF041"), "KCF041 servico inexistente")
 
     var anaDevice = registry.registerDevice(ana, "nb", "pk")
-    var anaService = registry.publishService(ana, anaDevice.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    var anaService = registry.publishService(ana, anaDevice.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
     var notYours = ""
     try {
         registry.registerCustomDomain(ana.id, "alheio.example.com", service.id)
@@ -128,7 +128,7 @@ test "dominio: verificacao contra destinos esperados (sem rede)", "domains-verif
     assert(registry.edgeHosts.size == 2, "dois destinos")
     var mel = registry.createAccount("mel", "m@e.com", "segredo")
     var device = registry.registerDevice(mel, "nb", "pk")
-    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
     registry.registerCustomDomain(mel.id, "api.example.com", service.id)
 
     assert(registry.verifyCustomDomainWith(mel.id, "api.example.com", listOf("198.51.100.7")) == "KCF124: hostname does not resolve to this Edge", "outro IP recusa")
@@ -159,7 +159,7 @@ test "dominio: rota so ativa depois de VERIFIED; poda acompanha o servico", "dom
     registry.setEdgeHosts(listOf("203.0.113.10"))
     var mel = registry.createAccount("mel", "m@e.com", "segredo")
     var device = registry.registerDevice(mel, "nb", "pk")
-    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
     registry.registerCustomDomain(mel.id, "api.example.com", service.id)
     assert(registry.resolveRoute("api.example.com") == null, "PENDING nao roteia")
 
@@ -186,7 +186,7 @@ test "dominio: rota so ativa depois de VERIFIED; poda acompanha o servico", "dom
     var reloaded = Registry("/tmp/kofcloud-domrt-reload-" + crypto.randomHex(4) + ".json")
     var mel2 = reloaded.createAccount("mel", "m@e.com", "segredo")
     var dev2 = reloaded.registerDevice(mel2, "nb", "pk")
-    var svc2 = reloaded.publishService(mel2, dev2.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    var svc2 = reloaded.publishService(mel2, dev2.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
     reloaded.registerCustomDomain(mel2.id, "loja.example.com", svc2.id)
     assert(reloaded.customByHostname("loja.example.com") != null, "PENDING persiste")
 }
@@ -383,7 +383,7 @@ test "dominio: serializadores puros sem rede", "domains-serial" {
     var registry = Registry("/tmp/kofcloud-domserial-" + crypto.randomHex(4) + ".json")
     var mel = registry.createAccount("mel", "m@e.com", "segredo")
     var device = registry.registerDevice(mel, "nb", "pk")
-    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
     var domain = registry.registerCustomDomain(mel.id, "api.example.com", service.id)
     // domainIsVerified delega no construtor (fonte unica do literal):
     // recem-registrado e PENDING, VERIFIED apos verify. O terceiro assert

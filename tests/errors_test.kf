@@ -203,10 +203,10 @@ test "erros: limites e owner-gate no registry viajam como KCF080/KCF081/KCF022/K
     }
     assert(codeIs(blocked, "KCF080"), "KCF080 limite de dispositivos")
 
-    registry.publishService(mel, d1.id, "site", "127.0.0.1", 8080, "http", "PUBLIC")
+    registry.publishService(mel, d1.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
     var blockedSvc = ""
     try {
-        registry.publishService(mel, d1.id, "api", "127.0.0.1", 3000, "http", "PUBLIC")
+        registry.publishService(mel, d1.id, "api", "127.0.0.1", 3000, "http", "PUBLIC", "", "")
     } catch (String e) {
         blockedSvc = e
     }
@@ -215,7 +215,7 @@ test "erros: limites e owner-gate no registry viajam como KCF080/KCF081/KCF022/K
     var anaDevice = registry.registerDevice(ana, "nb", "pk")
     var notYours = ""
     try {
-        registry.publishService(ana, d1.id, "x", "127.0.0.1", 9000, "http", "PUBLIC")
+        registry.publishService(ana, d1.id, "x", "127.0.0.1", 9000, "http", "PUBLIC", "", "")
     } catch (String e) {
         notYours = e
     }

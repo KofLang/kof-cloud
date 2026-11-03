@@ -74,6 +74,8 @@ String serviceJson(Service service) {
     out.put("exposure", service.exposure)
     out.put("status", service.status)
     out.put("createdAt", longToString(service.createdAt))
+    out.put("allowMethods", service.allowMethods)
+    out.put("allowPaths", service.allowPaths)
     return json.encode(out)
 }
 
@@ -361,6 +363,16 @@ HttpResult handlePublishService(Registry registry, String? authHeader, String bo
     if (localPort <= 0 || localPort > 65535) {
         return HttpResult(400, errorJson(errLocalPort()))
     }
+    // Allowlist WAF opcional (CSV). Item invalido nao publica uma politica que
+    // nunca casaria (metodo e comparado exato) — devolve 400.
+    var allowMethods = normalizeAllowMethods(mapField(body, "allowMethods"), httpVerbs())
+    if (allowMethods.length == 0 && mapField(body, "allowMethods").trim().length > 0) {
+        return HttpResult(400, errorJson(errInvalidAllowMethod()))
+    }
+    var allowPaths = normalizeAllowPaths(mapField(body, "allowPaths"))
+    if (allowPaths.length == 0 && mapField(body, "allowPaths").trim().length > 0) {
+        return HttpResult(400, errorJson(errInvalidAllowPath()))
+    }
     var device = registry.deviceById(deviceId)
     if (device == null) {
         return HttpResult(404, errorJson(errDeviceNotFound()))
@@ -369,7 +381,7 @@ HttpResult handlePublishService(Registry registry, String? authHeader, String bo
         return HttpResult(404, errorJson(errDeviceNotFound()))
     }
     try {
-        var service = registry.publishService(account, deviceId, name, localAddress, localPort, protocol, exposure)
+        var service = registry.publishService(account, deviceId, name, localAddress, localPort, protocol, exposure, allowMethods, allowPaths)
         return HttpResult(200, serviceJson(service))
     } catch (String e) {
         return publishError(e)

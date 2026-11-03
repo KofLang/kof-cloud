@@ -271,7 +271,7 @@ externo (`12-tls.md`).
 direto para o serviço local. Cloud robusta filtra o óbvio na borda sem
 quebrar o legítimo (fail-open com log vs fail-closed configurável).
 
-**Estado: slices 1 + 2 ✅ (detectar, enforce, flag, corpo, timeout); slice 3 pendente.**
+**Estado: Fase 10 completa ✅ (slices 1, 2 e 3).**
 
 * **Slice 1-detectar — assinaturas mínimas em modo detectar ✅.**
   `wafDetectSignature` pura (método+path, minúsculas; `../`/`..%2f`/`..%5c`,
@@ -324,15 +324,16 @@ Desenho fatiado:
 * **Slice 2 — limites de corpo/tempo por rota.** Teto de request body por
   serviço (`kofcloud.limits.httpBodyBytes`, default 1 MiB; excedeu →
   `413 KCF110`) + timeout de upstream (502 após N s, sem pendurar o stream).
-* **Slice 3 — allowlist por serviço (fundação ✅, enforcement pendente).** `exposure: AUTHENTICATED` ganha
-  `allowMethods: [GET, POST]` e `allowPaths: ["/api/*"]` opcionais no
-  manifesto/API; fora da lista → `403 KCF111`. Fail-closed por desenho.
-  Fundação pronta: construtor `errWafAllowDenied()` + Hint (aponta a métrica
-  `_waf_allow_denied`) + sufixo de métrica em `noteHttpFinished`, tudo travado
-  em teste (`errors-hint`, `errors-hint-all`, `metrics`); matcher
-  `wafAllowCheck` puro travado em `wafallow-unit` (método exato + path
-  exato/prefixo `/*`, query ignorada, lista vazia = sem restrição); o HttpFront
-  ainda não emite KCF111 (sem mudança de comportamento).
+* **Slice 3 — allowlist por serviço ✅.** `allowMethods`/`allowPaths` (CSV)
+  opcionais no `POST /v1/services`; persistidos no `Service` e aplicados no
+  Edge **antes do relay**: fora da lista → `403 KCF111` +
+  `X-KofCloud-WAF: blocked` + métrica `_waf_allow_denied` (sem stream, sem
+  Agent). Fail-closed só para quem declarou — lista vazia = sem restrição
+  (serviço legado passa). Política malformada não publica: `400 KCF113`
+  (método: só verbos exatos em maiúsculas) / `400 KCF114` (path: absoluto
+  `/...`, sem espaço). Prova: `tests/waf_allow_test.kf` (4 testes:
+  normalização de métodos e paths, `splitList`, e2e — 403 por path e por
+  método, path permitido 200, serviço sem política não barra).
 
 **Regra de ouro:** WAF nunca vaza conteúdo em log/métrica (só padrão que
 casou + hostname) e nunca quebra o legítimo por default (slice 1 começa

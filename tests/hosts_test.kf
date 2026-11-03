@@ -332,8 +332,8 @@ test "text: matchServiceName apara antes de comparar", "service-name-match" {
     // status/token/token-revoke resolvem por ela; padding resolve, so-espacos
     // nao casa com nada (o chamador barra vazio como uso antes).
     var services = listOf<Service>()
-    services.add(Service("id1", "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 1000))
-    services.add(Service("id2", "acc", "dev", "loja", "127.0.0.1", 3000, "http", "loja.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 1000))
+    services.add(Service("id1", "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 1000, "", ""))
+    services.add(Service("id2", "acc", "dev", "loja", "127.0.0.1", 3000, "http", "loja.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 1000, "", ""))
     assert(matchServiceName(services, "site") == "id1", "exato resolve")
     assert(matchServiceName(services, "  site  ") == "id1", "padding resolve")
     assert(matchServiceName(services, "loja") == "id2", "segundo resolve")

@@ -57,13 +57,12 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   (`httpBodyBytes`, 413) e validação de entrada (nome/porta/exposure/protocol/
   address loopback) — todos com enforcement. Ver `03-device.md` e
   `08-multiplexing.md`.
-* **WAF ainda é parcial (Fase 10).** Prontos: teto de corpo (slice 2a),
-  timeout de upstream (slice 2b) e slice 1 completo (detectar com
-  `would-block` + enforce via `serve --waf=enforce` → `403 KCF109` +
-  `blocked` antes do relay; corpo de até 64 KiB também é inspecionado). Falta
-  o enforcement da allowlist de métodos/paths (slice 3: fundação KCF111
-  pronta — construtor + Hint + matcher `wafAllowCheck` + métrica
-  `_waf_allow_denied` travados — sem emissor no HttpFront ainda). As
+* **WAF (Fase 10) — slices 1–3 feitos; o que não existe ainda.** Prontos: teto
+  de corpo (slice 2a), timeout de upstream (slice 2b), detecção/enforce de
+  assinaturas em método+path e corpo até 64 KiB (slice 1) e allowlist de
+  métodos/paths por serviço (`403 KCF111`, fail-closed só para quem declarou a
+  lista — slice 3). **Falta** um WAF mais profundo: regras por conta, corpo
+  decodificado (JSON base64/URL-encode), e assinaturas em headers. As
   assinaturas são literais: no corpo, a barra invertida do JSON não é
   normalizada, então traversal JSON-escapado não casa ali (casa na query crua).
   O timeout usa polling (`limitIdleSweepMs`) e o prazo é medido

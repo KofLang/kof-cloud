@@ -250,3 +250,92 @@ Bool wafAllowCheck(String method, String path, List<String> allowMethods, List<S
     }
     return true
 }
+
+// Valida uma lista de metodos da allowlist (slice 3): so verbos HTTP
+// conhecidos, em maiusculas, sem repeticao. Devolve a lista normalizada
+// (separada por virgula, sem espacos) ou "" quando ha item invalido — o
+// chamador rejeita com 400 em vez de publicar uma politica que nunca casaria
+// (metodo e comparado exato, ver wafAllowCheck).
+String normalizeAllowMethods(String raw, List<String> allowedVerbs) {
+    var out = listOf<String>()
+    for (var item in raw.split(",")) {
+        var verb = item.trim()
+        if (verb.length == 0) {
+            return ""
+        }
+        var known = false
+        for (var allowed in allowedVerbs) {
+            if (verb == allowed) {
+                known = true
+            }
+        }
+        if (known == false) {
+            return ""
+        }
+        if (out.contains(verb) == false) {
+            out.add(verb)
+        }
+    }
+    return joinCsv(out)
+}
+
+// Valida uma lista de caminhos da allowlist: cada item comeca com "/", sem
+// espaco nem controle, unico. Devolve a lista normalizada ou "" (invalido).
+String normalizeAllowPaths(String raw) {
+    var out = listOf<String>()
+    for (var item in raw.split(",")) {
+        var p = item.trim()
+        if (p.length == 0 || p.startsWith("/") == false) {
+            return ""
+        }
+        var bad = false
+        for (var i = 0; i < p.length; i++) {
+            var c = p.charAt(i) as Int
+            if (c <= 32 || c == 127) {
+                bad = true
+            }
+        }
+        if (bad) {
+            return ""
+        }
+        if (out.contains(p) == false) {
+            out.add(p)
+        }
+    }
+    return joinCsv(out)
+}
+
+String joinCsv(List<String> items) {
+    var out = ""
+    var first = true
+    for (var item in items) {
+        if (first) {
+            out = item
+            first = false
+        } else {
+            out = out + "," + item
+        }
+    }
+    return out
+}
+
+// Lista normalizada -> List<String> para wafAllowCheck ("" = sem restricao).
+List<String> splitList(String csv) {
+    var out = listOf<String>()
+    if (csv.trim().length == 0) {
+        return out
+    }
+    for (var item in csv.split(",")) {
+        var v = item.trim()
+        if (v.length > 0) {
+            out.add(v)
+        }
+    }
+    return out
+}
+
+// Verbos aceitos na allowlist (exatos, maiusculos — wafAllowCheck compara
+// exato). Fora desta lista o publish devolve KCF113.
+List<String> httpVerbs() {
+    return listOf("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")
+}

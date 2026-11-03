@@ -163,6 +163,16 @@ String errWafAllowDenied() {
     return "KCF111: method or path not allowed for this service"
 }
 
+// Allowlist WAF (slice 3): politica malformada na publicacao. KCF111 e a
+// negacao em runtime no Edge; estes dois sao o erro de AUTORIA.
+String errInvalidAllowMethod() {
+    return "KCF113: allowMethods must list HTTP verbs (GET, POST, ...)"
+}
+
+String errInvalidAllowPath() {
+    return "KCF114: allowPaths must be absolute paths (/api/*)"
+}
+
 String errBodyTooLarge() {
     return "KCF110: request body too large"
 }
@@ -278,6 +288,12 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF109") >= 0) {
         return "O Edge barrou a requisicao por padrao de ataque — se for legitimo, renomeie o parametro/caminho; o padrao detectado aparece na metrica `_waf_denied`."
+    }
+    if (raw.indexOf("KCF113") >= 0) {
+        return "allowMethods aceita so verbos HTTP em maiusculas (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS), separados por virgula."
+    }
+    if (raw.indexOf("KCF114") >= 0) {
+        return "allowPaths aceita caminhos absolutos separados por virgula (ex: /api/*, /health) — sem espacos."
     }
     if (raw.indexOf("KCF111") >= 0) {
         return "O servico so aceita certos metodos/caminhos (allowlist) — confira a lista do servico; a negacao aparece na metrica `_waf_allow_denied`."

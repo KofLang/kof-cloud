@@ -143,6 +143,16 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
             return
         }
     }
+    // WAF slice 3: allowlist do servico (fail-closed quando declarada). Listas
+    // vazias = servico sem politica, passa tudo (servico legado). Metodo/path
+    // nunca chegam ao servico nem ao Agent.
+    if (wafAllowCheck(request.method, request.path, splitList(service.allowMethods), splitList(service.allowPaths)) == false) {
+        var notAllowed = wafDeniedResponse(errWafAllowDenied())
+        conn.send(notAllowed)
+        conn.close()
+        noteHttpFinished("denied", "KCF111", raw.length, notAllowed.length, time.now() - started)
+        return
+    }
     var forwarded = serializeRequest(request, "edge", dropCredential)
     // Vaga de relay por servico: o recurso caro (tunel + servico local).
     // Recusar AQUI (antes do OPEN) nao consome stream nem toca no Agent.
