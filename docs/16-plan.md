@@ -189,8 +189,9 @@ isolada por hostname, Retry-After, métrica, Hint).
 dispositivo (túnel recusado com `DEVICE_SUSPENDED`, fatal — sem reconexão);
 health do Agent e status via API **não** dessuspendem (só `unsuspend`
 libera); enforcement imediato no Edge (request derruba a sessão) e contínuo
-via PING (cai em até um heartbeat); trilha de auditoria em anel (100
-eventos, só metadados) com `GET /v1/audit` filtrado por conta + `kof cloud
+via PING (cai em até um heartbeat); trilha de auditoria em anel (fonte unica
+`limitAuditEvents()`, `kofcloud.limits.auditEvents`, default 100 eventos, só
+metadados) com `GET /v1/audit` filtrado por conta + `kof cloud
 audit`. Prova: `tests/abuse_test.kf` (3 testes: rota/health/API, device no
 túnel, Edge fim a fim + audit via HTTP).
 

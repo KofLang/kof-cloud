@@ -173,6 +173,15 @@ Int limitBackoffMaxMs() {
     return config.int("kofcloud.limits.backoffMaxMs", 30000)
 }
 
+// Tamanho do anel de auditoria operacional (eventos por control plane).
+// Fonte unica do `Registry.audit()` — sem isso, afinar a trilha exigiria
+// editar o produto, nao a config. Afinavel por config mas sem recuo
+// silencioso: zerado/negativo recai no default (anel desligado perderia a
+// trilha de abuso sem avisar; o default 100 cabe em disco e em memoria).
+Int limitAuditEvents() {
+    return config.int("kofcloud.limits.auditEvents", 100)
+}
+
 // Tamanho de cada leitura crua de socket do TUNEL e do HTTP publico
 // (bytes). Fonte unica dos 6 pontos que leem o fio em blocos
 // (`conn.receive(n)`: HELLO + loop do tunel no Edge, WELCOME + loop no

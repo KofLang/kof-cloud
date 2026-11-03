@@ -102,11 +102,15 @@ class Registry {
         }
     }
 
-    // Trilha de auditoria: anel capado (100 eventos). So metadados
-    // operacionais; nunca senha, token, chave ou conteudo.
+    // Trilha de auditoria: anel capado (fonte unica `limitAuditEvents()`).
+    // So metadados operacionais; nunca senha, token, chave ou conteudo.
     void audit(String actor, String action, String target) {
         this.audit.add(AuditEvent(longToString(time.now()), actor, action, target))
-        while (this.audit.size > 100) {
+        var cap = limitAuditEvents()
+        if (cap <= 0) {
+            cap = 100
+        }
+        while (this.audit.size > cap) {
             this.audit = this.audit.subList(1, this.audit.size)
         }
     }
