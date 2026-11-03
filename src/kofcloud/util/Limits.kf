@@ -159,6 +159,20 @@ Int limitWafBodyInspectBytes() {
     return config.int("kofcloud.limits.wafBodyInspectBytes", 65536)
 }
 
+// Base e teto do backoff exponencial de reconexao do Agent (ms). Fonte unica
+// dos `defaultBackoffBase()`/`defaultBackoffMax()` em `agent/Backoff` — sem
+// isso, afinar o ritmo de reconexao exigiria editar o produto, nao a config.
+// Afinaveis por config mas sem recuo silencioso: base zerada/negativa recai
+// no default (evita loop agressivo de reconexao) e teto abaixo da base recai
+// na base (evita `min(base, max)` invertido).
+Int limitBackoffBaseMs() {
+    return config.int("kofcloud.limits.backoffBaseMs", 500)
+}
+
+Int limitBackoffMaxMs() {
+    return config.int("kofcloud.limits.backoffMaxMs", 30000)
+}
+
 // Tamanho de cada leitura crua de socket do TUNEL e do HTTP publico
 // (bytes). Fonte unica dos 6 pontos que leem o fio em blocos
 // (`conn.receive(n)`: HELLO + loop do tunel no Edge, WELCOME + loop no

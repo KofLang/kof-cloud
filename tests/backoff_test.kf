@@ -1,5 +1,6 @@
 
 import kofcloud.agent.Backoff
+import kofcloud.util.Limits
 
 test "backoff: cresce com tentativas e respeita o teto" {
     var base = 500
@@ -22,4 +23,11 @@ test "backoff: tentativas maiores nao diminuem o teto" {
 test "backoff: defaults coerentes" {
     assert(defaultBackoffBase() > 0, "base positiva")
     assert(defaultBackoffMax() > defaultBackoffBase(), "teto maior que base")
+    // Fonte unica: os defaults delegam no Limits (valores travados + mutacao
+    // quebra). Recuos sem recuo silencioso: base nao-positiva volta ao
+    // default, teto abaixo da base volta a base.
+    assert(defaultBackoffBase() == limitBackoffBaseMs(), "base do Limits")
+    assert(defaultBackoffMax() == limitBackoffMaxMs(), "teto do Limits")
+    assert(limitBackoffBaseMs() == 500, "default base 500 ms")
+    assert(limitBackoffMaxMs() == 30000, "default teto 30000 ms")
 }

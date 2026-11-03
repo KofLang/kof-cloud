@@ -1,5 +1,7 @@
 package kofcloud.agent
 
+import kofcloud.util.Limits
+
 // Backoff exponencial com jitter, para reconexao do tunel.
 //   delay = min(base * 2^attempt, max) com jitter de +-20%.
 // Evita loop agressivo de reconexao (docs/09-flows.md §5).
@@ -27,9 +29,17 @@ Int backoffDelay(Int attempt, Int base, Int maxDelay) {
 }
 
 Int defaultBackoffBase() {
-    return 500
+    var base = limitBackoffBaseMs()
+    if (base <= 0) {
+        base = 500
+    }
+    return base
 }
 
 Int defaultBackoffMax() {
-    return 30000
+    var maxDelay = limitBackoffMaxMs()
+    if (maxDelay < defaultBackoffBase()) {
+        maxDelay = defaultBackoffBase()
+    }
+    return maxDelay
 }
