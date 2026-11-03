@@ -48,6 +48,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | diagnostico doctor | somente-leitura em camadas (login, control, device, servicos, tunel) + `--file` | `doctor_test.kf` |
 | daemon user-level (slice 3) | `cli/Daemon.kf`: unit systemd `--user` + install/status/uninstall | `daemon_test.kf` |
 | presenca real do tunel | espelho bind/unbind no Registry + `GET /v1/presence` filtrado por conta + `status` ONLINE/OFFLINE confirmado | `presence_test.kf` |
+| teto de corpo (WAF 2a) | `kofcloud.limits.httpBodyBytes` → `413 KCF110` antes do relay + métrica `_body_too_large` | `waf_body_test.kf` |
 | eventos do Agent | `agent/Events.kf`: `agentEvent` emite para `log.*` **e** `agent-runtime.log` (teto 256 KiB); `logs --runtime` | `agent_events_test.kf` |
 | idle timeout (tunel + stream) | `lastActivityMs` + sweepers Edge/Agent, EOF limpo vira throw (reconecta) | `idle_test.kf` |
 
@@ -74,6 +75,10 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   serviço `kfs_` **antes** do túnel (`e2e_authenticated_test.kf`), com o token
   da conta recusado e a credencial removida antes de chegar ao serviço local.
 * **Revogação de dispositivo** derruba a sessão e remove as rotas dele.
+* **Teto de corpo por requisição**: `Content-Length` acima de
+  `kofcloud.limits.httpBodyBytes` (1 MiB) é recusado no Edge com `413 KCF110`
+  antes de consumir stream ou tocar no Agent; exatamente no teto passa
+  (`waf_body_test.kf`).
 * **Observabilidade local do Agent**: os eventos reais do túnel ficam
   consultáveis depois do processo terminar (`logs --runtime`), sem depender de
   stdout — e sem gravar segredo (`agent_events_test.kf`).

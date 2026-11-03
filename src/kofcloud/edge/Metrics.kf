@@ -101,6 +101,8 @@ void noteHttpFinished(String outcome, String deniedDetail, Int requestBytes, Int
             observability.counter(metricHttpDenied() + "_rate_limited")
         } else if (deniedDetail == "KCF108") {
             observability.counter(metricHttpDenied() + "_service_overloaded")
+        } else if (deniedDetail == "KCF110") {
+            observability.counter(metricHttpDenied() + "_body_too_large")
         } else {
             observability.counter(metricHttpDenied() + "_other")
         }

@@ -127,6 +127,13 @@ Int limitServiceConns() {
     return config.int("kofcloud.limits.serviceConns", 64)
 }
 
+// Teto do corpo de uma requisicao publica (bytes). Excedeu -> 413 KCF110,
+// recusado no Edge ANTES do relay (nao consome stream nem toca no Agent).
+// Protege a maquina do usuario de uploads que ela nao pediu para aceitar.
+Int limitHttpBodyBytes() {
+    return config.int("kofcloud.limits.httpBodyBytes", 1048576)
+}
+
 // Teto do `agent.log` local (bytes). Append que estourar corta o inicio
 // (linhas inteiras, via trimLogHead) em vez de crescer sem limite: log
 // local de diagnostico, nao trilha de auditoria (essa vive no control

@@ -151,6 +151,10 @@ String errServiceOverloaded() {
     return "KCF108: too many connections for this service"
 }
 
+String errBodyTooLarge() {
+    return "KCF110: request body too large"
+}
+
 // ---- dominio proprio (Fase 6) ----
 
 String errInvalidCustomHostname() {
@@ -255,6 +259,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF108") >= 0) {
         return "Servico ocupado agora — tente de novo em instantes."
+    }
+    if (raw.indexOf("KCF110") >= 0) {
+        return "O corpo da requisicao passou do teto do Edge — envie menos dados ou aumente `kofcloud.limits.httpBodyBytes`."
     }
     if (raw.indexOf("KCF120") >= 0) {
         return "O dominio precisa ser um hostname externo valido (ex: api.example.com) — sem IP e fora de *.kofcloud.io."

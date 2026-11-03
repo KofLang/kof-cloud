@@ -352,6 +352,7 @@ test "erros: Hint orienta sem vazar segredo ou recurso alheio", "errors-hint" {
     assert(errHint("KCF106: too many concurrent streams").indexOf("instantes") >= 0, "KCF106 pede retry")
     assert(errHint("KCF107: too many requests").indexOf("instante") >= 0, "KCF107 pede espera")
     assert(errHint("KCF108: too many connections for this service").indexOf("instantes") >= 0, "KCF108 pede retry")
+    assert(errHint("KCF110: request body too large").indexOf("httpBodyBytes") >= 0, "KCF110 aponta o limite")
     assert(errHint("KCF120: bad hostname").indexOf("api.example.com") >= 0, "KCF120 da exemplo")
     assert(errHint("KCF121: hostname already registered").indexOf("domain list") >= 0, "KCF121 sugere lista")
     assert(errHint("KCF122: domain not found").indexOf("domain list") >= 0, "KCF122 sugere lista")
@@ -367,7 +368,7 @@ test "erros: Hint orienta sem vazar segredo ou recurso alheio", "errors-hint" {
 test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" {
     // Camada 1 — os construtores reais emitem o codigo e tem Hint (amarra o
     // corpo de cada err*(): trocar o codigo dentro do construtor quebra).
-    // Os 35 construtores de Errors.kf; os 2 parametrizados recebem valor
+    // Os 36 construtores de Errors.kf; os 2 parametrizados recebem valor
     // ficticio (nunca viaja — so prova que a saida casa com a dica).
     var emitted = listOf<String>()
     emitted.add(errInvalidHandle())
@@ -401,11 +402,12 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     emitted.add(errTooManyStreams())
     emitted.add(errRateLimited())
     emitted.add(errServiceOverloaded())
+    emitted.add(errBodyTooLarge())
     emitted.add(errInvalidCustomHostname())
     emitted.add(errDomainTaken())
     emitted.add(errDomainNotFound())
     emitted.add(errDomainUnreachable())
-    assert(emitted.size == 35, "35 construtores emitem codigo")
+    assert(emitted.size == 36, "36 construtores emitem codigo")
     for (var msg in emitted) {
         assert(errHint(msg).length > 0, msg + " via construtor tem Hint")
     }
@@ -446,6 +448,7 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     codes.add("KCF106")
     codes.add("KCF107")
     codes.add("KCF108")
+    codes.add("KCF110")
     codes.add("KCF120")
     codes.add("KCF121")
     codes.add("KCF122")

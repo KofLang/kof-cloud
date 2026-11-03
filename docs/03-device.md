@@ -85,6 +85,7 @@ suspender preserva serviços, tokens e domínios — `unsuspend` libera tudo.
 | serviços por dispositivo | 10 | `kofcloud.limits.services` | ✅ (429 `KCF081`) |
 | streams simultâneos por túnel | 128 | `kofcloud.limits.streams` | ✅ (429 / `RESET LIMIT_EXCEEDED`) |
 | conexões simultâneas por serviço | 64 | `kofcloud.limits.serviceConns` | ✅ (429 `KCF108` + `Retry-After`, antes do OPEN) |
+| corpo de requisição | 1 MiB | `kofcloud.limits.httpBodyBytes` | ✅ (413 `KCF110`, antes do relay) |
 | bytes por frame DATA | 1 MiB | `kofcloud.limits.frameBytes` | ✅ (envio fatiado em 16 KiB; teto fail-closed) |
 | requisições por hostname | 100 / 60 s | `kofcloud.limits.httpRequests` / `httpWindowMs` | ✅ (429 `KCF107` + `Retry-After`) |
 | idle timeout do túnel | 120 s | `kofcloud.limits.tunnelIdleMs` | ✅ (cai sem frames úteis; PING não renova) |

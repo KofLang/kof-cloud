@@ -18,6 +18,7 @@ class EdgeState {
     Long streamIdleMs
     Map<String, String> serviceConns
     Int serviceConnLimit
+    Int bodyLimit
 
     constructor(registry: Registry) {
         this.registry = registry
@@ -29,6 +30,16 @@ class EdgeState {
         this.streamIdleMs = limitStreamIdleMs()
         this.serviceConns = mapOf()
         this.serviceConnLimit = limitServiceConns()
+        this.bodyLimit = limitHttpBodyBytes()
+    }
+
+    // Permite aos testes fixarem o teto de corpo sem config de processo.
+    void setBodyLimit(Int limit) {
+        this.bodyLimit = limit
+    }
+
+    Int bodyLimitBytes() {
+        return this.bodyLimit
     }
 
     // Permite aos testes fixarem o limite sem config de processo.

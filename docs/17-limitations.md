@@ -51,9 +51,17 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 * **Limites aplicados.** Dispositivos ativos por conta, serviços por
   dispositivo, streams por túnel, rate limit por hostname, frame DATA fatiado
   (blocos de 16 KiB), teto de linha do túnel (fail-closed), idle timeout,
-  conexões simultâneas por serviço e validação de entrada (nome/porta/
-  exposure/protocol/address loopback) — todos com enforcement. Ver
-  `03-device.md` e `08-multiplexing.md`.
+  conexões simultâneas por serviço, teto de corpo de requisição
+  (`httpBodyBytes`, 413) e validação de entrada (nome/porta/exposure/protocol/
+  address loopback) — todos com enforcement. Ver `03-device.md` e
+  `08-multiplexing.md`.
+* **WAF ainda é parcial (Fase 10).** Só o teto de corpo existe (slice 2a);
+  não há assinaturas de SQLi/XSS/traversal (slice 1), timeout de upstream
+  (slice 2b) nem allowlist de métodos/paths (slice 3). O teto usa o
+  `Content-Length` **declarado**, e o corpo inteiro já foi lido antes da
+  decisão: é proteção de política e de carga no serviço do usuário, não uma
+  garantia de memória no Edge. Quem declara `Content-Length` falso continua
+  limitado pelo `maxBytes` global do `serve`.
 * **Logs em dois arquivos, por desenho (débito quitado).** `kof cloud logs`
   lê `~/.kofcloud/agent.log` (marcos de sessão gravados pela CLI: `connect`,
   `disconnect`). `kof cloud logs --runtime` lê

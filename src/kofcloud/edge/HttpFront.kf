@@ -109,6 +109,18 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         noteHttpFinished("denied", "KCF103", raw.length, down.length, time.now() - started)
         return
     }
+    // WAF slice 2: teto de corpo por requisicao. Checado ANTES do relay (nao
+    // consome stream, nao toca no Agent, nao le o corpo). Chaveado por
+    // Content-Length DECLARADO — corpo sem Content-Length (transfer-encoding
+    // de requisicao) esta fora do MVP do Edge e nao passa por aqui.
+    var declared = contentLengthOf(request.headers)
+    if (declared > state.bodyLimitBytes()) {
+        var tooLarge = errorResponse(413, errBodyTooLarge())
+        conn.send(tooLarge)
+        conn.close()
+        noteHttpFinished("denied", "KCF110", raw.length, tooLarge.length, time.now() - started)
+        return
+    }
     var dropCredential = exposureRequiresAuth(service.exposure)
     var forwarded = serializeRequest(request, "edge", dropCredential)
     // Vaga de relay por servico: o recurso caro (tunel + servico local).

@@ -270,7 +270,17 @@ externo (`12-tls.md`).
 direto para o serviço local. Cloud robusta filtra o óbvio na borda sem
 quebrar o legítimo (fail-open com log vs fail-closed configurável).
 
-**Estado: ⏳ não iniciado.** Desenho fatiado:
+**Estado: slice 2 parcial ✅ (teto de corpo); sl. 1 e 3 pendentes.**
+
+* **Slice 2a — teto de corpo por requisição ✅.** `kofcloud.limits.httpBodyBytes`
+  (default 1 MiB); o Edge recusa antes do relay quando o `Content-Length`
+  declarado passa → `413 KCF110` + métrica `_body_too_large`. Não consome
+  stream nem toca no Agent; corpo exatamente no teto passa. Corpo sem
+  `Content-Length` (transfer-encoding de requisição) está fora do MVP do
+  Edge e não é medido. Prova: `tests/waf_body_test.kf` (2 testes).
+* **Slice 2b — timeout de upstream:** pendente.
+
+Desenho fatiado:
 
 * **Slice 1 — regras básicas por padrão (modo detectar).** Assinaturas
   mínimas em método/path/query/corpo pequeno (traversal `../`, null byte,

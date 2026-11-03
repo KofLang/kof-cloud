@@ -51,6 +51,7 @@ encaminha pelo túnel. **A aplicação do usuário nunca fica exposta diretament
 |---|---|---|
 | conexões públicas simultâneas | 1024 | `503` + fecha |
 | conexões simultaneas por servico | 64 (`kofcloud.limits.serviceConns`) | `429 KCF108` + `Retry-After` (antes do OPEN; aproximado sob corrida, ver abaixo) |
+| corpo de requisicao | 1 MiB (`kofcloud.limits.httpBodyBytes`) | `413 KCF110` (antes do relay; por `Content-Length` declarado) |
 | requisições por hostname e janela | 100 / 60 s | `429 KCF107` + `Retry-After` |
 | header total | 16 KiB | `431` |
 | corpo | 16 MiB | `413` |
@@ -101,6 +102,7 @@ O corpo das respostas de erro do Edge também viaja como `KCFnnn`:
 | `429` | `KCF106` too many concurrent streams | limite `kofcloud.limits.streams` por túnel |
 | `429` | `KCF107` too many requests | rate limit por hostname (+ `Retry-After`); antes de rotear, sem revelar nada |
 | `429` | `KCF108` too many connections for this service | limite por serviço (+ `Retry-After`); antes do OPEN, aproximado sob corrida |
+| `413` | `KCF110` request body too large | `Content-Length` acima de `kofcloud.limits.httpBodyBytes`; recusado antes do relay |
 
 ## Observabilidade mínima
 
