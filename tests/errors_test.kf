@@ -372,7 +372,7 @@ test "erros: Hint orienta sem vazar segredo ou recurso alheio", "errors-hint" {
 test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" {
     // Camada 1 — os construtores reais emitem o codigo e tem Hint (amarra o
     // corpo de cada err*(): trocar o codigo dentro do construtor quebra).
-    // Os 39 construtores de Errors.kf; os 2 parametrizados recebem valor
+    // Os 41 construtores de Errors.kf; os 2 parametrizados recebem valor
     // ficticio (nunca viaja — so prova que a saida casa com a dica).
     var emitted = listOf<String>()
     emitted.add(errInvalidHandle())
@@ -408,13 +408,15 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     emitted.add(errServiceOverloaded())
     emitted.add(errWafDenied())
     emitted.add(errWafAllowDenied())
+    emitted.add(errInvalidAllowMethod())
+    emitted.add(errInvalidAllowPath())
     emitted.add(errBodyTooLarge())
     emitted.add(errUpstreamTimeout())
     emitted.add(errInvalidCustomHostname())
     emitted.add(errDomainTaken())
     emitted.add(errDomainNotFound())
     emitted.add(errDomainUnreachable())
-    assert(emitted.size == 39, "39 construtores emitem codigo")
+    assert(emitted.size == 41, "41 construtores emitem codigo")
     for (var msg in emitted) {
         assert(errHint(msg).length > 0, msg + " via construtor tem Hint")
     }
@@ -459,6 +461,8 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     codes.add("KCF110")
     codes.add("KCF111")
     codes.add("KCF112")
+    codes.add("KCF113")
+    codes.add("KCF114")
     codes.add("KCF120")
     codes.add("KCF121")
     codes.add("KCF122")

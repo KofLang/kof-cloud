@@ -206,8 +206,10 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `429` | `KCF108` too many connections | Edge: sem vaga de relay por serviço (`Retry-After`; antes do OPEN) |
 | `403` | `KCF109` blocked by edge protection | Edge: assinatura WAF casou com enforce ligado (`serve --waf=enforce`, via `setWafEnforce(true)` no EdgeState; antes do relay, sem stream, só o nome do padrão na métrica `_waf_denied`) + header `X-KofCloud-WAF: blocked`; no detectar a resposta do relay segue marcada com `X-KofCloud-WAF: would-block` |
 | `413` | `KCF110` request body too large | Edge: `Content-Length` declarado acima de `kofcloud.limits.httpBodyBytes` (default 1 MiB); antes do relay, sem stream, métrica `_body_too_large` |
-| `403` | `KCF111` method or path not allowed | fundação da allowlist por serviço (slice 3): construtor + Hint + métrica `_waf_allow_denied` travados; ainda sem emissor no HttpFront (sem mudança de comportamento) |
+| `403` | `KCF111` method or path not allowed | Edge: método/path fora da allowlist do serviço (`wafAllowCheck` antes do relay, sem stream; fail-closed só para quem declarou, lista vazia = legado passa) + header `X-KofCloud-WAF: blocked` + métrica `_waf_allow_denied` |
 | `504` | `KCF112` upstream did not respond in time | Edge: watchdog do stream sem DATA no prazo (`kofcloud.limits.tunnelIdleMs`); sem bytes → 504, com parcial → entrega o parcial; métrica `_timeout` |
+| `400` | `KCF113` invalid allowMethods | publish com `allowMethods` fora do formato (só verbos HTTP em maiúsculas, separados por vírgula; erro de autoria, não publica regra que nunca casaria) |
+| `400` | `KCF114` invalid allowPaths | publish com `allowPaths` fora do formato (caminhos absolutos separados por vírgula, ex: `/api/*, /health`; erro de autoria) |
 
 Owner-gate: `POST /v1/services/status` só aceita a conta dona (`KCF042`
 interno vira o mesmo `404 KCF041` na borda, para não revelar recurso alheio;
