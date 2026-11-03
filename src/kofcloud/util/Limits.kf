@@ -117,6 +117,16 @@ Int limitHttpWindowMs() {
     return config.int("kofcloud.limits.httpWindowMs", 60000)
 }
 
+// Recuo anunciado no `Retry-After` do 429 (segundos) quando a janela do rate
+// limit vem zerada/invalida. Fonte unica do `EdgeState.httpRetryAfterSec()` —
+// sem isso, o recuo duplicava a semantica da janela default (60 s) como
+// literal solto. Afinavel por config mas sem recuo silencioso: zerado ou
+// negativo recai no default (429 sem Retry-After util quebraria o cliente
+// honesto mais do que o abusivo).
+Int limitHttpRetryAfterSec() {
+    return config.int("kofcloud.limits.httpRetryAfterSec", 60)
+}
+
 // Conexoes publicas simultaneas EM RELAY por servico (o recurso caro: tunel
 // + servico local). Excedeu -> 429 KCF108 com Retry-After, ANTES de abrir
 // stream. Contagem aproximada sob corrida extrema (check-then-act sem lock;

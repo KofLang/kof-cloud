@@ -124,7 +124,11 @@ class EdgeState {
 
     Int httpRetryAfterSec() {
         if (this.httpWindowMs <= 0) {
-            return 60
+            var fallback = limitHttpRetryAfterSec()
+            if (fallback <= 0) {
+                fallback = 60
+            }
+            return fallback
         }
         return this.httpWindowMs / 1000 + 1
     }

@@ -94,6 +94,12 @@ test "rate limit: quarto pedido rapido e 429 com Retry-After", "ratelimit" {
     assert(statusOf(capped) == 429, "quarto -> 429 mesmo com servico saudavel")
     assert(bodyOf(httpGetRaw(httpPort, "/", "files.mel.kofcloud.io")) == "svc-rl", "terceiro host com cota propria segue 200")
 
+    // Fonte unica: o recuo do 429 delega no Limits (default 60 s travado;
+    // mutacao quebra). Janela valida deriva da janela (60 s -> 61 s);
+    // janela zerada recai no default em vez de 429 sem recuo util.
+    assert(limitHttpRetryAfterSec() == 60, "default Retry-After 60 s")
+    assert(edgeState.httpRetryAfterSec() == 61, "janela 60 s deriva 61 s")
+
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
     assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
