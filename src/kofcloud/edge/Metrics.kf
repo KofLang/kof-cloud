@@ -123,3 +123,24 @@ void noteHttpFinished(String outcome, String deniedDetail, Int requestBytes, Int
 void noteStreamOpened() {
     observability.counter("kofcloud_edge_tunnel_streams_total")
 }
+
+// Deteccao WAF em modo detectar (Fase 10, slice 1): a requisicao SEGUE para
+// o relay (nunca bloqueia); so conta. `signature` e o nome do padrao que
+// casou ("traversal", "sqli-union", ...) — nunca corpo, path, hostname ou
+// credencial. Sem cardinalidade por cliente por desenho.
+void noteWafDetected(String signature) {
+    observability.counter("kofcloud_edge_waf_detected_total")
+    if (signature == "traversal") {
+        observability.counter("kofcloud_edge_waf_detected_total_traversal")
+    } else if (signature == "nullbyte") {
+        observability.counter("kofcloud_edge_waf_detected_total_nullbyte")
+    } else if (signature == "sqli-union") {
+        observability.counter("kofcloud_edge_waf_detected_total_sqli_union")
+    } else if (signature == "sqli-tautology") {
+        observability.counter("kofcloud_edge_waf_detected_total_sqli_tautology")
+    } else if (signature == "xss-script") {
+        observability.counter("kofcloud_edge_waf_detected_total_xss_script")
+    } else {
+        observability.counter("kofcloud_edge_waf_detected_total_other")
+    }
+}

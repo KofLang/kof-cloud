@@ -140,3 +140,30 @@ String bearerValue(String authorization) {
     }
     return authorization.trim()
 }
+
+// Assinaturas WAF (Fase 10, slice 1 — modo detectar): inspecao pura de
+// metodo + path (+query, que viaja no path). Devolve o nome do padrao que
+// casou ou "" quando limpo. Regra de ouro: nunca recebe nem devolve corpo,
+// credencial ou chave — so o nome do padrao (ex: "traversal"), que e o
+// unico dado que chega a metrica/log. O Edge em modo detectar CONTA e
+// segue com o relay (nunca bloqueia); o enforce (403 KCF109) e outro
+// incremento.
+String wafDetectSignature(String method, String path) {
+    var target = (method + " " + path).toLowerCase()
+    if (target.indexOf("..%2f") >= 0 || target.indexOf("..%5c") >= 0 || target.indexOf("../") >= 0 || target.indexOf("..\\") >= 0) {
+        return "traversal"
+    }
+    if (target.indexOf("%00") >= 0) {
+        return "nullbyte"
+    }
+    if (target.indexOf("union select") >= 0 || target.indexOf("union%20select") >= 0) {
+        return "sqli-union"
+    }
+    if (target.indexOf("or 1=1") >= 0 || target.indexOf("or%201%3d1") >= 0) {
+        return "sqli-tautology"
+    }
+    if (target.indexOf("<script") >= 0 || target.indexOf("%3cscript") >= 0) {
+        return "xss-script"
+    }
+    return ""
+}

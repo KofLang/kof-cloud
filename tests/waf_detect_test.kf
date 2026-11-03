@@ -1,0 +1,155 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Http
+import kofcloud.edge.Tunnel
+import kofcloud.model.Errors
+import kofcloud.store.Store
+import kofcloud.util.Limits
+import kofcloud.util.Text
+import testkit.Support
+
+// WAF slice 1 (Fase 10) — modo detectar: o Edge inspeciona metodo+path,
+// CONTA por padrao e segue com o relay (nunca bloqueia). Nenhum legitimo
+// quebra por construcao; o enforce (403 KCF109) e outro incremento.
+
+test "waf detectar: assinaturas puras por padrao", "wafdetect-unit" {
+    // Cada padrao tem nome proprio (e o unico dado que chega a metrica).
+    assert(wafDetectSignature("GET", "/files/../../etc/passwd") == "traversal", "traversal ../")
+    assert(wafDetectSignature("GET", "/x/..%2f..%2fsecret") == "traversal", "traversal codificado")
+    assert(wafDetectSignature("GET", "/x%00y") == "nullbyte", "null byte")
+    assert(wafDetectSignature("GET", "/search?q=UNION SELECT * FROM users") == "sqli-union", "union select")
+    assert(wafDetectSignature("GET", "/login?u=x' OR 1=1--") == "sqli-tautology", "or 1=1")
+    assert(wafDetectSignature("GET", "/q=<script>alert(1)</script>") == "xss-script", "script em query")
+    // Caixa nao importa; metodo entra na inspecao.
+    assert(wafDetectSignature("get", "/Q=<SCRIPT>") == "xss-script", "caixa mista")
+    // Limpo nao conta.
+    assert(wafDetectSignature("GET", "/") == "", "raiz limpa")
+    assert(wafDetectSignature("GET", "/api/users?page=2") == "", "query legitima")
+    assert(wafDetectSignature("POST", "/echo") == "", "post legitimo")
+    // KCF109 existe e tem Hint (o enforce futuro usa esse codigo).
+    assert(errWafDenied().indexOf("KCF109") >= 0, "codigo KCF109")
+    assert(errHint(errWafDenied()).length > 0, "tem Hint")
+}
+
+test "waf detectar: ataque conta mas passa; legitimo nao conta", "wafdetect" {
+    var localSvc = 19761
+    var controlPort = 19762
+    var tunnelPort = 19763
+    var httpPort = 19764
+
+    // Servidor TCP cru de proposito: o web.app() do runtime fecha a conexao
+    // sem headers para paths com `..` (medido em probe) — e o que esta em
+    // prova e a deteccao no Edge, nao o web server. Responde 200 a qualquer
+    // path (eco do path no corpo, para provar que o relay completou).
+    var localListener = net.listen(localSvc)
+    var localServer = spawn {
+        var serving = true
+        while (serving) {
+            try {
+                var peer = localListener.accept()
+                var worker = spawn { serveDetectPeer(peer) }
+            } catch (String e) {
+                serving = false
+            }
+        }
+    }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-wafdetect-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-wafdetect-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-wafdetect-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent online")
+
+    var host = "site.mel.kofcloud.io"
+    // Linha de base: legitimo passa e ainda nao contou nada.
+    assert(bodyOf(httpGetRaw(httpPort, "/", host)) == "svc-detect", "GET segue funcionando")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total") == -1, "nada contado antes do ataque")
+
+    // Ataque em modo detectar: CONTA mas passa (200, chega no servico).
+    var evil = httpGetRaw(httpPort, "/files/../../etc/passwd", host)
+    assert(statusOf(evil) == 200, "detectar nao bloqueia")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total") >= 1, "deteccao contada")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total_traversal") >= 1, "padrao traversal contado")
+
+    // Legitimo depois do ataque: segue 200, sem contar de novo.
+    assert(bodyOf(httpGetRaw(httpPort, "/", host)) == "svc-detect", "legitimo segue 200")
+
+    // Parada limpa.
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+    localListener.close()
+}
+
+// Um peer do servidor cru: le ate o fim dos headers (ou EOF, caso do
+// health check TCP que so conecta e fecha) e responde 200 constante a
+// qualquer requisicao real. O corpo fixo prova que o relay completou;
+// a deteccao vive na metrica do Edge, nao aqui.
+void serveDetectPeer(Conn peer) {
+    var req = ""
+    var reading = true
+    while (reading) {
+        var chunk = peer.receive(4096)
+        if (chunk.length == 0) {
+            reading = false
+        } else {
+            req = req + bytesToString(chunk)
+            if (req.indexOf("\r\n\r\n") >= 0) {
+                reading = false
+            }
+        }
+    }
+    if (req.length > 0 && req.indexOf("HTTP/") >= 0) {
+        var body = "svc-detect"
+        var head = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n"
+        peer.send(bytesFromString(head + body))
+    }
+    peer.close()
+}
+
+Int metricValue(String exposition, String name) {
+    for (var line in exposition.split("\n")) {
+        var trimmed = line.trim()
+        if (trimmed.startsWith(name + " ")) {
+            return parseIntSafe(trimmed.substring(name.length + 1).trim(), -1)
+        }
+    }
+    return -1
+}

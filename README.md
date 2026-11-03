@@ -132,7 +132,8 @@ Suítes verdes: framing, bytes, protocolo de túnel, hostnames/exposição,
 identidade/cifra, registry, backoff, integração do control plane, E2E,
 domínio próprio, métricas, rate limit, suspensão/auditoria, frames
 fatiados, idle timeout, conexões por serviço, deploy, daemon, hot-reload,
-doctor, presença do túnel, eventos do agent e teto de corpo WAF (27 suites). Ver `docs/15-tests.md` para a matriz.
+doctor, presença do túnel, eventos do agent, teto de corpo WAF, detectar
+WAF e timeout de upstream (29 suites). Ver `docs/15-tests.md` para a matriz.
 
 ## Segurança
 

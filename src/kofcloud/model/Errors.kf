@@ -151,6 +151,10 @@ String errServiceOverloaded() {
     return "KCF108: too many connections for this service"
 }
 
+String errWafDenied() {
+    return "KCF109: request blocked by edge protection"
+}
+
 String errBodyTooLarge() {
     return "KCF110: request body too large"
 }
@@ -263,6 +267,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF108") >= 0) {
         return "Servico ocupado agora — tente de novo em instantes."
+    }
+    if (raw.indexOf("KCF109") >= 0) {
+        return "O Edge barrou a requisicao por padrao de ataque — se for legitimo, renomeie o parametro/caminho; o padrao detectado aparece na metrica `_waf_denied`."
     }
     if (raw.indexOf("KCF110") >= 0) {
         return "O corpo da requisicao passou do teto do Edge — envie menos dados ou aumente `kofcloud.limits.httpBodyBytes`."

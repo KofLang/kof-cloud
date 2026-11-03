@@ -44,6 +44,8 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U20 | diagnostico doctor | `tests/doctor_test.kf` (5 testes) | para na primeira camada sem login, manifesto com caminho no erro, **ajuda lista o tunel**, **camada do tunel pura (presente/ausente/erro sem rede nem HOME)**, fim a fim acusa/aprova servico **+ drift de config pelo caminho do doctor (doctorCheck delega ao verifyDeployment: nao publicado → drift → sem resposta, igual ao --check)** + `--file` segue `resolveManifestPath` (mesma regra do deploy/down: ausente/vazio/so-espacos = default, padding aparado) |
 | U21 | presenca real do tunel | `tests/presence_test.kf` (1 teste) | tunel vivo listado em /v1/presence, morto some; 401 sem token, filtro por conta, sem vazar device alheio |
 | U22 | teto de corpo (WAF slice 2a) | `tests/waf_body_test.kf` (2 testes: `wafbody-unit` + `wafbody`) | `limitHttpBodyBytes` positivo + `errBodyTooLarge` com KCF110 e Hint; Content-Length acima do teto → 413 antes do relay (sem stream, sem Agent), no teto passa |
+| U23 | detectar WAF (slice 1-detectar) | `tests/waf_detect_test.kf` (2 testes: `wafdetect-unit` + `wafdetect`) | `wafDetectSignature` pura (5 padrões + caixa + limpo) + `errWafDenied` KCF109 com Hint; e2e com servidor TCP cru (web.app fecha `..` sem headers — medido em probe): ataque conta por padrão mas passa (200), legítimo não conta |
+| U24 | timeout de upstream (WAF slice 2b) | `tests/waf_timeout_test.kf` (2 testes: `waftimeout-unit` + `waftimeout`) | `errUpstreamTimeout` KCF112 com Hint; e2e com serviço mudo e prazo curto: 504 + vaga liberada (2º pedido também 504, não 429) + métrica `_timeout` |
 
 ## Integração
 
@@ -72,6 +74,8 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | E12 | concorrência por serviço | `tests/conns_test.kf` (`conns`) | limite 1 com tráfego real simultâneo |
 | E13 | deploy fim a fim | `tests/deploy_test.kf` (`deploy-e2e`) | publica sem duplicar, down preserva o extra |
 | E14 | teto de corpo fim a fim | `tests/waf_body_test.kf` (`wafbody`) | 413 KCF110 + metrica antes do relay; corpo no teto chega ao servico local |
+| E15 | detectar WAF fim a fim | `tests/waf_detect_test.kf` (`wafdetect`) | ataque conta por padrao mas passa (200, relay completa); legitimo segue 200 sem contar |
+| E16 | timeout de upstream fim a fim | `tests/waf_timeout_test.kf` (`waftimeout`) | serviço mudo: 504 KCF112 + vaga liberada + métrica; parcial entregue se já havia bytes |
 
 Não há camada `integration_*` separada: os arquivos `control_test.kf`,
 `errors_test.kf`, `metrics_test.kf` etc. já sobem HTTP/TCP real (são E2E na

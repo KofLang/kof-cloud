@@ -122,6 +122,15 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         return
     }
     var dropCredential = exposureRequiresAuth(service.exposure)
+    // WAF slice 1 (modo detectar): inspeciona metodo+path e CONTA, sem
+    // bloquear — a requisicao segue para o relay mesmo quando casa. So o
+    // nome do padrao chega a metrica (nunca corpo, path ou hostname).
+    // O enforce (403 KCF109) e outro incremento; por enquanto nenhum
+    // legitimo quebra por construcao.
+    var signature = wafDetectSignature(request.method, request.path)
+    if (signature.length > 0) {
+        noteWafDetected(signature)
+    }
     var forwarded = serializeRequest(request, "edge", dropCredential)
     // Vaga de relay por servico: o recurso caro (tunel + servico local).
     // Recusar AQUI (antes do OPEN) nao consome stream nem toca no Agent.

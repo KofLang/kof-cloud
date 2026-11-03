@@ -270,8 +270,15 @@ externo (`12-tls.md`).
 direto para o serviço local. Cloud robusta filtra o óbvio na borda sem
 quebrar o legítimo (fail-open com log vs fail-closed configurável).
 
-**Estado: slice 2 ✅ (corpo + timeout); sl. 1 e 3 pendentes.**
+**Estado: slices 1-detectar + 2 ✅ (detectar, corpo, timeout); sl. 1-enforce e 3 pendentes.**
 
+* **Slice 1-detectar — assinaturas mínimas em modo detectar ✅.**
+  `wafDetectSignature` pura (método+path, minúsculas; `../`/`..%2f`/`..%5c`,
+  `%00`, `UNION SELECT`, `OR 1=1`, `<script`/`%3cscript`) → nome do padrão;
+  o Edge (`HttpFront`) conta por padrão (`_traversal`, `_nullbyte`,
+  `_sqli_union`, `_sqli_tautology`, `_xss_script`, `_other`) e segue com o
+  relay (nunca bloqueia). `KCF109` existe com Hint (o enforce futuro usa
+  esse código). Prova: `tests/waf_detect_test.kf` (2 testes).
 * **Slice 2a — teto de corpo por requisição ✅.** `kofcloud.limits.httpBodyBytes`
   (default 1 MiB); o Edge recusa antes do relay quando o `Content-Length`
   declarado passa → `413 KCF110` + métrica `_body_too_large`. Não consome
@@ -289,13 +296,15 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
 
 Desenho fatiado:
 
-* **Slice 1 — regras básicas por padrão (modo detectar).** Assinaturas
+* **Slice 1 — regras básicas por padrão (modo detectar ✅ / enforce pendente).** Assinaturas
   mínimas em método/path/query/corpo pequeno (traversal `../`, null byte,
-  `UNION SELECT`/`OR 1=1` canônicos, `<script` em query): casa → `403 KCF109`
+  `UNION SELECT`/`OR 1=1` canônicos, `<script` em query): casa → conta
+  (detectar ✅) e, no enforce futuro, `403 KCF109`
   + métrica `_waf_denied` + log só com padrão+hostname (nunca corpo).
-  Default **detectar** (conta + header `X-KofCloud-WAF: would-block`);
-  `--waf=enforce` bloqueia. Prova: unit das assinaturas + e2e (ataque 403,
-  legítimo 200).
+  Default **detectar** (conta e segue; header `X-KofCloud-WAF: would-block`
+  e `--waf=enforce` ficam para o enforce);
+  Prova do detectar: `tests/waf_detect_test.kf` (unit das assinaturas + e2e:
+  ataque 200 contado por padrão, legítimo 200 sem contar).
 * **Slice 2 — limites de corpo/tempo por rota.** Teto de request body por
   serviço (`kofcloud.limits.httpBodyBytes`, default 1 MiB; excedeu →
   `413 KCF110`) + timeout de upstream (502 após N s, sem pendurar o stream).
