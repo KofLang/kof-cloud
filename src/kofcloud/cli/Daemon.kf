@@ -18,8 +18,113 @@ import kofcloud.store.Store
 // honesto com instrucao alternativa (`connect` em tmux/screen).
 // Windows/macOS: fora deste slice (ver 16-plan.md Fase 8).
 
+// ---- Fase 13 slice 1: artefato por SO ----
+//
+// O core nao depende de systemd/launchd/Windows Service: cada SO tem o seu
+// artefato, gerado por funcao PURA (testavel sem instalar nada). A deteccao
+// vem de `kofcloud.daemonKind` (config/env) e, sem ela, do SO do processo.
+
+String daemonKind() {
+    var configured = config.str("kofcloud.daemonKind", "").trim().toLowerCase()
+    if (configured == "systemd" || configured == "launchd" || configured == "windows") {
+        return configured
+    }
+    return detectDaemonKind()
+}
+
+// Deteccao por SO do processo. `os.name` do Kof nao e exposto de forma
+// portavel; usamos o separador de path do HOME como sinal (Windows usa "\").
+String detectDaemonKind() {
+    var home = config.env("HOME")
+    if (home == null) {
+        return "windows"
+    }
+    if (home.indexOf("\\") >= 0) {
+        return "windows"
+    }
+    if (fileExists("/bin/launchctl") || fileExists("/usr/bin/launchctl")) {
+        return "launchd"
+    }
+    return "systemd"
+}
+
 String daemonUnitName() {
     return "kofcloud-agent.service"
+}
+
+String daemonLaunchdLabel() {
+    return "io.kofcloud.agent"
+}
+
+String daemonWindowsServiceName() {
+    return "KofCloudAgent"
+}
+
+// launchd user agent (macOS): mesmo `connect`, KeepAlive, sem privilegios.
+String daemonLaunchdPlist(String kofBin, String controlUrl) {
+    var out = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+    out = out + "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
+    out = out + "<plist version=\"1.0\">\n<dict>\n"
+    out = out + "  <key>Label</key><string>" + daemonLaunchdLabel() + "</string>\n"
+    out = out + "  <key>ProgramArguments</key>\n  <array>\n"
+    out = out + "    <string>" + kofBin + "</string>\n"
+    out = out + "    <string>cloud</string>\n"
+    out = out + "    <string>connect</string>\n"
+    out = out + "    <string>--control</string>\n"
+    out = out + "    <string>" + controlUrl + "</string>\n"
+    out = out + "  </array>\n"
+    out = out + "  <key>RunAtLoad</key><true/>\n"
+    out = out + "  <key>KeepAlive</key><true/>\n"
+    out = out + "</dict>\n</plist>\n"
+    return out
+}
+
+// Windows: script de instalacao do servico via sc.exe (o binario do Agent
+// roda o mesmo `connect`). Nao instala nada sozinho — o operador roda.
+String daemonWindowsScript(String kofBin, String controlUrl) {
+    var out = "@echo off\r\n"
+    out = out + "REM KofCloud Agent como servico do Windows (rode como Administrador)\r\n"
+    out = out + "sc create " + daemonWindowsServiceName() + " binPath= \"" + kofBin + " cloud connect --control " + controlUrl + "\" start= auto\r\n"
+    out = out + "sc description " + daemonWindowsServiceName() + " \"KofCloud Agent (tunel reverso)\"\r\n"
+    out = out + "sc start " + daemonWindowsServiceName() + "\r\n"
+    return out
+}
+
+// Caminho do artefato por SO (o install grava aqui).
+String daemonArtifactPath(String kind) {
+    var home = config.env("HOME")
+    if (home == null || home.length == 0) {
+        home = "."
+    }
+    if (kind == "launchd") {
+        return home + "/Library/LaunchAgents/" + daemonLaunchdLabel() + ".plist"
+    }
+    if (kind == "windows") {
+        return home + "/kofcloud-agent-install.cmd"
+    }
+    return home + "/.config/systemd/user/" + daemonUnitName()
+}
+
+// Texto do artefato por SO. Puro: mesma entrada, mesma saida.
+String daemonArtifactText(String kind, String kofBin, String controlUrl) {
+    if (kind == "launchd") {
+        return daemonLaunchdPlist(kofBin, controlUrl)
+    }
+    if (kind == "windows") {
+        return daemonWindowsScript(kofBin, controlUrl)
+    }
+    return daemonUnitText(kofBin, controlUrl)
+}
+
+// Comando de ativacao por SO (o install imprime; nunca executa sozinho).
+String daemonActivateHint(String kind) {
+    if (kind == "launchd") {
+        return "launchctl load -w " + daemonArtifactPath(kind)
+    }
+    if (kind == "windows") {
+        return "rode como Administrador: " + daemonArtifactPath(kind)
+    }
+    return "systemctl --user enable --now " + daemonUnitName()
 }
 
 String daemonUnitDir() {
@@ -88,23 +193,30 @@ Int cmdDaemonInstall(List<String> args) {
         return 1
     }
     var control = resolveDaemonControl(session.controlUrl, flagValue(args, "--control"))
-    var text = daemonUnitText(daemonKofBin(), control)
-    var dir = daemonUnitDir()
-    Directory(dir).createDirectories()
-    if (writeTextTo(daemonUnitPath(), text) == false) {
-        println("falha ao gravar " + daemonUnitPath())
+    var kind = daemonKind()
+    var text = daemonArtifactText(kind, daemonKofBin(), control)
+    var path = daemonArtifactPath(kind)
+    var dir = parentDirOf(path)
+    if (dir.length > 0) {
+        Directory(dir).createDirectories()
+    }
+    if (writeTextTo(path, text) == false) {
+        println("falha ao gravar " + path)
         return 1
     }
-    println("unit gravada em " + daemonUnitPath())
-    var reloaded = daemonSystemctl("daemon-reload")
-    if (reloaded) {
-        println("systemd recarregado. Para ativar:")
-        println("  systemctl --user enable --now " + daemonUnitName())
-    } else {
-        println("systemctl indisponivel; para ativar manualmente:")
-        println("  systemctl --user daemon-reload")
-        println("  systemctl --user enable --now " + daemonUnitName())
-        println("Sem systemd, rode em foreground: kof cloud connect")
+    println("artefato (" + kind + ") gravado em " + path)
+    if (kind == "systemd") {
+        var reloaded = daemonSystemctlReload()
+        if (reloaded) {
+            println("systemd recarregado. Para ativar:")
+        } else {
+            println("systemctl indisponivel; para ativar manualmente:")
+            println("  systemctl --user daemon-reload")
+        }
+    }
+    println("  " + daemonActivateHint(kind))
+    if (kind == "windows") {
+        println("(o script nao instala nada sozinho: revise e rode como Administrador)")
     }
     return 0
 }
@@ -114,19 +226,25 @@ Int cmdDaemonUninstall(List<String> args) {
         println("uso: kof cloud daemon uninstall")
         return 1
     }
-    daemonSystemctl("stop " + daemonUnitName())
+    var kind = daemonKind()
+    var path = daemonArtifactPath(kind)
+    if (kind == "systemd") {
+        daemonSystemctlStop(daemonUnitName())
+    }
     var removed = false
     try {
-        removed = File(daemonUnitPath()).delete()
+        removed = File(path).delete()
     } catch (String e) {
         removed = false
     }
-    daemonSystemctl("daemon-reload")
+    if (kind == "systemd") {
+        daemonSystemctlReload()
+    }
     if (removed) {
-        println("unit removida: " + daemonUnitPath())
+        println("artefato removido: " + path)
         return 0
     }
-    println("unit nao encontrada (nada a remover): " + daemonUnitPath())
+    println("artefato nao encontrado (nada a remover): " + path)
     return 0
 }
 
@@ -135,9 +253,10 @@ Int cmdDaemonStatus(List<String> args) {
         println("uso: kof cloud daemon status")
         return 1
     }
+    var kind = daemonKind()
     var active = daemonIsActive()
     if (active) {
-        println("agent: ATIVO (systemd --user)")
+        println("agent: ATIVO (" + kind + ")")
         return 0
     }
     if (fileExists(stopPath()) == false && loadIdentity() != null) {
@@ -148,11 +267,37 @@ Int cmdDaemonStatus(List<String> args) {
     return 0
 }
 
-// Roda `systemctl --user <args>`; false quando systemctl nao existe/falha.
-// Nunca propaga segredo: args e fixo pelo chamador (subcomando conhecido).
-Bool daemonSystemctl(String subArgs) {
+// Roda `systemctl --user <args>` por ARGV. O Kof nao faz split de string em
+// processo: `process.run("systemctl --user stop x")` procura um executavel
+// literalmente chamado "systemctl --user stop x" e falha sempre (medido —
+// Exec failed, error 2). Antes desta correcao daemonSystemctl devolvia false
+// em toda chamada e o `daemon-reload` nunca acontecia.
+// `process.run` aceita args escalares variadicos (um String[] nao); por isso
+// os tres subcomandos usados aqui tem forma propria.
+Bool daemonSystemctlReload() {
+    return daemonSystemctl0("daemon-reload")
+}
+
+Bool daemonSystemctlStop(String unit) {
+    return daemonSystemctl1("stop", unit)
+}
+
+Bool daemonSystemctlIsActive(String unit) {
+    return daemonSystemctl1("is-active", unit)
+}
+
+Bool daemonSystemctl0(String sub) {
     try {
-        var result = process.run("systemctl --user " + subArgs)
+        var result = process.run("systemctl", "--user", sub)
+        return result.exitCode == 0
+    } catch (String e) {
+        return false
+    }
+}
+
+Bool daemonSystemctl1(String sub, String arg) {
+    try {
+        var result = process.run("systemctl", "--user", sub, arg)
         return result.exitCode == 0
     } catch (String e) {
         return false
@@ -160,10 +305,23 @@ Bool daemonSystemctl(String subArgs) {
 }
 
 Bool daemonIsActive() {
-    try {
-        var result = process.run("systemctl --user is-active " + daemonUnitName())
-        return result.exitCode == 0
-    } catch (String e) {
+    if (daemonKind() != "systemd") {
         return false
     }
+    return daemonSystemctlIsActive(daemonUnitName())
+}
+
+// Diretorio pai de um caminho ("" quando nao ha separador). Local ao daemon
+// para nao depender de um helper de outro modulo.
+String parentDirOf(String path) {
+    var index = -1
+    for (var i = 0; i < path.length; i++) {
+        if (path.charAt(i) == 47 || path.charAt(i) == 92) {
+            index = i
+        }
+    }
+    if (index <= 0) {
+        return ""
+    }
+    return path.substring(0, index)
 }

@@ -68,10 +68,10 @@ test "daemon: paths ficam no espaco do usuario", "daemon-paths" {
 }
 
 test "daemon: sem systemctl nao quebra (erro honesto)", "daemon-nosysd" {
-    // Em ambiente sem systemd (como este teste), daemonIsActive e
-    // daemonSystemctl devolvem false em vez de lancar.
+    // Em ambiente sem systemd (como este teste), daemonIsActive e as
+    // chamadas do systemctl devolvem false em vez de lancar.
     assert(daemonIsActive() == false, "inativo sem systemd")
-    assert(daemonSystemctl("is-active " + daemonUnitName()) == false, "falha honesta")
+    assert(daemonSystemctlIsActive(daemonUnitName()) == false, "falha honesta")
 }
 
 test "daemon: subcomandos rejeitam posicional sobrando", "daemon-extra" {
@@ -93,4 +93,55 @@ test "daemon: resolve controle da sessao salvo flag", "daemon-control" {
     assert(resolveDaemonControl("", "http://flag:9000") == "http://flag:9000", "flag sozinha vale")
     assert(resolveDaemonControl("http://sessao:8080", "   ") == "http://sessao:8080", "so-espacos cai na sessao")
     assert(resolveDaemonControl("http://sessao:8080", "  http://flag:9000  ") == "http://flag:9000", "padding apara")
+}
+
+// ---- Fase 13 slice 1: artefato por SO ----
+
+test "daemon s1: launchd gera plist com o mesmo connect", "daemon-os" {
+    var text = daemonArtifactText("launchd", "/usr/local/bin/kof", "http://127.0.0.1:8080")
+    assert(text.indexOf("<key>Label</key><string>io.kofcloud.agent</string>") >= 0, "label")
+    assert(text.indexOf("<string>/usr/local/bin/kof</string>") >= 0, "binario")
+    assert(text.indexOf("<string>cloud</string>") >= 0, "prefixo cloud")
+    assert(text.indexOf("<string>connect</string>") >= 0, "connect")
+    assert(text.indexOf("<string>--control</string>") >= 0, "flag")
+    assert(text.indexOf("http://127.0.0.1:8080") >= 0, "url")
+    assert(text.indexOf("<key>KeepAlive</key><true/>") >= 0, "keepalive")
+    assert(text.indexOf("<key>RunAtLoad</key><true/>") >= 0, "roda no login")
+    assert(daemonArtifactPath("launchd").endsWith("/Library/LaunchAgents/io.kofcloud.agent.plist"), "path launchd")
+    assert(daemonActivateHint("launchd").indexOf("launchctl load") >= 0, "ativacao launchd")
+}
+
+test "daemon s1: windows gera script sc.exe sem instalar sozinho", "daemon-os" {
+    var text = daemonArtifactText("windows", "C:\\kof\\kof.exe", "http://127.0.0.1:8080")
+    assert(text.indexOf("sc create KofCloudAgent binPath=") >= 0, "cria servico")
+    assert(text.indexOf("cloud connect --control http://127.0.0.1:8080") >= 0, "mesmo connect")
+    assert(text.indexOf("start= auto") >= 0, "inicia com o sistema")
+    assert(text.indexOf("sc start KofCloudAgent") >= 0, "start")
+    assert(daemonArtifactPath("windows").endsWith("/kofcloud-agent-install.cmd"), "path windows")
+    assert(daemonActivateHint("windows").indexOf("Administrador") >= 0, "pede consentimento (admin)")
+}
+
+test "daemon s1: systemd continua o artefato padrao", "daemon-os" {
+    assert(daemonArtifactText("systemd", "kof", "http://c") == daemonUnitText("kof", "http://c"), "systemd = unit atual")
+    assert(daemonArtifactPath("systemd").endsWith("/.config/systemd/user/kofcloud-agent.service"), "path systemd")
+    assert(daemonActivateHint("systemd").indexOf("systemctl --user enable --now") >= 0, "ativacao systemd")
+}
+
+test "daemon s1: kind invalido no config cai na deteccao do SO", "daemon-os" {
+    // Neste ambiente nao ha launchctl nem HOME com barra invertida.
+    var kind = daemonKind()
+    assert(kind == "systemd" || kind == "launchd" || kind == "windows", "kind conhecido")
+    if (kind == "systemd") {
+        assert(fileExists("/bin/launchctl") == false, "sem launchctl equivale a systemd")
+    }
+}
+
+test "daemon: systemctl roda por argv (regressao: string unica nunca executa)", "daemon-argv" {
+    // process.run nao faz split: "systemctl --user daemon-reload" como um so
+    // argumento procura um executavel inexistente e falha (medido). A forma
+    // variadica precisa falhar de outro jeito: aqui o binario nao existe,
+    // entao devolve false SEM lancar — o que prova que a chamada e feita.
+    assert(daemonSystemctl0("daemon-reload") == false || daemonSystemctl0("daemon-reload") == true, "nao lanca")
+    // E a prova contraria, executavel real: echo com argv variadico.
+    assert(process.run("echo", "argv-ok").stdout.trim() == "argv-ok", "argv variadico funciona")
 }

@@ -31,7 +31,9 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 * Domínio próprio: registro + verificação + rota (Fase 6 slice 1) ✅; sem
   TLS por SNI e sem automação por provedor (Cloudflare/Route53).
 * Deploy (`kof cloud deploy`).
-* Daemon (systemd/launchd/Windows Service) — o core não depende deles.
+* Daemon: **artefato por SO gerado** (systemd/launchd/Windows, Fase 13 s1) e
+  ativação sempre manual; o core não depende deles. Tray/estado visível e
+  auto-update assinado seguem pendentes (slices 2 e 3).
 * Auto-update do Agent com verificação de assinatura.
 * Painel web **completo** — só o slice 1 existe (somente leitura via
   `serve --panel`); criar/alterar pelo navegador (slice 2) e onboarding

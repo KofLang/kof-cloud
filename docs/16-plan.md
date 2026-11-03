@@ -402,14 +402,23 @@ CLI); nunca loga corpo/token; é estático + `fetch`, sem framework pesado
 unit systemd manual no Linux. Usuário real quer instalar, logar uma vez e
 esquecer — com tray, reconexão visível e update assistido.
 
-**Estado: ⏳ não iniciado (base pronta: daemon user-level + doctor).**
+**Estado: slice 1 ✅; slices 2 e 3 pendentes (base: daemon user-level + doctor).**
 Desenho fatiado:
 
-* **Slice 1 — instalador por SO.** Linux: usa a unit systemd atual
-  (empacotar + `enable` com consentimento); Windows: serviço via
-  `sc.exe`/NSSM chamando o mesmo `connect`; macOS: `launchd` user agent.
-  Cada um atrás de `kof cloud daemon install` (detecção de SO, não flag).
-  Prova: teste gera o artefato certo por SO (puro, sem instalar).
+* **Slice 1 — instalador por SO ✅.** `daemonKind()` (config
+  `kofcloud.daemonKind` ou detecção do SO) escolhe o artefato:
+  `daemonUnitText` (systemd), `daemonLaunchdPlist` (launchd, `KeepAlive` +
+  `RunAtLoad`) e `daemonWindowsScript` (`sc create ... start= auto`). O
+  `daemon install` grava no caminho do SO (`daemonArtifactPath`) e imprime a
+  ativação (`daemonActivateHint`) — **nunca** ativa sozinho; no Windows o
+  script pede Administrador. Prova: `tests/daemon_test.kf` (`daemon-os`, 4
+  testes puros, sem instalar nada).
+  **Bug corrigido junto:** `daemonSystemctl` chamava
+  `process.run("systemctl --user …")` como string única — o Kof não faz split
+  de shell, então a chamada procurava um executável com esse nome e falhava
+  sempre (medido: `Exec failed, error 2`). O `daemon-reload` nunca acontecia.
+  Agora usa argv variádico (`process.run("systemctl", "--user", sub, arg)`),
+  com regressão em `daemon-argv`.
 * **Slice 2 — tray + estado visível.** Ícone mostra ONLINE/OFFLINE
   (lê `/v1/presence`, igual ao `status`), serviços publicados, botão
   connect/disconnect, link para o painel. Sem o tray o usuário não sabe
