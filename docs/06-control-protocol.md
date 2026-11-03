@@ -205,7 +205,9 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `429` | `KCF107` too many requests | Edge: rate limit por hostname (`Retry-After`; antes de rotear) |
 | `429` | `KCF108` too many connections | Edge: sem vaga de relay por serviço (`Retry-After`; antes do OPEN) |
 | `403` | `KCF109` blocked by edge protection | Edge: assinatura WAF casou com enforce ligado (`serve --waf=enforce`, via `setWafEnforce(true)` no EdgeState; antes do relay, sem stream, só o nome do padrão na métrica `_waf_denied`) + header `X-KofCloud-WAF: blocked`; no detectar a resposta do relay segue marcada com `X-KofCloud-WAF: would-block` |
+| `413` | `KCF110` request body too large | Edge: `Content-Length` declarado acima de `kofcloud.limits.httpBodyBytes` (default 1 MiB); antes do relay, sem stream, métrica `_body_too_large` |
 | `403` | `KCF111` method or path not allowed | fundação da allowlist por serviço (slice 3): construtor + Hint + métrica `_waf_allow_denied` travados; ainda sem emissor no HttpFront (sem mudança de comportamento) |
+| `504` | `KCF112` upstream did not respond in time | Edge: watchdog do stream sem DATA no prazo (`kofcloud.limits.tunnelIdleMs`); sem bytes → 504, com parcial → entrega o parcial; métrica `_timeout` |
 
 Owner-gate: `POST /v1/services/status` só aceita a conta dona (`KCF042`
 interno vira o mesmo `404 KCF041` na borda, para não revelar recurso alheio;
