@@ -20,6 +20,7 @@ class EdgeState {
     Int serviceConnLimit
     Int bodyLimit
     Int upstreamWaitMs
+    Bool wafEnforce
 
     constructor(registry: Registry) {
         this.registry = registry
@@ -33,6 +34,18 @@ class EdgeState {
         this.serviceConnLimit = limitServiceConns()
         this.bodyLimit = limitHttpBodyBytes()
         this.upstreamWaitMs = limitTunnelIdleMs()
+        this.wafEnforce = false
+    }
+
+    // Permite ligar o enforce WAF sem config de processo (o default e
+    // detectar: conta e segue). O `serve --waf=enforce` e outro incremento;
+    // o nucleo (EdgeState + HttpFront) nao depende da flag.
+    void setWafEnforce(Bool enforce) {
+        this.wafEnforce = enforce
+    }
+
+    Bool wafEnforcing() {
+        return this.wafEnforce
     }
 
     // Permite aos testes fixarem o timeout de upstream sem config de processo.

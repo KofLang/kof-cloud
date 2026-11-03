@@ -50,7 +50,8 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | presenca real do tunel | espelho bind/unbind no Registry + `GET /v1/presence` filtrado por conta + `status` ONLINE/OFFLINE confirmado | `presence_test.kf` |
 | timeout de upstream (WAF 2b) | watchdog entrega RESET no stream → `504 KCF112` (ou parcial) + métrica `_timeout` | `waf_timeout_test.kf` |
 | teto de corpo (WAF 2a) | `kofcloud.limits.httpBodyBytes` → `413 KCF110` antes do relay + métrica `_body_too_large` | `waf_body_test.kf` |
-| detectar WAF (slice 1-detectar) | `wafDetectSignature` pura (método+path) + contagem por padrão no `HttpFront` (relay segue; `KCF109` com Hint reservado ao enforce) | `waf_detect_test.kf` |
+| detectar WAF (slice 1-detectar) | `wafDetectSignature` pura (método+path) + contagem por padrão no `HttpFront` (relay segue) | `waf_detect_test.kf` (`wafdetect-unit` + `wafdetect`) |
+| enforce WAF núcleo (slice 1-enforce) | `EdgeState.setWafEnforce(true)` → casa vira `403 KCF109` antes do relay (sem stream, sem Agent) + métrica `_waf_denied` | `waf_detect_test.kf` (`wafenforce`: ataque não chega ao local, legítimo 200 antes/depois) |
 | eventos do Agent | `agent/Events.kf`: `agentEvent` emite para `log.*` **e** `agent-runtime.log` (teto 256 KiB); `logs --runtime` | `agent_events_test.kf` |
 | idle timeout (tunel + stream) | `lastActivityMs` + sweepers Edge/Agent, EOF limpo vira throw (reconecta) | `idle_test.kf` |
 

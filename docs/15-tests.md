@@ -45,6 +45,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U21 | presenca real do tunel | `tests/presence_test.kf` (1 teste) | tunel vivo listado em /v1/presence, morto some; 401 sem token, filtro por conta, sem vazar device alheio |
 | U22 | teto de corpo (WAF slice 2a) | `tests/waf_body_test.kf` (2 testes: `wafbody-unit` + `wafbody`) | `limitHttpBodyBytes` positivo + `errBodyTooLarge` com KCF110 e Hint; Content-Length acima do teto → 413 antes do relay (sem stream, sem Agent), no teto passa |
 | U23 | detectar WAF (slice 1-detectar) | `tests/waf_detect_test.kf` (2 testes: `wafdetect-unit` + `wafdetect`) | `wafDetectSignature` pura (5 padrões + caixa + limpo) + `errWafDenied` KCF109 com Hint; e2e com servidor TCP cru (web.app fecha `..` sem headers — medido em probe): ataque conta por padrão mas passa (200), legítimo não conta |
+| U23b | enforce WAF núcleo (slice 1-enforce) | `tests/waf_detect_test.kf` (1 teste: `wafenforce`) + locks em `metrics_test.kf`/`errors_test.kf` | `setWafEnforce(true)` → ataque 403 KCF109 sem chegar ao local (contador no peer prova), legítimo 200 antes e depois, métricas `_traversal` + `_waf_denied`; mapeamento KCF109→sufixo travado + KCF109 na lista canônica de Hint |
 | U24 | timeout de upstream (WAF slice 2b) | `tests/waf_timeout_test.kf` (2 testes: `waftimeout-unit` + `waftimeout`) | `errUpstreamTimeout` KCF112 com Hint; e2e com serviço mudo e prazo curto: 504 + vaga liberada (2º pedido também 504, não 429) + métrica `_timeout` |
 
 ## Integração
@@ -75,6 +76,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | E13 | deploy fim a fim | `tests/deploy_test.kf` (`deploy-e2e`) | publica sem duplicar, down preserva o extra |
 | E14 | teto de corpo fim a fim | `tests/waf_body_test.kf` (`wafbody`) | 413 KCF110 + metrica antes do relay; corpo no teto chega ao servico local |
 | E15 | detectar WAF fim a fim | `tests/waf_detect_test.kf` (`wafdetect`) | ataque conta por padrao mas passa (200, relay completa); legitimo segue 200 sem contar |
+| E15b | enforce WAF fim a fim | `tests/waf_detect_test.kf` (`wafenforce`) | ataque 403 KCF109 antes do relay (local nao ve); legitimo 200 antes e depois |
 | E16 | timeout de upstream fim a fim | `tests/waf_timeout_test.kf` (`waftimeout`) | serviço mudo: 504 KCF112 + vaga liberada + métrica; parcial entregue se já havia bytes |
 
 Não há camada `integration_*` separada: os arquivos `control_test.kf`,

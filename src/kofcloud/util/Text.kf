@@ -146,8 +146,8 @@ String bearerValue(String authorization) {
 // casou ou "" quando limpo. Regra de ouro: nunca recebe nem devolve corpo,
 // credencial ou chave — so o nome do padrao (ex: "traversal"), que e o
 // unico dado que chega a metrica/log. O Edge em modo detectar CONTA e
-// segue com o relay (nunca bloqueia); o enforce (403 KCF109) e outro
-// incremento.
+// segue com o relay; com enforce ligado (`EdgeState.setWafEnforce(true)`)
+// casa vira `403 KCF109` antes do relay.
 String wafDetectSignature(String method, String path) {
     var target = (method + " " + path).toLowerCase()
     if (target.indexOf("..%2f") >= 0 || target.indexOf("..%5c") >= 0 || target.indexOf("../") >= 0 || target.indexOf("..\\") >= 0) {

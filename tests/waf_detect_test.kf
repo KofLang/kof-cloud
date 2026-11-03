@@ -11,9 +11,10 @@ import kofcloud.util.Limits
 import kofcloud.util.Text
 import testkit.Support
 
-// WAF slice 1 (Fase 10) — modo detectar: o Edge inspeciona metodo+path,
-// CONTA por padrao e segue com o relay (nunca bloqueia). Nenhum legitimo
-// quebra por construcao; o enforce (403 KCF109) e outro incremento.
+// WAF slice 1 (Fase 10) — detectar e enforce: o Edge inspeciona metodo+path
+// e CONTA por padrao nos dois modos. Default (detectar) segue com o relay
+// (nenhum legitimo quebra); com enforce ligado casa vira 403 KCF109 antes
+// do relay, sem stream e sem tocar no Agent.
 
 test "waf detectar: assinaturas puras por padrao", "wafdetect-unit" {
     // Cada padrao tem nome proprio (e o unico dado que chega a metrica).
@@ -29,7 +30,7 @@ test "waf detectar: assinaturas puras por padrao", "wafdetect-unit" {
     assert(wafDetectSignature("GET", "/") == "", "raiz limpa")
     assert(wafDetectSignature("GET", "/api/users?page=2") == "", "query legitima")
     assert(wafDetectSignature("POST", "/echo") == "", "post legitimo")
-    // KCF109 existe e tem Hint (o enforce futuro usa esse codigo).
+    // KCF109 existe e tem Hint (o enforce usa esse codigo).
     assert(errWafDenied().indexOf("KCF109") >= 0, "codigo KCF109")
     assert(errHint(errWafDenied()).length > 0, "tem Hint")
 }
@@ -116,6 +117,123 @@ test "waf detectar: ataque conta mas passa; legitimo nao conta", "wafdetect" {
     File(agentStop).delete()
     File(edgeStop).delete()
     localListener.close()
+}
+
+test "waf enforce: ataque vira 403 KCF109 sem tocar no relay; legitimo passa", "wafenforce" {
+    var localSvc = 19781
+    var controlPort = 19782
+    var tunnelPort = 19783
+    var httpPort = 19784
+
+    // Servidor TCP cru (mesmo motivo do detectar: o web.app() do runtime
+    // fecha a conexao sem headers para paths com `..`, e o que esta em
+    // prova e o Edge, nao o web server). Conta quantas requisicoes chegam
+    // ao local: com enforce, o ataque NUNCA chega.
+    var localListener = net.listen(localSvc)
+    var reached = new Int[1]
+    reached[0] = 0
+    var localServer = spawn {
+        var serving = true
+        while (serving) {
+            try {
+                var peer = localListener.accept()
+                var worker = spawn { serveEnforcePeer(peer, reached) }
+            } catch (String e) {
+                serving = false
+            }
+        }
+    }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-wafenforce-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    edgeState.setWafEnforce(true)
+    var edgeStop = "/tmp/kofcloud-wafenforce-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-wafenforce-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent online")
+
+    var host = "site.mel.kofcloud.io"
+    // Legitimo passa mesmo com enforce ligado.
+    assert(bodyOf(httpGetRaw(httpPort, "/", host)) == "svc-detect", "legitimo passa no enforce")
+    assert(reached[0] >= 1, "legitimo chegou ao local")
+
+    // Ataque vira 403 KCF109 ANTES do relay: o local nao ve nada alem do
+    // que ja viu (o legitimo acima).
+    var seenBefore = reached[0]
+    var evil = httpGetRaw(httpPort, "/files/../../etc/passwd", host)
+    assert(statusOf(evil) == 403, "enforce bloqueia")
+    assert(bodyOf(evil).indexOf("KCF109") >= 0, "KCF109 no corpo")
+    assert(reached[0] == seenBefore, "ataque nao chegou ao local")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total_traversal") >= 1, "padrao contado")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_http_denied_total_waf_denied") >= 1, "negada contada")
+
+    // Legitimo depois do ataque: segue 200.
+    assert(bodyOf(httpGetRaw(httpPort, "/", host)) == "svc-detect", "legitimo segue 200")
+
+    // Parada limpa.
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+    localListener.close()
+}
+
+// Peer contador para o enforce: responde 200 constante (como o detectar)
+// mas marca cada requisicao REAL que chega ao local. Health check TCP
+// (EOF sem HTTP) nao conta — so o relay conta.
+void serveEnforcePeer(Conn peer, Int[] reached) {
+    var req = ""
+    var reading = true
+    while (reading) {
+        var chunk = peer.receive(4096)
+        if (chunk.length == 0) {
+            reading = false
+        } else {
+            req = req + bytesToString(chunk)
+            if (req.indexOf("\r\n\r\n") >= 0) {
+                reading = false
+            }
+        }
+    }
+    if (req.length > 0 && req.indexOf("HTTP/") >= 0) {
+        reached[0] = reached[0] + 1
+        var body = "svc-detect"
+        var head = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n"
+        peer.send(bytesFromString(head + body))
+    }
+    peer.close()
 }
 
 // Um peer do servidor cru: le ate o fim dos headers (ou EOF, caso do

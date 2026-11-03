@@ -122,14 +122,20 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         return
     }
     var dropCredential = exposureRequiresAuth(service.exposure)
-    // WAF slice 1 (modo detectar): inspeciona metodo+path e CONTA, sem
-    // bloquear — a requisicao segue para o relay mesmo quando casa. So o
-    // nome do padrao chega a metrica (nunca corpo, path ou hostname).
-    // O enforce (403 KCF109) e outro incremento; por enquanto nenhum
-    // legitimo quebra por construcao.
+    // WAF slice 1: inspeciona metodo+path. Default (detectar): CONTA e segue
+    // com o relay (nenhum legitimo quebra por construcao). Enforce: casa ->
+    // `403 KCF109` antes do relay (sem stream, sem Agent). So o nome do
+    // padrao chega a metrica (nunca corpo, path ou hostname).
     var signature = wafDetectSignature(request.method, request.path)
     if (signature.length > 0) {
         noteWafDetected(signature)
+        if (state.wafEnforcing()) {
+            var denied = errorResponse(403, errWafDenied())
+            conn.send(denied)
+            conn.close()
+            noteHttpFinished("denied", "KCF109", raw.length, denied.length, time.now() - started)
+            return
+        }
     }
     var forwarded = serializeRequest(request, "edge", dropCredential)
     // Vaga de relay por servico: o recurso caro (tunel + servico local).
