@@ -202,3 +202,47 @@ String wafDetectSignature(String method, String path) {
     }
     return ""
 }
+
+// Allowlist WAF (Fase 10, slice 3 — fundacao do enforcement KCF111): decisao
+// pura metodo+path contra as listas do servico. Listas vazias = sem restricao
+// (servico legado ou sem allowMethods/allowPaths configurados passa tudo — o
+// fail-closed so vale para servico QUE declarou a lista). NUNCA devolve corpo,
+// path, hostname ou credencial — so Bool (o motivo KCF111 e fixo no emissor).
+// Metodo casa exato em maiusculas (o parser HTTP entrega o verbo cru);
+// path ignora query (`/api/x?y=2` casa `/api/x`) e aceita prefixo `/*`
+// (`/api/*` casa `/api/users` mas nao `/api2`).
+Bool wafAllowCheck(String method, String path, List<String> allowMethods, List<String> allowPaths) {
+    if (allowMethods.size > 0) {
+        var ok = false
+        for (var allowed in allowMethods) {
+            if (method == allowed) {
+                ok = true
+            }
+        }
+        if (ok == false) {
+            return false
+        }
+    }
+    if (allowPaths.size > 0) {
+        var bare = path
+        var cut = path.indexOf("?")
+        if (cut >= 0) {
+            bare = path.substring(0, cut)
+        }
+        var ok = false
+        for (var pattern in allowPaths) {
+            if (pattern.endsWith("/*")) {
+                var prefix = pattern.substring(0, pattern.length - 1)
+                if (bare.startsWith(prefix)) {
+                    ok = true
+                }
+            } else if (bare == pattern) {
+                ok = true
+            }
+        }
+        if (ok == false) {
+            return false
+        }
+    }
+    return true
+}

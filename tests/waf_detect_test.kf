@@ -35,6 +35,33 @@ test "waf detectar: assinaturas puras por padrao", "wafdetect-unit" {
     assert(errHint(errWafDenied()).length > 0, "tem Hint")
 }
 
+test "waf allowlist: matcher puro de metodos e paths", "wafallow-unit" {
+    // Listas vazias = sem restricao (servico legado passa tudo).
+    assert(wafAllowCheck("GET", "/", listOf<String>(), listOf<String>()) == true, "vazio libera")
+    assert(wafAllowCheck("DELETE", "/admin", listOf<String>(), listOf<String>()) == true, "vazio libera tudo")
+    // Metodo: casa exato, resto barra.
+    var methods = listOf<String>()
+    methods.add("GET")
+    methods.add("POST")
+    assert(wafAllowCheck("GET", "/qualquer", methods, listOf<String>()) == true, "metodo listado passa")
+    assert(wafAllowCheck("POST", "/qualquer", methods, listOf<String>()) == true, "segundo metodo passa")
+    assert(wafAllowCheck("DELETE", "/qualquer", methods, listOf<String>()) == false, "metodo fora barra")
+    assert(wafAllowCheck("get", "/qualquer", methods, listOf<String>()) == false, "metodo e case-sensitive")
+    // Path: exato ou prefixo /*; query ignorada; /api2 nao e /api/*.
+    var paths = listOf<String>()
+    paths.add("/api/*")
+    paths.add("/health")
+    assert(wafAllowCheck("GET", "/api/users", listOf<String>(), paths) == true, "prefixo casa")
+    assert(wafAllowCheck("GET", "/api/users?page=2", listOf<String>(), paths) == true, "query ignorada")
+    assert(wafAllowCheck("GET", "/health", listOf<String>(), paths) == true, "exato casa")
+    assert(wafAllowCheck("GET", "/api2", listOf<String>(), paths) == false, "prefixo parcial nao casa")
+    assert(wafAllowCheck("GET", "/outro", listOf<String>(), paths) == false, "fora da lista barra")
+    // Combinado: metodo E path precisam passar.
+    assert(wafAllowCheck("GET", "/api/users", methods, paths) == true, "ambos passam")
+    assert(wafAllowCheck("DELETE", "/api/users", methods, paths) == false, "metodo barra mesmo com path ok")
+    assert(wafAllowCheck("GET", "/outro", methods, paths) == false, "path barra mesmo com metodo ok")
+}
+
 test "waf detectar: ataque conta mas passa; legitimo nao conta", "wafdetect" {
     var localSvc = 19761
     var controlPort = 19762

@@ -326,8 +326,10 @@ Desenho fatiado:
   manifesto/API; fora da lista → `403 KCF111`. Fail-closed por desenho.
   Fundação pronta: construtor `errWafAllowDenied()` + Hint (aponta a métrica
   `_waf_allow_denied`) + sufixo de métrica em `noteHttpFinished`, tudo travado
-  em teste (`errors-hint`, `errors-hint-all`, `metrics`); o HttpFront ainda não
-  emite KCF111 (sem mudança de comportamento).
+  em teste (`errors-hint`, `errors-hint-all`, `metrics`); matcher
+  `wafAllowCheck` puro travado em `wafallow-unit` (método exato + path
+  exato/prefixo `/*`, query ignorada, lista vazia = sem restrição); o HttpFront
+  ainda não emite KCF111 (sem mudança de comportamento).
 
 **Regra de ouro:** WAF nunca vaza conteúdo em log/métrica (só padrão que
 casou + hostname) e nunca quebra o legítimo por default (slice 1 começa

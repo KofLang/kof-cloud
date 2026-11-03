@@ -69,10 +69,10 @@ o run total imprime `27 passed, 0 failed`. Falha = nome do teste + assert
 | e2e autenticado | `tests/e2e_authenticated_test.kf` | 1 |
 | eventos do agent | `tests/agent_events_test.kf` | 6 |
 | teto de corpo (WAF) | `tests/waf_body_test.kf` | 2 |
-| detectar WAF | `tests/waf_detect_test.kf` | 3 |
+| detectar WAF + corpo + allowlist (matcher) | `tests/waf_detect_test.kf` | 6 |
 | timeout de upstream (WAF) | `tests/waf_timeout_test.kf` | 2 |
 
-Total: 158 testes. Ver `15-tests.md` para a matriz.
+Total: 161 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 
