@@ -475,12 +475,14 @@ E2EE real significa: a plataforma nunca tem a chave do conteúdo, mesmo
 comprometida. É o que protege a máquina física e o site hospedado de
 verdade (inclusive da própria operadora da nuvem).
 
-**Estado: ⏳ não iniciado.** Modelo honesto, em camadas (cada slice reduz
-o que a plataforma vê, sem quebrar o anterior):
+**Estado: slice 1 ✅; slices 2 e 3 pendentes.** Modelo honesto, em camadas
+(cada slice reduz o que a plataforma vê, sem quebrar o anterior):
 
-* **Slice 1 — declarar o modelo.** Documentar o que cada parte vê hoje
-  (cliente vê tudo; Edge vê Host+corpo; Agent/serviço veem tudo) vs o
-  alvo (Edge vê só o necessário para rotear). Sem código — alinhamento.
+* **Slice 1 — declarar o modelo ✅.** `docs/20-visibility.md`: tabela
+  quem-vê-o-quê (cliente/Edge/túnel/Agent/serviço) medida contra o código
+  (`edge/Relay.kf` decifra, `edge/Http.kf` remove credencial, tokens só
+  como hash) + definição de E2EE (corpo opaco, Host visível) + tensão
+  honesta WAF×E2EE. Sem código — alinhamento.
 * **Slice 2 — Host blindado, corpo opaco.** O `Host` continua visível
   (roteamento exige), mas o corpo passa a viajar cifrado de ponta a
   ponta (chave por serviço, distribuída via control plane autenticado;

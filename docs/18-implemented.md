@@ -198,8 +198,10 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   sincronização do manifesto + auto-update com assinatura Ed25519.
 * **Baixa latência (Fase 14)** — medir (p50/p99) → relay regional →
   caminho de bytes O(n); sem número antes/depois, sem otimização.
-* **E2EE real (Fase 15)** — corpo opaco para a plataforma (Edge roteia
-  sem decifrar); tensão honesta com WAF (por serviço: um ou outro).
+* **E2EE real (Fase 15)** — slice 1 (modelo de visibilidade em
+  `docs/20-visibility.md`: quem vê o quê hoje vs alvo corpo-opaco) ✅;
+  corpo opaco (slice 2) e SNI mínimo (slice 3) pendentes; tensão honesta
+  com WAF (por serviço: um ou outro).
 * **Arquitetura escalável (Fase 16)** — estado plugável → Edge horizontal
   → control ativo-passivo → células; mesma API, fail-closed, rollback.
 * **Resposta a incidentes (Fase 17)** — detecção com severidade → `freeze`
