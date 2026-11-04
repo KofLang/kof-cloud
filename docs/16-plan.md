@@ -623,10 +623,13 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
 
 **Estado: ⏳ não iniciado (ritmo, não projeto).** Desenho:
 
-* **Slice 1 — baseline e SBOM.** `kof cloud audit --sbom` gera inventário
-  (versão do CLI, Runtime Kof, deps, hashes); `docs/SECURITY.md`
-  (política: o que é suportado, como reportar, SLA de resposta);
-  `security.txt` no Edge (`/.well-known/security.txt`).
+* **Slice 1 — baseline e SBOM (parcial: `security.txt` ✅).**
+  O Edge serve `/.well-known/security.txt` (200 `text/plain`, corpo
+  estático Contact + Policy, sem dado operacional) **antes** de rate
+  limit/roteamento/auth — sem conta, sem túnel, sem tocar em serviço
+  local (scanner legítimo não é contido). Prova:
+  `tests/security_test.kf` (`security-unit` + `security`). Pendente:
+  `audit --sbom`, `docs/SECURITY.md` e o resto do ritmo.
 * **Slice 2 — varredura contínua.** `kof cloud scan` (dependências,
   segredos vazados em `kofcloud.json`/env, PEM expirando, `kfs_` sem
   TTL em serviço crítico); roda no CI a cada push + game-day mensal.

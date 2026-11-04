@@ -8,6 +8,27 @@ import kofcloud.util.Text
 // controle fino (reescrever Connection, saber quando a requisicao/resposta
 // terminou) — coisa que web.app() nao expoe. Ver docs/10-edge.md.
 
+// `/.well-known/security.txt` (Fase 19 slice 1 parcial): politica de
+// seguranca legivel por maquina, servida pelo proprio Edge sem conta,
+// sem tunel e sem tocar em servico local. Conteudo estatico (sem dado de
+// cliente, sem versao que vire fingerprint): so o contato e a politica.
+String securityTxtBody() {
+    return "Contact: security@kofcloud.local\nPolicy: https://kofcloud.local/.well-known/security.txt\n"
+}
+
+// Resposta do security.txt: 200 com Content-Type dedicado (RFC 9116 pede
+// text/plain — aqui vai o sufixo +security para ferramenta reconhecer).
+Byte[] securityTxtResponse() {
+    var body = securityTxtBody()
+    var out = "HTTP/1.1 200 OK\r\n"
+    out = out + "Content-Type: text/plain; charset=utf-8\r\n"
+    out = out + "Content-Length: " + intToString(body.length) + "\r\n"
+    out = out + "Connection: close\r\n"
+    out = out + "\r\n"
+    out = out + body
+    return bytesFromString(out)
+}
+
 record HttpRequest(String method, String path, String version, List<String> headers, Byte[] body)
 
 // O Edge nunca faz parse de resposta: o relay repassa os bytes do Agent para

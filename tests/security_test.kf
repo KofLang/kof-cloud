@@ -1,0 +1,69 @@
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Http
+import kofcloud.edge.Tunnel
+import kofcloud.store.Store
+import testkit.Support
+
+// Fase 19 slice 1 parcial: `/.well-known/security.txt` servido pelo Edge
+// sem conta, sem tunel e sem tocar em servico local.
+
+test "security: corpo estatico sem dado operacional", "security-unit" {
+    var body = securityTxtBody()
+    assert(body.indexOf("Contact:") >= 0, "tem contato")
+    assert(body.indexOf("Policy:") >= 0, "tem politica")
+    assert(body.indexOf("kfc_") < 0, "sem token")
+    assert(body.indexOf("kfs_") < 0, "sem credencial")
+    assert(body.indexOf("127.0.0.1") < 0, "sem endereco")
+    var raw = bytesToString(securityTxtResponse())
+    assert(statusOf(raw) == 200, "200 OK")
+    assert(responseHeader(raw, "content-type") == "text/plain; charset=utf-8", "content-type texto")
+    assert(raw.indexOf(body) >= 0, "corpo na resposta")
+}
+
+test "security: Edge serve sem conta, sem tunel e sem rate limit", "security" {
+    var controlPort = 19731
+    var tunnelPort = 19732
+    var httpPort = 19733
+    var registry = Registry("/tmp/kofcloud-sec-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-sec-edge-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(httpPort, 60), "edge no ar")
+
+    // Sem conta criada, sem tunel: qualquer Host devolve o security.txt.
+    var first = httpGetRaw(httpPort, "/.well-known/security.txt", "inexistente.example.com")
+    assert(statusOf(first) == 200, "200 sem conta: " + statusOf(first))
+    assert(bodyOf(first).indexOf("Contact:") >= 0, "corpo com contato")
+    assert(responseHeader(first, "content-type") == "text/plain; charset=utf-8", "content-type texto")
+
+    // Nao e rota roteavel: host desconhecido em outro path segue 404 opaco.
+    var missing = httpGetRaw(httpPort, "/nao-existe", "inexistente.example.com")
+    assert(statusOf(missing) == 404, "outro path segue opaco: " + statusOf(missing))
+
+    // Sem rate limit: 120 pedidos seguidos passam (o limite e 100/janela
+    // por hostname — se o security.txt contasse, o 101o seria 429).
+    var ok = true
+    var i = 0
+    while (i < 120 && ok) {
+        var probe = httpGetRaw(httpPort, "/.well-known/security.txt", "scanner.example.com")
+        if (statusOf(probe) != 200) {
+            ok = false
+        }
+        i = i + 1
+    }
+    assert(ok, "120 pedidos sem 429 (fora do rate limit)")
+
+    // Parada limpa (precedente: waf_body): o stopFile fecha o listener
+    // do Edge; sem isso o accept travado so cede no --timeout do runner.
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(edgeStop).delete()
+}

@@ -41,6 +41,19 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         return
     }
     var request = parseRequest(raw)
+    // `/.well-known/security.txt` ANTES de tudo (rate limit, roteamento,
+    // auth): politica de seguranca legivel por maquina, sem conta, sem
+    // tunel, sem tocar em servico local. Sem rate limit de proposito —
+    // scanner legitimo nao deve ser contido nem contar como ataque. O path
+    // e canonico (ver securityTxtBody); query nao muda nada (parseRequest
+    // separa path de query — ver Http.kf).
+    if (request.method == "GET" && request.path == "/.well-known/security.txt") {
+        var txt = securityTxtResponse()
+        conn.send(txt)
+        conn.close()
+        noteHttpFinished("ok", "", raw.length, txt.length, time.now() - started)
+        return
+    }
     var host = hostOnly(headerValue(request.headers, "host"))
     // Rate limit ANTES de rotear/autorizar/tocar no tunel: o 429 nao revela
     // nada sobre o servico (existe? qual exposicao?) e nao consome recurso
