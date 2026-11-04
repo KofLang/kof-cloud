@@ -71,6 +71,10 @@ test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
     // Slice Fase 19 s2 parcial (scan): comando novo exige trava no help
     // (mesmo precedente — sem trava, README e help divergem em silencio).
     assert(help.indexOf("scan [--file <caminho>]") >= 0, "scan documentado")
+    // Slice Fase 17 s2 (freeze, lane): dispatcher/help/README existem mas
+    // sem trava — mesmo precedente dos acima. Trava as duas linhas.
+    assert(help.indexOf("freeze service|device <nome|id>") >= 0, "freeze documentado")
+    assert(help.indexOf("unfreeze service|device <nome|id>") >= 0, "unfreeze documentado")
 }
 
 test "daemon: paths ficam no espaco do usuario", "daemon-paths" {
