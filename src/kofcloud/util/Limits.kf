@@ -223,3 +223,55 @@ Int stopFilePollMs() {
 Int agentStopPollMs() {
     return config.int("kofcloud.limits.agentStopPollMs", 250)
 }
+
+// Limiar do detector de recusas do Edge (Fase 17 slice 1): quantas recusas
+// de tunel dentro da janela abrem o incidente global `edge_refusals`.
+// Fonte unica do `noteEdgeRefusalIncident` — afinar sem editar o produto.
+// Recuo seguro: zerado/negativo recai no default (limiar desligado nunca
+// abriria o incidente, e abrir de menos e pior que abrir demais aqui —
+// recusas em rajada sao o sinal de Edge sob ataque ou conta com problema).
+Int limitEdgeRefusalThreshold() {
+    var threshold = config.int("kofcloud.limits.edgeRefusalThreshold", 10)
+    if (threshold <= 0) {
+        threshold = 10
+    }
+    return threshold
+}
+
+// Janela do detector de recusas do Edge (ms). Fonte unica do
+// `noteEdgeRefusalIncident` — mesma janela nos dois ramos (reset e
+// comparacao). Recuo seguro: zerada/negativa recai no default (janela
+// zerada nunca acumularia, e o detector morreria silencioso).
+Int limitEdgeRefusalWindowMs() {
+    var window = config.int("kofcloud.limits.edgeRefusalWindowMs", 60000)
+    if (window <= 0) {
+        window = 60000
+    }
+    return window
+}
+
+// Limiar do detector de revogacao em lote (por conta, Fase 17 slice 1):
+// quantas revogacoes (device ou token) dentro da janela abrem o incidente.
+// Fonte unica do `Registry.detectBulkRevokes` — os dois ramos (device e
+// token) usam o mesmo limiar de proposito: lote e lote, seja qual for o
+// alvo. Recuo seguro: zerado/negativo recai no default (limiar desligado
+// nunca abriria o incidente de lote).
+Int limitBulkRevokeThreshold() {
+    var threshold = config.int("kofcloud.limits.bulkRevokeThreshold", 3)
+    if (threshold <= 0) {
+        threshold = 3
+    }
+    return threshold
+}
+
+// Janela do detector de revogacao em lote (ms). Fonte unica do chamador
+// `Registry.revokeDeviceInner` — a janela viaja como `Long` ate o
+// `detectBulkRevokes` porque `time.now()` e `Long`. Recuo seguro:
+// zerada/negativa recai no default (janela zerada nunca acumularia).
+Long limitBulkRevokeWindowMs() {
+    var window = config.int("kofcloud.limits.bulkRevokeWindowMs", 60000)
+    if (window <= 0) {
+        window = 60000
+    }
+    return window
+}

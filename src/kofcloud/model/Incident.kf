@@ -1,5 +1,7 @@
 package kofcloud.model
 
+import kofcloud.util.Limits
+
 // Incidentes (Fase 17 slice 1 — deteccao e severidade).
 //
 // Um incidente e um sinal operacional com nivel, aberto por um detector e
@@ -87,7 +89,12 @@ Int limitIncidents() {
 
 // Janela e limiar do detector de revogacao em lote (por conta).
 // `bulkRevokeWindowMs` / `bulkRevokeThreshold`: continua a mais que isso
-// dentro da janela abre incidente.
+// dentro da janela abre incidente. Delegam na fonte unica
+// (`util/Limits.kf`) — mesma regra do detector do Edge.
 Int bulkRevokeThreshold() {
-    return 3
+    return limitBulkRevokeThreshold()
+}
+
+Long bulkRevokeWindowMs() {
+    return limitBulkRevokeWindowMs()
 }

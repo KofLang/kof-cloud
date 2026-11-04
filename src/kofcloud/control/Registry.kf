@@ -421,7 +421,7 @@ class Registry {
     Bool revokeDevice(String accountId, String deviceId) {
         var revoked = this.revokeDeviceInner(accountId, deviceId)
         if (revoked) {
-            this.detectBulkRevokes(accountId, 60000)
+            this.detectBulkRevokes(accountId, bulkRevokeWindowMs())
         }
         return revoked
     }

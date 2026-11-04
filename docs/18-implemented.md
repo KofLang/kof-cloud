@@ -57,7 +57,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | status page pública (Fase 17 s3) | `serve --status-page` → `/status` (HTML) e `/status.json`, sem token, só incidentes globais | `status_page_test.kf` |
 | contenção `freeze`/`unfreeze` (Fase 17 s2) | suspende + revoga credenciais do alvo e abre incidente; unfreeze restaura o status anterior (reversível por desenho) | `freeze_test.kf` |
 | template de post-mortem (Fase 17 s3) | `docs/incidents/README.md` — 5 seções do ciclo (causa/impacto/timeline/correção/preventiva com dono+prazo), sem dado de cliente; trava cita `freeze`/`resolve` reais | `incidents_test.kf` (`postmortem-template`) |
-| incidentes (Fase 17 s1) | `model/Incident.kf` + detecção por conta (revoke em lote via auditoria) e global (Edge); `POST /v1/incidents`, CLI `incidents` | `incidents_test.kf` |
+| incidentes (Fase 17 s1) | `model/Incident.kf` + detecção por conta (revoke em lote via auditoria) e global (Edge); `POST /v1/incidents`, CLI `incidents`; limiares/janelas dos 2 detectores em fonte única (`util/Limits.kf`, config `kofcloud.limits.*`) | `incidents_test.kf` |
 | rotação de `kfs_` (Fase 19 s3) | `service rotate (<nome>\|--all)`/`rotation`: emite novo e revoga antigos só após o TTL (overlap); `--all` com falha isolada por serviço; sem TTL = pendente, nunca silencioso | `rotate_test.kf` |
 | daemon por SO (Fase 13 s1) | `daemonKind` + artefato systemd/launchd/Windows puro; install grava e imprime a ativação (nunca ativa sozinho) | `daemon_test.kf` (`daemon-os`) |
 | allowlist WAF pela CLI | `publish --allow-method`/`--allow-path` (repetíveis) com validação local; `service status` mostra a política | `publish_allow_test.kf` |

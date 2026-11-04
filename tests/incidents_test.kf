@@ -24,6 +24,17 @@ test "incidentes: severidade e resumo por sinal", "incident-unit" {
     assert(severityIsKnown("CRIT"), "CRIT conhecido")
     assert(severityIsKnown("nada") == false, "desconhecida recusada")
     assert(limitIncidents() > 0, "anel positivo")
+    // Detectores em fonte unica (`util/Limits.kf`, mesma familia de
+    // `limitHeartbeatMs`/`limitIdleSweepMs`): valor travado + delegacao
+    // (mudar o default no Limits muda o detector — mutacao quebra).
+    assert(edgeRefusalThreshold() == 10, "limiar do edge travado")
+    assert(edgeRefusalThreshold() == limitEdgeRefusalThreshold(), "edge delega na fonte")
+    assert(edgeRefusalWindowMs() == 60000, "janela do edge travada")
+    assert(edgeRefusalWindowMs() == limitEdgeRefusalWindowMs(), "janela delega na fonte")
+    assert(bulkRevokeThreshold() == 3, "limiar de lote travado")
+    assert(bulkRevokeThreshold() == limitBulkRevokeThreshold(), "lote delega na fonte")
+    assert(bulkRevokeWindowMs() == 60000, "janela de lote travada")
+    assert(bulkRevokeWindowMs() == limitBulkRevokeWindowMs(), "janela de lote delega na fonte")
     assert(errIncidentNotFound().indexOf("KCF125") >= 0, "codigo KCF125")
     assert(errHint(errIncidentNotFound()).length > 0, "Hint presente")
 }

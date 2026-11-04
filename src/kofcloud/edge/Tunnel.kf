@@ -260,11 +260,11 @@ void refuseTunnel(EdgeState state, Conn conn, String reason) {
 // recusa poucas vezes; rajada (>= limite na janela) e sinal de problema.
 // Estado local em vez de anel global: cada RefusalProbe tem sua janela.
 Int edgeRefusalThreshold() {
-    return 10
+    return limitEdgeRefusalThreshold()
 }
 
 Long edgeRefusalWindowMs() {
-    return 60000
+    return limitEdgeRefusalWindowMs()
 }
 
 class RefusalProbe {
