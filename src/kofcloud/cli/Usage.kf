@@ -33,6 +33,8 @@ String usageText() {
     out = out + "  service token <nome> [--ttl <horas>]  (credencial kfs_ para AUTHENTICATED)\n"
     out = out + "  service token-list <nome>   (inventario, sem valores)\n"
     out = out + "  service token-revoke <nome> <kfs_|id>  (revoga UMA credencial; id curto se unico)\n"
+    out = out + "  service rotate <nome> [--ttl <horas>] [--prune]  (credencial nova; revoga as antigas SO depois do TTL)\n"
+    out = out + "  service rotation <nome>   (quantas credenciais ainda valem)\n"
     out = out + "  domain list\n"
     out = out + "  domain add <hostname> --service <nome>\n"
     out = out + "  domain verify <hostname>\n"

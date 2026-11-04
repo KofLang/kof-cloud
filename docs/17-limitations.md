@@ -34,7 +34,9 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 * Daemon: **artefato por SO gerado** (systemd/launchd/Windows, Fase 13 s1) e
   ativação sempre manual; o core não depende deles. Tray/estado visível e
   auto-update assinado seguem pendentes (slices 2 e 3).
-* Auto-update do Agent com verificação de assinatura.
+* Auto-update do Agent com verificação de assinatura. (A rotação de `kfs_`
+  por serviço existe — `service rotate` com overlap — mas `rotate --all`,
+  rotação programada de PEM e kill-switch global seguem pendentes.)
 * Painel web **completo** — só o slice 1 existe (somente leitura via
   `serve --panel`); criar/alterar pelo navegador (slice 2) e onboarding
   guiado (slice 3) seguem pendentes.

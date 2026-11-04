@@ -21,6 +21,9 @@ record TokenEntry(String accountId, String tokenHash, Long createdAt)
 
 record ServiceToken(String serviceId, String accountId, String tokenHash, Long createdAt, Long expiresAt)
 
+// Resultado da rotacao assistida (Fase 19 slice 3).
+record RotateResult(String token, Int revoked, Int pending)
+
 record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens, List<CustomDomain> customDomains, List<AuditEvent> audit)
 
 class Registry {
@@ -539,6 +542,68 @@ class Registry {
         }
         this.save()
         noteServiceTokenRevoked()
+    }
+
+    // Rotacao assistida (Fase 19 slice 3 — "re-emite kfs_ com overlap,
+    // revoga os antigos depois do TTL"): emite uma credencial nova e revoga as
+    // anteriores APENAS quando ja passaram do prazo. Uma credencial sem
+    // expiracao (expiresAt=0, comportamento antigo) nao e revogada em
+    // silencio — fica contada como "pendente" e some com `pruneExpired`.
+    RotateResult rotateServiceTokens(String accountId, String serviceId, Int ttlHours) {
+        var token = this.issueServiceToken(accountId, serviceId, ttlHours)
+        var now = time.now()
+        var kept = listOf<ServiceToken>()
+        var revoked = 0
+        var pending = 0
+        for (var entry in this.serviceTokens) {
+            if (entry.serviceId != serviceId) {
+                kept.add(entry)
+                continue
+            }
+            if (tokenMatches(entry.tokenHash, token)) {
+                kept.add(entry)
+            } else if (this.serviceTokenExpired(entry, now)) {
+                revoked = revoked + 1
+            } else {
+                kept.add(entry)
+                pending = pending + 1
+            }
+        }
+        if (revoked > 0) {
+            this.finishRevoke(accountId, serviceId, kept)
+        }
+        return RotateResult(token, revoked, pending)
+    }
+
+    // Quantas credenciais antigas do servico ainda valem (a passos do TTL).
+    Int pendingRotationCount(String serviceId) {
+        var now = time.now()
+        var count = 0
+        for (var entry in this.serviceTokens) {
+            if (entry.serviceId == serviceId && this.serviceTokenExpired(entry, now) == false) {
+                count = count + 1
+            }
+        }
+        return count
+    }
+
+    // Remove as credenciais ja expiradas do servico (housekeeping),
+    // devolvendo quantas sairam. Nunca toca em credencial valida.
+    Int pruneExpiredServiceTokens(String accountId, String serviceId) {
+        var now = time.now()
+        var kept = listOf<ServiceToken>()
+        var removed = 0
+        for (var entry in this.serviceTokens) {
+            if (entry.serviceId == serviceId && this.serviceTokenExpired(entry, now)) {
+                removed = removed + 1
+            } else {
+                kept.add(entry)
+            }
+        }
+        if (removed > 0) {
+            this.finishRevoke(accountId, serviceId, kept)
+        }
+        return removed
     }
 
     Bool revokeServiceToken(String accountId, String serviceId, String token) {

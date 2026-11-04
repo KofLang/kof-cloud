@@ -107,7 +107,9 @@ service suspend <nome>       (fora da rota, nada removido)
 service unsuspend <nome>
 service token <nome> [--ttl <horas>]  (credencial kfs_ para AUTHENTICATED; ex.: --ttl 24)
 service token-list <nome>   (inventario, sem valores)
-service token-revoke <nome> <kfs_|id>  (revoga UMA credencial; id curto se unico)
+service token-revoke <nome> <kfs_|id>
+service rotate <nome> [--ttl <horas>] [--prune]
+service rotation <nome>  (revoga UMA credencial; id curto se unico)
 domain list
 domain add <hostname> --service <nome>   (dominio proprio, devolve a instrucao CNAME)
 domain verify <hostname>                 (confere o DNS e ativa a rota)

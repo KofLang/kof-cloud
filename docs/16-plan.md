@@ -623,10 +623,15 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   segredos vazados em `kofcloud.json`/env, PEM expirando, `kfs_` sem
   TTL em serviço crítico); roda no CI a cada push + game-day mensal.
   Achado vira issue com severidade, nunca silêncio.
-* **Slice 3 — resposta e rotação programada.** Rotação assistida
-  (`kof cloud rotate --all`: re-emite `kfs_` com overlap, revoga os
-  antigos depois do TTL; PEMs com 30 dias de antecedência); kill-switch
-  documentado (o `freeze` da Fase 17 em escala de plataforma).
+* **Slice 3 — resposta e rotação programada.** Rotação assistida ✅
+  (por serviço): `kof cloud service rotate <nome> [--ttl H] [--prune]`
+  emite uma credencial nova e **só revoga as anteriores depois do TTL**
+  (overlap sem downtime); `service rotation <nome>` mostra quantas ainda
+  valem. Credencial **sem** expiração nunca é revogada em silêncio — fica
+  contada como pendente até ser revogada à mão. Prova:
+  `tests/rotate_test.kf` (4). Pendente: `rotate --all` (todos os serviços
+  da conta), PEMs com 30 dias de antecedência e kill-switch documentado
+  (o `freeze` da Fase 17 em escala de plataforma).
 * **Slice 4 — auditoria externa.** Trilha imutável (audit log WORM:
   append-only com hash encadeado, verificável por terceiro); relatório
   SOC2-tipo-II como meta (controles mapeados 1:1 com o que já existe:

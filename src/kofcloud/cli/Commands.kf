@@ -1033,6 +1033,106 @@ Int cmdServiceTokenRevoke(List<String> args) {
     }
 }
 
+// Rotacao assistida (Fase 19 s3): emite uma credencial nova para o servico e
+// revoga as anteriores SO depois do TTL (overlap). `--prune` limpa as ja
+// expiradas. O token novo aparece uma unica vez — troque onde ele e usado
+// antes do prazo acabar.
+Int cmdServiceRotate(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println(notLoggedInLine())
+        return 1
+    }
+    if (extraPositional(args, 1)) {
+        println("uso: kof cloud service rotate <nome> [--ttl <horas>] [--prune]")
+        return 1
+    }
+    var name = firstPositional(args).trim()
+    var ttlRaw = flagValue(args, "--ttl").trim()
+    var ttl = parseIntSafe(ttlRaw, 0)
+    if (name.length == 0) {
+        println("uso: kof cloud service rotate <nome> [--ttl <horas>] [--prune]")
+        return 1
+    }
+    if (ttlRaw.length > 0 && ttl <= 0) {
+        println("ttl invalido: use horas inteiras > 0")
+        return 1
+    }
+    var prune = hasFlag(args, "--prune")
+    try {
+        var services = fetchServices(session.controlUrl, session.token)
+        var target = matchServiceName(services, name)
+        if (target.length == 0) {
+            println(serviceNotFoundLine(name))
+            return 1
+        }
+        var body = mapOf()
+        body.put("serviceId", target)
+        if (ttl > 0) {
+            body.put("ttlHours", intToString(ttl))
+        }
+        if (prune) {
+            body.put("prune", "true")
+        }
+        var raw = requireOk(http.post(session.controlUrl + "/v1/services/rotate", json.encode(body), jsonHeader(session.token)))
+        var result = json.decode<Map<String, String>>(raw)
+        println("Credencial nova (" + name + "):")
+        println(mapField(result, "token"))
+        println("")
+        println("Revogadas por expiracao: " + mapField(result, "revoked"))
+        println("Ainda valendo (inclui a nova): " + mapField(result, "pending"))
+        if (ttl > 0) {
+            println("")
+            println("Troque onde usa o token em ate " + intToString(ttl) + "h; depois rode:")
+            println("  kof cloud service rotation " + name + "   (para conferir)")
+            println("  kof cloud service rotate " + name + " --ttl " + intToString(ttl) + "  (proxima rotacao)")
+        } else {
+            println("")
+            println("Sem --ttl a credencial nao expira: rotacione com --ttl para revogar as antigas.")
+        }
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
+Int cmdServiceRotation(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println(notLoggedInLine())
+        return 1
+    }
+    var name = firstPositional(args).trim()
+    if (name.length == 0 || extraPositional(args, 1)) {
+        println("uso: kof cloud service rotation <nome>")
+        return 1
+    }
+    try {
+        var services = fetchServices(session.controlUrl, session.token)
+        var target = matchServiceName(services, name)
+        if (target.length == 0) {
+            println(serviceNotFoundLine(name))
+            return 1
+        }
+        var body = mapOf()
+        body.put("serviceId", target)
+        var raw = requireOk(http.post(session.controlUrl + "/v1/services/rotation", json.encode(body), jsonHeader(session.token)))
+        var result = json.decode<Map<String, String>>(raw)
+        var pending = parseIntSafe(mapField(result, "pending"), 0)
+        println("Credenciais validas (" + name + "): " + intToString(pending))
+        if (pending <= 1) {
+            println("Rotacao concluida: so a credencial atual vale.")
+        } else {
+            println("Rotacao em andamento: aguarde o TTL das antigas (ou revogue com `service token-revoke`).")
+        }
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
 // Segundo argumento posicional (o primeiro e capturado por firstPositional).
 String secondPositional(List<String> args) {
     var seen = false

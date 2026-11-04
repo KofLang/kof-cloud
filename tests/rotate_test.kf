@@ -1,0 +1,104 @@
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.store.Store
+import kofcloud.model.Errors
+import testkit.Support
+
+// Fase 19 slice 3 — rotacao assistida de kfs_ com overlap.
+// Regra: emite a nova e so revoga as anteriores DEPOIS do TTL. Uma credencial
+// sem expiracao (expiresAt=0) nunca e revogada em silencio — fica "pendente".
+
+String rotatePath(String name) {
+    return "/tmp/kofcloud-rotate-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "rotacao: emite nova e mantem as antigas dentro do TTL (overlap)", "rotate-unit" {
+    var registry = Registry(rotatePath("overlap"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
+    var first = registry.issueServiceToken(account.id, service.id, 24)
+
+    var rotated = registry.rotateServiceTokens(account.id, service.id, 24)
+    assert(rotated.token.startsWith("kfs_"), "token novo")
+    assert(rotated.token != first, "valor diferente")
+    assert(rotated.revoked == 0, "nada revogado ainda (TTL nao venceu)")
+    // A antiga continua valida durante o overlap; a nova tambem.
+    var oldOwner = registry.serviceByServiceToken(first)
+    assert(oldOwner != null, "antiga segue valida")
+    var newOwner = registry.serviceByServiceToken(rotated.token)
+    assert(newOwner != null, "nova ja vale")
+}
+
+test "rotacao: credencial sem TTL nao e revogada em silencio", "rotate-unit" {
+    var registry = Registry(rotatePath("nottl"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
+    var legacy = registry.issueServiceToken(account.id, service.id)  // sem expiracao
+
+    var rotated = registry.rotateServiceTokens(account.id, service.id, 24)
+    assert(rotated.revoked == 0, "sem expiracao = nao revoga")
+    assert(registry.serviceByServiceToken(legacy) != null, "legado continua valido")
+    // pending conta as validas ANTES da rotacao (a legada); a nova nao entra.
+    assert(rotated.pending == 1, "a legada continua pendente")
+    assert(registry.pendingRotationCount(service.id) == 2, "legada + nova valem agora")
+}
+
+test "rotacao: prune remove so as expiradas", "rotate-unit" {
+    var registry = Registry(rotatePath("prune"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
+    var current = registry.issueServiceToken(account.id, service.id, 24)
+    var expired = registry.issueServiceToken(account.id, service.id, 1)
+    assert(registry.pendingRotationCount(service.id) == 2, "duas validas antes")
+
+    // Sem esperar 1h: prune so age em expirada de verdade; nada vence aqui.
+    assert(registry.pruneExpiredServiceTokens(account.id, service.id) == 0, "nenhuma expirada ainda")
+    assert(registry.serviceByServiceToken(current) != null, "atual intacta")
+    assert(registry.serviceByServiceToken(expired) != null, "a de 1h ainda vale")
+}
+
+test "rotacao: control plane expoe rotate e rotation por HTTP", "rotate" {
+    var controlPort = 19851
+    var registry = Registry(rotatePath("http"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}"
+    var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
+    assert(serviceId.length > 0, "servico publicado")
+
+    // Emite uma e rotaciona com TTL.
+    var firstBody = "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"24\"}"
+    var first = httpPostJson(controlPort, "/v1/services/token", firstBody, accountToken)
+    assert(statusOf(first) == 200, "primeira emitida")
+
+    var rotateBody = "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"24\"}"
+    var rotated = httpPostJson(controlPort, "/v1/services/rotate", rotateBody, accountToken)
+    assert(statusOf(rotated) == 200, "rotacao ok")
+    var result = json.decode<Map<String, String>>(bodyOf(rotated))
+    assert(mapField(result, "token").startsWith("kfs_"), "token novo")
+    assert(mapField(result, "revoked") == "0", "nada revogado (overlap)")
+    assert(mapField(result, "pending") == "2", "duas validas durante o overlap")
+
+    var status = httpPostJson(controlPort, "/v1/services/rotation", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
+    assert(statusOf(status) == 200, "status ok")
+    assert(mapField(json.decode<Map<String, String>>(bodyOf(status)), "pending") == "2", "status confirma 2")
+
+    // TTL invalido nao rotaciona.
+    var badTtl = "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"-1\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/rotate", badTtl, accountToken)) == 400, "ttl negativo -> 400")
+
+    // Servico alheio: 404 opaco.
+    var otherAccount = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
+    var anaToken = mapField(json.decode<Map<String, String>>(bodyOf(otherAccount)), "token")
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/rotate", rotateBody, anaToken)) == 404, "alheio -> 404")
+}

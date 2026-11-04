@@ -124,6 +124,12 @@ Int runService(List<String> args) {
     if (sub == "unsuspend") {
         return cmdServiceUnsuspend(rest)
     }
+    if (sub == "rotate") {
+        return cmdServiceRotate(rest)
+    }
+    if (sub == "rotation") {
+        return cmdServiceRotation(rest)
+    }
     if (sub == "token") {
         return cmdServiceToken(rest)
     }
