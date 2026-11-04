@@ -252,9 +252,17 @@ entre cliente e Edge. Cloud robusta de verdade exige HTTPS ponta a ponta
   openssl gera o par, `enableTls` liga, `http.get` lê o `/v1/health` via
   HTTPS) + `tests/hosts_test.kf` (`serve-tls`: paridade, erro de metade,
   esquema do banner, guardas fail-fast).
-* **Slice 2 — HSTS + redirecionamento HTTP→HTTPS.** Resposta 301 para
-  `http://` quando o TLS está ativo + header `Strict-Transport-Security`.
-  Sem flag nova (segue o modo do slice 1).
+* **Slice 2 — HSTS + redirecionamento HTTP→HTTPS ✅ (parcial: HSTS).**
+  O runtime do Kof já emite `Strict-Transport-Security` em toda resposta
+  `web.app()` sob TLS (`Policy.headers=true` por default, gated em
+  `req.secure` do SSLSocket — medido em `JvmRuntimeWebDispatch` linha 95 e
+  `JvmWebSecurityRuntime` linha 37). Sem código nosso: com o par TLS, o
+  control plane já anuncia HSTS; sem TLS, nada é anunciado (anunciar em
+  claro seria mentir). Prova: `tests/control_test.kf` (`control-tls`:
+  resposta crua via `openssl s_client` tem `max-age=`; via HTTP o header é
+  ausente). Tentar `app.use` com `headerSet` seria redundante — e o
+  redirecionamento 301 HTTP→HTTPS fica fora (o `serve` sobe um control
+  por porta: com TLS não há listener HTTP para redirecionar).
 * **Slice 3 — SNI por hostname + renovação assistida.** Um PEM por
   hostname próprio VERIFIED (mapa em memória, recarregado sem derrubar
   o Edge); `domain verify` passa a aceitar o PEM; expiração visível no

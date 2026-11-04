@@ -84,4 +84,20 @@ test "control plane: HTTPS com PEM do operador (serve --tls-cert/--tls-key)", "c
     assert(waitForPort(18082, 60), "control plane TLS no ar")
     var health = http.get("https://127.0.0.1:18082/v1/health")
     assert(health.indexOf("ok") >= 0, "health via HTTPS: " + health)
+    // HSTS (Fase 9 slice 2 parcial): o runtime do Kof emite
+    // Strict-Transport-Security em TODA resposta web.app() sob TLS
+    // (Policy.headers=true por default; gated em req.secure do SSLSocket —
+    // medido em JvmRuntimeWebDispatch/JvmWebSecurityRuntime). http.get so
+    // devolve corpo, entao a prova e a resposta crua via openssl s_client
+    // (precedente daemon-argv: openssl via process.run; sh+printf monta o
+    // CRLF que o readRequest exige — LF puro espera eterno).
+    var raw = process.run("sh", "-c", "printf 'GET /v1/health HTTP/1.0\r\n\r\n' | timeout 15 openssl s_client -connect 127.0.0.1:18082 -quiet 2>/dev/null")
+    var hsts = responseHeader(raw.stdout, "strict-transport-security")
+    assert(hsts.indexOf("max-age=") >= 0, "HSTS via HTTPS: " + hsts)
+    // HTTP sem TLS nao anuncia HSTS (anunciar em claro seria mentir).
+    var plain = ControlPlane(registry, 18083, "127.0.0.1", 0)
+    var plainServer = spawn { plain.start() }
+    assert(waitForPort(18083, 60), "control plane HTTP no ar")
+    var plainRaw = httpGetRaw(18083, "/v1/health", "127.0.0.1")
+    assert(responseHeader(plainRaw, "strict-transport-security") == "", "sem HSTS em HTTP")
 }
