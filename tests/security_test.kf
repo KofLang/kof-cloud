@@ -23,6 +23,23 @@ test "security: corpo estatico sem dado operacional", "security-unit" {
     assert(raw.indexOf(body) >= 0, "corpo na resposta")
 }
 
+test "security: SECURITY.md existe com as secoes e o contato canonico", "security-policy" {
+    // Trava do slice: o doc de politica nao pode apodrecer (sumir secao,
+    // trocar o contato e divergir do security.txt que o Edge serve).
+    // Caminho relativo ao repo: o runner usa a raiz como cwd (precedente:
+    // os testes gravam /tmp absoluto; aqui le o doc versionado).
+    var policy = readTextOr("docs/SECURITY.md", "")
+    assert(policy.length > 0, "SECURITY.md existe e nao e vazio")
+    assert(policy.indexOf("## O que é suportado") >= 0, "secao suportado")
+    assert(policy.indexOf("## O que NÃO é suportado") >= 0, "secao nao-suportado")
+    assert(policy.indexOf("## Como reportar") >= 0, "secao reporte")
+    assert(policy.indexOf("## SLA de resposta") >= 0, "secao SLA")
+    assert(policy.indexOf("## Escopo") >= 0, "secao escopo")
+    // Contato canonico unico: o mesmo do corpo servido pelo Edge.
+    assert(policy.indexOf("security@kofcloud.local") >= 0, "contato no doc")
+    assert(securityTxtBody().indexOf("security@kofcloud.local") >= 0, "contato no fio")
+}
+
 test "security: Edge serve sem conta, sem tunel e sem rate limit", "security" {
     var controlPort = 19731
     var tunnelPort = 19732

@@ -75,9 +75,9 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | allowlist WAF (Fase 10 slice 3) | `tests/waf_allow_test.kf` | 4 |
 | painel somente-leitura | `tests/panel_test.kf` | 3 |
 | rotacao de kfs_ (Fase 19 s3) | `tests/rotate_test.kf` | 4 |
-| `security.txt` (Fase 19 s1 parcial) | `tests/security_test.kf` | 2 |
+| `security.txt` + `SECURITY.md` (Fase 19 s1 parcial) | `tests/security_test.kf` | 3 |
 
-Total: 182 testes. Ver `15-tests.md` para a matriz.
+Total: 183 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

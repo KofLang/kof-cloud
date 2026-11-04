@@ -21,6 +21,7 @@
 | 17 | [Limitações](17-limitations.md) | lacunas honestas |
 | 18 | [Implementado](18-implemented.md) | o que está pronto e verificado |
 | — | [STATUS](STATUS.md) | estado medido: verde/prova/gaps + como reproduzir |
+| — | [Segurança](SECURITY.md) | política: suporte, reporte, SLA, escopo (Fase 19 slice 1) |
 | — | [Visibilidade](20-visibility.md) | quem vê o quê (Fase 15 slice 1: retrato atual vs alvo E2EE) |
 
 ## Como rodar

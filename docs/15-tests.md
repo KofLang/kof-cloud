@@ -53,7 +53,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U28 | daemon por SO (Fase 13 s1) | `tests/daemon_test.kf` (`daemon-os` 4 + `daemon-argv`) | plist launchd (label/KeepAlive/RunAtLoad/connect), script Windows (`sc create`, `start= auto`, pede admin), systemd inalterado, kind inválido cai na detecção; regressão: systemctl por argv (string única nunca executa) |
 | U29 | rotação de `kfs_` (Fase 19 s3) | `tests/rotate_test.kf` (4: `rotate-unit` + `rotate`) | overlap (antiga vale até o TTL, nada revogado), credencial sem TTL não é revogada em silêncio, prune só remove expirada, HTTP: rotate devolve token/revoked/pending, rotation confirma, TTL negativo 400, serviço alheio 404 |
 | U24 | timeout de upstream (WAF slice 2b) | `tests/waf_timeout_test.kf` (2 testes: `waftimeout-unit` + `waftimeout`) | `errUpstreamTimeout` KCF112 com Hint; e2e com serviço mudo e prazo curto: 504 + vaga liberada (2º pedido também 504, não 429) + métrica `_timeout` |
-| U30 | `security.txt` (Fase 19 s1 parcial) | `tests/security_test.kf` (2: `security-unit` + `security`) | corpo estático (Contact + Policy, sem token/credencial/endereço), 200 `text/plain`; e2e sem conta/túnel: Host inexistente serve 200, outro path segue 404 opaco, 120 pedidos seguidos sem 429 (fora do rate limit) |
+| U30 | `security.txt` + `SECURITY.md` (Fase 19 s1 parcial) | `tests/security_test.kf` (3: `security-unit` + `security` + `security-policy`) | corpo estático (Contact + Policy, sem token/credencial/endereço), 200 `text/plain`; e2e sem conta/túnel: Host inexistente serve 200, outro path segue 404 opaco, 120 pedidos seguidos sem 429 (fora do rate limit); trava do doc (5 seções + contato canônico igual ao fio) |
 
 ## Integração
 
