@@ -65,6 +65,9 @@ test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
     // (rotation com descricao de revoke). Trava as duas linhas da fonte.
     assert(help.indexOf("service rotate <nome> [--ttl <horas>] [--prune]") >= 0, "rotate documentado")
     assert(help.indexOf("service rotation <nome>") >= 0, "rotation documentado")
+    // Slice Fase 19 s1 (SBOM): o audit ganhou --sbom e o help precisa
+    // anunciar (precedente: rotate/rotation sem trava apodreceu o README).
+    assert(help.indexOf("audit [--sbom]") >= 0, "audit anuncia --sbom")
 }
 
 test "daemon: paths ficam no espaco do usuario", "daemon-paths" {

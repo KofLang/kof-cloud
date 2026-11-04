@@ -634,14 +634,16 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
 
 **Estado: ⏳ não iniciado (ritmo, não projeto).** Desenho:
 
-* **Slice 1 — baseline e SBOM (parcial: `security.txt` + `SECURITY.md` ✅).**
+* **Slice 1 — baseline e SBOM (parcial: `security.txt` + `SECURITY.md` + `audit --sbom` ✅).**
   O Edge serve `/.well-known/security.txt` (200 `text/plain`, corpo
   estático Contact + Policy, sem dado operacional) **antes** de rate
   limit/roteamento/auth — sem conta, sem túnel, sem tocar em serviço
   local (scanner legítimo não é contido); `docs/SECURITY.md` declara
-  suporte/reporte/SLA/escopo com trava de regressão. Prova:
-  `tests/security_test.kf` (`security-unit` + `security` +
-  `security-policy`). Pendente: `audit --sbom` e o resto do ritmo.
+  suporte/reporte/SLA/escopo com trava de regressão; `audit --sbom`
+  imprime o inventário local (44 fontes + SHA-256, sem login, sem rede).
+  Prova: `tests/security_test.kf` (`security-unit` + `security` +
+  `security-policy`) + `tests/hosts_test.kf` (`audit-sbom`). Pendente:
+  o resto do ritmo (`scan`, `rotate --all`, PEM, kill-switch, WORM).
 * **Slice 2 — varredura contínua.** `kof cloud scan` (dependências,
   segredos vazados em `kofcloud.json`/env, PEM expirando, `kfs_` sem
   TTL em serviço crítico); roda no CI a cada push + game-day mensal.

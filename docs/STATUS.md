@@ -26,7 +26,7 @@
 ```bash
 export PATH=/home/mel/tools/jdk-25/bin:$PATH
 KOF=/home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar
-java -jar $KOF test --target jvm --timeout 150   # 33 suites, 0 falhas
+java -jar $KOF test --target jvm --timeout 150   # 34 suites, 0 falhas
 java -jar $KOF build --output /tmp/kofcloud-check # compila sem erro
 ```
 
@@ -44,7 +44,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | Suite | Arquivo | Testes |
 |---|---|---|
 | framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 11 |
-| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls | `tests/hosts_test.kf` | 28 |
+| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls/audit-sbom | `tests/hosts_test.kf` | 29 |
 | identidade/cifra/tokens | `tests/identity_test.kf` | 7 |
 | backoff | `tests/backoff_test.kf` | 3 |
 | registry | `tests/registry_test.kf` | 7 |
@@ -76,8 +76,9 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | painel somente-leitura | `tests/panel_test.kf` | 3 |
 | rotacao de kfs_ (Fase 19 s3) | `tests/rotate_test.kf` | 4 |
 | `security.txt` + `SECURITY.md` (Fase 19 s1 parcial) | `tests/security_test.kf` | 3 |
+| incidentes (Fase 17 s1) | `tests/incidents_test.kf` | 7 |
 
-Total: 183 testes. Ver `15-tests.md` para a matriz.
+Total: 191 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

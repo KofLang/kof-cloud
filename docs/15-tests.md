@@ -55,6 +55,7 @@ isso o runner esperaria para sempre (`--timeout 0` = sem limite é o default).
 | U24 | timeout de upstream (WAF slice 2b) | `tests/waf_timeout_test.kf` (2 testes: `waftimeout-unit` + `waftimeout`) | `errUpstreamTimeout` KCF112 com Hint; e2e com serviço mudo e prazo curto: 504 + vaga liberada (2º pedido também 504, não 429) + métrica `_timeout` |
 | U30 | `security.txt` + `SECURITY.md` (Fase 19 s1 parcial) | `tests/security_test.kf` (3: `security-unit` + `security` + `security-policy`) | corpo estático (Contact + Policy, sem token/credencial/endereço), 200 `text/plain`; e2e sem conta/túnel: Host inexistente serve 200, outro path segue 404 opaco, 120 pedidos seguidos sem 429 (fora do rate limit); trava do doc (5 seções + contato canônico igual ao fio) |
 | U31 | incidentes (Fase 17 s1) | `tests/incidents_test.kf` (7) | severidade/resumo por sinal, idempotência por (sinal, conta), revogação em lote abre (limiar 3) sem duplicar, resolver permite reabrir, escopo global visível / alheio invisível, HTTP lista/resolve/404 alheio (KCF125), rajada de recusas do Edge abre o global |
+| U32 | SBOM local (Fase 19 s1 parcial) | `tests/hosts_test.kf` (`audit-sbom`) + lock em `daemon_test.kf` (`deploy-usage`) | `sbomModules` (44 fontes em fonte única), `sbomLine`/`sbomText` (formato sha256sum, UNREADABLE honesto, hash byte-idêntico ao `sha256sum`); `audit --sbom` local sem login; ajuda anuncia |
 
 ## Integração
 

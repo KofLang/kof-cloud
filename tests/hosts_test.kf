@@ -414,3 +414,26 @@ test "text: resolveStatePath apara e cai no default", "serve-state" {
     assert(flagDuplicated(listOf("--state", "a", "--state", "b"), "--state") == true, "state repetido barra")
     assert(flagDuplicated(listOf("--state", "a"), "--state") == false, "state unico ok")
 }
+
+test "text: sbom cobre os 44 fontes com hash verificavel", "audit-sbom" {
+    // Puras (precedente: serve-tls): lista curada em fonte unica (trava
+    // quebra se adicionarem modulo — mesmo padrao do errors-hint-all),
+    // linha no formato sha256sum, UNREADABLE honesto em vez de hash falso.
+    var modules = sbomModules()
+    assert(modules.size == 44, "44 fontes: " + intToString(modules.size))
+    assert(modules.get(0) == "src/kofcloud/agent/Agent.kf", "primeiro modulo")
+    assert(modules.get(modules.size - 1) == "src/Main.kf", "ultimo modulo")
+    assert(sbomLine("a/b.kf", "") == "UNREADABLE  a/b.kf", "ilegivel nao vira hash")
+    var line = sbomLine("a/b.kf", "conteudo")
+    assert(line == crypto.sha256("conteudo") + "  a/b.kf", "formato sha256sum")
+    assert(line.indexOf("  a/b.kf") >= 0, "caminho na linha")
+    var text = sbomText(listOf("a/b.kf", "c/d.kf"), listOf("x", ""))
+    assert(text.indexOf(crypto.sha256("x") + "  a/b.kf") >= 0, "primeira linha com hash")
+    assert(text.indexOf("UNREADABLE  c/d.kf") >= 0, "segunda linha honesta")
+    // O hash e verificavel por fora: mesmo algoritmo do Tokens (sha256).
+    var probe = File("src/kofcloud/model/Exposure.kf").readText()
+    assert(probe != null && probe.length > 0, "fonte real legivel")
+    if (probe != null) {
+        assert(sbomLine("src/kofcloud/model/Exposure.kf", probe).startsWith(crypto.sha256(probe)), "hash do disco")
+    }
+}

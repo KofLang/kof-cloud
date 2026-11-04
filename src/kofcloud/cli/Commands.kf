@@ -1341,8 +1341,58 @@ Int cmdLogs(List<String> args) {
 
 record AuditEntry(String at, String actor, String action, String target)
 
+// Inventario SBOM (Fase 19 slice 1 parcial): lista curada dos 44 fontes do
+// KofCloud — sem Directory.list (plano, sem recursao) e sem versao no repo
+// ou no stdlib (STATUS.md documenta o toolchain; nada inventado). O hash
+// e sha256 sobre o texto (sonda provou byte-identico ao sha256sum). Pura
+// na composicao: SBOM de verdade passa root + conteudos; File.readText
+// vive no cmdAudit (precedente: loadManifestFile separa parse de IO).
+List<String> sbomModules() {
+    return listOf("src/kofcloud/agent/Agent.kf", "src/kofcloud/agent/Backoff.kf", "src/kofcloud/agent/Events.kf", "src/kofcloud/agent/Health.kf", "src/kofcloud/agent/Metrics.kf", "src/kofcloud/agent/Relay.kf", "src/kofcloud/cli/Cli.kf", "src/kofcloud/cli/Commands.kf", "src/kofcloud/cli/Daemon.kf", "src/kofcloud/cli/Deploy.kf", "src/kofcloud/cli/Doctor.kf", "src/kofcloud/cli/Local.kf", "src/kofcloud/cli/Usage.kf", "src/kofcloud/control/ControlPlane.kf", "src/kofcloud/control/Metrics.kf", "src/kofcloud/control/Panel.kf", "src/kofcloud/control/Registry.kf", "src/kofcloud/edge/EdgeState.kf", "src/kofcloud/edge/HttpFront.kf", "src/kofcloud/edge/Http.kf", "src/kofcloud/edge/Metrics.kf", "src/kofcloud/edge/Relay.kf", "src/kofcloud/edge/Tunnel.kf", "src/kofcloud/identity/Keys.kf", "src/kofcloud/identity/Tokens.kf", "src/kofcloud/model/Account.kf", "src/kofcloud/model/Audit.kf", "src/kofcloud/model/CustomDomain.kf", "src/kofcloud/model/Device.kf", "src/kofcloud/model/Errors.kf", "src/kofcloud/model/Exposure.kf", "src/kofcloud/model/Service.kf", "src/kofcloud/protocol/Bytes.kf", "src/kofcloud/protocol/Frame.kf", "src/kofcloud/protocol/LineCodec.kf", "src/kofcloud/protocol/Payload.kf", "src/kofcloud/protocol/Session.kf", "src/kofcloud/protocol/Tunnel.kf", "src/kofcloud/protocol/Version.kf", "src/kofcloud/store/Store.kf", "src/kofcloud/util/Hosts.kf", "src/kofcloud/util/Limits.kf", "src/kofcloud/util/Text.kf", "src/Main.kf")
+}
+
+// Linha do SBOM: "sha256  caminho" (formato do sha256sum, verificavel por
+// fora). Conteudo vazio = arquivo ilegivel (nunca hash de string vazia em
+// silencio — seria fingerprint falso).
+String sbomLine(String path, String content) {
+    if (content.length == 0) {
+        return "UNREADABLE  " + path
+    }
+    return crypto.sha256(content) + "  " + path
+}
+
+String sbomText(List<String> modules, List<String> contents) {
+    var i = 0
+    var out = ""
+    while (i < modules.size && i < contents.size) {
+        out = out + sbomLine(modules.get(i), contents.get(i)) + "\n"
+        i = i + 1
+    }
+    return out
+}
+
 // Trilha de auditoria da conta: ultimos eventos dos proprios recursos.
+// Com --sbom: inventario local dos fontes (sem login, sem rede) — Fase 19
+// slice 1 parcial. Local por desenho: o SBOM descreve o que esta no disco,
+// nao o que o servidor diz que esta.
 Int cmdAudit(List<String> args) {
+    if (hasFlag(args, "--sbom")) {
+        if (extraPositional(args, 0) || flagDuplicated(args, "--sbom")) {
+            println("uso: kof cloud audit [--sbom]")
+            return 1
+        }
+        var modules = sbomModules()
+        var contents = listOf<String>()
+        for (var module in modules) {
+            var text = File(module).readText()
+            if (text == null) {
+                text = ""
+            }
+            contents.add(text)
+        }
+        println(sbomText(modules, contents))
+        return 0
+    }
     if (extraPositional(args, 0)) {
         println("uso: kof cloud audit")
         return 1
