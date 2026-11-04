@@ -56,8 +56,8 @@ test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
     assert(help.indexOf(doctorLine) >= 0, "doctor documenta --file do manifesto")
     assert(help.indexOf("build/artifact") >= 0, "deploy anuncia build+artifact do manifesto")
     assert(help.indexOf("(build)/(artifact)") >= 0, "plan anuncia marcas por linha")
-    var serveLine = "serve [--control-port " + intToString(defaultControlPort()) + "] [--tunnel-port " + intToString(defaultTunnelPort()) + "] [--http-port " + intToString(defaultHttpPort()) + "] [--state <arquivo>] [--panel] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]"
-    assert(help.indexOf(serveLine) >= 0, "serve anuncia portas da fonte unica + --state + --panel + --waf + --tls")
+    var serveLine = "serve [--control-port " + intToString(defaultControlPort()) + "] [--tunnel-port " + intToString(defaultTunnelPort()) + "] [--http-port " + intToString(defaultHttpPort()) + "] [--state <arquivo>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]"
+    assert(help.indexOf(serveLine) >= 0, "serve anuncia portas da fonte unica + --state + --panel + --status-page + --waf + --tls")
     assert(help.indexOf("com o par TLS o control plane serve HTTPS") >= 0, "serve anuncia o efeito do par TLS")
     assert(help.indexOf("daemon install|status|uninstall") >= 0, "daemon documentado (README omitia ate este commit)")
     // Regressao do slice Fase 19 s3: os comandos novos (rotate/rotation)

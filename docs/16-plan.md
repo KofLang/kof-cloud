@@ -559,7 +559,7 @@ sempre com rollback de um comando.
 comunicar e aprender. Hoje há auditoria em anel (100 eventos) e métricas;
 falta o ciclo completo: do sinal ao post-mortem.
 
-**Estado: slices 1 e 2 ✅; slice 3 pendente.** Desenho fatiado (cada slice exercitado em
+**Estado: slices 1 e 2 ✅; slice 3 parcial (status page) ✅.** Desenho fatiado (cada slice exercitado em
 game-day: simula o incidente de propósito e mede o tempo de resposta):
 
 * **Slice 1 — detecção e severidade.** Sinais com nível
@@ -601,6 +601,16 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   impacto, timeline, correção, ação preventiva com dono e prazo).
   Prova: game-day completo fecha com post-mortem publicado.
 
+
+  **Implementado (status page):** `control/StatusPage.kf` serve
+  `GET /status` (HTML, auto-refresh 30 s) e `GET /status.json` quando
+  `serve --status-page` está ligado — **sem login nem token**, e **só com
+  incidentes globais de plataforma** (filtro de defesa em profundidade no
+  próprio renderer; nada de dado de conta). Estado geral derivado dos abertos
+  (`operational` / `partial_outage` / `major_outage`), timestamps ISO-8601
+  UTC, `kind` interno não vaza, texto sempre escapado (HTML e JSON). Prova:
+  `tests/status_page_test.kf` (5). **Pendentes:** webhook assinado Ed25519 e
+  template de post-mortem (`docs/incidents/`).
 **Regras:** contenção sempre reversível; comunicação sempre antes do
 fix secreto (avisa o impacto, depois corrige); todo incidente vira teste
 novo (se não tem regressão, não fechou).

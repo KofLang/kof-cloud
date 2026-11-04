@@ -3,6 +3,7 @@ package kofcloud.control
 import kofcloud.control.Metrics
 import kofcloud.control.Panel
 import kofcloud.control.Registry
+import kofcloud.control.StatusPage
 import kofcloud.model.Account
 import kofcloud.model.Audit
 import kofcloud.model.CustomDomain
@@ -960,6 +961,7 @@ class ControlPlane {
     Registry registry
     Int port
     Bool panelEnabled
+    Bool statusPageEnabled
     String edgeHost
     Int edgePort
     String tlsCertPem
@@ -969,6 +971,7 @@ class ControlPlane {
         this.registry = registry
         this.port = port
         this.panelEnabled = false
+        this.statusPageEnabled = false
         this.edgeHost = edgeHost
         this.edgePort = edgePort
         this.tlsCertPem = ""
@@ -989,6 +992,13 @@ class ControlPlane {
         this.panelEnabled = true
     }
 
+    // Liga a status page publica (Fase 17 slice 3): GET /status (HTML) e
+    // GET /status.json — sem login, sem token, SEMPRE so incidentes globais
+    // de plataforma. Sem a flag as rotas nao existem.
+    void enableStatusPage() {
+        this.statusPageEnabled = true
+    }
+
     void start() {
         var reg = this.registry
         var self = this
@@ -997,6 +1007,15 @@ class ControlPlane {
         if (this.panelEnabled) {
             app.get("/panel") {
                 return panelHtml()
+            }
+        }
+
+        if (this.statusPageEnabled) {
+            app.get("/status.json") {
+                return statusPageJson(reg.allIncidents())
+            }
+            app.get("/status") {
+                return statusPageHtml(reg.allIncidents())
             }
         }
 

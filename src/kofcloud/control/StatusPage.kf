@@ -1,0 +1,199 @@
+package kofcloud.control
+
+import kofcloud.model.Incident
+import kofcloud.util.Text
+
+// Status page (Fase 17 slice 3): leitura PUBLICA dos incidentes de
+// PLATAFORMA (escopo global — `accountId` vazio). Nunca mostra dado de conta:
+// a lista de entrada so contem os globais, e o renderer nao tem acesso ao
+// Registry. Sem login, sem token, sem escrita.
+
+// Nivel do estado geral a partir dos incidentes globais ABERTOS.
+// Pura: mesma entrada, mesma saida.
+String overallStatus(List<Incident> incidents) {
+    var worst = "operational"
+    for (var incident in incidents) {
+        if (incident.resolvedAt == 0) {
+            if (incident.severity == "CRIT") {
+                return "major_outage"
+            }
+            if (incident.severity == "WARN") {
+                worst = "partial_outage"
+            }
+        }
+    }
+    return worst
+}
+
+// Rotulo humano do estado geral.
+String overallStatusLabel(String status) {
+    if (status == "major_outage") {
+        return "Interrupcao maior"
+    }
+    if (status == "partial_outage") {
+        return "Degradacao parcial"
+    }
+    return "Operacional"
+}
+
+// So os globais (defesa em profundidade: mesmo que alguem passe a lista
+// completa, nada de conta vaza).
+List<Incident> globalOnly(List<Incident> incidents) {
+    var out = listOf<Incident>()
+    for (var incident in incidents) {
+        if (incident.accountId.length == 0) {
+            out.add(incident)
+        }
+    }
+    return out
+}
+
+// ISO-8601 UTC de um epoch em ms (YYYY-MM-DDTHH:MM:SSZ). Segundos
+// bissextos nao existem em epoch; a conversao civil usa o algoritmo de
+// dias-desde-1970 (sem dependencia de timezone do processo).
+String isoTimestamp(Long epochMs) {
+    var days = epochMs / 86400000
+    var rest = epochMs - days * 86400000
+    var hour = rest / 3600000
+    rest = rest - hour * 3600000
+    var minute = rest / 60000
+    var second = (rest - minute * 60000) / 1000
+    var z = days + 719468
+    var era = z / 146097
+    var doe = z - era * 146097
+    var yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+    var y = yoe + era * 400
+    var doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+    var mp = (5 * doy + 2) / 153
+    var d = doy - (153 * mp + 2) / 5 + 1
+    var m = mp + 3
+    if (mp >= 10) {
+        m = mp - 9
+        y = y + 1
+    }
+    // Os operandos de Long ficam Long ate a conversao explicita (SEM014).
+    var yi = y as Int
+    var mi = m as Int
+    var di = d as Int
+    var hi = hour as Int
+    var mni = minute as Int
+    var si = second as Int
+    return pad4(yi) + "-" + pad2(mi) + "-" + pad2(di) + "T" + pad2(hi) + ":" + pad2(mni) + ":" + pad2(si) + "Z"
+}
+
+String pad2(Int value) {
+    if (value < 10) {
+        return "0" + intToString(value)
+    }
+    return intToString(value)
+}
+
+String pad4(Int value) {
+    var out = intToString(value)
+    while (out.length < 4) {
+        out = "0" + out
+    }
+    return out
+}
+
+String statusPageTitle() {
+    return "KofCloud — status"
+}
+
+// Corpo JSON (maquina): o estado geral + os incidentes globais.
+String statusPageJson(List<Incident> incidents) {
+    var globals = globalOnly(incidents)
+    var parts = listOf<String>()
+    for (var incident in globals) {
+        var entry = mapOf()
+        entry.put("kind", incident.kind)
+        entry.put("severity", incident.severity)
+        // Escapado tambem no JSON: quem consome e um navegador; nada de
+        // marcar texto vindo do registro como HTML.
+        entry.put("summary", escapeHtml(incident.summary))
+        entry.put("openedAt", isoTimestamp(incident.openedAt))
+        if (incident.resolvedAt > 0) {
+            entry.put("resolvedAt", isoTimestamp(incident.resolvedAt))
+        }
+        parts.add(json.encode(entry))
+    }
+    var out = "{\"status\":\"" + overallStatus(globals) + "\",\"incidents\":["
+    return out + joinParts(parts) + "]}"
+}
+
+String joinParts(List<String> parts) {
+    var out = ""
+    var first = true
+    for (var part in parts) {
+        if (first) {
+            out = part
+            first = false
+        } else {
+            out = out + "," + part
+        }
+    }
+    return out
+}
+
+// Corpo HTML (humano): estado, lista de incidentes globais, atualize a pagina.
+String statusPageHtml(List<Incident> incidents) {
+    var globals = globalOnly(incidents)
+    var status = overallStatus(globals)
+    var color = "#3fb950"
+    if (status == "partial_outage") {
+        color = "#d29922"
+    }
+    if (status == "major_outage") {
+        color = "#f85149"
+    }
+    var out = "<!doctype html>\n<html lang=\"pt-BR\"><head><meta charset=\"utf-8\">\n"
+    out = out + "<meta http-equiv=\"refresh\" content=\"30\">\n"
+    out = out + "<title>" + statusPageTitle() + "</title>\n"
+    out = out + "<style>body{font:14px system-ui,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}"
+    out = out + "header{padding:18px 24px;border-bottom:1px solid #2a2d35}"
+    out = out + "main{padding:24px;max-width:860px}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px}"
+    out = out + "table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px;border-bottom:1px solid #22252c}"
+    out = out + ".muted{color:#8a8f98}footer{padding:16px 24px;color:#5b606a;font-size:12px}</style></head><body>\n"
+    out = out + "<header><h1 style=\"font-size:16px;margin:0\">" + statusPageTitle() + "</h1></header>\n<main>\n"
+    out = out + "<h2><span class=\"dot\" style=\"background:" + color + "\"></span>" + overallStatusLabel(status) + "</h2>\n"
+    out = out + "<p class=\"muted\">Estado da plataforma. Atualiza a cada 30 s.</p>\n"
+    if (globals.size == 0) {
+        out = out + "<p>Nenhum incidente registrado.</p>\n"
+    } else {
+        out = out + "<table><tr><th>Quando</th><th>Nivel</th><th>Evento</th><th>Status</th></tr>\n"
+        for (var incident in globals) {
+            var state = "Aberto"
+            if (incident.resolvedAt > 0) {
+                state = "Resolvido"
+            }
+            out = out + "<tr><td>" + escapeHtml(isoTimestamp(incident.openedAt)) + "</td><td>"
+            out = out + escapeHtml(incident.severity) + "</td><td>" + escapeHtml(incident.summary) + "</td><td>"
+            out = out + state + "</td></tr>\n"
+        }
+        out = out + "</table>\n"
+    }
+    out = out + "</main>\n<footer>KofCloud status — dados de plataforma apenas; nenhum dado de conta.</footer>\n"
+    out = out + "</body></html>"
+    return out
+}
+
+String escapeHtml(String text) {
+    var out = ""
+    for (var i = 0; i < text.length; i++) {
+        var c = text.charAt(i)
+        if (c == '<') {
+            out = out + "&lt;"
+        } else if (c == '>') {
+            out = out + "&gt;"
+        } else if (c == '&') {
+            out = out + "&amp;"
+        } else if (c == '"') {
+            out = out + "&quot;"
+        } else if (c == "'") {
+            out = out + "&#39;"
+        } else {
+            out = out + c
+        }
+    }
+    return out
+}

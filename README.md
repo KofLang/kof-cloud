@@ -129,7 +129,7 @@ freeze service|device <nome|id>
 unfreeze service|device <nome|id>
 incidents [--all] [--resolve <id>]
 logs [--tail <linhas>] [--runtime]   (marcos de sessao; --runtime = eventos reais do Agent; teto 256 KiB por arquivo)
-serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>] [--panel] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]
+serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]
 ```
 
 ## Testes

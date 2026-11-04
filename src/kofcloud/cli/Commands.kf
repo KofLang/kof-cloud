@@ -1659,6 +1659,7 @@ Int cmdServe(List<String> args) {
     var statePath = resolveStatePath(flagValue(args, "--state"))
     var wafMode = resolveWafMode(flagValue(args, "--waf"))
     var panel = hasFlag(args, "--panel")
+    var statusPage = hasFlag(args, "--status-page")
     var tunnelSecret = config.str("kofcloud.tunnelSecret", "")
     var maxBytes = limitMaxBodyBytes()
     // TLS do control plane (Fase 9 slice 1 parcial): par cert+key em PEM;
@@ -1724,12 +1725,18 @@ Int cmdServe(List<String> args) {
     if (panel) {
         println("painel: http://127.0.0.1:" + intToString(controlPort) + "/panel")
     }
+    if (statusPage) {
+        println("status:  http://127.0.0.1:" + intToString(controlPort) + "/status")
+    }
 
     var platformStop = kofcloudHome() + "/platform-stop"
     File(platformStop).delete()
     var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
     if (panel) {
         control.enablePanel()
+    }
+    if (statusPage) {
+        control.enableStatusPage()
     }
     if (tlsPair.length > 0) {
         // PEMs ja validados acima (nao-vazios); rele do disco por clareza —

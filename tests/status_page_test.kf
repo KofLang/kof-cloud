@@ -1,0 +1,92 @@
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.control.StatusPage
+import kofcloud.model.Incident
+import kofcloud.store.Store
+import testkit.Support
+
+// Fase 17 slice 3 (parcial) — status page publica.
+// Le so incidentes GLOBAIS (plataforma). Sem login, sem token, sem dado de
+// conta. Sem a flag `--status-page` as rotas nem existem.
+
+String statusPath(String name) {
+    return "/tmp/kofcloud-status-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "status: estado geral agrega severidade dos abertos", "status-unit" {
+    assert(overallStatus(listOf<Incident>()) == "operational", "sem incidentes")
+    var warn = Incident("1", "x", "WARN", "", "s", 0, 0)
+    var crit = Incident("2", "y", "CRIT", "", "s", 0, 0)
+    assert(overallStatus(listOf(warn)) == "partial_outage", "WARN degrada")
+    assert(overallStatus(listOf(warn, crit)) == "major_outage", "CRIT tem precedencia")
+    var resolvedCrit = Incident("3", "z", "CRIT", "", "s", 0, 1)
+    assert(overallStatus(listOf(resolvedCrit)) == "operational", "resolvido nao conta")
+    assert(overallStatusLabel("major_outage").indexOf("Interrupcao") >= 0, "rotulo")
+}
+
+test "status: so os globais passam, nunca dado de conta", "status-unit" {
+    var accountIncident = Incident("1", "x", "CRIT", "conta-1", "s", 0, 0)
+    var global = Incident("2", "y", "WARN", "", "s", 0, 0)
+    var filtered = globalOnly(listOf(accountIncident, global))
+    assert(filtered.size == 1, "um global")
+    assert(filtered.get(0).accountId.length == 0, "sem conta")
+    // O JSON e o HTML construidos a partir da lista COMPLETA tambem filtram.
+    assert(statusPageJson(listOf(accountIncident, global)).indexOf("conta-1") < 0, "json sem conta")
+    assert(statusPageHtml(listOf(accountIncident, global)).indexOf("conta-1") < 0, "html sem conta")
+}
+
+test "status: timestamp ISO-8601 UTC", "status-unit" {
+    assert(isoTimestamp(0) == "1970-01-01T00:00:00Z", "epoch")
+    assert(isoTimestamp(86400000) == "1970-01-02T00:00:00Z", "um dia")
+    // 2024-02-29T12:34:56Z
+    assert(isoTimestamp(1709210096000) == "2024-02-29T12:34:56Z", "bissexto")
+}
+
+test "status: HTML escapa e JSON e valido", "status-unit" {
+    var evil = Incident("1", "x", "WARN", "", "<script>alert(1)</script>", 0, 0)
+    var html = statusPageHtml(listOf(evil))
+    assert(html.indexOf("<script>alert(1)</script>") < 0, "script escapado")
+    assert(html.indexOf("&lt;script&gt;") >= 0, "escape presente")
+    var body = statusPageJson(listOf(evil))
+    assert(body.startsWith("{\"status\":\"partial_outage\""), "status no JSON")
+    assert(body.indexOf("<script>") < 0, "JSON nao interpola HTML")
+    // O JSON decodifica (nao e texto solto).
+    var parsed = json.decode<Map<String, String>>(body)
+    assert(parsed.size >= 1, "decodifica")
+}
+
+test "status: rota publica serve HTML/JSON sem token; sem flag e 404", "status" {
+    var controlPort = 19881
+    var registry = Registry(statusPath("http"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    control.enableStatusPage()
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    // Injeta um incidente GLOBAL e um de conta.
+    registry.raiseIncident("edge_refusals", "")
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var mel = registry.accountByHandle("mel")
+    if (mel != null) {
+        registry.raiseIncident("bulk_device_revokes", mel.id)
+    }
+
+    var html = httpGetRaw(controlPort, "/status", "127.0.0.1")
+    assert(statusOf(html) == 200, "status 200 sem token")
+    assert(bodyOf(html).indexOf("edge_refusals") < 0, "kind interno nao aparece no HTML")
+    assert(bodyOf(html).indexOf("the edge refused many tunnels") >= 0, "resumo global aparece")
+    assert(bodyOf(html).indexOf("many devices revoked") < 0, "incidente de conta NAO aparece")
+
+    var jsonBody = httpGetRaw(controlPort, "/status.json", "127.0.0.1")
+    assert(statusOf(jsonBody) == 200, "json 200")
+    assert(bodyOf(jsonBody).indexOf("partial_outage") >= 0, "estado degradado")
+    assert(bodyOf(jsonBody).indexOf("many devices revoked") < 0, "json sem dado de conta")
+
+    // Sem a flag, as rotas nao existem.
+    var otherPort = 19882
+    var off = ControlPlane(Registry(statusPath("off")), otherPort, "127.0.0.1", 0)
+    var offServer = spawn { off.start() }
+    assert(waitForPort(otherPort, 60), "segundo control no ar")
+    assert(statusOf(httpGetRaw(otherPort, "/status", "127.0.0.1")) == 404, "sem flag 404")
+    assert(statusOf(httpGetRaw(otherPort, "/status.json", "127.0.0.1")) == 404, "sem flag json 404")
+}

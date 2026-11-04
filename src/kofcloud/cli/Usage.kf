@@ -50,7 +50,7 @@ String usageText() {
     out = out + "  incidents [--all] [--resolve <id>]   (abertos da conta + plataforma)\n"
     out = out + "  logs [--tail <linhas>] [--runtime]  (marcos de sessao; --runtime = eventos reais do Agent)\n"
     out = out + "\n"
-    out = out + "  serve [--control-port " + intToString(defaultControlPort()) + "] [--tunnel-port " + intToString(defaultTunnelPort()) + "] [--http-port " + intToString(defaultHttpPort()) + "] [--state <arquivo>] [--panel] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]\n"
+    out = out + "  serve [--control-port " + intToString(defaultControlPort()) + "] [--tunnel-port " + intToString(defaultTunnelPort()) + "] [--http-port " + intToString(defaultHttpPort()) + "] [--state <arquivo>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]\n"
     out = out + "        sobe a plataforma (control plane + edge) localmente; com o par TLS o control plane serve HTTPS\n"
     return out
 }
