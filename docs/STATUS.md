@@ -26,7 +26,7 @@
 ```bash
 export PATH=/home/mel/tools/jdk-25/bin:$PATH
 KOF=/home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar
-java -jar $KOF test --target jvm --timeout 150   # 31 suites, 0 falhas
+java -jar $KOF test --target jvm --timeout 150   # 32 suites, 0 falhas
 java -jar $KOF build --output /tmp/kofcloud-check # compila sem erro
 ```
 
@@ -74,8 +74,9 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | timeout de upstream (WAF) | `tests/waf_timeout_test.kf` | 2 |
 | allowlist WAF (Fase 10 slice 3) | `tests/waf_allow_test.kf` | 4 |
 | painel somente-leitura | `tests/panel_test.kf` | 3 |
+| rotacao de kfs_ (Fase 19 s3) | `tests/rotate_test.kf` | 4 |
 
-Total: 175 testes. Ver `15-tests.md` para a matriz.
+Total: 179 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

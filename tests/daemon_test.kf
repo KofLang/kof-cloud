@@ -60,6 +60,11 @@ test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
     assert(help.indexOf(serveLine) >= 0, "serve anuncia portas da fonte unica + --state + --panel + --waf + --tls")
     assert(help.indexOf("com o par TLS o control plane serve HTTPS") >= 0, "serve anuncia o efeito do par TLS")
     assert(help.indexOf("daemon install|status|uninstall") >= 0, "daemon documentado (README omitia ate este commit)")
+    // Regressao do slice Fase 19 s3: os comandos novos (rotate/rotation)
+    // nao tinham trava no help — o README inclusive copiou o texto errado
+    // (rotation com descricao de revoke). Trava as duas linhas da fonte.
+    assert(help.indexOf("service rotate <nome> [--ttl <horas>] [--prune]") >= 0, "rotate documentado")
+    assert(help.indexOf("service rotation <nome>") >= 0, "rotation documentado")
 }
 
 test "daemon: paths ficam no espaco do usuario", "daemon-paths" {

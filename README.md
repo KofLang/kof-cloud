@@ -108,8 +108,8 @@ service unsuspend <nome>
 service token <nome> [--ttl <horas>]  (credencial kfs_ para AUTHENTICATED; ex.: --ttl 24)
 service token-list <nome>   (inventario, sem valores)
 service token-revoke <nome> <kfs_|id>
-service rotate <nome> [--ttl <horas>] [--prune]
-service rotation <nome>  (revoga UMA credencial; id curto se unico)
+service rotate <nome> [--ttl <horas>] [--prune]  (credencial nova; revoga as antigas SO depois do TTL)
+service rotation <nome>  (quantas credenciais ainda valem)
 domain list
 domain add <hostname> --service <nome>   (dominio proprio, devolve a instrucao CNAME)
 domain verify <hostname>                 (confere o DNS e ativa a rota)
@@ -137,7 +137,7 @@ identidade/cifra, registry, backoff, integração do control plane, E2E,
 domínio próprio, métricas, rate limit, suspensão/auditoria, frames
 fatiados, idle timeout, conexões por serviço, deploy, daemon, hot-reload,
 doctor, presença do túnel, eventos do agent, teto de corpo WAF, detectar
-WAF, timeout de upstream, allowlist WAF e painel somente-leitura (31 suites). Ver `docs/15-tests.md` para a matriz.
+WAF, timeout de upstream, allowlist WAF, painel somente-leitura e rotação de kfs_ (32 suites). Ver `docs/15-tests.md` para a matriz.
 
 ## Segurança
 
