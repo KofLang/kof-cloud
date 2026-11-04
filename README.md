@@ -105,6 +105,7 @@ device revoke <nome|deviceId>
 device suspend <nome|deviceId>      (túnel recusado, nada removido)
 device unsuspend <nome|deviceId>
 publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]
+        [--allow-method VERBO]... [--allow-path /caminho]...
 unpublish <nome>
 service list
 service status <nome>

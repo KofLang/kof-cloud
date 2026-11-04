@@ -122,6 +122,38 @@ void printFail(String context, String raw) {
     }
 }
 
+// Todas as ocorrencias de uma flag repetivel (--allow-method GET --allow-method POST).
+List<String> flagValues(List<String> args, String flag) {
+    var out = listOf<String>()
+    var i = 0
+    while (i < args.size) {
+        if (args.get(i) == flag && i + 1 < args.size) {
+            out.add(args.get(i + 1))
+            i = i + 1
+        }
+        i = i + 1
+    }
+    return out
+}
+
+// Junta valores repetidos em CSV, aparando e recusando item vazio. "" quando
+// algum item e vazio (o chamador reporta erro e nao publica).
+String repeatedCsv(List<String> values) {
+    var out = ""
+    for (var value in values) {
+        var item = value.trim()
+        if (item.length == 0) {
+            return ""
+        }
+        if (out.length == 0) {
+            out = item
+        } else {
+            out = out + "," + item
+        }
+    }
+    return out
+}
+
 String flagValue(List<String> args, String flag) {
     var i = 0
     while (i < args.size) {
@@ -613,6 +645,32 @@ Int cmdPublish(List<String> args) {
     }
     // Fail-fast local (mesmas regras da API KCF045/KCF047): evita uma
     // viagem de rede para um erro certo, com dica acionavel na hora.
+    // Allowlist WAF opcional (mesma politica do POST /v1/services): aceita
+    // uma flag por item; validacao local antes da rede (KCF113/KCF114).
+    var methodsRaw = repeatedCsv(flagValues(args, "--allow-method"))
+    var methodsGiven = flagValues(args, "--allow-method").size > 0
+    if (methodsGiven && methodsRaw.length == 0) {
+        println("--allow-method sem valor — use --allow-method GET (repita para varios)")
+        return 1
+    }
+    var allowMethods = normalizeAllowMethods(methodsRaw, httpVerbs())
+    if (methodsGiven && allowMethods.length == 0) {
+        println(errInvalidAllowMethod())
+        println(errHint(errInvalidAllowMethod()))
+        return 1
+    }
+    var pathsRaw = repeatedCsv(flagValues(args, "--allow-path"))
+    var pathsGiven = flagValues(args, "--allow-path").size > 0
+    if (pathsGiven && pathsRaw.length == 0) {
+        println("--allow-path sem valor — use --allow-path /api/* (repita para varios)")
+        return 1
+    }
+    var allowPaths = normalizeAllowPaths(pathsRaw)
+    if (pathsGiven && allowPaths.length == 0) {
+        println(errInvalidAllowPath())
+        println(errHint(errInvalidAllowPath()))
+        return 1
+    }
     var localError = validatePublishLocal(name, port, exposure, address)
     if (localError.length > 0) {
         println(localError)
@@ -625,6 +683,12 @@ Int cmdPublish(List<String> args) {
     body.put("localPort", intToString(port))
     body.put("protocol", defaultProtocol())
     body.put("exposure", exposure)
+    if (allowMethods.length > 0) {
+        body.put("allowMethods", allowMethods)
+    }
+    if (allowPaths.length > 0) {
+        body.put("allowPaths", allowPaths)
+    }
     try {
         var raw = requireOk(http.post(session.controlUrl + "/v1/services", json.encode(body), jsonHeader(session.token)))
         var service = json.decode<Service>(raw)
@@ -634,6 +698,12 @@ Int cmdPublish(List<String> args) {
         println("Local:  " + service.localAddress + ":" + intToString(service.localPort))
         println("Publico: https://" + service.hostname)
         println("Status: " + service.status)
+        if (service.allowMethods.length > 0) {
+            println("Metodos: " + service.allowMethods)
+        }
+        if (service.allowPaths.length > 0) {
+            println("Caminhos: " + service.allowPaths)
+        }
         return 0
     } catch (String e) {
         printFail("falha ao publicar", e)
@@ -717,6 +787,12 @@ Int cmdServiceStatus(List<String> args) {
                 println("Local:   " + service.localAddress + ":" + intToString(service.localPort))
                 println("Exposicao: " + service.exposure)
                 println("Status:  " + service.status)
+                if (service.allowMethods.length > 0) {
+                    println("Metodos: " + service.allowMethods)
+                }
+                if (service.allowPaths.length > 0) {
+                    println("Caminhos: " + service.allowPaths)
+                }
                 // Inventario de credenciais junto do status: o operador ve
                 // de relance se ha kfs_ com prazo a vigiar (só AUTHENTICATED
                 // usa; nos demais, a lista vem vazia e nada e impresso).

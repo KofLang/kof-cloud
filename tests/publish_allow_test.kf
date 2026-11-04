@@ -1,0 +1,40 @@
+import kofcloud.cli.Commands
+import kofcloud.cli.Usage
+import kofcloud.util.Text
+
+// Fase 10 slice 3 pela CLI: `publish --allow-method` / `--allow-path`.
+// A API ja aceitava a allowlist; a CLI so expunha a API direta. Agora o
+// usuario declara a politica no publish normal, com validacao local.
+
+test "publish allow: flags repetiveis viram CSV", "publish-allow-unit" {
+    var args = listOf("site", "--port", "8080", "--allow-method", "GET", "--allow-method", " POST ", "--allow-path", "/api/*", "--allow-path", "/health")
+    var methods = flagValues(args, "--allow-method")
+    assert(methods.size == 2, "duas ocorrencias")
+    assert(repeatedCsv(methods) == "GET,POST", "apara e junta")
+    var paths = flagValues(args, "--allow-path")
+    assert(repeatedCsv(paths) == "/api/*,/health", "paths em CSV")
+    // Ausente = lista vazia (sem restricao).
+    assert(flagValues(listOf("site", "--port", "8080"), "--allow-method").size == 0, "ausente")
+    // Item vazio (--allow-method "") invalida o conjunto.
+    assert(repeatedCsv(listOf("GET", "  ")) == "", "item vazio recusado")
+}
+
+test "publish allow: validacao usa as mesmas regras da API", "publish-allow-unit" {
+    var ok = normalizeAllowMethods(repeatedCsv(listOf("GET", "POST")), httpVerbs())
+    assert(ok == "GET,POST", "validos passam")
+    var lower = normalizeAllowMethods(repeatedCsv(listOf("get")), httpVerbs())
+    assert(lower == "", "minusculo recusado (exato)")
+    var okPaths = normalizeAllowPaths(repeatedCsv(listOf("/api/*", "/health")))
+    assert(okPaths == "/api/*,/health", "paths validos")
+    var badPaths = normalizeAllowPaths(repeatedCsv(listOf("api/*")))
+    assert(badPaths == "", "sem barra recusado")
+    // Hints uteis para o operador.
+    assert(errHint(errInvalidAllowMethod()).indexOf("allowMethods") >= 0, "Hint do metodo")
+    assert(errHint(errInvalidAllowPath()).indexOf("allowPaths") >= 0, "Hint do path")
+}
+
+test "publish allow: usage documenta as flags", "publish-allow-usage" {
+    var help = usageText()
+    assert(help.indexOf("--allow-method") >= 0, "help do publish anuncia --allow-method")
+    assert(help.indexOf("--allow-path") >= 0, "help do publish anuncia --allow-path")
+}

@@ -55,6 +55,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | incidentes (Fase 17 s1) | `model/Incident.kf` + detecção por conta (revoke em lote via auditoria) e global (Edge); `POST /v1/incidents`, CLI `incidents` | `incidents_test.kf` |
 | rotação de `kfs_` (Fase 19 s3) | `service rotate (<nome>\|--all)`/`rotation`: emite novo e revoga antigos só após o TTL (overlap); `--all` com falha isolada por serviço; sem TTL = pendente, nunca silencioso | `rotate_test.kf` |
 | daemon por SO (Fase 13 s1) | `daemonKind` + artefato systemd/launchd/Windows puro; install grava e imprime a ativação (nunca ativa sozinho) | `daemon_test.kf` (`daemon-os`) |
+| allowlist WAF pela CLI | `publish --allow-method`/`--allow-path` (repetíveis) com validação local; `service status` mostra a política | `publish_allow_test.kf` |
 | allowlist WAF (Fase 10 s3) | `allowMethods`/`allowPaths` no publish → `403 KCF111` antes do relay; `KCF113`/`KCF114` para política malformada; `kofcloud.json` cobre os campos (mesma normalização, drift no `--plan`/`--check`/`doctor`) | `waf_allow_test.kf` + `deploy_test.kf` |
 | painel somente-leitura (Fase 12 s1) | `serve --panel` → `GET /panel` estático (`control/Panel.kf`) lendo `/v1` com o token colado na página | `panel_test.kf` |
 | timeout de upstream (WAF 2b) | watchdog entrega RESET no stream → `504 KCF112` (ou parcial) + métrica `_timeout` | `waf_timeout_test.kf` |

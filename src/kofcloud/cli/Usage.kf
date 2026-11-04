@@ -24,7 +24,7 @@ String usageText() {
     out = out + "  device revoke <nome|deviceId>\n"
     out = out + "  device suspend <nome|deviceId>\n"
     out = out + "  device unsuspend <nome|deviceId>\n"
-    out = out + "  publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]\n"
+    out = out + "  publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>] [--allow-method VERBO]... [--allow-path /caminho]...\n"
     out = out + "  unpublish <nome>\n"
     out = out + "  service list\n"
     out = out + "  service status <nome>\n"
