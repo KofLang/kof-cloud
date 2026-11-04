@@ -32,6 +32,9 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/services/remove` | conta | `{serviceId}` |
 | `POST` | `/v1/services/suspend` | conta | `{serviceId}` → `{suspended:true}` (sai da rota, nada removido) |
 | `POST` | `/v1/services/unsuspend` | conta | `{serviceId}` → `{suspended:false}` |
+| `POST` | `/v1/freeze` | conta | contenção reversível `{target:service\|device,id}` → `{frozen,revoked,incidentId}` (sem id → 400 `KCF126`; alvo fora de service/device → 400 `KCF127`; alheio/inexistente → 404 `KCF128` opaco) |
+| `POST` | `/v1/unfreeze` | conta | `{target,id}` → `{frozen:0,restored}` (alheio/inexistente → 404 `KCF128` opaco; restaura exatamente o status anterior) |
+| `POST` | `/v1/incidents` | conta | lista incidentes da conta + globais (resolve com `{resolveId}`; alheio → 404 `KCF125` opaco; `all:true` = só globais) |
 | `GET` | `/v1/audit` | conta | últimos eventos da conta (anel de 100, só metadados) |
 | `POST` | `/v1/services/status` | dispositivo | `{serviceId,status}` (health reportado pelo Agent) |
 | `POST` | `/v1/heartbeat` | dispositivo | `{deviceId}` → `{ok:true, serverTime}` |
@@ -210,6 +213,10 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `504` | `KCF112` upstream did not respond in time | Edge: watchdog do stream sem DATA no prazo (`kofcloud.limits.tunnelIdleMs`); sem bytes → 504, com parcial → entrega o parcial; métrica `_timeout` |
 | `400` | `KCF113` invalid allowMethods | publish com `allowMethods` fora do formato (só verbos HTTP em maiúsculas, separados por vírgula; erro de autoria, não publica regra que nunca casaria) |
 | `400` | `KCF114` invalid allowPaths | publish com `allowPaths` fora do formato (caminhos absolutos separados por vírgula, ex: `/api/*, /health`; erro de autoria) |
+| `400` | `KCF126` freeze target id required | freeze/unfreeze sem `id` do alvo |
+| `400` | `KCF127` invalid freeze target | freeze/unfreeze com `target` fora de `service`/`device` |
+| `404` | `KCF128` freeze target not found | alvo inexistente **ou de outra conta** (opaco por desenho) |
+| `404` | `KCF125` incident not found | incidente inexistente **ou de outra conta** (opaco por desenho) |
 
 Owner-gate: `POST /v1/services/status` só aceita a conta dona (`KCF042`
 interno vira o mesmo `404 KCF041` na borda, para não revelar recurso alheio;
