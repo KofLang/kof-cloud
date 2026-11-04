@@ -59,9 +59,34 @@ O Kof **não tem ACME**. Então:
 caminho HTTPS apenas via `web.app().listenSecure` no target JVM. Ver
 `12-kof-apis.md` §Lacunas e `16-limitations.md`.
 
+## Estado entregue no KofCloud (medido 2026-11-04)
+
+* **Control plane HTTPS ✅:** `serve --tls-cert/--tls-key` →
+  `listenSecure(port, certPem, keyPem)`; HSTS vem do runtime do Kof
+  (`Policy.headers` + gate em `req.secure`). O fluxo real da CLI
+  (`loginOrCreate` + `registerDevice`) está provado sobre HTTPS em
+  `tests/control_test.kf` (`control-tls-cli`).
+* **Edge público: segue HTTP.** Duas barreiras medidas, não suposições:
+  `net` não tem TLS (`KofNet.java` só expõe `listen`/`connect` crus — L2) e o
+  handler do `web.app()` devolve `String`, corrompendo bytes altos (L16). O
+  Edge tem parser HTTP próprio sobre socket cru e precisa repassar binário.
+
+> **Ressalva de segurança do cliente (importante).** O cliente `kof.http` é
+> **trust-all por construção**: `JvmWebHttpRuntime.java:112-132` instala um
+> `X509TrustManager` que aceita qualquer certificado e desliga
+> `endpointIdentificationAlgorithm` para **toda** requisição `https://` — não
+> há opt-in nem env. Consequência honesta: com o control plane em HTTPS o
+> conteúdo (login, `kfc_`) viaja **cifrado**, mas o cliente **não autentica o
+> servidor** — um MITM com certificado forjado é aceito. Mitigação hoje:
+> control plane em rede confiável/loopback, ou terminador TLS verificado na
+> frente. Verificação real depende do slice "cliente `kof.http` verificador"
+> do plano do Kof.
+
 > **Plano a jusante:** o endurecimento de TLS do próprio Kof (SNI por
 > hostname, hot-reload de certificado, cliente `kof.http` verificador,
-> ACME DNS-01) está desenhado em `Kof4j/docs/development/future/PLAN-TLS-HARDENING.md`
-> (só plano, zero código; promoção exige decisão da mantenedora). Quando as
-> fatias 1–4 pousarem na JVM, a Fase 9 do KofCloud (slices 1–3 em
-> `16-plan.md`) ganha o primitivo que falta hoje.
+> ACME DNS-01) foi **promovido de `future/` para `docs/development/`** em
+> 02/11 e tem fatias pousadas no branch `lab` (SNI 02/11 21:45, hot-reload
+> 02/11 22:08, ACME JWS ES256 03/11 00:18). Nenhuma está nos jars pinados
+> (0.6.3 e 0.6.7, ambos de 27/10), então o KofCloud ainda não as usa. Quando
+> saírem num release, a Fase 9 do KofCloud (slices 2–3 em `16-plan.md`) ganha
+> SNI e rotação de certificado sem restart.

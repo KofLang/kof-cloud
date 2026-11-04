@@ -63,7 +63,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | daemon | `tests/daemon_test.kf` | 13 |
 | doctor | `tests/doctor_test.kf` | 5 |
 | hot-reload | `tests/reload_test.kf` | 1 |
-| control plane | `tests/control_test.kf` | 3 |
+| control plane | `tests/control_test.kf` | 4 |
 | presenca | `tests/presence_test.kf` | 1 |
 | e2e | `tests/e2e_test.kf` | 1 |
 | e2e multiservico | `tests/e2e_multiservice_test.kf` | 1 |
@@ -76,7 +76,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | painel somente-leitura | `tests/panel_test.kf` | 3 |
 | rotacao de kfs_ (Fase 19 s3) | `tests/rotate_test.kf` | 4 |
 
-Total: 179 testes. Ver `15-tests.md` para a matriz.
+Total: 180 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

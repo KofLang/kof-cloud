@@ -51,6 +51,17 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   federado.
 * **Rate limiting é por processo.** Não é global entre nós.
 * **Certificados são externos.** O operador fornece o PEM.
+* **HTTPS no control plane cifra, mas o cliente não autentica o servidor.**
+  `kof.http` é trust-all por construção (`JvmWebHttpRuntime.java:112-132`:
+  `X509TrustManager` que aceita qualquer certificado +
+  `endpointIdentificationAlgorithm` desligado, sem opt-in). O login e o
+  `kfc_` viajam cifrados, mas um MITM com certificado forjado é aceito.
+  Mitigação: control em rede confiável/loopback ou terminador TLS verificado.
+  Não é limite do KofCloud — é a superfície atual do cliente do Kof, que tem
+  fatia própria ("cliente verificador") no plano de TLS dele.
+* **TLS no Edge público não existe** (L2: `net` sem TLS; L16: handler
+  `web.app()` devolve `String` e corrompe binário). O Edge faz HTTP com
+  terminador externo. Ver `12-tls.md`.
 * **O Edge fala HTTP/1.1.** Sem pipelining avançado, sem trailers.
 * **Sem half-close no protocolo.** Um stream termina com `END`/`RESET`; não há
   sinal de "não vou mais escrever, mas ainda leio".

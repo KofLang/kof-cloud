@@ -57,6 +57,11 @@ compartilhando um registro único. Com `--tls-cert cert.pem --tls-key
 key.pem`, o control plane serve HTTPS (o login e o `kfc_` viajam cifrados;
 o Edge público segue HTTP — ver `docs/12-tls.md`).
 
+> **Ressalva honesta:** o cliente HTTP do Kof (`kof.http`) é trust-all —
+> aceita qualquer certificado. O HTTPS do control **cifra** o login/token,
+> mas o CLI **não autentica** o servidor. Use em rede confiável/loopback ou
+> com um terminador TLS verificado na frente. Ver `docs/12-tls.md`.
+
 ### 2. Usar o CLI (na máquina do usuário)
 
 ```bash

@@ -186,10 +186,13 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 * **Múltiplos nós** de control plane/edge (sem consenso; registro único em
   memória + arquivo).
 * **TLS/HTTPS na borda (Fase 9)** — slice 1 parcial: control plane HTTPS
-  via `serve --tls-cert/--tls-key` (`listenSecure` 3-arg, JVM); resto dos
-  slices (HSTS+301, SNI por hostname, Edge HTTPS) pendente — Edge esbarra
-  na L16; ACME automático: ES256/JWS pousou no lab do Kof, ainda fora do
-  jar pinado.
+  via `serve --tls-cert/--tls-key` (`listenSecure` 3-arg, JVM) + HSTS (vem
+  do runtime do Kof) + **fluxo real da CLI provado sobre HTTPS**
+  (`control-tls-cli`); o resto (301, SNI por hostname, Edge HTTPS) segue
+  pendente — Edge esbarra em L2 (`net` sem TLS) e L16 (handler `String`);
+  ACME automático: ES256/JWS pousou no lab do Kof, ainda fora do jar
+  pinado. **Ressalva:** o cliente `kof.http` é trust-all — cifra, mas não
+  autentica o servidor (ver `12-tls.md` e `17-limitations.md`).
 * **WAF + proteção da aplicação (Fase 10)** — slices: assinaturas mínimas
   (detectar antes de bloquear), teto de corpo/timeout por rota, allowlist
   por serviço. Regra: nunca logar conteúdo, nunca quebrar o legítimo.

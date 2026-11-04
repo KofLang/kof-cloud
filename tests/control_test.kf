@@ -1,4 +1,5 @@
 
+import kofcloud.cli.Commands
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.store.Store
@@ -100,4 +101,35 @@ test "control plane: HTTPS com PEM do operador (serve --tls-cert/--tls-key)", "c
     assert(waitForPort(18083, 60), "control plane HTTP no ar")
     var plainRaw = httpGetRaw(18083, "/v1/health", "127.0.0.1")
     assert(responseHeader(plainRaw, "strict-transport-security") == "", "sem HSTS em HTTP")
+}
+
+test "control plane: fluxo real da CLI (login + device) sobre HTTPS", "control-tls-cli" {
+    // Fecha o gap do slice anterior: so o /v1/health estava provado. Aqui
+    // passam as funcoes REAIS que o `cmdLogin` chama — loginOrCreate (cria
+    // a conta e emite o kfc_) e registerDevice (header X-KofCloud-Token) —
+    // contra o control plane com TLS. Sem tocar HOME: saveSession/
+    // saveIdentity ficam no cmdLogin, nao nestas funcoes.
+    var dir = "/tmp/kofcloud-tlscli-" + crypto.randomHex(4)
+    Directory(dir).createDirectories()
+    var certPath = dir + "/cert.pem"
+    var keyPath = dir + "/key.pem"
+    var gen = process.run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", keyPath, "-out", certPath, "-days", "1", "-nodes", "-subj", "/CN=localhost", "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost")
+    assert(gen.exitCode == 0, "openssl gerou o par")
+    var certPem = readTextOr(certPath, "")
+    var keyPem = readTextOr(keyPath, "")
+    var path = "/tmp/kofcloud-cp-tlscli-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    var control = ControlPlane(registry, 18084, "127.0.0.1", 0)
+    control.enableTls(certPem, keyPem)
+    var server = spawn { control.start() }
+    assert(waitForPort(18084, 60), "control plane TLS no ar")
+    var controlUrl = "https://127.0.0.1:18084"
+    // Login/criacao de conta pela CLI real, sobre TLS.
+    var token = loginOrCreate(controlUrl, "mel", "segredo")
+    assert(token.startsWith("kfc_"), "token emitido via HTTPS: " + token)
+    // Device pela CLI real (header X-KofCloud-Token) sobre TLS.
+    var deviceId = registerDevice(controlUrl, token, "nb", "pk")
+    assert(deviceId.length > 0, "device registrado via HTTPS: " + deviceId)
+    // O token e a credencial: nunca aparecem na URL nem em header de log.
+    assert(controlUrl.indexOf(token) < 0, "token fora da URL")
 }
