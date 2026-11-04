@@ -268,9 +268,8 @@ entre cliente e Edge. Cloud robusta de verdade exige HTTPS ponta a ponta
   e avisa (nunca bloqueia) quando o PEM expira em menos de 30 dias;
   openssl ausente/erro = sem aviso. Pura `tlsCertExpiringSoon` (exitCode
   → Bool). Prova: `tests/hosts_test.kf` (`serve-tls` estendido). Pendente:
-  SNI por hostname (mapa em memória, depende do runtime) e renovação
-  automática. Pendente: SNI por hostname (mapa em memória, recarregado
-  sem derrubar o Edge — depende do runtime), `domain verify` aceitar o
+  SNI por hostname (mapa em memória, recarregado sem derrubar o Edge —
+  depende do runtime), renovação automática, `domain verify` aceitar o
   PEM, e expiração visível também no `service status`/`doctor`.
   ACME de verdade (DNS-01) depende de ES256 no stdlib — sem isso, emissão
   continua externa (ver `12-tls.md`).
@@ -658,7 +657,8 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   imprime o inventário local (44 fontes + SHA-256, sem login, sem rede).
   Prova: `tests/security_test.kf` (`security-unit` + `security` +
   `security-policy`) + `tests/hosts_test.kf` (`audit-sbom`). Pendente:
-  o resto do ritmo (`scan`, `rotate --all`, PEM, kill-switch, WORM).
+  o resto do ritmo (`rotate --all` ✅ no slice 3, `scan` ✅ no slice 2,
+  PEM, kill-switch ✅ documentado, WORM).
 * **Slice 2 — varredura contínua (parcial: scan do manifesto ✅).**
   `kof cloud scan [--file]` lê o manifesto e acusa `kfs_`/`kfc_`/password
   literal (exit 1 com achado, 0 limpo) — sem login, sem rede, para rodar
