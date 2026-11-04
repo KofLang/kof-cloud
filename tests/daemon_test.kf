@@ -63,7 +63,7 @@ test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
     // Regressao do slice Fase 19 s3: os comandos novos (rotate/rotation)
     // nao tinham trava no help — o README inclusive copiou o texto errado
     // (rotation com descricao de revoke). Trava as duas linhas da fonte.
-    assert(help.indexOf("service rotate <nome> [--ttl <horas>] [--prune]") >= 0, "rotate documentado")
+    assert(help.indexOf("service rotate (<nome>|--all) [--ttl <horas>] [--prune]") >= 0, "rotate documenta --all")
     assert(help.indexOf("service rotation <nome>") >= 0, "rotation documentado")
     // Slice Fase 19 s1 (SBOM): o audit ganhou --sbom e o help precisa
     // anunciar (precedente: rotate/rotation sem trava apodreceu o README).

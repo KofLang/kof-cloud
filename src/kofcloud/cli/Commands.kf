@@ -1040,20 +1040,67 @@ Int cmdServiceTokenRevoke(List<String> args) {
 // revoga as anteriores SO depois do TTL (overlap). `--prune` limpa as ja
 // expiradas. O token novo aparece uma unica vez — troque onde ele e usado
 // antes do prazo acabar.
+//
+// `rotate --all` (mesmo slice, pendente ate este commit): itera os servicos
+// da conta e rotaciona um por um. Falha num servico nao aborta os demais
+// (precedente: down --prune poda em lote); o resumo final lista ok/falhas
+// e o exit e 1 se alguma falhar. Sem --ttl segue a regra do singular:
+// credencial sem expiracao nunca e revogada em silencio.
+Int rotateAllServices(LocalSession session, List<Service> services, Int ttl, Bool prune) {
+    var done = 0
+    var failures = listOf<String>()
+    for (var service in services) {
+        var body = mapOf()
+        body.put("serviceId", service.id)
+        if (ttl > 0) {
+            body.put("ttlHours", intToString(ttl))
+        }
+        if (prune) {
+            body.put("prune", "true")
+        }
+        try {
+            var raw = requireOk(http.post(session.controlUrl + "/v1/services/rotate", json.encode(body), jsonHeader(session.token)))
+            var result = json.decode<Map<String, String>>(raw)
+            println(service.name + ": nova " + mapField(result, "token") + " (revogadas " + mapField(result, "revoked") + ", valendo " + mapField(result, "pending") + ")")
+            done = done + 1
+        } catch (String e) {
+            failures.add(service.name)
+        }
+    }
+    if (services.size == 0) {
+        println("nenhum servico para rotacionar")
+        return 0
+    }
+    if (failures.size > 0) {
+        printFail("falha em " + intToString(failures.size) + " servico(s)", failures.get(0))
+        return 1
+    }
+    println("rotate --all ok: " + intToString(done) + " servico(s)")
+    return 0
+}
+
 Int cmdServiceRotate(List<String> args) {
     var session = loadSession()
     if (session == null) {
         println(notLoggedInLine())
         return 1
     }
-    if (extraPositional(args, 1)) {
+    // --all dispensa o nome (rotaciona TODOS os servicos da conta); com
+    // nome exige exatamente 1 posicional. --all + nome = ambíguo, barra.
+    var all = hasFlag(args, "--all")
+    var name = firstPositional(args).trim()
+    if (all) {
+        if (name.length > 0 || extraPositional(args, 1)) {
+            println("uso: kof cloud service rotate --all [--ttl <horas>] [--prune]")
+            return 1
+        }
+    } else if (extraPositional(args, 1)) {
         println("uso: kof cloud service rotate <nome> [--ttl <horas>] [--prune]")
         return 1
     }
-    var name = firstPositional(args).trim()
     var ttlRaw = flagValue(args, "--ttl").trim()
     var ttl = parseIntSafe(ttlRaw, 0)
-    if (name.length == 0) {
+    if (name.length == 0 && all == false) {
         println("uso: kof cloud service rotate <nome> [--ttl <horas>] [--prune]")
         return 1
     }
@@ -1061,9 +1108,16 @@ Int cmdServiceRotate(List<String> args) {
         println("ttl invalido: use horas inteiras > 0")
         return 1
     }
+    if (flagMissingValue(args, "--ttl") || flagDuplicated(args, "--ttl") || flagDuplicated(args, "--all") || flagDuplicated(args, "--prune")) {
+        println("uso: kof cloud service rotate [--all] <nome> [--ttl <horas>] [--prune]")
+        return 1
+    }
     var prune = hasFlag(args, "--prune")
     try {
         var services = fetchServices(session.controlUrl, session.token)
+        if (all) {
+            return rotateAllServices(session, services, ttl, prune)
+        }
         var target = matchServiceName(services, name)
         if (target.length == 0) {
             println(serviceNotFoundLine(name))

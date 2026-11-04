@@ -656,14 +656,16 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   vazar o valor). Prova: `tests/deploy_test.kf` (`deploy-scan`) + trava
   da ajuda. Pendente: dependências, segredos em env, PEM expirando,
   `kfs_` sem TTL em serviço crítico (exigem openssl/rede/conta).
-* **Slice 3 — resposta e rotação programada.** Rotação assistida ✅
-  (por serviço): `kof cloud service rotate <nome> [--ttl H] [--prune]`
-  emite uma credencial nova e **só revoga as anteriores depois do TTL**
-  (overlap sem downtime); `service rotation <nome>` mostra quantas ainda
+* **Slice 3 — resposta e rotação programada (✅ + `rotate --all`).**
+  Rotação assistida (por serviço): `kof cloud service rotate
+  (<nome>|--all) [--ttl H] [--prune]` emite credencial nova e **só revoga
+  as anteriores depois do TTL** (overlap sem downtime); `--all` itera os
+  serviços da conta com falha isolada por serviço (resumo ok/falhas, exit
+  1 se alguma falhar); `service rotation <nome>` mostra quantas ainda
   valem. Credencial **sem** expiração nunca é revogada em silêncio — fica
   contada como pendente até ser revogada à mão. Prova:
-  `tests/rotate_test.kf` (4). Pendente: `rotate --all` (todos os serviços
-  da conta), PEMs com 30 dias de antecedência e kill-switch documentado
+  `tests/rotate_test.kf` (5: `rotate-all` com dois serviços independentes).
+  Pendente: PEMs com 30 dias de antecedência e kill-switch documentado
   (o `freeze` da Fase 17 em escala de plataforma).
 * **Slice 4 — auditoria externa.** Trilha imutável (audit log WORM:
   append-only com hash encadeado, verificável por terceiro); relatório

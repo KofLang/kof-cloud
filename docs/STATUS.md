@@ -74,11 +74,11 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | timeout de upstream (WAF) | `tests/waf_timeout_test.kf` | 2 |
 | allowlist WAF (Fase 10 slice 3) | `tests/waf_allow_test.kf` | 4 |
 | painel somente-leitura | `tests/panel_test.kf` | 3 |
-| rotacao de kfs_ (Fase 19 s3) | `tests/rotate_test.kf` | 4 |
+| rotacao de kfs_ (Fase 19 s3) | `tests/rotate_test.kf` | 5 |
 | `security.txt` + `SECURITY.md` (Fase 19 s1 parcial) | `tests/security_test.kf` | 3 |
 | incidentes (Fase 17 s1) | `tests/incidents_test.kf` | 7 |
 
-Total: 192 testes. Ver `15-tests.md` para a matriz.
+Total: 193 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

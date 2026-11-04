@@ -113,7 +113,7 @@ service unsuspend <nome>
 service token <nome> [--ttl <horas>]  (credencial kfs_ para AUTHENTICATED; ex.: --ttl 24)
 service token-list <nome>   (inventario, sem valores)
 service token-revoke <nome> <kfs_|id>
-service rotate <nome> [--ttl <horas>] [--prune]  (credencial nova; revoga as antigas SO depois do TTL)
+service rotate (<nome>|--all) [--ttl <horas>] [--prune]  (credencial nova; revoga as antigas SO depois do TTL)
 service rotation <nome>  (quantas credenciais ainda valem)
 domain list
 domain add <hostname> --service <nome>   (dominio proprio, devolve a instrucao CNAME)

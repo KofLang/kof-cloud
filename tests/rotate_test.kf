@@ -1,5 +1,6 @@
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
+import kofcloud.model.Service
 import kofcloud.store.Store
 import kofcloud.model.Errors
 import testkit.Support
@@ -101,4 +102,42 @@ test "rotacao: control plane expoe rotate e rotation por HTTP", "rotate" {
     var otherAccount = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
     var anaToken = mapField(json.decode<Map<String, String>>(bodyOf(otherAccount)), "token")
     assert(statusOf(httpPostJson(controlPort, "/v1/services/rotate", rotateBody, anaToken)) == 404, "alheio -> 404")
+}
+test "rotacao: dois servicos rotacionam independentes (base do --all)", "rotate-all" {
+    // O --all itera fetchServices + POST /v1/services/rotate por serviceId
+    // (o cmdServiceRotate le HOME real e nao e chamavel em teste — padrao do
+    // repo: protocolo via HTTP com helpers que replicam a regra). Aqui os
+    // dois servicos da conta, cada um com o proprio overlap.
+    var controlPort = 19852
+    var registry = Registry(rotatePath("all"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var mkPub = "{\"deviceId\":\"" + deviceId + "\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\""
+    var siteId = mapField(json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/services", mkPub + ",\"name\":\"site\"}", accountToken))), "id")
+    var apiId = mapField(json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/services", mkPub + ",\"name\":\"api\"}", accountToken))), "id")
+    assert(siteId.length > 0 && apiId.length > 0 && siteId != apiId, "dois servicos")
+
+    // Lista da conta (o que o --all itera): 2 servicos.
+    var listed = json.decode<List<Service>>(bodyOf(httpGetToken(controlPort, "/v1/services", accountToken)))
+    assert(listed.size == 2, "conta com 2 servicos")
+
+    // Rotaciona cada um (mesmo loop do --all): tokens distintos, overlap.
+    var firstSite = mapField(json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + siteId + "\",\"ttlHours\":\"24\"}", accountToken))), "token")
+    var firstApi = mapField(json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + apiId + "\",\"ttlHours\":\"24\"}", accountToken))), "token")
+    var rotSite = json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/services/rotate", "{\"serviceId\":\"" + siteId + "\",\"ttlHours\":\"24\"}", accountToken)))
+    var rotApi = json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/services/rotate", "{\"serviceId\":\"" + apiId + "\",\"ttlHours\":\"24\"}", accountToken)))
+    assert(mapField(rotSite, "token") != firstSite, "site: token novo")
+    assert(mapField(rotApi, "token") != firstApi, "api: token novo")
+    assert(mapField(rotSite, "token") != mapField(rotApi, "token"), "tokens por servico")
+    assert(mapField(rotSite, "revoked") == "0", "site: overlap")
+    assert(mapField(rotApi, "revoked") == "0", "api: overlap")
+    // Cada servico tem 2 validas; uma nao autoriza a outra (isolamento).
+    assert(registry.pendingRotationCount(siteId) == 2, "site com 2")
+    assert(registry.pendingRotationCount(apiId) == 2, "api com 2")
 }
