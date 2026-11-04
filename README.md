@@ -124,6 +124,7 @@ down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove o
 daemon install|status|uninstall   (artefato por SO — systemd/launchd/Windows — sem root, ativação manual)
 doctor [--file kofcloud.json]   (diagnostico: login, control, device, tunel, servicos)
 audit                        (trilha de auditoria da conta)
+incidents [--all] [--resolve <id>]
 logs [--tail <linhas>] [--runtime]   (marcos de sessao; --runtime = eventos reais do Agent; teto 256 KiB por arquivo)
 serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>] [--panel] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]
 ```

@@ -555,7 +555,7 @@ sempre com rollback de um comando.
 comunicar e aprender. Hoje há auditoria em anel (100 eventos) e métricas;
 falta o ciclo completo: do sinal ao post-mortem.
 
-**Estado: ⏳ não iniciado.** Desenho fatiado (cada slice exercitado em
+**Estado: slice 1 ✅; slices 2 e 3 pendentes.** Desenho fatiado (cada slice exercitado em
 game-day: simula o incidente de propósito e mede o tempo de resposta):
 
 * **Slice 1 — detecção e severidade.** Sinais com nível
@@ -563,6 +563,17 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   expiração em massa de `kfs_`, Edge sem heartbeat. `GET /v1/incidents`
   lista os abertos (filtrado por conta quando for dado de cliente, global
   quando for plataforma). Prova: teste injeta o sinal, incidente abre.
+
+  **Implementado (parcial em sinais):** `model/Incident.kf` (INFO/WARN/CRIT,
+  vocabulário fechado). Detector por conta: ≥3 `device.revoked` ou
+  `service.token_revoked` em 60 s (do anel de auditoria) → `CRIT`/`WARN`,
+  idempotente por (sinal, conta), reabre depois de resolvido. Detector global
+  do Edge: ≥10 recusas de túnel na janela → `edge_refusals` (WARN).
+  `POST /v1/incidents` lista (conta + globais; `all` = só globais) e
+  `resolveId` fecha (alheio → `404 KCF125`). CLI: `kof cloud incidents
+  [--all] [--resolve <id>]`. Pendentes: pico de 401/429 por hostname,
+  expiração em massa de `kfs_`, Edge sem heartbeat.
+
 * **Slice 2 — contenção em um comando.** `kof cloud freeze <alvo>`
   (conta|device|service|edge): congela tudo do alvo (suspend + revoga
   tokens vivos + derruba sessões) e gera ID de incidente; `unfreeze`

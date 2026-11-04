@@ -80,29 +80,29 @@ void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
     var clientPub = frameField(hello, "clientPub")
 
     if (frameInt(hello, "v") != protocolVersion()) {
-        refuseTunnel(conn, "VERSION_UNSUPPORTED")
+        refuseTunnel(state, conn, "VERSION_UNSUPPORTED")
         return
     }
     var device = state.registry.deviceById(deviceId)
     if (device == null) {
-        refuseTunnel(conn, "DEVICE_UNKNOWN")
+        refuseTunnel(state, conn, "DEVICE_UNKNOWN")
         return
     }
     if (deviceIsActive(device) == false) {
         if (deviceIsSuspended(device)) {
-            refuseTunnel(conn, "DEVICE_SUSPENDED")
+            refuseTunnel(state, conn, "DEVICE_SUSPENDED")
         } else {
-            refuseTunnel(conn, "DEVICE_REVOKED")
+            refuseTunnel(state, conn, "DEVICE_REVOKED")
         }
         return
     }
     var account = state.registry.accountByToken(token)
     if (account == null) {
-        refuseTunnel(conn, "AUTH_FAILED")
+        refuseTunnel(state, conn, "AUTH_FAILED")
         return
     }
     if (account.id != device.accountId) {
-        refuseTunnel(conn, "AUTH_FAILED")
+        refuseTunnel(state, conn, "AUTH_FAILED")
         return
     }
 
@@ -248,8 +248,44 @@ void tunnelWriter(Conn conn, TunnelSession session) {
     conn.close()
 }
 
-void refuseTunnel(Conn conn, String reason) {
+void refuseTunnel(EdgeState state, Conn conn, String reason) {
     conn.send(bytesFromString(encodeFrame(welcomeFrame(false, reason, "", "", 0))))
     conn.close()
     noteTunnelRefused(reason)
+    noteEdgeRefusalIncident(state)
+}
+
+// Detector de recusas no Edge (Fase 17 slice 1). Amostra por processo e so
+// para ABRIR o incidente global (idempotente no Registry): um Edge sadio
+// recusa poucas vezes; rajada (>= limite na janela) e sinal de problema.
+// Estado local em vez de anel global: cada RefusalProbe tem sua janela.
+Int edgeRefusalThreshold() {
+    return 10
+}
+
+Long edgeRefusalWindowMs() {
+    return 60000
+}
+
+class RefusalProbe {
+    Int count
+    Long windowStart
+
+    constructor() {
+        this.count = 0
+        this.windowStart = time.now()
+    }
+}
+
+void noteEdgeRefusalIncident(EdgeState state) {
+    var now = time.now()
+    var probe = state.refusalProbe
+    if (now - probe.windowStart > edgeRefusalWindowMs()) {
+        probe.count = 0
+        probe.windowStart = now
+    }
+    probe.count = probe.count + 1
+    if (probe.count == edgeRefusalThreshold()) {
+        state.registry.raiseIncident(incidentEdgeRefusals(), "")
+    }
 }

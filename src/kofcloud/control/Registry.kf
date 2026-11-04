@@ -5,6 +5,7 @@ import kofcloud.model.Account
 import kofcloud.model.Audit
 import kofcloud.model.CustomDomain
 import kofcloud.model.Device
+import kofcloud.model.Incident
 import kofcloud.model.Errors
 import kofcloud.model.Service
 import kofcloud.model.Exposure
@@ -24,7 +25,7 @@ record ServiceToken(String serviceId, String accountId, String tokenHash, Long c
 // Resultado da rotacao assistida (Fase 19 slice 3).
 record RotateResult(String token, Int revoked, Int pending)
 
-record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens, List<CustomDomain> customDomains, List<AuditEvent> audit)
+record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens, List<CustomDomain> customDomains, List<AuditEvent> audit, List<Incident> incidents)
 
 class Registry {
     List<Account> accounts
@@ -34,6 +35,7 @@ class Registry {
     List<ServiceToken> serviceTokens
     List<CustomDomain> customDomains
     List<AuditEvent> audit
+    List<Incident> incidents
     String path
     Int maxDevices
     Int maxServices
@@ -56,6 +58,7 @@ class Registry {
         this.serviceTokens = listOf<ServiceToken>()
         this.customDomains = listOf<CustomDomain>()
         this.audit = listOf<AuditEvent>()
+        this.incidents = listOf<Incident>()
         this.edgeOnline = mapOf()
         this.maxDevices = limitDevices()
         this.maxServices = limitServices()
@@ -99,6 +102,7 @@ class Registry {
             this.serviceTokens = state.serviceTokens
             this.customDomains = state.customDomains
             this.audit = state.audit
+            this.incidents = state.incidents
         } catch (String e) {
             // Estado corrompido: recomeca vazio em vez de derrubar o control
             // plane. O operador ve os dados ausentes e decide.
@@ -128,8 +132,97 @@ class Registry {
         return out
     }
 
+    // ---- incidentes (Fase 17 slice 1) ----
+
+    // Abre um incidente. Idempotente por (kind, accountId): se ja ha um
+    // ABERTO do mesmo tipo para a mesma conta, devolve null (o operador ve
+    // um incidente, nao um por ocorrencia). `accountId` "" = escopo global.
+    Incident? raiseIncident(String kind, String accountId) {
+        for (var existing in this.incidents) {
+            if (existing.kind == kind && existing.accountId == accountId && existing.resolvedAt == 0) {
+                return null
+            }
+        }
+        var incident = Incident(
+            uuid.v4(), kind, incidentSeverityFor(kind), accountId,
+            incidentSummaryFor(kind), time.now(), 0
+        )
+        this.incidents.add(incident)
+        var cap = limitIncidents()
+        while (this.incidents.size > cap) {
+            this.incidents = this.incidents.subList(1, this.incidents.size)
+        }
+        this.save()
+        return incident
+    }
+
+    Bool resolveIncident(String id) {
+        var out = listOf<Incident>()
+        var found = false
+        for (var incident in this.incidents) {
+            if (incident.id == id && incident.resolvedAt == 0) {
+                out.add(Incident(incident.id, incident.kind, incident.severity, incident.accountId, incident.summary, incident.openedAt, time.now()))
+                found = true
+            } else {
+                out.add(incident)
+            }
+        }
+        if (found) {
+            this.incidents = out
+            this.save()
+        }
+        return found
+    }
+
+    // Incidentes de uma conta; `includeGlobal` inclui os de plataforma.
+    List<Incident> incidentsForAccount(String accountId, Bool includeGlobal) {
+        var out = listOf<Incident>()
+        for (var incident in this.incidents) {
+            if (incident.accountId == accountId) {
+                out.add(incident)
+            } else if (includeGlobal && incident.accountId.length == 0) {
+                out.add(incident)
+            }
+        }
+        return out
+    }
+
+    List<Incident> allIncidents() {
+        return this.incidents
+    }
+
+    // Conta as ocorrencias de uma acao no audit da conta desde `sinceMs`.
+    Int auditCountSince(String accountId, String action, Long sinceMs) {
+        var count = 0
+        for (var event in this.audit) {
+            if (event.target == accountId || event.target.startsWith(accountId + "/")) {
+                // `at` e epoch em MILISSEGUNDOS (Long): encurta para Int antes
+                // de comparar — parseIntSafe corta em 32 bits e todo evento
+                // parecia fora da janela (incidente de lote nunca abria).
+                var atMs = parseLongSafe(event.at, 0)
+                if (event.action == action && atMs >= sinceMs) {
+                    count = count + 1
+                }
+            }
+        }
+        return count
+    }
+
+    // Detector de revogacao em lote (por conta, idempotente). Devolve o
+    // incidente aberto agora ou null.
+    Incident? detectBulkRevokes(String accountId, Long windowMs) {
+        var since = time.now() - windowMs
+        if (this.auditCountSince(accountId, auditDeviceRevoked(), since) >= bulkRevokeThreshold()) {
+            return this.raiseIncident(incidentBulkDeviceRevokes(), accountId)
+        }
+        if (this.auditCountSince(accountId, auditServiceTokenRevoked(), since) >= bulkRevokeThreshold()) {
+            return this.raiseIncident(incidentBulkTokenRevokes(), accountId)
+        }
+        return null
+    }
+
     void save() {
-        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens, this.serviceTokens, this.customDomains, this.audit)))
+        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens, this.serviceTokens, this.customDomains, this.audit, this.incidents)))
     }
 
     // ---- contas ----
@@ -244,6 +337,14 @@ class Registry {
     }
 
     Bool revokeDevice(String accountId, String deviceId) {
+        var revoked = this.revokeDeviceInner(accountId, deviceId)
+        if (revoked) {
+            this.detectBulkRevokes(accountId, 60000)
+        }
+        return revoked
+    }
+
+    Bool revokeDeviceInner(String accountId, String deviceId) {
         var account = this.accountById(accountId)
         var actor = "account:?"
         if (account != null) {
@@ -1044,4 +1145,23 @@ List<String> parseEdgeHosts(String raw) {
         out.add(current.toLowerCase())
     }
     return out
+}
+
+// Epoch em MILISSEGUNDOS nao cabe em Int; parseLongSafe le Long (o projeto
+// so tem parseIntSafe, que truncaria e faria todo evento parecer antigo).
+Long parseLongSafe(String text, Long fallback) {
+    if (text.length == 0) {
+        return fallback
+    }
+    var i = 0
+    var acc = 0L
+    while (i < text.length) {
+        var c = text.charAt(i) as Int
+        if (c < 48 || c > 57) {
+            return fallback
+        }
+        acc = acc * 10L + (c - 48)
+        i = i + 1
+    }
+    return acc
 }

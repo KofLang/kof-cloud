@@ -67,6 +67,9 @@ Int runCli(List<String> args) {
     if (first == "daemon") {
         return runDaemon(rest)
     }
+    if (first == "incidents") {
+        return cmdIncidents(rest)
+    }
     if (first == "logs") {
         return cmdLogs(rest)
     }

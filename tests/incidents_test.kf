@@ -1,0 +1,149 @@
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.model.Errors
+import kofcloud.model.Incident
+import kofcloud.edge.EdgeState
+import kofcloud.edge.Tunnel
+import kofcloud.store.Store
+import testkit.Support
+
+// Fase 17 slice 1 — deteccao e severidade.
+// Incidente = sinal com nivel, aberto por detector, fechado pelo operador.
+// Nunca carrega dado de cliente: so kind, severidade, escopo e resumo fixo.
+
+String incidentsPath(String name) {
+    return "/tmp/kofcloud-inc-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "incidentes: severidade e resumo por sinal", "incident-unit" {
+    assert(incidentSeverityFor(incidentBulkDeviceRevokes()) == "CRIT", "revoke em lote de device e CRIT")
+    assert(incidentSeverityFor(incidentBulkTokenRevokes()) == "WARN", "token e WARN")
+    assert(incidentSeverityFor(incidentEdgeRefusals()) == "WARN", "edge e WARN")
+    assert(incidentSeverityFor("desconhecido") == "INFO", "desconhecido e INFO")
+    assert(incidentSummaryFor(incidentBulkDeviceRevokes()).length > 0, "resumo presente")
+    assert(severityIsKnown("CRIT"), "CRIT conhecido")
+    assert(severityIsKnown("nada") == false, "desconhecida recusada")
+    assert(limitIncidents() > 0, "anel positivo")
+    assert(errIncidentNotFound().indexOf("KCF125") >= 0, "codigo KCF125")
+    assert(errHint(errIncidentNotFound()).length > 0, "Hint presente")
+}
+
+test "incidentes: abrir e idempotente por (sinal, conta)", "incident-unit" {
+    var registry = Registry(incidentsPath("idem"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var first = registry.raiseIncident(incidentBulkTokenRevokes(), account.id)
+    assert(first != null, "abre")
+    if (first != null) {
+        assert(first.severity == "WARN", "severidade do sinal")
+        assert(first.resolvedAt == 0, "aberto")
+    }
+    var second = registry.raiseIncident(incidentBulkTokenRevokes(), account.id)
+    assert(second == null, "nao duplica enquanto aberto")
+    assert(registry.incidentsForAccount(account.id, true).size == 1, "um so")
+}
+
+test "incidentes: revogacao em lote abre incidente da conta", "incident-unit" {
+    var registry = Registry(incidentsPath("bulk"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var d1 = registry.registerDevice(account, "d1", "pk")
+    var d2 = registry.registerDevice(account, "d2", "pk")
+    var d3 = registry.registerDevice(account, "d3", "pk")
+    var d4 = registry.registerDevice(account, "d4", "pk")
+
+    registry.revokeDevice(account.id, d1.id)
+    assert(registry.incidentsForAccount(account.id, true).size == 0, "uma ainda nao")
+    registry.revokeDevice(account.id, d2.id)
+    assert(registry.incidentsForAccount(account.id, true).size == 0, "duas ainda nao")
+    registry.revokeDevice(account.id, d3.id)
+    var list = registry.incidentsForAccount(account.id, true)
+    assert(list.size == 1, "terceira abre (limiar 3)")
+    if (list.size == 1) {
+        assert(list.get(0).kind == incidentBulkDeviceRevokes(), "sinal certo")
+        assert(list.get(0).severity == "CRIT", "CRIT")
+    }
+    registry.revokeDevice(account.id, d4.id)
+    assert(registry.incidentsForAccount(account.id, true).size == 1, "nao duplica")
+}
+
+test "incidentes: resolver fecha e permite abrir de novo depois", "incident-unit" {
+    var registry = Registry(incidentsPath("resolve"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var opened = registry.raiseIncident(incidentBulkDeviceRevokes(), account.id)
+    assert(opened != null, "aberto")
+    var id = ""
+    if (opened != null) {
+        id = opened.id
+    }
+    assert(registry.resolveIncident(id) == true, "fecha")
+    assert(registry.resolveIncident(id) == false, "fechar de novo nao acha")
+    var again = registry.raiseIncident(incidentBulkDeviceRevokes(), account.id)
+    assert(again != null, "pode reabrir depois de resolvido")
+}
+
+test "incidentes: escopo global aparece para a conta, escopo alheio nao", "incident-unit" {
+    var registry = Registry(incidentsPath("scope"))
+    var mel = registry.createAccount("mel", "mel@e.com", "segredo")
+    var ana = registry.createAccount("ana", "ana@e.com", "segredo")
+    registry.raiseIncident(incidentEdgeRefusals(), "")
+    registry.raiseIncident(incidentBulkTokenRevokes(), ana.id)
+
+    assert(registry.incidentsForAccount(mel.id, true).size == 1, "mel ve o global")
+    assert(registry.incidentsForAccount(mel.id, false).size == 0, "mel nao ve o de ana")
+    assert(registry.incidentsForAccount(ana.id, false).size == 1, "ana ve o seu")
+}
+
+test "incidentes: HTTP lista, resolve e recusa incidente alheio", "incident" {
+    var controlPort = 19861
+    var registry = Registry(incidentsPath("http"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var melToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var mel = registry.accountByHandle("mel")
+    var melId = ""
+    if (mel != null) {
+        melId = mel.id
+    }
+    var opened = registry.raiseIncident(incidentBulkDeviceRevokes(), melId)
+
+    var listed = httpPostJson(controlPort, "/v1/incidents", "{}", melToken)
+    assert(statusOf(listed) == 200, "lista 200")
+    assert(bodyOf(listed).indexOf("bulk_device_revokes") >= 0, "sinal na lista")
+    assert(bodyOf(listed).indexOf("CRIT") >= 0, "severidade na lista")
+
+    var incidentId = ""
+    if (opened != null) {
+        incidentId = opened.id
+    }
+    var resolved = httpPostJson(controlPort, "/v1/incidents", "{\"resolveId\":\"" + incidentId + "\"}", melToken)
+    assert(statusOf(resolved) == 200, "resolve 200")
+
+    // Outra conta nao enxerga nem fecha o incidente de mel (404 opaco).
+    var other = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
+    var anaToken = mapField(json.decode<Map<String, String>>(bodyOf(other)), "token")
+    assert(statusOf(httpPostJson(controlPort, "/v1/incidents", "{\"resolveId\":\"" + incidentId + "\"}", anaToken)) == 404, "alheio 404")
+    var anaList = httpPostJson(controlPort, "/v1/incidents", "{}", anaToken)
+    assert(bodyOf(anaList).indexOf("bulk_device_revokes") < 0, "lista de ana nao mostra")
+}
+
+test "incidentes: rajada de recusas do Edge abre incidente global", "incident-edge" {
+    // Amostra do Edge e por processo: o EdgeState carrega a sonda.
+    var registry = Registry(incidentsPath("edge"))
+    var edgeState = EdgeState(registry)
+    edgeState.refusalProbe.count = edgeRefusalThreshold() - 1
+    edgeState.refusalProbe.windowStart = time.now()
+    noteEdgeRefusalIncident(edgeState)
+    var list = registry.incidentsForAccount("", true)
+    assert(list.size == 1, "limiar abre o global")
+    if (list.size == 1) {
+        assert(list.get(0).kind == incidentEdgeRefusals(), "sinal do edge")
+        assert(list.get(0).accountId.length == 0, "escopo global")
+        assert(list.get(0).severity == "WARN", "WARN")
+    }
+    // Abaixo do limiar nao abre.
+    var fresh = EdgeState(Registry(incidentsPath("edge2")))
+    noteEdgeRefusalIncident(fresh)
+    assert(fresh.registry.allIncidents().size == 0, "uma recusa nao e incidente")
+}

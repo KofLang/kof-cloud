@@ -607,6 +607,58 @@ HttpResult handleRotationStatus(Registry registry, String? authHeader, String bo
     return HttpResult(200, json.encode(out))
 }
 
+// Incidentes (Fase 17 slice 1). Lista os da conta + os globais; `all=true`
+// mostra so os globais (plataforma). Nunca inclui dado de outra conta.
+// `resolveId` fecha um incidente (o da propria conta ou um global).
+HttpResult handleIncidents(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var body = decodeBody(bodyText)
+    var resolveId = mapField(body, "resolveId")
+    if (resolveId.length > 0) {
+        var target = ""
+        for (var incident in registry.incidentsForAccount(account.id, true)) {
+            if (incident.id == resolveId) {
+                target = incident.id
+            }
+        }
+        if (target.length == 0) {
+            return HttpResult(404, errorJson(errIncidentNotFound()))
+        }
+        registry.resolveIncident(target)
+    }
+    var onlyGlobal = mapField(body, "all") == "true"
+    var list = registry.incidentsForAccount(account.id, true)
+    if (onlyGlobal) {
+        var globals = listOf<Incident>()
+        for (var incident in list) {
+            if (incident.accountId.length == 0) {
+                globals.add(incident)
+            }
+        }
+        list = globals
+    }
+    var parts = listOf<String>()
+    for (var incident in list) {
+        parts.add(incidentJson(incident))
+    }
+    return HttpResult(200, "[" + joinStrings(parts, ",") + "]")
+}
+
+String incidentJson(Incident incident) {
+    var out = mapOf()
+    out.put("id", incident.id)
+    out.put("kind", incident.kind)
+    out.put("severity", incident.severity)
+    out.put("accountId", incident.accountId)
+    out.put("summary", incident.summary)
+    out.put("openedAt", longToString(incident.openedAt))
+    out.put("resolvedAt", longToString(incident.resolvedAt))
+    return json.encode(out)
+}
+
 // Erro do revoke de token por outcome: "revoked" nao e erro (o handler
 // responde 200 direto); "ambiguous" -> 409 KCF063 (pede o kfs_ completo);
 // resto ("", nao encontrado/sem dono) -> 404 com corpo reescrito para KCF041
@@ -1016,6 +1068,13 @@ class ControlPlane {
         }
         app.post("/v1/services/tokens") {
             var result = handleListServiceTokens(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/incidents") {
+            var result = handleIncidents(reg, header("x-kofcloud-token"), body())
             if (result.code == 200) {
                 return result.body
             }

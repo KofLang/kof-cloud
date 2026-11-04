@@ -173,6 +173,10 @@ String errInvalidAllowPath() {
     return "KCF114: allowPaths must be absolute paths (/api/*)"
 }
 
+String errIncidentNotFound() {
+    return "KCF125: incident not found"
+}
+
 String errBodyTooLarge() {
     return "KCF110: request body too large"
 }
@@ -288,6 +292,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF109") >= 0) {
         return "O Edge barrou a requisicao por padrao de ataque — se for legitimo, renomeie o parametro/caminho; o padrao detectado aparece na metrica `_waf_denied`."
+    }
+    if (raw.indexOf("KCF125") >= 0) {
+        return "Incidente nao encontrado nesta conta — veja `kof cloud incidents`."
     }
     if (raw.indexOf("KCF113") >= 0) {
         return "allowMethods aceita so verbos HTTP em maiusculas (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS), separados por virgula."

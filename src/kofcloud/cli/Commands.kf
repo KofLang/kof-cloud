@@ -20,6 +20,9 @@ import kofcloud.store.Store
 
 // Implementacao dos subcomandos. Cada um devolve o exit code.
 
+// Incidente como o CLI le (GET /v1/incidents).
+record IncidentEntry(String id, String kind, String severity, String accountId, String summary, String openedAt, String resolvedAt)
+
 record DomainEntry(String hostname, String kind, String service, String status)
 
 // Mensagens "nao encontrado" da CLI (fonte unica): 7 pontos de servico e 4
@@ -1257,6 +1260,51 @@ Int cmdDomainRemove(List<String> args) {
 // `logs` (marcos de sessao, gravados pela CLI) e `logs --runtime` (eventos
 // reais do Agent: connect, reconnect, recusa fatal, health, streams). Os dois
 // arquivos tem teto proprio; `--tail` vale para o escolhido.
+// Incidentes (Fase 17 slice 1): lista os abertos da conta + os globais
+// (plataforma). `--all` mostra so os globais; `--resolve <id>` fecha um.
+Int cmdIncidents(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println(notLoggedInLine())
+        return 1
+    }
+    if (extraPositional(args, 0)) {
+        println("uso: kof cloud incidents [--all] [--resolve <id>]")
+        return 1
+    }
+    var resolveId = flagValue(args, "--resolve").trim()
+    try {
+        var body = mapOf()
+        if (hasFlag(args, "--all")) {
+            body.put("all", "true")
+        }
+        if (resolveId.length > 0) {
+            body.put("resolveId", resolveId)
+        }
+        var raw = requireOk(http.post(session.controlUrl + "/v1/incidents", json.encode(body), jsonHeader(session.token)))
+        var list = json.decode<List<IncidentEntry>>(raw)
+        if (resolveId.length > 0) {
+            println("Incidente fechado: " + resolveId)
+        }
+        if (list.size == 0) {
+            println("nenhum incidente aberto")
+            return 0
+        }
+        for (var incident in list) {
+            var state = "ABERTO"
+            if (incident.resolvedAt != "0") {
+                state = "FECHADO"
+            }
+            println(incident.severity + "  " + incident.kind + "  " + state + "  " + incident.id)
+            println("  " + incident.summary)
+        }
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
 Int cmdLogs(List<String> args) {
     var runtime = hasFlag(args, "--runtime")
     var path = logPath()

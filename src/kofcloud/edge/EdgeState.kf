@@ -20,6 +20,7 @@ class EdgeState {
     Int serviceConnLimit
     Int bodyLimit
     Int upstreamWaitMs
+    RefusalProbe refusalProbe
     Bool wafEnforce
 
     constructor(registry: Registry) {
@@ -34,6 +35,7 @@ class EdgeState {
         this.serviceConnLimit = limitServiceConns()
         this.bodyLimit = limitHttpBodyBytes()
         this.upstreamWaitMs = limitTunnelIdleMs()
+        this.refusalProbe = RefusalProbe()
         this.wafEnforce = false
     }
 

@@ -1,0 +1,75 @@
+package kofcloud.model
+
+// Incidentes (Fase 17 slice 1 — deteccao e severidade).
+//
+// Um incidente e um sinal operacional com nivel, aberto por um detector e
+// fechado pelo operador depois de entendido. NUNCA carrega dado de cliente:
+// so o nome do sinal, a severidade, o escopo (conta, quando for dado de
+// conta) e um resumo curto e fixo por tipo de sinal.
+record Incident(String id, String kind, String severity, String accountId, String summary, Long openedAt, Long resolvedAt)
+
+String severityInfo() {
+    return "INFO"
+}
+
+String severityWarn() {
+    return "WARN"
+}
+
+String severityCrit() {
+    return "CRIT"
+}
+
+Bool severityIsKnown(String severity) {
+    return severity == severityInfo() || severity == severityWarn() || severity == severityCrit()
+}
+
+// Vocabulario fechado de sinais (cresce por adicao; nunca renomeia).
+String incidentBulkTokenRevokes() {
+    return "bulk_token_revokes"
+}
+
+String incidentBulkDeviceRevokes() {
+    return "bulk_device_revokes"
+}
+
+String incidentEdgeRefusals() {
+    return "edge_refusals"
+}
+
+// Severidade por sinal. Pura: a mesma entrada sempre da o mesmo nivel.
+String incidentSeverityFor(String kind) {
+    if (kind == incidentBulkDeviceRevokes()) {
+        return severityCrit()
+    }
+    if (kind == incidentBulkTokenRevokes() || kind == incidentEdgeRefusals()) {
+        return severityWarn()
+    }
+    return severityInfo()
+}
+
+// Resumo fixo por tipo (sem dado do cliente alem do que ja e do dono).
+String incidentSummaryFor(String kind) {
+    if (kind == incidentBulkDeviceRevokes()) {
+        return "many devices revoked in a short window"
+    }
+    if (kind == incidentBulkTokenRevokes()) {
+        return "many service credentials revoked in a short window"
+    }
+    if (kind == incidentEdgeRefusals()) {
+        return "the edge refused many tunnels in a short window"
+    }
+    return kind
+}
+
+// Limite do anel de incidentes (os mais antigos ja resolvidos saem primeiro).
+Int limitIncidents() {
+    return 100
+}
+
+// Janela e limiar do detector de revogacao em lote (por conta).
+// `bulkRevokeWindowMs` / `bulkRevokeThreshold`: continua a mais que isso
+// dentro da janela abre incidente.
+Int bulkRevokeThreshold() {
+    return 3
+}
