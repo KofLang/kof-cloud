@@ -50,6 +50,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | presenca real do tunel | espelho bind/unbind no Registry + `GET /v1/presence` filtrado por conta + `status` ONLINE/OFFLINE confirmado | `presence_test.kf` |
 | `security.txt` + `SECURITY.md` + SBOM (Fase 19 s1 parcial) | `/.well-known/security.txt` no Edge (200 `text/plain`, Contact + Policy estáticos) antes de rate limit/rota/auth; sem conta/túnel/serviço; `docs/SECURITY.md` com suporte/reporte/SLA/escopo e trava; `audit --sbom` local (44 fontes + SHA-256, sem login) | `security_test.kf` + `hosts_test.kf` (`audit-sbom`) |
 | scan de segredos (Fase 19 s2 parcial) | `kof cloud scan [--file]` local (kfs_/kfc_/password no manifesto, nomeia sem vazar, exit 1 com achado); sem login/rede | `deploy_test.kf` (`deploy-scan`) |
+| contenção `freeze`/`unfreeze` (Fase 17 s2) | suspende + revoga credenciais do alvo e abre incidente; unfreeze restaura o status anterior (reversível por desenho) | `freeze_test.kf` |
 | incidentes (Fase 17 s1) | `model/Incident.kf` + detecção por conta (revoke em lote via auditoria) e global (Edge); `POST /v1/incidents`, CLI `incidents` | `incidents_test.kf` |
 | rotação de `kfs_` (Fase 19 s3) | `service rotate (<nome>\|--all)`/`rotation`: emite novo e revoga antigos só após o TTL (overlap); `--all` com falha isolada por serviço; sem TTL = pendente, nunca silencioso | `rotate_test.kf` |
 | daemon por SO (Fase 13 s1) | `daemonKind` + artefato systemd/launchd/Windows puro; install grava e imprime a ativação (nunca ativa sozinho) | `daemon_test.kf` (`daemon-os`) |

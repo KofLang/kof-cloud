@@ -22,6 +22,9 @@ record TokenEntry(String accountId, String tokenHash, Long createdAt)
 
 record ServiceToken(String serviceId, String accountId, String tokenHash, Long createdAt, Long expiresAt)
 
+// Resultado de congelar um alvo (Fase 17 slice 2).
+record FreezeResult(Bool ok, String incidentId, Int revoked, String priorStatus)
+
 // Resultado da rotacao assistida (Fase 19 slice 3).
 record RotateResult(String token, Int revoked, Int pending)
 
@@ -59,6 +62,7 @@ class Registry {
         this.customDomains = listOf<CustomDomain>()
         this.audit = listOf<AuditEvent>()
         this.incidents = listOf<Incident>()
+        this.freezeMarks = mapOf()
         this.edgeOnline = mapOf()
         this.maxDevices = limitDevices()
         this.maxServices = limitServices()
@@ -709,6 +713,144 @@ class Registry {
 
     Bool revokeServiceToken(String accountId, String serviceId, String token) {
         return this.revokeServiceTokenResult(accountId, serviceId, token) == "revoked"
+    }
+
+    // ---- contencao (Fase 17 slice 2) ----
+    //
+    // Freeze e REVERSIVEL por desenho: suspende o alvo e revoga as
+    // credenciais vivas, guardando o status anterior em `freezeMarks` (memoria
+    // do processo: e acao de resposta a incidente, nao estado de produto).
+    // Unfreeze restaura exatamente o status anterior. Configuracao (servicos,
+    // dominios, allowlist) nunca e tocada.
+
+    Map<String, String> freezeMarks
+
+    Map<String, String> frozenMarks() {
+        return this.freezeMarks
+    }
+
+    FreezeResult freezeService(String accountId, String serviceId) {
+        var service = this.serviceById(serviceId)
+        if (service == null) {
+            return FreezeResult(false, "", 0, "")
+        }
+        if (service.accountId != accountId) {
+            return FreezeResult(false, "", 0, "")
+        }
+        var prior = service.status
+        var revoked = 0
+        var kept = listOf<ServiceToken>()
+        for (var entry in this.serviceTokens) {
+            if (entry.serviceId == serviceId) {
+                revoked = revoked + 1
+            } else {
+                kept.add(entry)
+            }
+        }
+        if (revoked > 0) {
+            this.serviceTokens = kept
+        }
+        this.suspendService(accountId, serviceId)
+        this.freezeMarks.put("service/" + serviceId, prior)
+        var account = this.accountById(accountId)
+        if (account != null) {
+            this.audit(auditActorAccount(account.handle), auditServiceFrozen(), accountId + "/" + serviceId)
+        }
+        var incident = this.raiseIncident(incidentFreezeService(), accountId)
+        var incidentId = ""
+        if (incident != null) {
+            incidentId = incident.id
+        }
+        this.save()
+        return FreezeResult(true, incidentId, revoked, prior)
+    }
+
+    FreezeResult freezeDevice(String accountId, String deviceId) {
+        var device = this.deviceById(deviceId)
+        if (device == null) {
+            return FreezeResult(false, "", 0, "")
+        }
+        if (device.accountId != accountId) {
+            return FreezeResult(false, "", 0, "")
+        }
+        var prior = device.status
+        // Revoga as credenciais de todos os servicos do dispositivo.
+        var owned = this.servicesForDevice(deviceId)
+        var ownedIds = listOf<String>()
+        for (var service in owned) {
+            ownedIds.add(service.id)
+        }
+        var kept = listOf<ServiceToken>()
+        var revoked = 0
+        for (var entry in this.serviceTokens) {
+            if (ownedIds.contains(entry.serviceId)) {
+                revoked = revoked + 1
+            } else {
+                kept.add(entry)
+            }
+        }
+        if (revoked > 0) {
+            this.serviceTokens = kept
+        }
+        this.suspendDevice(accountId, deviceId)
+        this.freezeMarks.put("device/" + deviceId, prior)
+        var account = this.accountById(accountId)
+        if (account != null) {
+            this.audit(auditActorAccount(account.handle), auditDeviceFrozen(), accountId + "/" + deviceId)
+        }
+        var incident = this.raiseIncident(incidentFreezeDevice(), accountId)
+        var incidentId = ""
+        if (incident != null) {
+            incidentId = incident.id
+        }
+        this.save()
+        return FreezeResult(true, incidentId, revoked, prior)
+    }
+
+    Bool unfreezeService(String accountId, String serviceId) {
+        var service = this.serviceById(serviceId)
+        if (service == null) {
+            return false
+        }
+        if (service.accountId != accountId) {
+            return false
+        }
+        var mark = this.freezeMarks.get("service/" + serviceId)
+        var restore = statusUnknown()
+        if (mark != null) {
+            restore = mark
+        }
+        this.setServiceStatus(serviceId, restore)
+        this.freezeMarks.remove("service/" + serviceId)
+        var account = this.accountById(accountId)
+        if (account != null) {
+            this.audit(auditActorAccount(account.handle), auditServiceUnfrozen(), accountId + "/" + serviceId)
+        }
+        this.save()
+        return true
+    }
+
+    Bool unfreezeDevice(String accountId, String deviceId) {
+        var device = this.deviceById(deviceId)
+        if (device == null) {
+            return false
+        }
+        if (device.accountId != accountId) {
+            return false
+        }
+        var mark = this.freezeMarks.get("device/" + deviceId)
+        var restore = deviceActive()
+        if (mark != null) {
+            restore = mark
+        }
+        this.setDeviceStatus(accountId, deviceId, restore, "")
+        this.freezeMarks.remove("device/" + deviceId)
+        var account = this.accountById(accountId)
+        if (account != null) {
+            this.audit(auditActorAccount(account.handle), auditDeviceUnfrozen(), accountId + "/" + deviceId)
+        }
+        this.save()
+        return true
     }
 
     // ---- servicos ----

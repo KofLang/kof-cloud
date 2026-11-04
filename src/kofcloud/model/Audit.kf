@@ -67,3 +67,21 @@ String auditDomainVerified() {
 String auditDomainRemoved() {
     return "domain.removed"
 }
+
+// Contencao (Fase 17 slice 2): freeze suspende e revoga credenciais do alvo;
+// unfreeze reverte EXATAMENTE o que o freeze fez.
+String auditServiceFrozen() {
+    return "service.frozen"
+}
+
+String auditServiceUnfrozen() {
+    return "service.unfrozen"
+}
+
+String auditDeviceFrozen() {
+    return "device.frozen"
+}
+
+String auditDeviceUnfrozen() {
+    return "device.unfrozen"
+}

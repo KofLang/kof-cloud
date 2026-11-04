@@ -173,6 +173,18 @@ String errInvalidAllowPath() {
     return "KCF114: allowPaths must be absolute paths (/api/*)"
 }
 
+String errTargetRequired() {
+    return "KCF126: freeze target id required"
+}
+
+String errInvalidTarget() {
+    return "KCF127: target must be service or device"
+}
+
+String errTargetNotFound() {
+    return "KCF128: target not found"
+}
+
 String errIncidentNotFound() {
     return "KCF125: incident not found"
 }
@@ -292,6 +304,15 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF109") >= 0) {
         return "O Edge barrou a requisicao por padrao de ataque — se for legitimo, renomeie o parametro/caminho; o padrao detectado aparece na metrica `_waf_denied`."
+    }
+    if (raw.indexOf("KCF126") >= 0) {
+        return "Informe o id do alvo: `kof cloud freeze service <nome|id>` ou `device <nome|id>`."
+    }
+    if (raw.indexOf("KCF127") >= 0) {
+        return "Alvo invalido: use `service` ou `device`."
+    }
+    if (raw.indexOf("KCF128") >= 0) {
+        return "Alvo nao encontrado nesta conta — confira `kof cloud service list` / `device list`."
     }
     if (raw.indexOf("KCF125") >= 0) {
         return "Incidente nao encontrado nesta conta — veja `kof cloud incidents`."

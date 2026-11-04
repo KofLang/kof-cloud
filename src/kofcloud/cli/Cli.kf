@@ -67,6 +67,12 @@ Int runCli(List<String> args) {
     if (first == "daemon") {
         return runDaemon(rest)
     }
+    if (first == "freeze") {
+        return cmdFreeze(rest)
+    }
+    if (first == "unfreeze") {
+        return cmdUnfreeze(rest)
+    }
     if (first == "incidents") {
         return cmdIncidents(rest)
     }

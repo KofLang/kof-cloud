@@ -607,6 +607,53 @@ HttpResult handleRotationStatus(Registry registry, String? authHeader, String bo
     return HttpResult(200, json.encode(out))
 }
 
+// Contencao (Fase 17 slice 2): freeze suspende o alvo, revoga as credenciais
+// vivas e registra o incidente; unfreeze restaura exatamente o status
+// anterior. Alvo: `service` ou `device` (id). Alvo alheio -> 404 opaco.
+HttpResult handleFreeze(Registry registry, String? authHeader, String bodyText, Bool freezing) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var body = decodeBody(bodyText)
+    var targetKind = mapField(body, "target")
+    var targetId = mapField(body, "id")
+    if (targetId.length == 0) {
+        return HttpResult(400, errorJson(errTargetRequired()))
+    }
+    if (targetKind != "service" && targetKind != "device") {
+        return HttpResult(400, errorJson(errInvalidTarget()))
+    }
+    var out = mapOf()
+    if (freezing) {
+        var result = FreezeResult(false, "", 0, "")
+        if (targetKind == "service") {
+            result = registry.freezeService(account.id, targetId)
+        } else {
+            result = registry.freezeDevice(account.id, targetId)
+        }
+        if (result.ok == false) {
+            return HttpResult(404, errorJson(errTargetNotFound()))
+        }
+        out.put("frozen", intToString(1))
+        out.put("revoked", intToString(result.revoked))
+        out.put("incidentId", result.incidentId)
+        return HttpResult(200, json.encode(out))
+    }
+    var restored = false
+    if (targetKind == "service") {
+        restored = registry.unfreezeService(account.id, targetId)
+    } else {
+        restored = registry.unfreezeDevice(account.id, targetId)
+    }
+    if (restored == false) {
+        return HttpResult(404, errorJson(errTargetNotFound()))
+    }
+    out.put("frozen", intToString(0))
+    out.put("restored", intToString(1))
+    return HttpResult(200, json.encode(out))
+}
+
 // Incidentes (Fase 17 slice 1). Lista os da conta + os globais; `all=true`
 // mostra so os globais (plataforma). Nunca inclui dado de outra conta.
 // `resolveId` fecha um incidente (o da propria conta ou um global).
@@ -1068,6 +1115,20 @@ class ControlPlane {
         }
         app.post("/v1/services/tokens") {
             var result = handleListServiceTokens(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/freeze") {
+            var result = handleFreeze(reg, header("x-kofcloud-token"), body(), true)
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/unfreeze") {
+            var result = handleFreeze(reg, header("x-kofcloud-token"), body(), false)
             if (result.code == 200) {
                 return result.body
             }

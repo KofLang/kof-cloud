@@ -1,0 +1,138 @@
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.model.Errors
+import kofcloud.model.Incident
+import kofcloud.store.Store
+import testkit.Support
+
+// Fase 17 slice 2 — contencao reversivel.
+// freeze suspende o alvo, revoga as credenciais vivas e abre o incidente;
+// unfreeze restaura EXATAMENTE o status anterior. Configuracao nunca some.
+
+String freezePath(String name) {
+    return "/tmp/kofcloud-freeze-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "contencao: freeze de servico revoga credenciais e abre incidente", "freeze-unit" {
+    var registry = Registry(freezePath("svc"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
+    var token = registry.issueServiceToken(account.id, service.id, 24)
+
+    var result = registry.freezeService(account.id, service.id)
+    assert(result.ok, "congelou")
+    assert(result.revoked == 1, "uma credencial revogada")
+    assert(result.incidentId.length > 0, "incidente aberto")
+    assert(registry.serviceByServiceToken(token) == null, "credencial nao vale mais")
+    var after = registry.serviceById(service.id)
+    assert(after != null, "servico ainda existe")
+    if (after != null) {
+        assert(after.status == "SUSPENDED", "suspenso (nao roteia)")
+        assert(after.hostname == service.hostname, "config preservada")
+    }
+}
+
+test "contencao: unfreeze restaura o status anterior", "freeze-unit" {
+    var registry = Registry(freezePath("restore"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    registry.setServiceStatus(service.id, "ONLINE")
+
+    registry.freezeService(account.id, service.id)
+    var during = registry.serviceById(service.id)
+    assert(during != null, "existe durante")
+    if (during != null) {
+        assert(during.status == "SUSPENDED", "congelado")
+    }
+    assert(registry.unfreezeService(account.id, service.id), "descongelou")
+    var restored = registry.serviceById(service.id)
+    assert(restored != null, "existe")
+    if (restored != null) {
+        assert(restored.status == "ONLINE", "voltou ao status de antes do freeze")
+    }
+}
+
+test "contencao: freeze de device cobre todos os servicos dele", "freeze-unit" {
+    var registry = Registry(freezePath("dev"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var other = registry.registerDevice(account, "outro", "pk2")
+    var a = registry.publishService(account, device.id, "a", "127.0.0.1", 8081, "http", "AUTHENTICATED", "", "")
+    var b = registry.publishService(account, device.id, "b", "127.0.0.1", 8082, "http", "AUTHENTICATED", "", "")
+    var untouched = registry.publishService(account, other.id, "c", "127.0.0.1", 8083, "http", "AUTHENTICATED", "", "")
+    registry.issueServiceToken(account.id, a.id, 24)
+    registry.issueServiceToken(account.id, b.id, 24)
+    var keep = registry.issueServiceToken(account.id, untouched.id, 24)
+
+    var result = registry.freezeDevice(account.id, device.id)
+    assert(result.ok, "congelou o device")
+    assert(result.revoked == 2, "revogou as duas do device")
+    var frozenDevice = registry.deviceById(device.id)
+    assert(frozenDevice != null, "device existe")
+    if (frozenDevice != null) {
+        assert(frozenDevice.status == "SUSPENDED", "device suspenso")
+    }
+    assert(registry.serviceByServiceToken(keep) != null, "credencial do outro device intacta")
+
+    assert(registry.unfreezeDevice(account.id, device.id), "descongelou")
+    var active = registry.deviceById(device.id)
+    assert(active != null, "device existe")
+    if (active != null) {
+        assert(active.status == "ACTIVE", "volta ativo")
+    }
+}
+
+test "contencao: alvo alheio nao congela", "freeze-unit" {
+    var registry = Registry(freezePath("owner"))
+    var mel = registry.createAccount("mel", "mel@e.com", "segredo")
+    var ana = registry.createAccount("ana", "ana@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    assert(registry.freezeService(ana.id, service.id).ok == false, "servico alheio recusado")
+    assert(registry.freezeDevice(ana.id, device.id).ok == false, "device alheio recusado")
+    assert(registry.unfreezeService(ana.id, service.id) == false, "unfreeze alheio recusado")
+}
+
+test "contencao: codigos KCF126/KCF127/KCF128 com Hint", "freeze-unit" {
+    assert(errTargetRequired().indexOf("KCF126") >= 0, "KCF126")
+    assert(errInvalidTarget().indexOf("KCF127") >= 0, "KCF127")
+    assert(errTargetNotFound().indexOf("KCF128") >= 0, "KCF128")
+    assert(errHint(errTargetRequired()).length > 0, "Hint 126")
+    assert(errHint(errInvalidTarget()).length > 0, "Hint 127")
+    assert(errHint(errTargetNotFound()).length > 0, "Hint 128")
+}
+
+test "contencao: HTTP freeze/unfreeze e incidente listado", "freeze" {
+    var controlPort = 19871
+    var registry = Registry(freezePath("http"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}"
+    var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
+
+    var freezeBody = "{\"target\":\"service\",\"id\":\"" + serviceId + "\"}"
+    var frozen = httpPostJson(controlPort, "/v1/freeze", freezeBody, accountToken)
+    assert(statusOf(frozen) == 200, "freeze 200")
+    var result = json.decode<Map<String, String>>(bodyOf(frozen))
+    assert(mapField(result, "incidentId").length > 0, "incidente devolvido")
+
+    var listed = httpPostJson(controlPort, "/v1/incidents", "{}", accountToken)
+    assert(bodyOf(listed).indexOf("freeze_service") >= 0, "incidente de contencao na lista")
+
+    var unfrozen = httpPostJson(controlPort, "/v1/unfreeze", freezeBody, accountToken)
+    assert(statusOf(unfrozen) == 200, "unfreeze 200")
+
+    // Validacoes.
+    assert(statusOf(httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"service\"}", accountToken)) == 400, "sem id 400")
+    assert(statusOf(httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"edge\",\"id\":\"x\"}", accountToken)) == 400, "alvo invalido 400")
+    assert(statusOf(httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"service\",\"id\":\"naoexiste\"}", accountToken)) == 404, "inexistente 404")
+}

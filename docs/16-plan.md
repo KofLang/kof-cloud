@@ -560,7 +560,7 @@ sempre com rollback de um comando.
 comunicar e aprender. Hoje há auditoria em anel (100 eventos) e métricas;
 falta o ciclo completo: do sinal ao post-mortem.
 
-**Estado: slice 1 ✅; slices 2 e 3 pendentes.** Desenho fatiado (cada slice exercitado em
+**Estado: slices 1 e 2 ✅; slice 3 pendente.** Desenho fatiado (cada slice exercitado em
 game-day: simula o incidente de propósito e mede o tempo de resposta):
 
 * **Slice 1 — detecção e severidade.** Sinais com nível
@@ -585,6 +585,16 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   reverte passo a passo com confirmação. Congelar é reversível por
   desenho — destruir nunca é automático. Prova: e2e congela e
   descongela sem perder configuração.
+
+  **Implementado (service|device):** `Registry.freezeService/freezeDevice`
+  suspendem o alvo, revogam as credenciais vivas e abrem o incidente
+  (`freeze_service`/`freeze_device`, WARN); o status anterior fica em memória
+  (`freezeMarks`) e `unfreezeService/unfreezeDevice` restauram exatamente
+  ele — configuração (serviços, domínios, allowlist) nunca é tocada.
+  `POST /v1/freeze` e `/v1/unfreeze` (`{target,id}`; alvo alheio/inexistente
+  → `404 KCF128` opaco; `KCF126`/`KCF127` para entrada inválida). CLI:
+  `kof cloud freeze|unfreeze service|device <nome|id>`. **Pendente:** alvos
+  `account` e `edge` (o segundo exige coordenação multi-Edge, Fase 16).
 * **Slice 3 — comunicação e post-mortem.** Status page mínima (lê os
   incidentes globais; sem login), notificação por webhook configurável
   (conta cadastra URL + segredo; payload assinado Ed25519), e template

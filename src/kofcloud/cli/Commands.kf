@@ -1314,6 +1314,92 @@ Int cmdDomainRemove(List<String> args) {
 // `logs` (marcos de sessao, gravados pela CLI) e `logs --runtime` (eventos
 // reais do Agent: connect, reconnect, recusa fatal, health, streams). Os dois
 // arquivos tem teto proprio; `--tail` vale para o escolhido.
+// Contencao (Fase 17 slice 2): `freeze service|device <nome|id>` suspende,
+// revoga credenciais vivas e abre o incidente; `unfreeze` restaura o status
+// anterior. Sempre reversivel — nada e destruido.
+Int cmdFreeze(List<String> args) {
+    return runContainment(args, true)
+}
+
+Int cmdUnfreeze(List<String> args) {
+    return runContainment(args, false)
+}
+
+Int runContainment(List<String> args, Bool freezing) {
+    var verb = "unfreeze"
+    if (freezing) {
+        verb = "freeze"
+    }
+    var session = loadSession()
+    if (session == null) {
+        println(notLoggedInLine())
+        return 1
+    }
+    if (extraPositional(args, 2)) {
+        println("uso: kof cloud " + verb + " service|device <nome|id>")
+        return 1
+    }
+    var kind = firstPositional(args).trim()
+    var name = secondPositional(args).trim()
+    if (kind.length == 0 || name.length == 0) {
+        println("uso: kof cloud " + verb + " service|device <nome|id>")
+        return 1
+    }
+    if (kind != "service" && kind != "device") {
+        println("alvo invalido: use service ou device")
+        return 1
+    }
+    try {
+        var targetId = name
+        if (kind == "service") {
+            var services = fetchServices(session.controlUrl, session.token)
+            var matched = matchServiceName(services, name)
+            if (matched.length == 0) {
+                println(serviceNotFoundLine(name))
+                return 1
+            }
+            targetId = matched
+        } else {
+            var devices = fetchDevices(session.controlUrl, session.token)
+            var matched = ""
+            for (var device in devices) {
+                if (device.name == name || device.id == name) {
+                    matched = device.id
+                }
+            }
+            if (matched.length == 0) {
+                println(deviceNotFoundLine(name))
+                return 1
+            }
+            targetId = matched
+        }
+        var body = mapOf()
+        body.put("target", kind)
+        body.put("id", targetId)
+        var endpoint = "/v1/freeze"
+        if (freezing == false) {
+            endpoint = "/v1/unfreeze"
+        }
+        var raw = requireOk(http.post(session.controlUrl + endpoint, json.encode(body), jsonHeader(session.token)))
+        var result = json.decode<Map<String, String>>(raw)
+        if (freezing) {
+            println("Congelado (" + kind + "): " + name)
+            println("Credenciais revogadas: " + mapField(result, "revoked"))
+            println("Incidente: " + mapField(result, "incidentId"))
+            println("")
+            println("Reverter: kof cloud unfreeze " + kind + " " + name)
+        } else {
+            println("Descongelado (" + kind + "): " + name)
+            println("Configuracao preservada; status anterior restaurado.")
+            println("Credenciais revogadas no freeze NAO voltam — emita novas se precisar.")
+        }
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
 // Incidentes (Fase 17 slice 1): lista os abertos da conta + os globais
 // (plataforma). `--all` mostra so os globais; `--resolve <id>` fecha um.
 Int cmdIncidents(List<String> args) {

@@ -37,12 +37,24 @@ String incidentEdgeRefusals() {
     return "edge_refusals"
 }
 
+// Contencao (slice 2): o incidente registra o alvo congelado.
+String incidentFreezeService() {
+    return "freeze_service"
+}
+
+String incidentFreezeDevice() {
+    return "freeze_device"
+}
+
 // Severidade por sinal. Pura: a mesma entrada sempre da o mesmo nivel.
 String incidentSeverityFor(String kind) {
     if (kind == incidentBulkDeviceRevokes()) {
         return severityCrit()
     }
     if (kind == incidentBulkTokenRevokes() || kind == incidentEdgeRefusals()) {
+        return severityWarn()
+    }
+    if (kind == incidentFreezeService() || kind == incidentFreezeDevice()) {
         return severityWarn()
     }
     return severityInfo()
@@ -58,6 +70,12 @@ String incidentSummaryFor(String kind) {
     }
     if (kind == incidentEdgeRefusals()) {
         return "the edge refused many tunnels in a short window"
+    }
+    if (kind == incidentFreezeService()) {
+        return "service frozen for incident containment"
+    }
+    if (kind == incidentFreezeDevice()) {
+        return "device frozen for incident containment"
     }
     return kind
 }
