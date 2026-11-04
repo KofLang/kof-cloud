@@ -35,6 +35,17 @@ test "security: SECURITY.md existe com as secoes e o contato canonico", "securit
     assert(policy.indexOf("## Como reportar") >= 0, "secao reporte")
     assert(policy.indexOf("## SLA de resposta") >= 0, "secao SLA")
     assert(policy.indexOf("## Escopo") >= 0, "secao escopo")
+    assert(policy.indexOf("## Contenção (kill-switch documentado)") >= 0, "secao contencao")
+    // O procedimento cita so comandos que existem (se um mudar de nome,
+    // a trava quebra de proposito — kill-switch desatualizado e pior que
+    // nenhum, porque o operador segue passo que nao funciona).
+    assert(policy.indexOf("kof cloud freeze service") >= 0, "caminho rapido freeze")
+    assert(policy.indexOf("kof cloud unfreeze service") >= 0, "caminho reversao")
+    assert(policy.indexOf("kof cloud service suspend") >= 0, "passo suspend")
+    assert(policy.indexOf("kof cloud service token-revoke") >= 0, "passo revoke")
+    assert(policy.indexOf("kof cloud device suspend") >= 0, "passo device")
+    assert(policy.indexOf("kof cloud disconnect") >= 0, "passo disconnect")
+    assert(policy.indexOf("kof cloud doctor") >= 0, "passo confere")
     // Contato canonico unico: o mesmo do corpo servido pelo Edge.
     assert(policy.indexOf("security@kofcloud.local") >= 0, "contato no doc")
     assert(securityTxtBody().indexOf("security@kofcloud.local") >= 0, "contato no fio")

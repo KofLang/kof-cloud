@@ -51,3 +51,43 @@ Vale para o código deste repositório (control plane + Edge + Agent +
 CLI, alvo JVM). Fora do escopo: o runtime Kof (reporte no repositório
 dele), o terminador TLS externo do operador, DNS do operador e o
 sistema operacional da máquina do usuário.
+
+## Contenção (kill-switch documentado)
+
+Se uma credencial vazar ou um serviço for comprometido, o caminho rápido
+é um comando só (Fase 17 slice 2 — congela, revoga e abre incidente):
+
+```
+kof cloud freeze service <nome>     # suspende + revoga kfs_ + incidente
+kof cloud freeze device <nome>      # device: suspende + revoga de todos os servicos dele
+kof cloud unfreeze service <nome>   # restaura EXATAMENTE o status anterior
+```
+
+Sem o `freeze` (ou para entender o que ele faz por baixo), o procedimento
+manual usa os mesmos primitivos — tudo reversível por desenho (nada aqui
+destrói configuração); a ordem importa: primeiro tira a rota, depois mata
+a credencial, por último derruba o túnel.
+
+```
+# 1. Tira a rota (o Edge responde 404 opaco, como PRIVATE):
+kof cloud service suspend <nome>
+
+# 2. Mata a credencial vazada (achar pelo inventario, sem valores):
+kof cloud service token-list <nome>
+kof cloud service token-revoke <nome> <id-curto>
+
+# 3. Se o device foi comprometido, recusa o tunel (fatal, sem reconexao):
+kof cloud device suspend <nome>
+
+# 4. Derruba o tunel local (o Edge limpa a rota via unbind):
+kof cloud disconnect
+
+# 5. Confere: rota fora, credencial morta, tunel caido:
+kof cloud service status <nome>   # service ... SUSPENDED, fora da rota
+kof cloud doctor                  # tunel OFFLINE confirmado pelo Edge
+```
+
+Reverter o manual é o inverso (`unsuspend` libera a rota; o túnel volta
+no próximo `connect`; credencial revogada **não** volta — emita outra com
+`service token`). Se um passo mudar de nome, a trava `security-policy`
+quebra de propósito — kill-switch desatualizado é pior que nenhum.

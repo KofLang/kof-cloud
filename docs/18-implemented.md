@@ -221,6 +221,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 * **Integrações de mercado (Fase 18)** — DNS/cert, OIDC/SSO+SCIM, CI/CD
   com `--plan`, OTel/billing, segredos externos; sem lock-in, dry-run.
 * **Segurança contínua (Fase 19)** — SBOM + `security.txt`, scan no CI,
-  rotação assistida + kill-switch, audit log WORM rumo a SOC2.
+  rotação assistida + kill-switch **documentado** (`SECURITY.md` ##
+  Contenção), audit log WORM rumo a SOC2.
 
 Ver `16-plan.md` para as fases e `17-limitations.md` para as lacunas.

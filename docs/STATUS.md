@@ -26,7 +26,7 @@
 ```bash
 export PATH=/home/mel/tools/jdk-25/bin:$PATH
 KOF=/home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar
-java -jar $KOF test --target jvm --timeout 150   # 34 suites, 0 falhas
+java -jar $KOF test --target jvm --timeout 150   # 35 suites, 0 falhas
 java -jar $KOF build --output /tmp/kofcloud-check # compila sem erro
 ```
 
@@ -77,8 +77,9 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | rotacao de kfs_ (Fase 19 s3) | `tests/rotate_test.kf` | 5 |
 | `security.txt` + `SECURITY.md` (Fase 19 s1 parcial) | `tests/security_test.kf` | 3 |
 | incidentes (Fase 17 s1) | `tests/incidents_test.kf` | 7 |
+| contenção (Fase 17 s2) | `tests/freeze_test.kf` | 6 |
 
-Total: 193 testes. Ver `15-tests.md` para a matriz.
+Total: 199 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

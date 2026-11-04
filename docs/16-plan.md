@@ -675,8 +675,10 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   valem. Credencial **sem** expiração nunca é revogada em silêncio — fica
   contada como pendente até ser revogada à mão. Prova:
   `tests/rotate_test.kf` (5: `rotate-all` com dois serviços independentes).
-  Pendente: PEMs com 30 dias de antecedência e kill-switch documentado
-  (o `freeze` da Fase 17 em escala de plataforma).
+  Pendente: PEMs com 30 dias de antecedência; kill-switch ✅ documentado
+  (`docs/SECURITY.md` ## Contenção — procedimento manual reversível com
+  o que existe; o `freeze` de um comando da Fase 17 automatiza quando
+  existir).
 * **Slice 4 — auditoria externa.** Trilha imutável (audit log WORM:
   append-only com hash encadeado, verificável por terceiro); relatório
   SOC2-tipo-II como meta (controles mapeados 1:1 com o que já existe:
