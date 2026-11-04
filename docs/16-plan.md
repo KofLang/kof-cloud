@@ -609,8 +609,11 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   próprio renderer; nada de dado de conta). Estado geral derivado dos abertos
   (`operational` / `partial_outage` / `major_outage`), timestamps ISO-8601
   UTC, `kind` interno não vaza, texto sempre escapado (HTML e JSON). Prova:
-  `tests/status_page_test.kf` (5). **Pendentes:** webhook assinado Ed25519 e
-  template de post-mortem (`docs/incidents/`).
+  `tests/status_page_test.kf` (5). **Implementado (template):**
+  `docs/incidents/README.md` — contrato do post-mortem (causa, impacto,
+  timeline, correção, ação preventiva com dono e prazo; sem dado de
+  cliente), com trava de regressão (`postmortem-template`). **Pendente:**
+  webhook assinado Ed25519.
 **Regras:** contenção sempre reversível; comunicação sempre antes do
 fix secreto (avisa o impacto, depois corrige); todo incidente vira teste
 novo (se não tem regressão, não fechou).

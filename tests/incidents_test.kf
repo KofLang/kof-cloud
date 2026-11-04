@@ -147,3 +147,27 @@ test "incidentes: rajada de recusas do Edge abre incidente global", "incident-ed
     noteEdgeRefusalIncident(fresh)
     assert(fresh.registry.allIncidents().size == 0, "uma recusa nao e incidente")
 }
+
+test "incidentes: template de post-mortem tem as 5 secoes e sem dado de cliente", "postmortem-template" {
+    // Trava da Fase 17 slice 3: o ciclo so fecha com post-mortem, e o
+    // template nao pode apodrecer (sumir secao, perder o exemplo de
+    // comando ou passar a pedir dado de cliente). Precedente: a trava
+    // do SECURITY.md (security-policy). Caminho relativo ao repo: o
+    // runner usa a raiz como cwd.
+    var doc = readTextOr("docs/incidents/README.md", "")
+    assert(doc.length > 0, "template existe e nao e vazio")
+    assert(doc.indexOf("## Causa") >= 0, "secao causa")
+    assert(doc.indexOf("## Impacto") >= 0, "secao impacto")
+    assert(doc.indexOf("## Timeline") >= 0, "secao timeline")
+    assert(doc.indexOf("## Correção") >= 0, "secao correcao")
+    assert(doc.indexOf("## Ação preventiva") >= 0, "secao preventiva")
+    // O template cita os comandos reais do ciclo (se um mudar de nome,
+    // a trava quebra de proposito — procedimento desatualizado e pior
+    // que nenhum, porque o operador segue passo que nao funciona).
+    assert(doc.indexOf("kof cloud freeze") >= 0, "caminho contencao")
+    assert(doc.indexOf("incidents --resolve") >= 0, "caminho resolve")
+    // Regra de privacidade do template: orienta a nunca registrar dado
+    // de cliente (mesma regra de log/metrica/audit).
+    assert(doc.indexOf("kfs_") >= 0, "cita o que nao vazar")
+    assert(doc.indexOf("sem hostname") >= 0, "proibe hostname")
+}
