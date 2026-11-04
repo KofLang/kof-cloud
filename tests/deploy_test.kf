@@ -582,3 +582,21 @@ test "deploy: loadManifestFile distingue ausente, invalido e valido", "deploy-lo
     assert(good.services.size == 1, "um servico")
     assert(good.services.get(0).name == "site", "nome certo")
 }
+
+test "deploy: scan acusa segredo no manifesto e aprova o limpo", "deploy-scan" {
+    // Pura, sem rede nem HOME (precedente: deploy-err): manifesto limpo =
+    // zero achados; kfs_/kfc_/password em qualquer servico = achado com o
+    // nome (sem vazar o valor); vazio = limpo.
+    var clean = scanManifestSecrets("{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
+    assert(clean.size == 0, "limpo passa")
+    assert(scanManifestSecrets("").size == 0, "vazio passa")
+    assert(scanManifestSecrets("   ").size == 0, "so-espacos passa")
+    var leaked = scanManifestSecrets("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"api\",\"port\":3000,\"build\":\"deploy kfs_abc123\"}]}")
+    assert(leaked.size == 1, "um achado: " + intToString(leaked.size))
+    assert(leaked.get(0).indexOf("api") >= 0, "nomeia o servico")
+    assert(leaked.get(0).indexOf("kfs_abc123") < 0, "nao vaza o valor")
+    var account = scanManifestSecrets("{\"services\":[{\"name\":\"db\",\"port\":5432,\"password\":\"segredo\"}]}")
+    assert(account.size == 1, "password tambem e achado")
+    var accountToken = scanManifestSecrets("{\"services\":[{\"name\":\"site\",\"port\":8080,\"artifact\":\"kfc_x\"}]}")
+    assert(accountToken.size == 1, "kfc_ tambem e achado")
+}

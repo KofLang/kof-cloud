@@ -644,10 +644,13 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   Prova: `tests/security_test.kf` (`security-unit` + `security` +
   `security-policy`) + `tests/hosts_test.kf` (`audit-sbom`). Pendente:
   o resto do ritmo (`scan`, `rotate --all`, PEM, kill-switch, WORM).
-* **Slice 2 — varredura contínua.** `kof cloud scan` (dependências,
-  segredos vazados em `kofcloud.json`/env, PEM expirando, `kfs_` sem
-  TTL em serviço crítico); roda no CI a cada push + game-day mensal.
-  Achado vira issue com severidade, nunca silêncio.
+* **Slice 2 — varredura contínua (parcial: scan do manifesto ✅).**
+  `kof cloud scan [--file]` lê o manifesto e acusa `kfs_`/`kfc_`/password
+  literal (exit 1 com achado, 0 limpo) — sem login, sem rede, para rodar
+  no CI a cada push. Pura `scanManifestSecrets` (nomeia o serviço sem
+  vazar o valor). Prova: `tests/deploy_test.kf` (`deploy-scan`) + trava
+  da ajuda. Pendente: dependências, segredos em env, PEM expirando,
+  `kfs_` sem TTL em serviço crítico (exigem openssl/rede/conta).
 * **Slice 3 — resposta e rotação programada.** Rotação assistida ✅
   (por serviço): `kof cloud service rotate <nome> [--ttl H] [--prune]`
   emite uma credencial nova e **só revoga as anteriores depois do TTL**

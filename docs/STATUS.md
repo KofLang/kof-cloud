@@ -59,7 +59,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | frames | `tests/frames_test.kf` | 4 |
 | idle | `tests/idle_test.kf` | 4 |
 | conexoes | `tests/conns_test.kf` | 2 |
-| deploy | `tests/deploy_test.kf` | 8 |
+| deploy + scan | `tests/deploy_test.kf` | 9 |
 | daemon | `tests/daemon_test.kf` | 13 |
 | doctor | `tests/doctor_test.kf` | 5 |
 | hot-reload | `tests/reload_test.kf` | 1 |
@@ -78,7 +78,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | `security.txt` + `SECURITY.md` (Fase 19 s1 parcial) | `tests/security_test.kf` | 3 |
 | incidentes (Fase 17 s1) | `tests/incidents_test.kf` | 7 |
 
-Total: 191 testes. Ver `15-tests.md` para a matriz.
+Total: 192 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

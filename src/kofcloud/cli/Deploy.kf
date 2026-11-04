@@ -224,6 +224,31 @@ List<String> verifyDeployment(String controlUrl, String token, List<ManifestServ
 // para erros da plataforma via API, nao para manifesto local malformado).
 // `port` aceita numero ou string (o control plane usa strings, mas manifesto
 // com numero e o idiomatico em JSON); o resto tem defaults de `publish`.
+// Varredura de segredos no manifesto (Fase 19 slice 2 parcial): texto cru,
+// por servico. Segredo em QUALQUER campo e achado (o manifesto so declara
+// nome/porta/address/exposure/protocol/build/artifact/allowlist — nenhum
+// deles deve conter credencial). Pura, sem IO: o cmdScan le o arquivo e
+// formata. Nunca imprime o valor — so o campo e o servico.
+List<String> scanManifestSecrets(String raw) {
+    var findings = listOf<String>()
+    var trimmed = raw.trim()
+    if (trimmed.length == 0) {
+        return findings
+    }
+    var index = 0
+    for (var entry in splitManifestObjects(manifestArray(trimmed))) {
+        var name = manifestField(entry, "name").trim()
+        if (name.length == 0) {
+            name = "#" + intToString(index)
+        }
+        if (entry.indexOf("kfs_") >= 0 || entry.indexOf("kfc_") >= 0 || entry.indexOf("password") >= 0) {
+            findings.add("servico \"" + name + "\": possivel segredo no manifesto (kfs_/kfc_/password) — remova antes do commit")
+        }
+        index = index + 1
+    }
+    return findings
+}
+
 List<ManifestService> parseManifest(String raw) {
     var trimmed = raw.trim()
     if (trimmed.length == 0) {
@@ -688,4 +713,30 @@ Int cmdDown(List<String> args) {
     }
     println("down ok: " + intToString(services.size) + " servico(s) do manifesto removidos")
     return 0
+}
+
+// Varredura local de segredos (Fase 19 slice 2 parcial): `kof cloud scan`
+// le o manifesto e acusa credencial literal ANTES do commit/deploy — sem
+// login, sem rede. Local por desenho: o que esta no disco e o que pode
+// vazar no git. Exit 1 com achado (falha o CI), 0 limpo.
+Int cmdScan(List<String> args) {
+    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file")) {
+        println("uso: kof cloud scan [--file <caminho>]")
+        return 1
+    }
+    var path = resolveManifestPath(flagValue(args, "--file"))
+    var raw = readTextOr(path, "")
+    if (raw.length == 0) {
+        println("manifesto nao encontrado: " + path)
+        return 1
+    }
+    var findings = scanManifestSecrets(raw)
+    if (findings.size == 0) {
+        println("scan ok: nenhum segredo no manifesto")
+        return 0
+    }
+    for (var finding in findings) {
+        println(finding)
+    }
+    return 1
 }

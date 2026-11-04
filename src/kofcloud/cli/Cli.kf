@@ -76,6 +76,9 @@ Int runCli(List<String> args) {
     if (first == "audit") {
         return cmdAudit(rest)
     }
+    if (first == "scan") {
+        return cmdScan(rest)
+    }
     if (first == "serve") {
         return cmdServe(rest)
     }

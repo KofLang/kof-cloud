@@ -44,6 +44,7 @@ String usageText() {
     out = out + "  daemon install|status|uninstall   (systemd --user, sem root)\n"
     out = out + "  doctor [--file " + defaultManifestPath() + "]       (diagnostico: login, control, device, tunel, servicos)\n"
     out = out + "  audit [--sbom]              (trilha de auditoria da conta; --sbom = inventario local dos fontes)\n"
+    out = out + "  scan [--file <caminho>]      (varredura local de segredos no manifesto; exit 1 com achado)\n"
     out = out + "  incidents [--all] [--resolve <id>]   (abertos da conta + plataforma)\n"
     out = out + "  logs [--tail <linhas>] [--runtime]  (marcos de sessao; --runtime = eventos reais do Agent)\n"
     out = out + "\n"
