@@ -180,3 +180,16 @@ imagens, PNG) **não pode** usar `web.app()` como front. E `listenSecure`
 Fase 9 slice 1 (HTTPS com PEM do operador) está bloqueada, a menos que exista
 TLS em socket cru (L2) ou uma API de resposta binária. É por isso que o Edge
 continua com parser HTTP próprio sobre `net.listen`.
+
+### L17 — Ed25519 nao e utilizavel pelo caminho documentado ⚠️ **moldou o webhook**
+
+Medido: `crypto.sign/verify` declaram a face Ed25519, mas
+`keyExchange.privateKey("ed25519")` **lanca** `SECN014: unknown signing
+algorithm ed25519` — nao ha geracao de par Ed25519 exposta nem forma de
+importar a chave privada Ed25519. Conclusao pratica: nao ha como assinar uma
+mensagem com um par gerado pela aplicacao hoje.
+
+**Consequencia:** o webhook de incidentes (Fase 17 s3) usa **HMAC-SHA256**
+(`crypto.hmacSha256`), que e o padrao de fato de webhooks (Stripe, GitHub) e
+existe em todos os alvos. Assinatura assimetrica com chave do proprio
+KofCloud fica pendente ate o stdlib expor par Ed25519 (gap a abrir).

@@ -67,6 +67,9 @@ Int runCli(List<String> args) {
     if (first == "daemon") {
         return runDaemon(rest)
     }
+    if (first == "webhook") {
+        return cmdWebhook(rest)
+    }
     if (first == "freeze") {
         return cmdFreeze(rest)
     }

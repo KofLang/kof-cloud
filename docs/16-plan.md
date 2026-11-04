@@ -559,7 +559,7 @@ sempre com rollback de um comando.
 comunicar e aprender. Hoje há auditoria em anel (100 eventos) e métricas;
 falta o ciclo completo: do sinal ao post-mortem.
 
-**Estado: slices 1 e 2 ✅; slice 3 parcial (status page) ✅.** Desenho fatiado (cada slice exercitado em
+**Estado: Fase 17 completa ✅ (slices 1, 2 e 3).** Desenho fatiado (cada slice exercitado em
 game-day: simula o incidente de propósito e mede o tempo de resposta):
 
 * **Slice 1 — detecção e severidade.** Sinais com nível
@@ -614,6 +614,18 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   timeline, correção, ação preventiva com dono e prazo; sem dado de
   cliente), com trava de regressão (`postmortem-template`). **Pendente:**
   webhook assinado Ed25519.
+
+  **Implementado (webhook):** `model/Webhook.kf` + `Registry.setWebhook/
+  removeWebhook/deliverWebhook` + `POST /v1/webhook` (set|show|remove|test) e
+  CLI `kof cloud webhook`. Quando um incidente **da conta** abre, o control
+  plane faz POST do evento com `X-KofCloud-Signature: sha256=<hex>` (HMAC
+  SHA-256 do corpo com o segredo compartilhado, comparado em tempo constante
+  no receptor). URL https (http só em loopback, sem credencial na URL) e
+  segredo ≥16 chars validados; o segredo **nunca** volta pela API/CLI (só o
+  prefixo). Falha de entrega não impede o incidente de existir. **Divergência
+  registrada:** o desenho pedia Ed25519, mas o stdlib não expõe par Ed25519
+  utilizável (SECN014, `13-kof-apis.md` L17). Prova:
+  `tests/webhook_test.kf` (5).
 **Regras:** contenção sempre reversível; comunicação sempre antes do
 fix secreto (avisa o impacto, depois corrige); todo incidente vira teste
 novo (se não tem regressão, não fechou).

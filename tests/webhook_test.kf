@@ -1,0 +1,150 @@
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.model.Errors
+import kofcloud.model.Webhook
+import kofcloud.store.Store
+import kofcloud.protocol.Bytes
+import testkit.Support
+
+// Fase 17 slice 3 — webhook de incidentes com assinatura HMAC-SHA256.
+//
+// POR QUE HMAC E NAO Ed25519 (que o plano pedia): medido — o stdlib so tem a
+// face Ed25519 de `crypto.sign`, e `keyExchange.privateKey("ed25519")` falha
+// com SECN014 ("unknown signing algorithm ed25519"); nao ha como gerar o par.
+// HMAC-SHA256 e o padrao de fato de webhooks e existe em todos os alvos.
+
+String webhookPath(String name) {
+    return "/tmp/kofcloud-wh-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "webhook: URL e segredo validados (puros)", "webhook-unit" {
+    assert(webhookUrlError("https://example.com/hook") == "", "https ok")
+    assert(webhookUrlError("https://example.com:8443/hook") == "", "porta ok")
+    assert(webhookUrlError("http://127.0.0.1:9999/hook") == "", "http loopback ok")
+    assert(webhookUrlError("http://example.com/hook") != "", "http externo recusado")
+    assert(webhookUrlError("ftp://example.com/hook") != "", "esquema recusado")
+    assert(webhookUrlError("https://user:pass@example.com/hook") != "", "credencial na URL recusada")
+    assert(webhookUrlError("https://") != "", "sem host recusado")
+    assert(webhookUrlError("https://example.com:99999/x") != "", "porta invalida")
+    assert(webhookUrlError("") != "", "vazio recusado")
+    assert(webhookSecretError("curto") != "", "segredo curto recusado")
+    assert(webhookSecretError("0123456789abcdef") == "", "16 chars ok")
+}
+
+test "webhook: assinatura HMAC verificavel e sensivel ao payload", "webhook-unit" {
+    var secret = "0123456789abcdef"
+    var payload = webhookPayload("bulk_device_revokes", "CRIT", "resumo", 1700000000000)
+    var header = webhookSignatureHeader(secret, payload)
+    assert(header.startsWith("sha256="), "formato padrao")
+    assert(header.length == 7 + 64, "hex de 32 bytes")
+    // O receptor recalcula e confere em tempo constante.
+    var recomputed = webhookSignatureHeader(secret, payload)
+    assert(webhookSignatureValid(secret, payload, header, recomputed), "assinatura confere")
+    // Payload adulterado nao confere; segredo errado tambem nao.
+    var tampered = webhookSignatureHeader(secret, payload + " ")
+    assert(webhookSignatureValid(secret, payload, header, tampered) == false, "payload adulterado falha")
+    var wrongSecret = webhookSignatureHeader("ffffffffffffffff", payload)
+    assert(webhookSignatureValid(secret, payload, header, wrongSecret) == false, "segredo errado falha")
+    // Determinismo.
+    assert(webhookSignature(secret, payload) == webhookSignature(secret, payload), "deterministica")
+}
+
+test "webhook: payload nao carrega dado sensivel", "webhook-unit" {
+    var payload = webhookPayload("freeze_device", "WARN", "device frozen", 1)
+    assert(payload.indexOf("kfc_") < 0, "sem token")
+    assert(payload.indexOf("kfs_") < 0, "sem credencial de servico")
+    var parsed = json.decode<Map<String, String>>(payload)
+    assert(parsed.get("event") != null, "event presente")
+}
+
+test "webhook: cadastro, leitura sem segredo e remocao", "webhook-unit" {
+    var registry = Registry(webhookPath("crud"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    registry.setWebhook(account.id, "https://example.com/hook", "0123456789abcdef")
+    var config = registry.webhookForAccount(account.id)
+    assert(config != null, "configurado")
+    if (config != null) {
+        assert(config.url == "https://example.com/hook", "url")
+        assert(config.secret == "0123456789abcdef", "segredo guardado (para o receptor comparar)")
+    }
+    // Invalidos nao gravam.
+    var blocked = false
+    try {
+        registry.setWebhook(account.id, "http://externo.com/h", "0123456789abcdef")
+    } catch (String e) {
+        blocked = true
+    }
+    assert(blocked, "url invalida recusada")
+    assert(registry.removeWebhook(account.id), "removeu")
+    assert(registry.removeWebhook(account.id) == false, "remover de novo falha")
+}
+
+test "webhook: incidente da conta dispara entrega assinada de verdade", "webhook" {
+    var hookPort = 19901
+    var controlPort = 19902
+
+    // Receptor HTTP que guarda corpo e assinatura recebidos (web.app: quem
+    // entrega e o http.post do Kof, entao o receptor precisa ser um servidor
+    // real — socket cru exigiria fechar a resposta na mao).
+    var received = listOf<String>()
+    var receivedSig = listOf<String>()
+    var hook = web.app()
+    hook.post("/hook") {
+        received.add(body())
+        var sig = header("x-kofcloud-signature")
+        if (sig == null) {
+            sig = "(nenhuma)"
+        }
+        receivedSig.add(sig)
+        return "ok"
+    }
+    var receiverTask = spawn { hook.listen(hookPort) }
+    assert(waitForPort(hookPort, 60), "receptor no ar")
+
+    var registry = Registry(webhookPath("e2e"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var mel = registry.accountByHandle("mel")
+    var melId = ""
+    if (mel != null) {
+        melId = mel.id
+    }
+    var secret = "segredo-de-teste-123"
+    var setBody = "{\"action\":\"set\",\"url\":\"http://127.0.0.1:" + intToString(hookPort) + "/hook\",\"secret\":\"" + secret + "\"}"
+    var setResult = httpPostJson(controlPort, "/v1/webhook", setBody, token)
+    assert(statusOf(setResult) == 200, "cadastrou via API")
+    assert(bodyOf(setResult).indexOf(secret) < 0, "API NAO devolve o segredo")
+
+    // Um incidente da conta abre -> entrega assinada.
+    registry.raiseIncident("bulk_device_revokes", melId)
+    var attempts = 60
+    while (attempts > 0 && received.size == 0) {
+        time.sleep(50)
+        attempts = attempts - 1
+    }
+    assert(received.size == 1, "recebeu uma entrega")
+    if (received.size == 1) {
+        var payload = received.get(0)
+        assert(payload.indexOf("bulk_device_revokes") >= 0, "payload tem o sinal")
+        assert(payload.indexOf("kfc_") < 0, "payload sem token")
+        // A assinatura bate com o segredo compartilhado.
+        var expected = webhookSignatureHeader(secret, payload)
+        assert(receivedSig.get(0) == expected, "assinatura verificada pelo receptor")
+    }
+
+    // Incidente GLOBAL nao entrega a webhook de conta.
+    registry.raiseIncident("edge_refusals", "")
+    time.sleep(400)
+    assert(received.size == 1, "global nao entrega em webhook de conta")
+
+    // `test` entrega de proposito.
+    var testResult = httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"test\"}", token)
+    assert(statusOf(testResult) == 200, "teste ok")
+    assert(bodyOf(testResult).indexOf("\"delivered\":\"200\"") >= 0, "entrega de teste")
+
+    hook.close()
+}

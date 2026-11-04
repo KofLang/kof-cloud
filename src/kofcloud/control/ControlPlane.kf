@@ -608,6 +608,58 @@ HttpResult handleRotationStatus(Registry registry, String? authHeader, String bo
     return HttpResult(200, json.encode(out))
 }
 
+// Webhook de incidentes (Fase 17 s3). `action`: set | show | remove | test.
+// O segredo NUNCA sai na resposta; `show` devolve so a URL e um prefixo.
+HttpResult handleWebhook(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var body = decodeBody(bodyText)
+    var action = mapField(body, "action")
+    if (action == "set") {
+        try {
+            registry.setWebhook(account.id, mapField(body, "url"), mapField(body, "secret"))
+        } catch (String e) {
+            return HttpResult(400, errorJson(errInvalidWebhook() + " (" + e + ")"))
+        }
+        return HttpResult(200, webhookJson(registry.webhookForAccount(account.id)))
+    }
+    if (action == "remove") {
+        if (registry.removeWebhook(account.id) == false) {
+            return HttpResult(404, errorJson(errWebhookNotFound()))
+        }
+        return HttpResult(200, "{\"removed\":true}")
+    }
+    if (action == "test") {
+        var config = registry.webhookForAccount(account.id)
+        if (config == null) {
+            return HttpResult(404, errorJson(errWebhookNotFound()))
+        }
+        var status = registry.deliverWebhook(account.id, "webhook_test", "INFO", "webhook test delivery", time.now())
+        var out = mapOf()
+        out.put("delivered", intToString(status))
+        return HttpResult(200, json.encode(out))
+    }
+    var config = registry.webhookForAccount(account.id)
+    if (config == null) {
+        return HttpResult(404, errorJson(errWebhookNotFound()))
+    }
+    return HttpResult(200, webhookJson(config))
+}
+
+String webhookJson(WebhookConfig? config) {
+    if (config == null) {
+        return "{}"
+    }
+    var out = mapOf()
+    out.put("url", config.url)
+    // So o prefixo: o segredo inteiro nunca sai pela API.
+    out.put("secretHint", config.secret.substring(0, 4) + "…")
+    out.put("createdAt", longToString(config.createdAt))
+    return json.encode(out)
+}
+
 // Contencao (Fase 17 slice 2): freeze suspende o alvo, revoga as credenciais
 // vivas e registra o incidente; unfreeze restaura exatamente o status
 // anterior. Alvo: `service` ou `device` (id). Alvo alheio -> 404 opaco.
@@ -1134,6 +1186,13 @@ class ControlPlane {
         }
         app.post("/v1/services/tokens") {
             var result = handleListServiceTokens(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/webhook") {
+            var result = handleWebhook(reg, header("x-kofcloud-token"), body())
             if (result.code == 200) {
                 return result.body
             }

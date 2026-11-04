@@ -1390,6 +1390,71 @@ Int cmdDomainRemove(List<String> args) {
 // `logs` (marcos de sessao, gravados pela CLI) e `logs --runtime` (eventos
 // reais do Agent: connect, reconnect, recusa fatal, health, streams). Os dois
 // arquivos tem teto proprio; `--tail` vale para o escolhido.
+// Webhook de incidentes (Fase 17 s3): `set <url> --secret <s>`, `show`,
+// `remove`, `test`. O segredo nunca aparece na saida (so o prefixo).
+Int cmdWebhook(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println(notLoggedInLine())
+        return 1
+    }
+    var sub = firstPositional(args).trim()
+    if (sub.length == 0) {
+        println("uso: kof cloud webhook set <url> --secret <segredo> | show | remove | test")
+        return 1
+    }
+    try {
+        var body = mapOf()
+        var endpoint = "/v1/webhook"
+        if (sub == "set") {
+            var url = secondPositional(args).trim()
+            var secret = flagValue(args, "--secret").trim()
+            if (url.length == 0 || secret.length == 0) {
+                println("uso: kof cloud webhook set <url> --secret <segredo>")
+                return 1
+            }
+            body.put("action", "set")
+            body.put("url", url)
+            body.put("secret", secret)
+        } else if (sub == "show") {
+            body.put("action", "show")
+        } else if (sub == "remove") {
+            body.put("action", "remove")
+        } else if (sub == "test") {
+            body.put("action", "test")
+        } else {
+            println("subcomando desconhecido: webhook " + sub)
+            return 1
+        }
+        var raw = requireOk(http.post(session.controlUrl + endpoint, json.encode(body), jsonHeader(session.token)))
+        var result = json.decode<Map<String, String>>(raw)
+        if (sub == "set") {
+            println("Webhook configurado.")
+            println("  URL:    " + mapField(result, "url"))
+            println("  Segredo: " + mapField(result, "secretHint") + " (guardado; nunca e impresso por inteiro)")
+            println("")
+            println("O receptor deve verificar o header `X-KofCloud-Signature: sha256=<hex>`,")
+            println("calculando hex(HMAC-SHA256(segredo, corpo_bruto)) em tempo constante.")
+        } else if (sub == "show") {
+            println("URL:     " + mapField(result, "url"))
+            println("Segredo: " + mapField(result, "secretHint"))
+        } else if (sub == "remove") {
+            println("Webhook removido.")
+        } else {
+            var delivered = mapField(result, "delivered")
+            if (delivered == "200") {
+                println("Entrega de teste OK.")
+            } else {
+                println("Entrega de teste falhou (o incidente fica registrado de qualquer forma).")
+            }
+        }
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
 // Contencao (Fase 17 slice 2): `freeze service|device <nome|id>` suspende,
 // revoga credenciais vivas e abre o incidente; `unfreeze` restaura o status
 // anterior. Sempre reversivel — nada e destruido.

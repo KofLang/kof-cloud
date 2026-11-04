@@ -6,6 +6,7 @@ import kofcloud.model.Audit
 import kofcloud.model.CustomDomain
 import kofcloud.model.Device
 import kofcloud.model.Incident
+import kofcloud.model.Webhook
 import kofcloud.model.Errors
 import kofcloud.model.Service
 import kofcloud.model.Exposure
@@ -28,7 +29,7 @@ record FreezeResult(Bool ok, String incidentId, Int revoked, String priorStatus)
 // Resultado da rotacao assistida (Fase 19 slice 3).
 record RotateResult(String token, Int revoked, Int pending)
 
-record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens, List<CustomDomain> customDomains, List<AuditEvent> audit, List<Incident> incidents)
+record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens, List<CustomDomain> customDomains, List<AuditEvent> audit, List<Incident> incidents, List<WebhookConfig> webhooks)
 
 class Registry {
     List<Account> accounts
@@ -39,6 +40,7 @@ class Registry {
     List<CustomDomain> customDomains
     List<AuditEvent> audit
     List<Incident> incidents
+    List<WebhookConfig> webhooks
     String path
     Int maxDevices
     Int maxServices
@@ -62,6 +64,7 @@ class Registry {
         this.customDomains = listOf<CustomDomain>()
         this.audit = listOf<AuditEvent>()
         this.incidents = listOf<Incident>()
+        this.webhooks = listOf<WebhookConfig>()
         this.freezeMarks = mapOf()
         this.edgeOnline = mapOf()
         this.maxDevices = limitDevices()
@@ -107,6 +110,7 @@ class Registry {
             this.customDomains = state.customDomains
             this.audit = state.audit
             this.incidents = state.incidents
+            this.webhooks = state.webhooks
         } catch (String e) {
             // Estado corrompido: recomeca vazio em vez de derrubar o control
             // plane. O operador ve os dados ausentes e decide.
@@ -141,6 +145,70 @@ class Registry {
     // Abre um incidente. Idempotente por (kind, accountId): se ja ha um
     // ABERTO do mesmo tipo para a mesma conta, devolve null (o operador ve
     // um incidente, nao um por ocorrencia). `accountId` "" = escopo global.
+    // ---- webhook de incidentes (Fase 17 slice 3) ----
+
+    // Cadastra/troca o webhook da conta. Valida URL e segredo (puros).
+    String setWebhook(String accountId, String url, String secret) {
+        var urlError = webhookUrlError(url)
+        if (urlError.length > 0) {
+            throw urlError
+        }
+        var secretError = webhookSecretError(secret.trim())
+        if (secretError.length > 0) {
+            throw secretError
+        }
+        var out = listOf<WebhookConfig>()
+        for (var existing in this.webhooks) {
+            if (existing.accountId != accountId) {
+                out.add(existing)
+            }
+        }
+        out.add(WebhookConfig(accountId, url.trim(), secret.trim(), time.now()))
+        this.webhooks = out
+        this.save()
+        return "ok"
+    }
+
+    Bool removeWebhook(String accountId) {
+        var out = listOf<WebhookConfig>()
+        var found = false
+        for (var existing in this.webhooks) {
+            if (existing.accountId == accountId) {
+                found = true
+            } else {
+                out.add(existing)
+            }
+        }
+        if (found) {
+            this.webhooks = out
+            this.save()
+        }
+        return found
+    }
+
+    // Config sem o segredo (o que a API/CLI pode devolver).
+    WebhookConfig? webhookForAccount(String accountId) {
+        for (var existing in this.webhooks) {
+            if (existing.accountId == accountId) {
+                return existing
+            }
+        }
+        return null
+    }
+
+    // POST assinado ao webhook da conta. `deliver` injetavel nos testes.
+    // Falha de rede NAO propaga: incidente sem entrega e melhor que incidente
+    // nao registrado. Devolve o status HTTP (0 = nao tentou/falhou).
+    Int deliverWebhook(String accountId, String kind, String severity, String summary, Long atMs) {
+        var config = this.webhookForAccount(accountId)
+        if (config == null) {
+            return 0
+        }
+        var payload = webhookPayload(kind, severity, summary, atMs)
+        var header = webhookSignatureHeader(config.secret, payload)
+        return postWebhook(config.url, payload, header)
+    }
+
     Incident? raiseIncident(String kind, String accountId) {
         for (var existing in this.incidents) {
             if (existing.kind == kind && existing.accountId == accountId && existing.resolvedAt == 0) {
@@ -157,6 +225,9 @@ class Registry {
             this.incidents = this.incidents.subList(1, this.incidents.size)
         }
         this.save()
+        if (accountId.length > 0) {
+            this.deliverWebhook(accountId, kind, incident.severity, incident.summary, incident.openedAt)
+        }
         return incident
     }
 
@@ -226,7 +297,7 @@ class Registry {
     }
 
     void save() {
-        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens, this.serviceTokens, this.customDomains, this.audit, this.incidents)))
+        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens, this.serviceTokens, this.customDomains, this.audit, this.incidents, this.webhooks)))
     }
 
     // ---- contas ----
@@ -1306,4 +1377,18 @@ Long parseLongSafe(String text, Long fallback) {
         i = i + 1
     }
     return acc
+}
+
+// POST assinado (I/O na borda do Registry; o desenho aceita porque o Registry
+// ja faz I/O de arquivo). Headers documentados no help/webhook: o receptor
+// verifica `X-KofCloud-Signature: sha256=<hex>` e `X-KofCloud-Event`.
+Int postWebhook(String url, String payload, String signature) {
+    try {
+        var headers = "Content-Type: application/json\nX-KofCloud-Event: incident.opened\nX-KofCloud-Signature: " + signature
+        var response = http.post(url, payload, headers)
+        return 200
+    } catch (String e) {
+        log.warn("webhook delivery failed: " + e)
+        return 0
+    }
 }

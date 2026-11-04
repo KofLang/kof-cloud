@@ -1,0 +1,117 @@
+package kofcloud.model
+
+import kofcloud.util.Hosts
+import kofcloud.util.Text
+
+// Webhook de incidentes (Fase 17 slice 3).
+//
+// A conta cadastra uma URL + segredo; quando um incidente dela abre, o
+// control plane faz POST do evento com assinatura HMAC-SHA256.
+//
+// POR QUE HMAC E NAO Ed25519 (que o desenho pedia): medido no stdlib — o
+// `crypto.sign` so tem a face Ed25519 e `keyExchange.privateKey("ed25519")`
+// falha com SECN014 ("unknown signing algorithm ed25519"); nao ha geracao
+// de par Ed25519 nem assinatura HMAC com chave ASCII exposta de outro jeito.
+// HMAC-SHA256 e o padrao de fato de webhooks (Stripe/GitHub), verifica com
+// o mesmo segredo compartilhado e existe em todos os alvos do Kof. A lacuna
+// do Ed25519 fica registrada em docs/13-kof-apis.md.
+
+// O segredo compartilhado e guardado em claro no estado (o receptor precisa
+// compara-lo byte a byte); nunca e devolvido pela API nem pela CLI.
+record WebhookConfig(String accountId, String url, String secret, Long createdAt)
+
+// Limites: URL e segredo curtos o bastante para caber num header e numa
+// linha de log sem inflar o estado.
+Int webhookMaxUrlChars() {
+    return 512
+}
+
+Int webhookSecretMinChars() {
+    return 16
+}
+
+// URL aceitavel: https em qualquer lugar, http so em loopback (dev). Recusa
+// esquemas perigosos (file:, ftp:, javascript:) e host vazio. Pura.
+String webhookUrlError(String url) {
+    var trimmed = url.trim()
+    if (trimmed.length == 0) {
+        return "url required"
+    }
+    if (trimmed.length > webhookMaxUrlChars()) {
+        return "url too long"
+    }
+    var lower = trimmed.toLowerCase()
+    var hostStart = 0
+    var scheme = ""
+    if (lower.startsWith("https://")) {
+        scheme = "https"
+        hostStart = 8
+    } else if (lower.startsWith("http://")) {
+        scheme = "http"
+        hostStart = 7
+    } else {
+        return "url must start with https:// (or http:// on loopback)"
+    }
+    var rest = trimmed.substring(hostStart)
+    var slash = rest.indexOf("/")
+    var authority = rest
+    if (slash >= 0) {
+        authority = rest.substring(0, slash)
+    }
+    if (authority.length == 0) {
+        return "url has no host"
+    }
+    // userinfo nao e aceito: daria credencial no estado.
+    if (authority.indexOf("@") >= 0) {
+        return "url must not carry credentials"
+    }
+    var host = authority
+    var colon = authority.indexOf(":")
+    if (colon >= 0) {
+        host = authority.substring(0, colon)
+        var portText = authority.substring(colon + 1)
+        var port = parseIntSafe(portText, 0)
+        if (port <= 0 || port > 65535) {
+            return "url port invalid"
+        }
+    }
+    if (scheme == "http" && validLocalAddress(host) == false) {
+        return "http:// only for loopback hosts (use https://)"
+    }
+    return ""
+}
+
+String webhookSecretError(String secret) {
+    if (secret.length < webhookSecretMinChars()) {
+        return "secret must have at least " + intToString(webhookSecretMinChars()) + " characters"
+    }
+    return ""
+}
+
+// Payload do evento: JSON estavel (chaves em ordem fixa por construcao).
+// Nunca leva dado de conta alem do que a propria conta ja conhece.
+String webhookPayload(String kind, String severity, String summary, Long atMs) {
+    var out = mapOf()
+    out.put("event", "incident.opened")
+    out.put("kind", kind)
+    out.put("severity", severity)
+    out.put("summary", summary)
+    out.put("at", longToString(atMs))
+    return json.encode(out)
+}
+
+// Assinatura: hex(HMAC-SHA256(segredo, payload)). O receptor recalcula e
+// compara em tempo constante.
+String webhookSignature(String secret, String payload) {
+    return crypto.hmacSha256(secret, payload)
+}
+
+// Header de assinatura (padrao `sha256=<hex>`, como o do GitHub).
+String webhookSignatureHeader(String secret, String payload) {
+    return "sha256=" + webhookSignature(secret, payload)
+}
+
+// Verificacao do lado do receptor (usada no teste e documentada no help).
+Bool webhookSignatureValid(String secret, String payload, String header, String providedHeader) {
+    return security.constantTimeEquals(header, providedHeader)
+}
