@@ -263,10 +263,15 @@ entre cliente e Edge. Cloud robusta de verdade exige HTTPS ponta a ponta
   ausente). Tentar `app.use` com `headerSet` seria redundante — e o
   redirecionamento 301 HTTP→HTTPS fica fora (o `serve` sobe um control
   por porta: com TLS não há listener HTTP para redirecionar).
-* **Slice 3 — SNI por hostname + renovação assistida.** Um PEM por
-  hostname próprio VERIFIED (mapa em memória, recarregado sem derrubar
-  o Edge); `domain verify` passa a aceitar o PEM; expiração visível no
-  `service status`/`doctor` (aviso a N dias, nunca bloqueio silencioso).
+* **Slice 3 — SNI por hostname + renovação assistida (parcial: aviso de expiração ✅).**
+  O `serve` com `--tls-cert/--tls-key` roda `openssl x509 -checkend 30d`
+  e avisa (nunca bloqueia) quando o PEM expira em menos de 30 dias;
+  openssl ausente/erro = sem aviso. Pura `tlsCertExpiringSoon` (exitCode
+  → Bool). Prova: `tests/hosts_test.kf` (`serve-tls` estendido). Pendente:
+  SNI por hostname (mapa em memória, depende do runtime) e renovação
+  automática. Pendente: SNI por hostname (mapa em memória, recarregado
+  sem derrubar o Edge — depende do runtime), `domain verify` aceitar o
+  PEM, e expiração visível também no `service status`/`doctor`.
   ACME de verdade (DNS-01) depende de ES256 no stdlib — sem isso, emissão
   continua externa (ver `12-tls.md`).
 

@@ -396,6 +396,11 @@ test "text: resolveTlsPair exige o par cert+key", "serve-tls" {
     assert(flagMissingValue(listOf("--tls-cert", "c.pem"), "--tls-cert") == false, "cert com valor ok")
     assert(flagMissingValue(listOf("--tls-key"), "--tls-key") == true, "key solta barra")
     assert(flagDuplicated(listOf("--tls-key", "a", "--tls-key", "b"), "--tls-key") == true, "key repetida barra")
+    // Aviso de expiracao (Fase 9 slice 3 parcial): pura sobre o exitCode
+    // do `openssl x509 -checkend` (0 = valido alem do prazo). Decisao
+    // separada do IO para testar sem openssl e sem disco.
+    assert(tlsCertExpiringSoon(0) == false, "valido alem do prazo: sem aviso")
+    assert(tlsCertExpiringSoon(1) == true, "expira dentro: avisa")
 }
 
 test "text: resolveStatePath apara e cai no default", "serve-state" {

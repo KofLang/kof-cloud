@@ -1490,6 +1490,15 @@ String controlScheme(String tlsPair) {
     return "http"
 }
 
+// Aviso de PEM expirando (Fase 9 slice 3 parcial): `openssl x509 -checkend`
+// devolve exit 0 = valido alem do prazo, 1 = expira dentro (ou PEM ruim).
+// Aviso, nunca bloqueio (precedente: artifact ausente no deploy): cortar
+// o serve por relogio torto seria pior que servir com cert velho. Pura na
+// decisao (exitCode -> Bool); IO (process.run) vive no cmdServe.
+Bool tlsCertExpiringSoon(Int checkendExitCode) {
+    return checkendExitCode != 0
+}
+
 // Portas: control HTTP, tunel e HTTP publico do edge.
 Int cmdServe(List<String> args) {
     // Flag solta vira string vazia no parseIntSafe (default silencioso);
@@ -1532,6 +1541,16 @@ Int cmdServe(List<String> args) {
             println("tls: PEM ilegivel (cert ou key vazio/ausente) — confira --tls-cert/--tls-key")
             println(usoServeLine())
             return 1
+        }
+        // Aviso de expiracao (Fase 9 slice 3 parcial): 30 dias. openssl
+        // ausente/erro = sem aviso (nao ha o que checar); expiracao nao
+        // bloqueia o serve (aviso, nunca bloqueio — o operador decide).
+        try {
+            var check = process.run("openssl", "x509", "-in", tlsCertPath, "-noout", "-checkend", "2592000")
+            if (tlsCertExpiringSoon(check.exitCode)) {
+                println("aviso: certificado TLS expira em menos de 30 dias — renove o PEM")
+            }
+        } catch (String e) {
         }
     }
 
