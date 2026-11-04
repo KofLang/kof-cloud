@@ -147,7 +147,7 @@ identidade/cifra, registry, backoff, integração do control plane, E2E,
 domínio próprio, métricas, rate limit, suspensão/auditoria, frames
 fatiados, idle timeout, conexões por serviço, deploy, daemon, hot-reload,
 doctor, presença do túnel, eventos do agent, teto de corpo WAF, detectar
-WAF, timeout de upstream, allowlist WAF, painel somente-leitura, rotação de kfs_, security.txt, incidentes, contenção e status page (36 suites). Ver `docs/15-tests.md` para a matriz.
+WAF, timeout de upstream, allowlist WAF, painel somente-leitura, rotação de kfs_, security.txt, incidentes, contenção e status page (37 suites). Ver `docs/15-tests.md` para a matriz.
 
 ## Segurança
 
