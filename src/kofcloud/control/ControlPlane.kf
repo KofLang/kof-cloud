@@ -803,6 +803,8 @@ class ControlPlane {
     Bool panelEnabled
     String edgeHost
     Int edgePort
+    String tlsCertPem
+    String tlsKeyPem
 
     constructor(registry: Registry, port: Int, edgeHost: String, edgePort: Int) {
         this.registry = registry
@@ -810,6 +812,16 @@ class ControlPlane {
         this.panelEnabled = false
         this.edgeHost = edgeHost
         this.edgePort = edgePort
+        this.tlsCertPem = ""
+        this.tlsKeyPem = ""
+    }
+
+    // TLS do control plane (Fase 9 slice 1 parcial): PEMs lidos pelo
+    // `serve --tls-cert/--tls-key`; vazio = HTTP (comportamento atual).
+    // O Edge publico segue HTTP — L16 (handler String corrompe binario).
+    void enableTls(String certPem, String keyPem) {
+        this.tlsCertPem = certPem
+        this.tlsKeyPem = keyPem
     }
 
     // Liga o painel somente-leitura (Fase 12 slice 1). Chamado pelo `serve`
@@ -1006,6 +1018,10 @@ class ControlPlane {
             return status(result.code, result.body)
         }
 
-        app.listen(this.port)
+        if (this.tlsCertPem.length > 0 && this.tlsKeyPem.length > 0) {
+            app.listenSecure(this.port, this.tlsCertPem, this.tlsKeyPem)
+        } else {
+            app.listen(this.port)
+        }
     }
 }

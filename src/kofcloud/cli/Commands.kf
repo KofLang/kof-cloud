@@ -51,7 +51,7 @@ String usoServiceTokenLine() {
 }
 
 String usoServeLine() {
-    return "uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--waf detectar|enforce] [--panel] (portas 1-65535)"
+    return "uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--waf detectar|enforce] [--panel] [--tls-cert <pem> --tls-key <pem>] (portas 1-65535)"
 }
 
 // Modo WAF do `serve --waf`: ausente, vazio ou so-espacos = detectar
@@ -198,7 +198,7 @@ Bool extraPositional(List<String> args, Int max) {
     var i = 0
     while (i < args.size) {
         var arg = args.get(i)
-        if (arg == "--port" || arg == "--address" || arg == "--exposure" || arg == "--device" || arg == "--ttl" || arg == "--tail" || arg == "--control" || arg == "--control-port" || arg == "--tunnel-port" || arg == "--http-port" || arg == "--state" || arg == "--waf" || arg == "--service" || arg == "--file" || arg == "--password") {
+        if (arg == "--port" || arg == "--address" || arg == "--exposure" || arg == "--device" || arg == "--ttl" || arg == "--tail" || arg == "--control" || arg == "--control-port" || arg == "--tunnel-port" || arg == "--http-port" || arg == "--state" || arg == "--waf" || arg == "--tls-cert" || arg == "--tls-key" || arg == "--service" || arg == "--file" || arg == "--password") {
             i = i + 2
             continue
         }
@@ -1268,18 +1268,42 @@ String resolveStatePath(String flagRaw) {
     return trimmed
 }
 
+// TLS do control plane (`serve --tls-cert/--tls-key`): ausente = HTTP
+// (comportamento atual); presente exige o PAR (cert + key) — metade sozinha
+// e erro posicional, nao default silencioso. Pura, sem IO: o cmdServe le os
+// PEMs e falha cedo se o arquivo nao existir. "" = sem TLS.
+String resolveTlsPair(String certRaw, String keyRaw) {
+    var cert = certRaw.trim()
+    var key = keyRaw.trim()
+    if (cert.length == 0 && key.length == 0) {
+        return ""
+    }
+    if (cert.length == 0 || key.length == 0) {
+        return "tls exige --tls-cert e --tls-key juntos (par ausente)"
+    }
+    return cert + "\n" + key
+}
+
+// Esquema do control plane no banner: https com TLS, http sem.
+String controlScheme(String tlsPair) {
+    if (tlsPair.length > 0) {
+        return "https"
+    }
+    return "http"
+}
+
 // Portas: control HTTP, tunel e HTTP publico do edge.
 Int cmdServe(List<String> args) {
     // Flag solta vira string vazia no parseIntSafe (default silencioso);
     // duplicada leria a primeira. Ambas rejeitadas antes de validar faixa.
     // --state segue a mesma regra (precedente: --file/--control/--device):
     // solto caia no default em silencio, duplicado lia a primeira.
-    if (flagMissingValue(args, "--control-port") || flagMissingValue(args, "--tunnel-port") || flagMissingValue(args, "--http-port") || flagMissingValue(args, "--state") || flagMissingValue(args, "--waf")) {
+    if (flagMissingValue(args, "--control-port") || flagMissingValue(args, "--tunnel-port") || flagMissingValue(args, "--http-port") || flagMissingValue(args, "--state") || flagMissingValue(args, "--waf") || flagMissingValue(args, "--tls-cert") || flagMissingValue(args, "--tls-key")) {
         println(usoServeLine())
         return 1
     }
-    if (flagDuplicated(args, "--control-port") || flagDuplicated(args, "--tunnel-port") || flagDuplicated(args, "--http-port") || flagDuplicated(args, "--state") || flagDuplicated(args, "--waf")) {
-        println("flag repetida — informe uma so vez: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--waf detectar|enforce]")
+    if (flagDuplicated(args, "--control-port") || flagDuplicated(args, "--tunnel-port") || flagDuplicated(args, "--http-port") || flagDuplicated(args, "--state") || flagDuplicated(args, "--waf") || flagDuplicated(args, "--tls-cert") || flagDuplicated(args, "--tls-key")) {
+        println("flag repetida — informe uma so vez: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]")
         return 1
     }
     var controlPort = parseIntSafe(flagValue(args, "--control-port").trim(), defaultControlPort())
@@ -1290,6 +1314,28 @@ Int cmdServe(List<String> args) {
     var panel = hasFlag(args, "--panel")
     var tunnelSecret = config.str("kofcloud.tunnelSecret", "")
     var maxBytes = limitMaxBodyBytes()
+    // TLS do control plane (Fase 9 slice 1 parcial): par cert+key em PEM;
+    // ausente = HTTP (comportamento atual); metade sozinha = erro local.
+    var tlsPair = resolveTlsPair(flagValue(args, "--tls-cert"), flagValue(args, "--tls-key"))
+    if (tlsPair.startsWith("tls exige")) {
+        println(tlsPair)
+        println(usoServeLine())
+        return 1
+    }
+    var tlsCertPath = ""
+    var tlsKeyPath = ""
+    if (tlsPair.length > 0) {
+        var sep = tlsPair.indexOf("\n")
+        tlsCertPath = tlsPair.substring(0, sep)
+        tlsKeyPath = tlsPair.substring(sep + 1)
+        var certPem = readTextOr(tlsCertPath, "")
+        var keyPem = readTextOr(tlsKeyPath, "")
+        if (certPem.length == 0 || keyPem.length == 0) {
+            println("tls: PEM ilegivel (cert ou key vazio/ausente) — confira --tls-cert/--tls-key")
+            println(usoServeLine())
+            return 1
+        }
+    }
 
     // Fail-fast: valida as tres portas ANTES de abrir qualquer listener —
     // sem isso, --control-port abc caia no default 8080 em silencio e porta
@@ -1310,11 +1356,14 @@ Int cmdServe(List<String> args) {
     var edgeState = EdgeState(registry)
     edgeState.setWafEnforce(wafMode == "enforce")
 
-    println("kofcloud control plane  -> http://127.0.0.1:" + intToString(controlPort))
+    println("kofcloud control plane  -> " + controlScheme(tlsPair) + "://127.0.0.1:" + intToString(controlPort))
     println("kofcloud edge tunnel    -> 127.0.0.1:" + intToString(tunnelPort))
     println("kofcloud edge public    -> http://127.0.0.1:" + intToString(httpPort))
     println("estado: " + statePath)
     println("waf: " + wafMode)
+    if (tlsPair.length > 0) {
+        println("tls: control plane em HTTPS (cert do operador)")
+    }
     if (panel) {
         println("painel: http://127.0.0.1:" + intToString(controlPort) + "/panel")
     }
@@ -1324,6 +1373,12 @@ Int cmdServe(List<String> args) {
     var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
     if (panel) {
         control.enablePanel()
+    }
+    if (tlsPair.length > 0) {
+        // PEMs ja validados acima (nao-vazios); rele do disco por clareza —
+        // o readTextOr do fail-fast e a fonte da verdade, sem duplicar regra.
+        var sep = tlsPair.indexOf("\n")
+        control.enableTls(readTextOr(tlsPair.substring(0, sep), ""), readTextOr(tlsPair.substring(sep + 1), ""))
     }
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, tunnelSecret, platformStop) }

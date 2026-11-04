@@ -184,9 +184,11 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   existe), **daemon: tray + auto-update** (slices 2–3 da Fase 13).
 * **Múltiplos nós** de control plane/edge (sem consenso; registro único em
   memória + arquivo).
-* **TLS/HTTPS na borda (Fase 9)** — slices: PEM do operador via
-  `listenSecure`, HSTS+301, SNI por hostname; ACME automático bloqueado
-  (sem ES256/ACME no stdlib).
+* **TLS/HTTPS na borda (Fase 9)** — slice 1 parcial: control plane HTTPS
+  via `serve --tls-cert/--tls-key` (`listenSecure` 3-arg, JVM); resto dos
+  slices (HSTS+301, SNI por hostname, Edge HTTPS) pendente — Edge esbarra
+  na L16; ACME automático: ES256/JWS pousou no lab do Kof, ainda fora do
+  jar pinado.
 * **WAF + proteção da aplicação (Fase 10)** — slices: assinaturas mínimas
   (detectar antes de bloquear), teto de corpo/timeout por rota, allowlist
   por serviço. Regra: nunca logar conteúdo, nunca quebrar o legítimo.

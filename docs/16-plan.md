@@ -237,14 +237,21 @@ entre cliente e Edge. Cloud robusta de verdade exige HTTPS ponta a ponta
 (cliente→Edge) + túnel cifrado (Edge→Agent, já existe com
 `KOFCLOUD_TUNNEL_SECRET`).
 
-**Estado: ⏳ não iniciado.** Desenho fatiado (cada slice é um incremento
-testável, na ordem):
+**Estado: slice 1 parcial ✅ (control plane) + resto ⏳.** Desenho fatiado
+(cada slice é um incremento testável, na ordem):
 
-* **Slice 1 — Edge HTTPS com PEM do operador.** `serve` ganha
-  `--tls-cert/--tls-key`; sem flags, HTTP (comportamento atual + aviso);
-  com flags, `web.app().listenSecure` (JVM) no lugar do listener cru.
-  Roteamento por `Host` e relay inalterados (o núcleo trabalha com bytes
-  já decifrados). Prova: e2e HTTPS com cert autoassinado gerado no teste.
+* **Slice 1 — HTTPS com PEM do operador ✅ (control plane).** `serve`
+  ganha `--tls-cert/--tls-key` (par obrigatório, PEM lido do disco com
+  fail-fast); sem flags, HTTP (comportamento atual); com o par,
+  `ControlPlane` usa `app.listenSecure(port, cert, key)` (JVM) e o banner
+  anuncia `https://`. A CLI fala com o control via `http.*` (trust-all no
+  Kof), então `login --control https://…` funciona sem config de trust.
+  Escopo honesto: só o control plane (JSON/Strings, sem binário) — o Edge
+  público segue HTTP porque o handler do `web.app()` corrompe bytes altos
+  (L16 segue valendo). Prova: `tests/control_test.kf` (`control-tls`:
+  openssl gera o par, `enableTls` liga, `http.get` lê o `/v1/health` via
+  HTTPS) + `tests/hosts_test.kf` (`serve-tls`: paridade, erro de metade,
+  esquema do banner, guardas fail-fast).
 * **Slice 2 — HSTS + redirecionamento HTTP→HTTPS.** Resposta 301 para
   `http://` quando o TLS está ativo + header `Strict-Transport-Security`.
   Sem flag nova (segue o modo do slice 1).
@@ -259,12 +266,13 @@ testável, na ordem):
 (JVM-only); sem ACME e sem ES256 (só Ed25519) — por isso sem Let's Encrypt
 automático ainda. Ver `12-tls.md` e `13-kof-apis.md` L2.
 
-**Slice 1 está bloqueado por medição, não por falta de plano:** o handler do
-`web.app()` devolve `String` e corrompe bytes altos (UTF-8: `0xC8 0xFF` →
-`C3 88 C3 BF` — `13-kof-apis.md` L16). Um proxy sobre `web.app()` destruiria
-respostas binárias. Para destravar: TLS em socket cru (capacidade do Kof) ou
-API de resposta binária no `web.app()`. Enquanto isso, TLS segue no terminador
-externo (`12-tls.md`).
+**Edge HTTPS segue bloqueado por medição, não por falta de plano:** o
+handler do `web.app()` devolve `String` e corrompe bytes altos (UTF-8:
+`0xC8 0xFF` → `C3 88 C3 BF` — `13-kof-apis.md` L16). Um proxy sobre
+`web.app()` destruiria respostas binárias. Para destravar o Edge: TLS em
+socket cru (capacidade do Kof) ou API de resposta binária no `web.app()`.
+Enquanto isso, TLS no Edge segue no terminador externo (`12-tls.md`) —
+o que o slice parcial acima resolve é o control plane (login/token).
 
 ## Fase 10 — WAF + proteção da aplicação (cloud robusta)
 

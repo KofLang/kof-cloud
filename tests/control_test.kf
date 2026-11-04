@@ -62,3 +62,26 @@ test "control plane: token invalido e recusado" {
     var denied = httpPostJson(18081, "/v1/devices", "{\"name\":\"x\",\"publicKey\":\"y\"}", "kfc_falso")
     assert(statusOf(denied) == 401, "401 sem token valido")
 }
+
+test "control plane: HTTPS com PEM do operador (serve --tls-cert/--tls-key)", "control-tls" {
+    // E2E (porta dedicada 18082): openssl gera o par, enableTls liga o
+    // listenSecure, e o cliente http.get (trust-all no Kof) le o /v1/health.
+    // Prova o slice Fase 9 parcial: login/token viajam cifrados no control.
+    var dir = "/tmp/kofcloud-tls-" + crypto.randomHex(4)
+    Directory(dir).createDirectories()
+    var certPath = dir + "/cert.pem"
+    var keyPath = dir + "/key.pem"
+    var gen = process.run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", keyPath, "-out", certPath, "-days", "1", "-nodes", "-subj", "/CN=localhost", "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost")
+    assert(gen.exitCode == 0, "openssl gerou o par")
+    var certPem = readTextOr(certPath, "")
+    var keyPem = readTextOr(keyPath, "")
+    assert(certPem.length > 0 && keyPem.length > 0, "PEMs lidos do disco")
+    var path = "/tmp/kofcloud-cp-tls-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    var control = ControlPlane(registry, 18082, "127.0.0.1", 0)
+    control.enableTls(certPem, keyPem)
+    var server = spawn { control.start() }
+    assert(waitForPort(18082, 60), "control plane TLS no ar")
+    var health = http.get("https://127.0.0.1:18082/v1/health")
+    assert(health.indexOf("ok") >= 0, "health via HTTPS: " + health)
+}

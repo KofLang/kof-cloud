@@ -44,7 +44,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | Suite | Arquivo | Testes |
 |---|---|---|
 | framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 11 |
-| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf | `tests/hosts_test.kf` | 27 |
+| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls | `tests/hosts_test.kf` | 28 |
 | identidade/cifra/tokens | `tests/identity_test.kf` | 7 |
 | backoff | `tests/backoff_test.kf` | 3 |
 | registry | `tests/registry_test.kf` | 7 |
@@ -63,7 +63,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | daemon | `tests/daemon_test.kf` | 13 |
 | doctor | `tests/doctor_test.kf` | 5 |
 | hot-reload | `tests/reload_test.kf` | 1 |
-| control plane | `tests/control_test.kf` | 2 |
+| control plane | `tests/control_test.kf` | 3 |
 | presenca | `tests/presence_test.kf` | 1 |
 | e2e | `tests/e2e_test.kf` | 1 |
 | e2e multiservico | `tests/e2e_multiservice_test.kf` | 1 |
@@ -75,7 +75,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | allowlist WAF (Fase 10 slice 3) | `tests/waf_allow_test.kf` | 4 |
 | painel somente-leitura | `tests/panel_test.kf` | 3 |
 
-Total: 173 testes. Ver `15-tests.md` para a matriz.
+Total: 175 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

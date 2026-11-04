@@ -53,7 +53,9 @@ kof run src/Main.kf serve --control-port 8080 --tunnel-port 7000 --http-port 808
 
 Isso sobe o control plane (HTTP/JSON em `:8080`), o listener de túneis
 (TCP `:7000`) e o listener HTTP público (`:8081`) no mesmo processo,
-compartilhando um registro único.
+compartilhando um registro único. Com `--tls-cert cert.pem --tls-key
+key.pem`, o control plane serve HTTPS (o login e o `kfc_` viajam cifrados;
+o Edge público segue HTTP — ver `docs/12-tls.md`).
 
 ### 2. Usar o CLI (na máquina do usuário)
 
@@ -116,7 +118,7 @@ daemon install|status|uninstall   (artefato por SO — systemd/launchd/Windows �
 doctor [--file kofcloud.json]   (diagnostico: login, control, device, tunel, servicos)
 audit                        (trilha de auditoria da conta)
 logs [--tail <linhas>] [--runtime]   (marcos de sessao; --runtime = eventos reais do Agent; teto 256 KiB por arquivo)
-serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>] [--panel] [--waf detectar|enforce]
+serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>] [--panel] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]
 ```
 
 ## Testes
