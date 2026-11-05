@@ -249,6 +249,57 @@ List<String> scanManifestSecrets(String raw) {
     return findings
 }
 
+// Nomes de variavel de ambiente que, se definidos, indicam credencial no
+// ambiente do shell (o Kof nao enumera env: `config.env(nome)` le um nome
+// por vez — por isso a lista e curada, nao uma varredura de tudo).
+List<String> sensitiveEnvNames() {
+    return listOf(
+        "KOFCLOUD_TOKEN", "KOFCLOUD_SECRET", "KOFCLOUD_TUNNEL_SECRET",
+        "KFS_TOKEN", "KFC_TOKEN", "GITHUB_TOKEN", "GH_TOKEN",
+        "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+        "DATABASE_URL", "DB_PASSWORD", "PGPASSWORD", "MYSQL_PWD"
+    )
+}
+
+// Varredura de segredos no ambiente (Fase 19 slice 2). Recebe pares
+// "NOME=valor" ja coletados (puro: sem IO, testavel sem env real). Achado
+// quando o NOME e sensivel e tem valor, ou quando QUALQUER valor carrega
+// kfs_/kfc_/password. Nunca imprime o valor — so o nome.
+List<String> scanEnvSecrets(List<String> pairs) {
+    var findings = listOf<String>()
+    var sensitive = sensitiveEnvNames()
+    for (var pair in pairs) {
+        var eq = pair.indexOf("=")
+        if (eq <= 0) {
+            continue
+        }
+        var name = pair.substring(0, eq)
+        var value = pair.substring(eq + 1)
+        if (value.length == 0) {
+            continue
+        }
+        if (sensitive.contains(name)) {
+            findings.add("ambiente: " + name + " esta definida (valor nao exibido) — prefira `secrets.get`/kof.config")
+        } else if (value.indexOf("kfs_") >= 0 || value.indexOf("kfc_") >= 0 || value.indexOf("password") >= 0) {
+            findings.add("ambiente: " + name + " parece conter credencial (valor nao exibido)")
+        }
+    }
+    return findings
+}
+
+// Coleta os pares "NOME=valor" dos nomes sensiveis definidos no processo.
+// IO (config.env) fica aqui; a decisao e scanEnvSecrets.
+List<String> collectSensitiveEnv() {
+    var out = listOf<String>()
+    for (var name in sensitiveEnvNames()) {
+        var value = config.env(name)
+        if (value != null) {
+            out.add(name + "=" + value)
+        }
+    }
+    return out
+}
+
 List<ManifestService> parseManifest(String raw) {
     var trimmed = raw.trim()
     if (trimmed.length == 0) {
@@ -720,19 +771,40 @@ Int cmdDown(List<String> args) {
 // login, sem rede. Local por desenho: o que esta no disco e o que pode
 // vazar no git. Exit 1 com achado (falha o CI), 0 limpo.
 Int cmdScan(List<String> args) {
-    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file")) {
-        println("uso: kof cloud scan [--file <caminho>]")
+    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file") || flagMissingValue(args, "--tls-cert") || flagDuplicated(args, "--tls-cert")) {
+        println("uso: kof cloud scan [--file <caminho>] [--tls-cert <pem>]")
         return 1
     }
+    var findings = listOf<String>()
+    // 1) Manifesto (segredos literais).
     var path = resolveManifestPath(flagValue(args, "--file"))
     var raw = readTextOr(path, "")
     if (raw.length == 0) {
         println("manifesto nao encontrado: " + path)
         return 1
     }
-    var findings = scanManifestSecrets(raw)
+    for (var finding in scanManifestSecrets(raw)) {
+        findings.add(finding)
+    }
+    // 2) Ambiente do processo (nomes sensiveis definidos).
+    for (var finding in scanEnvSecrets(collectSensitiveEnv())) {
+        findings.add(finding)
+    }
+    // 3) PEM do operador: expirado ou expirando em 30 dias (aviso, nao erro
+    //    de configuracao — o serve tambem so avisa).
+    var certPath = flagValue(args, "--tls-cert").trim()
+    if (certPath.length > 0) {
+        if (fileExists(certPath) == false) {
+            findings.add("tls: certificado nao encontrado: " + certPath)
+        } else {
+            var check = process.run("openssl", "x509", "-in", certPath, "-noout", "-checkend", "2592000")
+            if (tlsCertExpiringSoon(check.exitCode)) {
+                findings.add("tls: " + certPath + " expira em menos de 30 dias (ou nao e um PEM valido) — renove antes do vencimento")
+            }
+        }
+    }
     if (findings.size == 0) {
-        println("scan ok: nenhum segredo no manifesto")
+        println("scan ok: nenhum segredo no manifesto/ambiente e nenhum PEM expirando")
         return 0
     }
     for (var finding in findings) {

@@ -125,7 +125,7 @@ down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove o
 daemon install|status|uninstall   (artefato por SO — systemd/launchd/Windows — sem root, ativação manual)
 doctor [--file kofcloud.json]   (diagnostico: login, control, device, tunel, servicos)
 audit [--sbom] [--verify]               (trilha de auditoria da conta; --sbom = inventario local dos fontes)
-scan [--file <caminho>]      (varredura local de segredos no manifesto; exit 1 com achado)
+scan [--file <caminho>] [--tls-cert <pem>]      (varredura local de segredos no manifesto; exit 1 com achado)
 webhook set <url> --secret <s> | show | remove | test
 freeze service|device <nome|id>
 unfreeze service|device <nome|id>

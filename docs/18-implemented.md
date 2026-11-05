@@ -50,6 +50,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | presenca real do tunel | espelho bind/unbind no Registry + `GET /v1/presence` filtrado por conta + `status` ONLINE/OFFLINE confirmado | `presence_test.kf` |
 | `security.txt` + `SECURITY.md` + SBOM (Fase 19 s1 parcial) | `/.well-known/security.txt` no Edge (200 `text/plain`, Contact + Policy estáticos) antes de rate limit/rota/auth; sem conta/túnel/serviço; `docs/SECURITY.md` com suporte/reporte/SLA/escopo e trava; `audit --sbom` local (44 fontes + SHA-256, sem login) | `security_test.kf` + `hosts_test.kf` (`audit-sbom`) |
 | scan de segredos (Fase 19 s2 parcial) | `kof cloud scan [--file]` local (kfs_/kfc_/password no manifesto, nomeia sem vazar, exit 1 com achado); sem login/rede | `deploy_test.kf` (`deploy-scan`) |
+| scan de ambiente/PEM (F19 s2) | `scan` cobre manifesto + env sensível + PEM expirando (`--tls-cert`), sem vazar valor | `scan_extra_test.kf` |
 | cadeia de auditoria (F19 s4) | `prevHash`/`hash` encadeados; `audit --verify` e `/v1/audit/verify` detectam adulteração/remoção | `audit_chain_test.kf` |
 | webhook de incidentes (F17 s3) | HMAC-SHA256 (`X-KofCloud-Signature`), URL validada, segredo nunca devolvido, `kof cloud webhook set/show/remove/test` | `webhook_test.kf` |
 | status page pública (Fase 17 s3) | `serve --status-page` → `/status` (HTML) e `/status.json`, sem token, só incidentes globais | `status_page_test.kf` |

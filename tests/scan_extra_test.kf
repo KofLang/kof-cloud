@@ -1,0 +1,70 @@
+import kofcloud.cli.Deploy
+import kofcloud.cli.Usage
+import kofcloud.util.Text
+
+// Fase 19 slice 2 (complemento) — o scan passa a olhar tambem o ambiente e
+// o PEM do operador, nao so o manifesto.
+
+test "scan: ambiente sensivel e detectado sem vazar valor", "scan-env-unit" {
+    var pairs = listOf(
+        "KOFCLOUD_TOKEN=abc123",
+        "GITHUB_TOKEN=ghp_xxx",
+        "PATH=/usr/bin",
+        "MINHA_VAR=tem kfs_embutido",
+        "VAZIA="
+    )
+    var findings = scanEnvSecrets(pairs)
+    assert(findings.size == 3, "tres achados (token, github, kfs_ embutido)")
+    var joined = ""
+    for (var finding in findings) {
+        joined = joined + finding + "\n"
+    }
+    assert(joined.indexOf("KOFCLOUD_TOKEN") >= 0, "nomeia o token")
+    assert(joined.indexOf("GITHUB_TOKEN") >= 0, "nomeia o github")
+    assert(joined.indexOf("MINHA_VAR") >= 0, "nomeia a var com kfs_")
+    // Nunca o valor.
+    assert(joined.indexOf("abc123") < 0, "nao vaza o valor do token")
+    assert(joined.indexOf("ghp_xxx") < 0, "nao vaza o valor do github")
+    assert(joined.indexOf("PATH") < 0, "PATH nao e achado")
+    assert(joined.indexOf("VAZIA") < 0, "variavel vazia nao e achado")
+}
+
+test "scan: lista de nomes sensiveis e curada e estavel", "scan-env-unit" {
+    var names = sensitiveEnvNames()
+    assert(names.contains("KOFCLOUD_TOKEN"), "token do kofcloud")
+    assert(names.contains("KOFCLOUD_TUNNEL_SECRET"), "segredo do tunel")
+    assert(names.contains("AWS_SECRET_ACCESS_KEY"), "aws")
+    assert(names.contains("DATABASE_URL"), "banco")
+    assert(names.size >= 10, "lista util")
+    // Sem duplicata.
+    var seen = listOf<String>()
+    for (var name in names) {
+        assert(seen.contains(name) == false, "sem duplicata: " + name)
+        seen.add(name)
+    }
+}
+
+test "scan: PEM expirado/expirando e detectado com openssl", "scan-tls" {
+    var dir = "/tmp/kofcloud-scan-" + crypto.randomHex(4)
+    Directory(dir).createDirectories()
+    var certPath = dir + "/cert.pem"
+    var keyPath = dir + "/key.pem"
+    // Certificado valido por 1 dia: expira em menos de 30 -> achado.
+    var gen = process.run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", keyPath, "-out", certPath, "-days", "1", "-nodes", "-subj", "/CN=localhost")
+    assert(gen.exitCode == 0, "openssl gerou o par")
+    var check = process.run("openssl", "x509", "-in", certPath, "-noout", "-checkend", "2592000")
+    assert(tlsCertExpiringSoon(check.exitCode), "1 dia expira em 30")
+    // Valido por 365 dias: nao expira em 30.
+    var longPath = dir + "/long.pem"
+    var longKey = dir + "/long.key"
+    var gen2 = process.run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", longKey, "-out", longPath, "-days", "365", "-nodes", "-subj", "/CN=localhost")
+    assert(gen2.exitCode == 0, "segundo par")
+    var check2 = process.run("openssl", "x509", "-in", longPath, "-noout", "-checkend", "2592000")
+    assert(tlsCertExpiringSoon(check2.exitCode) == false, "365 dias nao expira em 30")
+}
+
+test "scan: usage documenta --tls-cert", "scan-usage" {
+    var help = usageText()
+    assert(help.indexOf("scan [--file") >= 0, "scan documentado")
+    assert(help.indexOf("--tls-cert") >= 0, "scan anuncia --tls-cert")
+}

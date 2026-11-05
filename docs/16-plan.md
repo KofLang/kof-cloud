@@ -691,6 +691,14 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   vazar o valor). Prova: `tests/deploy_test.kf` (`deploy-scan`) + trava
   da ajuda. Pendente: dependências, segredos em env, PEM expirando,
   `kfs_` sem TTL em serviço crítico (exigem openssl/rede/conta).
+
+  **Complemento ✅:** o `scan` agora também olha o **ambiente** (lista curada
+  de nomes sensíveis — o Kof não enumera env, `config.env(nome)` lê um por
+  vez — mais qualquer valor com `kfs_`/`kfc_`/`password`) e o **PEM do
+  operador** (`--tls-cert`: expirado ou expirando em 30 dias, via
+  `openssl x509 -checkend`). Nunca imprime valor, só o nome. Prova:
+  `tests/scan_extra_test.kf` (4). **Pendente:** dependências (exige resolver
+  `kofdeps`/rede) e `kfs_` sem TTL em serviço crítico (exige conta).
 * **Slice 3 — resposta e rotação programada (✅ + `rotate --all`).**
   Rotação assistida (por serviço): `kof cloud service rotate
   (<nome>|--all) [--ttl H] [--prune]` emite credencial nova e **só revoga
