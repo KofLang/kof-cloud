@@ -52,7 +52,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | service token | `tests/service_token_test.kf` | 13 |
 | erros R6 | `tests/errors_test.kf` | 10 |
 | dominios | `tests/domains_test.kf` | 9 |
-| metricas | `tests/metrics_test.kf` | 6 |
+| metricas | `tests/metrics_test.kf` | 7 |
 | rate limit | `tests/ratelimit_test.kf` | 2 |
 | agent metrics | `tests/agent_metrics_test.kf` | 3 |
 | abuso | `tests/abuse_test.kf` | 3 |
@@ -86,7 +86,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | higiene de credenciais (F19 s2) | `tests/token_hygiene_test.kf` | 4 |
 | painel de gestão completa (F12 s2) | `tests/panel_actions_test.kf` | 2 |
 
-Total: 232 testes. Ver `15-tests.md` para a matriz.
+Total: 233 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

@@ -481,13 +481,25 @@ best-effort, como hoje).
 com `bytesToString` O(n²) no caminho. Funciona, mas latência é distância +
 custo por byte — cloud rápida precisa dos dois endereçados com medição.
 
-**Estado: ⏳ não iniciado.** Desenho fatiado (cada slice com benchmark
-antes/depois, mesmo protocolo, sem mudar formato público):
+**Estado: slice 1 parcial ✅ (distribuição de latência); slices 2 e 3 pendentes.**
+Desenho fatiado (cada slice com benchmark antes/depois, mesmo protocolo,
+sem mudar formato público):
 
 * **Slice 1 — medir de verdade.** Benchmark contínuo no Edge: latência
   p50/p99 por hostname (agregado, sem dado de cliente), tempo de relay
   por tamanho, custo do chunk. Sem medir, otimizar é chute. Prova: nova
   seção no `/v1/metrics` + teste de formato.
+
+  **Implementado (distribuição):** o histograma do stdlib só exporta
+  `sum`/`count` (média), e média esconde cauda — que é o que pesa. Cada
+  requisição agora também cai em uma faixa monotônica de contadores
+  (`le_50`…`le_2000` + `gt_2000`), sem bucket por hostname/cliente. Fonte
+  única `latencyBucketLimitsMs()`; o rótulo é **derivado** da lista (mudar
+  a lista muda o rótulo, sem dois lugares para manter). Negativo (relógio
+  ajustado) cai na primeira faixa. Prova: `tests/metrics_test.kf`
+  (`metrics-latency`). **Pendente:** p50/p99 por hostname (hoje só agregado
+  global, porque contar por hostname seria cardinalidade por cliente) e o
+  tempo de relay por tamanho.
 * **Slice 2 — relay regional.** `connect` passa a receber a lista de Edges
   (`edgeHost` vira ranking por latência medida no handshake); o Agent
   escolhe o mais próximo e reavalia a cada N minutos. Sem consenso

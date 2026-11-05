@@ -126,6 +126,8 @@ export Prometheus em `observability.metrics()`, servido sem auth em
 | `kofcloud_edge_http_response_bytes_total` | counter | bytes de resposta somados |
 | `kofcloud_edge_tunnel_streams_total` | counter | streams abertos no relay |
 | `kofcloud_edge_http_request_latency_ms_{count,sum}` | histogram | latência fim-a-fim por requisição (ms) |
+| `kofcloud_edge_http_request_latency_ms_le_{50,100,250,500,1000,2000}` | counter | quantas requisições ficaram **até** cada faixa (ms, borda inclusiva) |
+| `kofcloud_edge_http_request_latency_ms_gt_2000` | counter | requisições acima da última faixa (cauda) |
 
 Regra de privacidade: só metadados operacionais agregados, sem cardinalidade
 por cliente — nenhum hostname, caminho, header, corpo, credencial ou chave

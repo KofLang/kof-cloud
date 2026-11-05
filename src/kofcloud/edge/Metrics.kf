@@ -53,6 +53,40 @@ String metricRequestLatencyMs() {
     return "kofcloud_edge_http_request_latency_ms"
 }
 
+// Latencia em faixas (Fase 14 slice 1 parcial): o histograma do stdlib so
+// exporta sum+count, ou seja a MEDIA. Latencia de cauda (p99) e o que pesa
+// numa cloud rapida, e media esconde cauda. Cada requisicao cai em uma
+// faixa monotonica de contadores — `_le_50` significa "<= 50 ms", e a
+// ultima (`_gt_2000`) e o excedente. Sem bucket por hostname/cliente,
+// mesma regra de privacidade do resto do modulo.
+List<Int> latencyBucketLimitsMs() {
+    return listOf(50, 100, 250, 500, 1000, 2000)
+}
+
+// Sufixo Prometheus da faixa que contem `elapsedMs`. Puro e com fonte unica
+// (os limites vem de `latencyBucketLimitsMs`; o rotulo e derivado deles, nao
+// digitado a mao — mudar a lista muda o rotulo). `elapsedMs` negativo
+// (relogio ajustado) cai na primeira faixa em vez de sumir da contagem.
+String latencyBucketSuffix(Long elapsedMs) {
+    var limits = latencyBucketLimitsMs()
+    var i = 0
+    while (i < limits.size) {
+        var limit = limits.get(i)
+        if (elapsedMs <= limit) {
+            return "_le_" + intToString(limit)
+        }
+        i = i + 1
+    }
+    return "_gt_" + intToString(limits.get(limits.size - 1))
+}
+
+// Acumula a amostra de latencia: histograma (sum+count, media) + a faixa
+// correspondente. Fonte unica da classificacao — o chamador so passa ms.
+void noteRequestLatency(Long elapsedMs) {
+    observability.histogram(metricRequestLatencyMs(), elapsedMs as Int)
+    observability.counter(metricRequestLatencyMs() + latencyBucketSuffix(elapsedMs))
+}
+
 // Recusas de tunel por motivo (motivos sao do protocolo, nunca de cliente).
 void noteTunnelRefused(String reason) {
     observability.counter(metricTunnelRefused())
@@ -118,7 +152,7 @@ void noteHttpFinished(String outcome, String deniedDetail, Int requestBytes, Int
     }
     observability.increment(metricRequestBytes(), requestBytes)
     observability.increment(metricResponseBytes(), responseBytes)
-    observability.histogram(metricRequestLatencyMs(), elapsedMs as Int)
+    noteRequestLatency(elapsedMs)
     observability.gauge(metricStreamsOpen(), 0)
 }
 

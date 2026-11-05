@@ -91,6 +91,32 @@ test "metricas: recusas de tunel contam por motivo", "metrics-tunnel" {
     assert(metricValue(observability.metrics(), "kofcloud_edge_tunnel_sessions_open") == 0, "gauge zera ao fechar")
 }
 
+test "metricas: latencia cai em faixa e a faixa conta", "metrics-latency" {
+    // Pura: a classificacao vem da lista unica `latencyBucketLimitsMs`,
+    // entao os rotulos sao derivados (nunca digitados). Bordas inclusivas.
+    assert(latencyBucketLimitsMs().get(0) == 50, "primeira faixa = 50 ms")
+    assert(latencyBucketSuffix(0) == "_le_50", "zero na primeira faixa")
+    assert(latencyBucketSuffix(50) == "_le_50", "borda inclusiva em 50")
+    assert(latencyBucketSuffix(51) == "_le_100", "acima de 50 cai na proxima")
+    assert(latencyBucketSuffix(250) == "_le_250", "borda inclusiva em 250")
+    assert(latencyBucketSuffix(999) == "_le_1000", "perto do teto de 1 s")
+    assert(latencyBucketSuffix(2000) == "_le_2000", "borda inclusiva no ultimo limite")
+    assert(latencyBucketSuffix(2001) == "_gt_2000", "acima do ultimo limite")
+    assert(latencyBucketSuffix(-5) == "_le_50", "relogio ajustado nao some da contagem")
+
+    // E2E na mesma funcao do produto: uma requisicao lenta (>= 60 ms) tem
+    // que aparecer na faixa certa e a soma das faixas nao pode encolher.
+    var before = metricValue(observability.metrics(), "kofcloud_edge_http_request_latency_ms_le_100")
+    if (before < 0) {
+        before = 0
+    }
+    noteHttpFinished("ok", "", 10, 20, 75)
+    var exposition = observability.metrics()
+    assert(metricValue(exposition, "kofcloud_edge_http_request_latency_ms_le_100") == before + 1, "75 ms conta em le_100")
+    // O histograma continua sendo alimentado pela mesma chamada (sum+count).
+    assert(metricHas(exposition, "kofcloud_edge_http_request_latency_ms_count"), "histograma segue contando")
+}
+
 test "metricas: Edge real conta ok/negada e bytes fim a fim", "metrics-e2e" {
     var localSvc = 19541
     var controlPort = 19542
