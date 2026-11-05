@@ -33,15 +33,17 @@ header .tag{color:#8a8f98;font-size:12px}
 main{padding:24px;display:grid;gap:24px;max-width:1100px}
 section{background:#161920;border:1px solid #2a2d35;border-radius:10px;padding:16px}
 section h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#8a8f98;margin:0 0 12px}
-input{background:#0f1115;border:1px solid #2a2d35;color:#e6e6e6;border-radius:6px;padding:8px 10px;width:340px}
-button{background:#2f6feb;border:0;color:#fff;border-radius:6px;padding:8px 14px;cursor:pointer}
+input,select{background:#0f1115;border:1px solid #2a2d35;color:#e6e6e6;border-radius:6px;padding:8px 10px}
+button{background:#2f6feb;border:0;color:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;margin:2px}
+button.danger{background:#8b2323}
 table{border-collapse:collapse;width:100%}
 th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #22252c;font-family:ui-monospace,monospace;font-size:13px}
 .on{color:#3fb950}.off{color:#8a8f98}.pend{color:#d29922}.err{color:#f85149}
-.muted{color:#8a8f98}
+.muted{color:#8a8f98}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.secret{word-break:break-all;background:#0f1115;padding:8px;border-radius:6px;margin-top:8px}
 footer{padding:16px 24px;color:#5b606a;font-size:12px}
 </style></head><body>
-<header><h1>KofCloud</h1><span class=\"tag\">painel somente leitura</span></header>
+<header><h1>KofCloud</h1><span class=\"tag\">painel</span></header>
 <main>
 <section>
   <h2>Conta</h2>
@@ -50,18 +52,44 @@ footer{padding:16px 24px;color:#5b606a;font-size:12px}
   <span id=\"msg\" class=\"muted\"></span>
   <p class=\"muted\">O token (o mesmo do <code>kof cloud login</code>) fica so na memoria desta aba. Nada e gravado.</p>
 </section>
-<section><h2>Dispositivos</h2><div id=\"devs\"></div></section>
-<section><h2>Servicos</h2><div id=\"svcs\"></div></section>
-<section><h2>Dominios</h2><div id=\"doms\"></div></section>
+<section><h2>Dispositivos</h2><div id=\"devs\"></div>
+  <p class=\"muted\">Revogar e permanente — suspender e reversivel.</p>
+  <div class=\"row\"><input id=\"devname\" placeholder=\"nome do dispositivo\">
+  <button onclick=\"acao('device-suspend')\">Suspender</button>
+  <button onclick=\"acao('device-unsuspend')\">Reativar</button>
+  <button class=\"danger\" onclick=\"acao('device-revoke')\">Revogar</button></div></section>
+<section><h2>Servicos</h2><div id=\"svcs\"></div>
+  <div class=\"row\"><input id=\"svcname\" placeholder=\"nome\"><input id=\"svcport\" placeholder=\"porta\" size=\"6\">
+  <select id=\"svcexp\"><option>PUBLIC</option><option>AUTHENTICATED</option><option>PRIVATE</option></select>
+  <button onclick=\"acao('publish')\">Publicar</button>
+  <button class=\"danger\" onclick=\"acao('unpublish')\">Remover</button></div>
+  <div class=\"row\"><input id=\"svctarget\" placeholder=\"nome\">
+  <button onclick=\"acao('service-suspend')\">Suspender</button>
+  <button onclick=\"acao('service-unsuspend')\">Reativar</button>
+  <button onclick=\"acao('token')\">Emitir kfs_</button>
+  <button class=\"danger\" onclick=\"acao('token-revoke-all')\">Revogar credenciais</button></div>
+  <div id=\"secret\"></div></section>
+<section><h2>Dominios</h2><div id=\"doms\"></div>
+  <div class=\"row\"><input id=\"domhost\" placeholder=\"api.exemplo.com\"><input id=\"domsvc\" placeholder=\"servico\">
+  <button onclick=\"acao('domain-add')\">Adicionar</button>
+  <button onclick=\"acao('domain-verify')\">Verificar DNS</button>
+  <button class=\"danger\" onclick=\"acao('domain-remove')\">Remover</button></div></section>
 </main>
-<footer>KofCloud painel v" + panelVersion() + " — le /v1/devices, /v1/presence, /v1/services e /v1/domains</footer>
+<footer>KofCloud painel v" + panelVersion() + " — usa /v1/devices, /v1/presence, /v1/services, /v1/domains, /v1/services/token, /v1/domains/{add,verify,remove}, /v1/devices/{revoke,suspend,unsuspend}, /v1/services/{suspend,unsuspend}</footer>
 <script>
 var TOKEN = '';  // so na memoria da aba; nunca persistido
+var STATE = {svcs: [], devs: []};
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>\"']/g, function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]; }); }
-function api(path, metodo){
-  return fetch(path, {method: metodo || 'GET', headers: {'X-KofCloud-Token': TOKEN}})
-    .then(function(r){ if(!r.ok) throw new Error(r.status + ' em ' + path); return r.json(); });
+function api(path, metodo, corpo){
+  var opt = {method: metodo || 'GET', headers: {'X-KofCloud-Token': TOKEN}};
+  if(corpo){ opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(corpo); }
+  return fetch(path, opt).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(j){
+      if(!r.ok) throw new Error((j.error || ('HTTP ' + r.status)));
+      return j;
+    });
+  });
 }
 function tabela(cabecalho, linhas){
   var h = '<table><tr>' + cabecalho.map(function(c){return '<th>'+esc(c)+'</th>';}).join('') + '</tr>';
@@ -70,17 +98,24 @@ function tabela(cabecalho, linhas){
   });
   return h + '</table>';
 }
+function idPorNome(lista, nome){
+  for(var i=0;i<lista.length;i++){ if(lista[i].name === nome) return lista[i].id || lista[i].deviceId; }
+  return '';
+}
+function ok(m){ var el=document.getElementById('msg'); el.className='on'; el.textContent=m; }
+function erro(m){ var el=document.getElementById('msg'); el.className='err'; el.textContent=m; }
 function carregar(){
   TOKEN = document.getElementById('tok').value.trim();
-  var msg = document.getElementById('msg');
-  if(!TOKEN){ msg.className='err'; msg.textContent='informe o token'; return; }
-  msg.className='muted'; msg.textContent='carregando...';
+  if(!TOKEN){ erro('informe o token'); return; }
+  document.getElementById('msg').className='muted';
+  document.getElementById('msg').textContent='carregando...';
   Promise.all([api('/v1/devices'), api('/v1/presence'), api('/v1/services'), api('/v1/domains')])
     .then(function(r){
       var devs = r[0], online = r[1], svcs = r[2], doms = r[3];
+      STATE.devs = devs; STATE.svcs = svcs;
       document.getElementById('devs').innerHTML = tabela(['nome','id','status','tunel'], devs.map(function(d){
-        var vivo = online.indexOf(d.id) >= 0;
-        return [esc(d.name), esc(d.id), esc(d.status),
+        var vivo = online.indexOf(d.id || d.deviceId) >= 0;
+        return [esc(d.name), esc(d.id || d.deviceId), esc(d.status),
                 vivo ? '<span class=\"on\">ONLINE</span>' : '<span class=\"off\">OFFLINE</span>'];
       }));
       document.getElementById('svcs').innerHTML = tabela(['nome','hostname','exposicao','status'], svcs.map(function(s){
@@ -91,9 +126,79 @@ function carregar(){
         var st = d.status === 'ACTIVE' ? '<span class=\"on\">' : '<span class=\"pend\">';
         return [esc(d.hostname), esc(d.kind), esc(d.service), st + esc(d.status || '-') + '</span>'];
       }));
-      msg.textContent = '';
+      document.getElementById('msg').textContent = '';
     })
-    .catch(function(e){ TOKEN=''; msg.className='err'; msg.textContent='falha: ' + e.message; });
+    .catch(function(e){ TOKEN=''; erro('falha: ' + e.message); });
+}
+function acao(tipo){
+  var p;
+  if(tipo === 'publish'){
+    var nome=document.getElementById('svcname').value.trim();
+    var porta=document.getElementById('svcport').value.trim();
+    if(!nome || !porta){ erro('informe nome e porta'); return; }
+    var dev = STATE.devs.length ? (STATE.devs[0].id || STATE.devs[0].deviceId) : '';
+    p = api('/v1/services','POST',{deviceId: dev, name: nome, localPort: porta, localAddress: '127.0.0.1',
+        protocol: 'http', exposure: document.getElementById('svcexp').value});
+  } else if(tipo === 'unpublish'){
+    var alvo=document.getElementById('svcname').value.trim();
+    if(!alvo){ erro('informe o nome do servico'); return; }
+    if(!confirm('Remover o servico \"' + alvo + '\"? A rota publica cai na hora.')) return;
+    p = api('/v1/services/remove','POST',{serviceId: idPorNome(STATE.svcs, alvo)});
+  } else if(tipo === 'service-suspend' || tipo === 'service-unsuspend'){
+    var n=document.getElementById('svctarget').value.trim();
+    var rota = tipo === 'service-suspend' ? '/v1/services/suspend' : '/v1/services/unsuspend';
+    p = api(rota,'POST',{serviceId: idPorNome(STATE.svcs, n)});
+  } else if(tipo === 'token'){
+    var n2=document.getElementById('svctarget').value.trim();
+    p = api('/v1/services/token','POST',{serviceId: idPorNome(STATE.svcs, n2)}).then(function(j){
+      var el=document.getElementById('secret');
+      el.innerHTML = '<p class=\"muted\">Credencial emitida — aparece UMA vez; copie agora:</p>' +
+                     '<div class=\"secret\">' + esc(j.token) + '</div>';
+      return {ok: 'credencial emitida'};
+    });
+  } else if(tipo === 'token-revoke-all'){
+    var n3=document.getElementById('svctarget').value.trim();
+    if(!confirm('Revogar TODAS as credenciais de \"' + n3 + '\"?')) return;
+    p = api('/v1/services/tokens','POST',{serviceId: idPorNome(STATE.svcs, n3)}).then(function(j){
+      var chain = Promise.resolve({ok: 'credenciais revogadas'});
+      for(var i=0;i<(j.length||0);i++){
+        (function(id){ chain = chain.then(function(){ return api('/v1/services/token/revoke','POST',{serviceId: idPorNome(STATE.svcs, n3), token: id}); }); })(j[i].id);
+      }
+      return chain;
+    });
+  } else if(tipo === 'device-suspend' || tipo === 'device-unsuspend' || tipo === 'device-revoke'){
+    var dn=document.getElementById('devname').value.trim();
+    var devId = idPorNome(STATE.devs, dn);
+    if(tipo === 'device-revoke' && !confirm('Revogar \"' + dn + '\"? Permanente — o dispositivo precisa ser registrado de novo.')) return;
+    var rotaD = tipo === 'device-revoke' ? '/v1/devices/revoke' : (tipo === 'device-suspend' ? '/v1/devices/suspend' : '/v1/devices/unsuspend');
+    p = api(rotaD,'POST',{deviceId: devId});
+  } else if(tipo === 'domain-add'){
+    var h=document.getElementById('domhost').value.trim();
+    var s=document.getElementById('domsvc').value.trim();
+    p = api('/v1/domains','POST',{hostname: h, serviceId: idPorNome(STATE.svcs, s)});
+  } else if(tipo === 'domain-verify'){
+    p = api('/v1/domains/verify','POST',{hostname: document.getElementById('domhost').value.trim()});
+  } else if(tipo === 'domain-remove'){
+    var h2=document.getElementById('domhost').value.trim();
+    if(!confirm('Remover o dominio \"' + h2 + '\"?')) return;
+    p = api('/v1/domains/remove','POST',{hostname: h2});
+  } else { return; }
+  p.then(function(j){ ok(j.ok || 'feito'); carregarListas(); })
+   .catch(function(e){ erro('falha: ' + e.message); });
+}
+function carregarListas(){
+  Promise.all([api('/v1/services'), api('/v1/domains')]).then(function(r){
+    var svcs=r[0], doms=r[1];
+    STATE.svcs = svcs;
+    document.getElementById('svcs').innerHTML = tabela(['nome','hostname','exposicao','status'], svcs.map(function(s){
+      var st = s.status === 'ONLINE' ? '<span class=\"on\">' : (s.status === 'OFFLINE' ? '<span class=\"off\">' : '<span class=\"pend\">');
+      return [esc(s.name), 'https://'+esc(s.hostname), esc(s.exposure), st + esc(s.status) + '</span>'];
+    }));
+    document.getElementById('doms').innerHTML = tabela(['hostname','tipo','servico','status'], doms.map(function(d){
+      var st = d.status === 'ACTIVE' ? '<span class=\"on\">' : '<span class=\"pend\">';
+      return [esc(d.hostname), esc(d.kind), esc(d.service), st + esc(d.status || '-') + '</span>'];
+    }));
+  });
 }
 </script>
 </body></html>"

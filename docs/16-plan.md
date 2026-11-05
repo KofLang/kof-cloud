@@ -394,7 +394,7 @@ Ver `13-kof-apis.md` (tabela de cripto).
 domínios/tokens pelo terminal afasta quem não é técnico — e gestão visual
 é o que transforma "túnel" em "nuvem" na cabeça do usuário.
 
-**Estado: slice 1 ✅; slices 2 e 3 pendentes.** Desenho fatiado (cada slice é
+**Estado: slices 1 e 2 ✅; slice 3 pendente.** Desenho fatiado (cada slice é
 um incremento testável; o painel consome só a API pública `/v1` — nenhum
 endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
 
@@ -412,6 +412,16 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   suspend/unsuspend — tudo pelo painel, chamando os mesmos endpoints da
   CLI. Cada ação pede confirmação quando destrutiva (revoke/remove).
   Prova: e2e via HTTP do painel (publica e remove de verdade).
+
+  **Implementado ✅.** O painel (`serve --panel`) ganhou formulários que
+  chamam as MESMAS rotas `/v1` da CLI: publicar, remover, suspender/reativar
+  serviço, emitir e revogar `kfs_`, adicionar/verificar/remover domínio,
+  suspender/reativar/revogar dispositivo. Destrutivas (remover serviço,
+  remover domínio, revogar dispositivo, revogar todas as credenciais) pedem
+  `confirm()`. O `kfs_` aparece **uma única vez** na emissão e nunca em
+  listagem; o token da conta continua só na memória da aba. Prova:
+  `tests/panel_actions_test.kf` (2 — o HTML expõe cada ação, e o e2e
+  publica/suspende/emite/remove pelas rotas que o painel usa).
 * **Slice 3 — onboarding guiado.** Criar conta → baixar desktop client →
   publish do primeiro serviço em 3 telas, com diagnóstico embutido
   (reaproveita a lógica do `doctor`, camada por camada). Prova: fluxo

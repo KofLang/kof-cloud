@@ -62,6 +62,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | daemon por SO (Fase 13 s1) | `daemonKind` + artefato systemd/launchd/Windows puro; install grava e imprime a ativação (nunca ativa sozinho) | `daemon_test.kf` (`daemon-os`) |
 | allowlist WAF pela CLI | `publish --allow-method`/`--allow-path` (repetíveis) com validação local; `service status` mostra a política | `publish_allow_test.kf` |
 | allowlist WAF (Fase 10 s3) | `allowMethods`/`allowPaths` no publish → `403 KCF111` antes do relay; `KCF113`/`KCF114` para política malformada; `kofcloud.json` cobre os campos (mesma normalização, drift no `--plan`/`--check`/`doctor`) | `waf_allow_test.kf` + `deploy_test.kf` |
+| painel — gestão completa (F12 s2) | formulários no `serve --panel` chamando as rotas `/v1` da CLI; `confirm()` nas destrutivas | `panel_actions_test.kf` |
 | painel somente-leitura (Fase 12 s1) | `serve --panel` → `GET /panel` estático (`control/Panel.kf`) lendo `/v1` com o token colado na página | `panel_test.kf` |
 | timeout de upstream (WAF 2b) | watchdog entrega RESET no stream → `504 KCF112` (ou parcial) + métrica `_timeout` | `waf_timeout_test.kf` |
 | teto de corpo (WAF 2a) | `kofcloud.limits.httpBodyBytes` → `413 KCF110` antes do relay + métrica `_body_too_large` | `waf_body_test.kf` |

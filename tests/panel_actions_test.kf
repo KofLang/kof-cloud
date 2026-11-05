@@ -1,0 +1,96 @@
+import kofcloud.control.ControlPlane
+import kofcloud.control.Panel
+import kofcloud.control.Registry
+import kofcloud.store.Store
+import testkit.Support
+
+// Fase 12 slice 2 — gestao completa pelo painel.
+// O painel continua estatico e sem endpoint privilegiado: cada acao chama a
+// MESMA rota /v1 da CLI. O teste prova (a) que o HTML expoe cada acao e a
+// confirmacao das destrutivas, e (b) que as rotas que ele chama funcionam.
+
+test "painel s2: HTML expoe as acoes da gestao completa", "panel-actions-unit" {
+    var html = panelHtml()
+    // Acoes de servico.
+    assert(html.indexOf("/v1/services/remove") >= 0, "unpublish")
+    assert(html.indexOf("/v1/services/suspend") >= 0, "suspend servico")
+    assert(html.indexOf("/v1/services/unsuspend") >= 0, "unsuspend servico")
+    assert(html.indexOf("/v1/services/token'") >= 0, "emitir kfs_")
+    assert(html.indexOf("/v1/services/token/revoke") >= 0, "revogar kfs_")
+    // Dominios.
+    assert(html.indexOf("/v1/domains/verify") >= 0, "verify dominio")
+    assert(html.indexOf("/v1/domains/remove") >= 0, "remove dominio")
+    // Dispositivos.
+    assert(html.indexOf("/v1/devices/revoke") >= 0, "revoke device")
+    assert(html.indexOf("/v1/devices/suspend") >= 0, "suspend device")
+    assert(html.indexOf("/v1/devices/unsuspend") >= 0, "unsuspend device")
+    // Destrutivas pedem confirmacao explicita.
+    assert(html.indexOf("confirm(") >= 0, "confirmacao presente")
+    // kfs_ aparece uma vez (na emissao), nunca numa listagem.
+    assert(html.indexOf("Credencial emitida") >= 0, "mostra o token uma vez")
+    // Seguranca do slice 1 preservada: nenhum VALOR de token no HTML
+    // (o rotulo "Emitir kfs_" e texto; valor teria kfs_ + 64 hex).
+    assert(html.indexOf("kfc_") < 0, "sem token de conta")
+    var labelsOnly = true
+    var cursor = html.indexOf("kfs_")
+    while (cursor >= 0) {
+        var after = cursor + 4
+        var hexRun = 0
+        while (after + hexRun < html.length && isHexChar(html.charAt(after + hexRun))) {
+            hexRun = hexRun + 1
+        }
+        if (hexRun >= 16) {
+            labelsOnly = false
+        }
+        cursor = html.indexOf("kfs_", after)
+    }
+    assert(labelsOnly, "nenhum valor kfs_ com cara de token")
+    assert(html.indexOf("localStorage") < 0, "token nao persistido")
+}
+
+test "painel s2: as rotas que o painel chama funcionam (publica e remove)", "panel-actions" {
+    var controlPort = 19931
+    var registry = Registry("/tmp/kofcloud-pa-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    control.enablePanel()
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+
+    // Publicar (o que o botao "Publicar" faz).
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    var published = httpPostJson(controlPort, "/v1/services", pubBody, token)
+    assert(statusOf(published) == 200, "publicou")
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
+
+    // Suspender/reativar (botoes).
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/suspend", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "suspendeu")
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/unsuspend", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "reativou")
+
+    // Emitir credencial (o painel mostra uma vez; a listagem so traz id).
+    var emitted = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", token)
+    assert(statusOf(emitted) == 200, "emitiu")
+    var list = httpPostJson(controlPort, "/v1/services/tokens", "{\"serviceId\":\"" + serviceId + "\"}", token)
+    assert(bodyOf(list).indexOf("kfs_") < 0, "listagem sem valor")
+
+    // Remover (botao destrutivo).
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "removeu")
+    var after = httpGetToken(controlPort, "/v1/services", token)
+    assert(bodyOf(after).indexOf("\"name\":\"site\"") < 0, "sumiu da lista")
+
+    // E a pagina continua servida sem token.
+    var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
+    assert(statusOf(page) == 200, "painel segue publico")
+}
+
+Bool isHexChar(Char c) {
+    var v = c as Int
+    var digit = v >= 48 && v <= 57
+    var lower = v >= 97 && v <= 102
+    var upper = v >= 65 && v <= 70
+    return digit || lower || upper
+}
