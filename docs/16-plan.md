@@ -671,7 +671,7 @@ nem aparece em log/métrica/audit; cada conector tem modo `--dry-run`.
 contínuo: a segurança não é uma fase que "termina", é um ritmo (scan,
 revisão, game-day, auditoria). Esta fase é o metrônomo.
 
-**Estado: ⏳ não iniciado (ritmo, não projeto).** Desenho:
+**Estado: slices 1–3 ✅ (parciais); slice 4 parcial (cadeia de hash) ✅.** Desenho:
 
 * **Slice 1 — baseline e SBOM (parcial: `security.txt` + `SECURITY.md` + `audit --sbom` ✅).**
   O Edge serve `/.well-known/security.txt` (200 `text/plain`, corpo
@@ -709,6 +709,18 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   SOC2-tipo-II como meta (controles mapeados 1:1 com o que já existe:
   R6, 404 opaco, E2EE, TTL, auditoria).
 
+
+  **Implementado (cadeia de integridade):** cada `AuditEvent` carrega
+  `prevHash`/`hash` (`sha256(prevHash|at|actor|action|target)`), encadeados
+  no `Registry.audit`. `GET /v1/audit/verify` e `kof cloud audit --verify`
+  reportam `{ok, brokenAt, events}`: alterar um campo ou remover um evento do
+  meio quebra a cadeia no índice certo. A listagem `/v1/audit` expõe os
+  hashes, então um terceiro pode verificar por conta própria. **Honestidade:**
+  não é WORM de verdade — quem tem o arquivo ainda pode reescrevê-lo inteiro
+  (inclusive recalculando a cadeia); o que existe é **detecção** de
+  adulteração parcial, não imutabilidade. Prova: `tests/audit_chain_test.kf`
+  (5). Pendente: WORM real (append-only no filesystem/objeto) e o relatório
+  SOC2-tipo-II.
 **Regras:** segurança por default em todo slice novo (a pergunta "o que
 pode vazar aqui?" entra no template de teste); nenhum dado de cliente
 em log/métrica/audit — sem exceção, sem "só dessa vez".

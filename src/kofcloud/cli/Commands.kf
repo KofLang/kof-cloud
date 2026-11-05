@@ -1620,7 +1620,7 @@ Int cmdLogs(List<String> args) {
     return 0
 }
 
-record AuditEntry(String at, String actor, String action, String target)
+record AuditEntry(String at, String actor, String action, String target, String prevHash, String hash)
 
 // Inventario SBOM (Fase 19 slice 1 parcial): lista curada dos 44 fontes do
 // KofCloud — sem Directory.list (plano, sem recursao) e sem versao no repo
@@ -1674,8 +1674,34 @@ Int cmdAudit(List<String> args) {
         println(sbomText(modules, contents))
         return 0
     }
+    if (hasFlag(args, "--verify")) {
+        if (extraPositional(args, 0) || flagDuplicated(args, "--verify")) {
+            println("uso: kof cloud audit [--sbom] [--verify]")
+            return 1
+        }
+        var verifySession = loadSession()
+        if (verifySession == null) {
+            println(notLoggedInLine())
+            return 1
+        }
+        try {
+            var raw = requireOk(http.get(verifySession.controlUrl + "/v1/audit/verify", authHeader(verifySession.token)))
+            var result = json.decode<Map<String, String>>(raw)
+            var events = mapField(result, "events")
+            if (mapField(result, "ok") == "true") {
+                println("Cadeia de auditoria integra (" + events + " eventos).")
+                return 0
+            }
+            println("CADEIA QUEBRADA no evento " + mapField(result, "brokenAt") + " de " + events + ".")
+            println("Alguem alterou ou removeu um evento da trilha — investigue antes de confiar nela.")
+            return 1
+        } catch (String e) {
+            printFail("falha", e)
+            return 1
+        }
+    }
     if (extraPositional(args, 0)) {
-        println("uso: kof cloud audit")
+        println("uso: kof cloud audit [--sbom] [--verify]")
         return 1
     }
     var session = loadSession()

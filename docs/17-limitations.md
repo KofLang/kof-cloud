@@ -44,6 +44,10 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 
 ## Limites do MVP implementado
 
+* **A trilha de auditoria é detectável, não imutável.** Cada evento tem hash
+  encadeado (`audit --verify` acusa adulteração/remoção parcial), mas o
+  arquivo de estado pode ser reescrito inteiro por quem tem o disco — WORM
+  real (append-only em storage separado) segue pendente.
 * **Um nó de control plane, um nó de Edge, em memória + arquivo JSON.** Não há
   consenso distribuído nem banco. É suficiente para provar o fluxo, não para
   produção multi-nó.

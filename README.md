@@ -124,7 +124,7 @@ deploy [--file kofcloud.json] [--check] [--plan]  (roda build + publica + verifi
 down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove orfaos)
 daemon install|status|uninstall   (artefato por SO — systemd/launchd/Windows — sem root, ativação manual)
 doctor [--file kofcloud.json]   (diagnostico: login, control, device, tunel, servicos)
-audit [--sbom]               (trilha de auditoria da conta; --sbom = inventario local dos fontes)
+audit [--sbom] [--verify]               (trilha de auditoria da conta; --sbom = inventario local dos fontes)
 scan [--file <caminho>]      (varredura local de segredos no manifesto; exit 1 com achado)
 webhook set <url> --secret <s> | show | remove | test
 freeze service|device <nome|id>

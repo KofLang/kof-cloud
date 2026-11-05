@@ -5,7 +5,37 @@ package kofcloud.model
 // O que NUNCA entra: senhas, tokens, chaves, conteudo de requisicao/resposta,
 // corpos, headers. IDs e handles do DONO sao visiveis para a propria conta
 // (o endpoint filtra por accountId); nada de terceiros vaza.
-record AuditEvent(String at, String actor, String action, String target)
+// `prevHash`/`hash`: cadeia de integridade (Fase 19 slice 4, WORM parcial).
+// `hash = sha256(prevHash + "|" + at + "|" + actor + "|" + action + "|" + target)`
+// — alterar qualquer campo de qualquer evento quebra a cadeia dali em diante,
+// e remover um evento do meio tambem (o prevHash do seguinte nao fecha).
+// Nao e WORM de verdade (o arquivo ainda pode ser reescrito por quem tem
+// disco), mas torna a adulteracao DETECTAVEL por terceiro que tenha a cadeia.
+record AuditEvent(String at, String actor, String action, String target, String prevHash, String hash)
+
+// Hash de um evento a partir do anterior. Pura: mesma entrada, mesmo hash.
+String auditEventHash(String prevHash, String at, String actor, String action, String target) {
+    return crypto.sha256(prevHash + "|" + at + "|" + actor + "|" + action + "|" + target)
+}
+
+// Verifica a cadeia de uma lista de eventos (na ordem em que foram gravados).
+// Devolve "" quando integra, ou o indice do primeiro evento quebrado.
+String auditChainError(List<AuditEvent> events) {
+    var prev = ""
+    var index = 0
+    for (var event in events) {
+        if (event.prevHash != prev) {
+            return intToString(index)
+        }
+        var expected = auditEventHash(event.prevHash, event.at, event.actor, event.action, event.target)
+        if (event.hash != expected) {
+            return intToString(index)
+        }
+        prev = event.hash
+        index = index + 1
+    }
+    return ""
+}
 
 String auditActorAccount(String handle) {
     return "account:" + handle

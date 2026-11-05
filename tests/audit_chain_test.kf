@@ -1,0 +1,119 @@
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.model.Audit
+import kofcloud.store.Store
+import testkit.Support
+
+// Fase 19 slice 4 (parcial) — trilha de auditoria com hash encadeado.
+// Nao e WORM de verdade (o arquivo pode ser reescrito), mas qualquer
+// adulteracao ou remocao no meio da cadeia fica DETECTAVEL.
+
+String chainPath(String name) {
+    return "/tmp/kofcloud-chain-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "cadeia: eventos encadeiam e a cadeia integra verifica", "chain-unit" {
+    var registry = Registry(chainPath("ok"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    registry.registerDevice(account, "nb", "pk")
+    var events = registry.auditForAccount(account.id)
+    assert(events.size >= 2, "dois eventos")
+    assert(auditChainError(events) == "", "cadeia integra")
+    // O primeiro evento tem prevHash vazio; o segundo aponta para o primeiro.
+    assert(events.get(0).prevHash == "", "raiz sem anterior")
+    if (events.size >= 2) {
+        assert(events.get(1).prevHash == events.get(0).hash, "encadeado")
+    }
+}
+
+test "cadeia: adulterar um campo quebra no indice certo", "chain-unit" {
+    var registry = Registry(chainPath("tamper"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    registry.registerDevice(account, "nb", "pk")
+    var events = registry.auditForAccount(account.id)
+    assert(events.size >= 2, "dois eventos")
+    // Adultera o TARGET do primeiro evento (mantendo o hash antigo).
+    var tampered = listOf<AuditEvent>()
+    var i = 0
+    for (var event in events) {
+        if (i == 0) {
+            tampered.add(AuditEvent(event.at, event.actor, event.action, "conta-alheia", event.prevHash, event.hash))
+        } else {
+            tampered.add(event)
+        }
+        i = i + 1
+    }
+    assert(auditChainError(tampered) == "0", "quebra no primeiro")
+}
+
+test "cadeia: remover um evento do meio quebra no seguinte", "chain-unit" {
+    var registry = Registry(chainPath("remove"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    registry.registerDevice(account, "nb", "pk")
+    registry.publishService(account, registry.devicesForAccount(account.id).get(0).id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    var events = registry.auditForAccount(account.id)
+    assert(events.size >= 3, "tres eventos")
+    // Remove o do meio: o prevHash do seguinte nao fecha mais.
+    var withoutMiddle = listOf<AuditEvent>()
+    withoutMiddle.add(events.get(0))
+    var i = 2
+    while (i < events.size) {
+        withoutMiddle.add(events.get(i))
+        i = i + 1
+    }
+    assert(auditChainError(withoutMiddle) == "1", "quebra no indice 1")
+}
+
+test "cadeia: hash e deterministico e sensivel a cada campo", "chain-unit" {
+    var base = auditEventHash("", "1", "account:mel", "account.login", "acc-1")
+    assert(base == auditEventHash("", "1", "account:mel", "account.login", "acc-1"), "deterministico")
+    assert(base != auditEventHash("", "2", "account:mel", "account.login", "acc-1"), "at muda")
+    assert(base != auditEventHash("", "1", "account:ana", "account.login", "acc-1"), "actor muda")
+    assert(base != auditEventHash("", "1", "account:mel", "account.logout", "acc-1"), "action muda")
+    assert(base != auditEventHash("", "1", "account:mel", "account.login", "acc-2"), "target muda")
+    assert(base != auditEventHash("x", "1", "account:mel", "account.login", "acc-1"), "prev muda")
+    assert(base.length == 64, "sha256 hex")
+}
+
+test "cadeia: HTTP /v1/audit/verify reporta integra e adulterada", "chain" {
+    var controlPort = 19911
+    var registry = Registry(chainPath("http"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+
+    var ok = httpGetToken(controlPort, "/v1/audit/verify", token)
+    assert(statusOf(ok) == 200, "verify 200")
+    assert(bodyOf(ok).indexOf("\"ok\":\"true\"") >= 0, "integra")
+
+    // A listagem traz os hashes (o terceiro pode verificar por conta propria).
+    var listed = httpGetToken(controlPort, "/v1/audit", token)
+    assert(bodyOf(listed).indexOf("\"hash\"") >= 0, "hash exposto")
+    assert(bodyOf(listed).indexOf("\"prevHash\"") >= 0, "prevHash exposto")
+
+    // Adultera o estado em disco e recarrega: a verificacao acusa.
+    var mel = registry.accountByHandle("mel")
+    var melId = ""
+    if (mel != null) {
+        melId = mel.id
+    }
+    var events = registry.auditForAccount(melId)
+    var tampered = listOf<AuditEvent>()
+    var i = 0
+    for (var event in events) {
+        if (i == 0) {
+            tampered.add(AuditEvent(event.at, event.actor, "account.hacked", event.target, event.prevHash, event.hash))
+        } else {
+            tampered.add(event)
+        }
+        i = i + 1
+    }
+    registry.audit = tampered
+    var broken = httpGetToken(controlPort, "/v1/audit/verify", token)
+    assert(bodyOf(broken).indexOf("\"ok\":\"false\"") >= 0, "adulterada detectada")
+    assert(bodyOf(broken).indexOf("\"brokenAt\":\"0\"") >= 0, "indice do primeiro")
+}
