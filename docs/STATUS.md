@@ -26,7 +26,7 @@
 ```bash
 export PATH=/home/mel/tools/jdk-25/bin:$PATH
 KOF=/home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar
-java -jar $KOF test --target jvm --timeout 150   # 41 suites, 0 falhas
+java -jar $KOF test --target jvm --timeout 150   # 42 suites, 0 falhas
 java -jar $KOF build --output /tmp/kofcloud-check # compila sem erro
 ```
 
@@ -77,15 +77,16 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | rotacao de kfs_ (Fase 19 s3) | `tests/rotate_test.kf` | 5 |
 | `security.txt` + `SECURITY.md` (Fase 19 s1 parcial) | `tests/security_test.kf` | 3 |
 | incidentes (Fase 17 s1 + template pós-mortem s3) | `tests/incidents_test.kf` | 8 |
-| contenção (Fase 17 s2) | `tests/freeze_test.kf` | 6 |
+| contenção (Fase 17 s2) | `tests/freeze_test.kf` | 8 |
 | status page (Fase 17 s3 parcial) | `tests/status_page_test.kf` | 5 |
 | publish com allowlist pela CLI (F10 s3) | `tests/publish_allow_test.kf` | 3 |
 | webhook de incidentes (F17 s3) | `tests/webhook_test.kf` | 5 |
 | cadeia de auditoria (F19 s4) | `tests/audit_chain_test.kf` | 5 |
 | scan de ambiente e PEM (F19 s2) | `tests/scan_extra_test.kf` | 4 |
 | higiene de credenciais (F19 s2) | `tests/token_hygiene_test.kf` | 4 |
+| painel de gestão completa (F12 s2) | `tests/panel_actions_test.kf` | 2 |
 
-Total: 226 testes. Ver `15-tests.md` para a matriz.
+Total: 230 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

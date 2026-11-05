@@ -860,7 +860,11 @@ class Registry {
             this.serviceTokens = kept
         }
         this.suspendService(accountId, serviceId)
-        this.freezeMarks.put("service/" + serviceId, prior)
+        // Marca original preservada (ver freezeDevice): um freeze repetido nao
+        // pode gravar SUSPENDED como se fosse o estado de antes.
+        if (this.freezeMarks.get("service/" + serviceId) == null) {
+            this.freezeMarks.put("service/" + serviceId, prior)
+        }
         var account = this.accountById(accountId)
         if (account != null) {
             this.audit(auditActorAccount(account.handle), auditServiceFrozen(), accountId + "/" + serviceId)
@@ -902,7 +906,12 @@ class Registry {
             this.serviceTokens = kept
         }
         this.suspendDevice(accountId, deviceId)
-        this.freezeMarks.put("device/" + deviceId, prior)
+        // Marca original preservada: congelar de novo (ou congelar o device
+        // depois de congelar o servico) nao pode trocar o status de antes por
+        // SUSPENDED — o unfreeze deixaria de reverter.
+        if (this.freezeMarks.get("device/" + deviceId) == null) {
+            this.freezeMarks.put("device/" + deviceId, prior)
+        }
         var account = this.accountById(accountId)
         if (account != null) {
             this.audit(auditActorAccount(account.handle), auditDeviceFrozen(), accountId + "/" + deviceId)
@@ -935,6 +944,77 @@ class Registry {
         if (account != null) {
             this.audit(auditActorAccount(account.handle), auditServiceUnfrozen(), accountId + "/" + serviceId)
         }
+        this.save()
+        return true
+    }
+
+    // Congelar a CONTA inteira: todo device e todo servico da conta, mais
+    // todas as credenciais kfs_ dela. Mesmo desenho do alvo unico — cada alvo
+    // guarda o proprio status anterior em `freezeMarks`, entao o unfreeze
+    // devolve cada um exatamente como estava (um servico que ja estava
+    // SUSPENDED continua SUSPENDED depois do ciclo).
+    FreezeResult freezeAccount(String accountId) {
+        var account = this.accountById(accountId)
+        if (account == null) {
+            return FreezeResult(false, "", 0, "")
+        }
+        var revoked = 0
+        var kept = listOf<ServiceToken>()
+        for (var entry in this.serviceTokens) {
+            if (entry.accountId == accountId) {
+                revoked = revoked + 1
+            } else {
+                kept.add(entry)
+            }
+        }
+        if (revoked > 0) {
+            this.serviceTokens = kept
+        }
+        // So grava a marca quando ainda nao ha uma: um segundo freeze do mesmo
+        // alvo nao pode sobrescrever o status original com SUSPENDED, senao o
+        // unfreeze nunca devolve o estado de antes (quebra a reversibilidade).
+        for (var device in this.devicesForAccount(accountId)) {
+            if (this.freezeMarks.get("device/" + device.id) == null) {
+                this.freezeMarks.put("device/" + device.id, device.status)
+            }
+            this.suspendDevice(accountId, device.id)
+        }
+        for (var service in this.servicesForAccount(accountId)) {
+            if (this.freezeMarks.get("service/" + service.id) == null) {
+                this.freezeMarks.put("service/" + service.id, service.status)
+            }
+            this.suspendService(accountId, service.id)
+        }
+        this.audit(auditActorAccount(account.handle), auditAccountFrozen(), accountId)
+        var incident = this.raiseIncident(incidentFreezeAccount(), accountId)
+        var incidentId = ""
+        if (incident != null) {
+            incidentId = incident.id
+        }
+        this.save()
+        return FreezeResult(true, incidentId, revoked, "")
+    }
+
+    Bool unfreezeAccount(String accountId) {
+        var account = this.accountById(accountId)
+        if (account == null) {
+            return false
+        }
+        for (var device in this.devicesForAccount(accountId)) {
+            var mark = this.freezeMarks.get("device/" + device.id)
+            if (mark != null) {
+                this.setDeviceStatus(accountId, device.id, mark, "")
+                this.freezeMarks.remove("device/" + device.id)
+            }
+        }
+        for (var service in this.servicesForAccount(accountId)) {
+            var mark = this.freezeMarks.get("service/" + service.id)
+            if (mark != null) {
+                this.setServiceStatus(service.id, mark)
+                this.freezeMarks.remove("service/" + service.id)
+            }
+        }
+        this.audit(auditActorAccount(account.handle), auditAccountUnfrozen(), accountId)
         this.save()
         return true
     }

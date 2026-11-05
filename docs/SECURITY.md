@@ -60,7 +60,9 @@ Se uma credencial vazar ou um serviço for comprometido, o caminho rápido
 ```
 kof cloud freeze service <nome>     # suspende + revoga kfs_ + incidente
 kof cloud freeze device <nome>      # device: suspende + revoga de todos os servicos dele
+kof cloud freeze account            # a conta inteira: devices + servicos + todas as kfs_
 kof cloud unfreeze service <nome>   # restaura EXATAMENTE o status anterior
+kof cloud unfreeze account          # devolve cada device/servico ao status de antes
 ```
 
 Sem o `freeze` (ou para entender o que ele faz por baixo), o procedimento

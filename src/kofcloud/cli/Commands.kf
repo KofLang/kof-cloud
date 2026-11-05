@@ -1514,14 +1514,23 @@ Int runContainment(List<String> args, Bool freezing) {
         println("uso: kof cloud " + verb + " service|device <nome|id>")
         return 1
     }
+    // `account` e o alvo da propria conta: sem id, sem nome — o token decide.
     var kind = firstPositional(args).trim()
     var name = secondPositional(args).trim()
-    if (kind.length == 0 || name.length == 0) {
+    if (kind.length == 0) {
+        println("uso: kof cloud " + verb + " service|device <nome|id> | account")
+        return 1
+    }
+    if (kind != "service" && kind != "device" && kind != "account") {
+        println("alvo invalido: use service, device ou account")
+        return 1
+    }
+    if (kind != "account" && name.length == 0) {
         println("uso: kof cloud " + verb + " service|device <nome|id>")
         return 1
     }
-    if (kind != "service" && kind != "device") {
-        println("alvo invalido: use service ou device")
+    if (kind == "account" && name.length > 0) {
+        println("uso: kof cloud " + verb + " account   (sem id: a conta do login)")
         return 1
     }
     try {
@@ -1534,7 +1543,7 @@ Int runContainment(List<String> args, Bool freezing) {
                 return 1
             }
             targetId = matched
-        } else {
+        } else if (kind == "device") {
             var devices = fetchDevices(session.controlUrl, session.token)
             var matched = ""
             for (var device in devices) {
@@ -1557,14 +1566,22 @@ Int runContainment(List<String> args, Bool freezing) {
         }
         var raw = requireOk(http.post(session.controlUrl + endpoint, json.encode(body), jsonHeader(session.token)))
         var result = json.decode<Map<String, String>>(raw)
+        var label = name
+        if (kind == "account") {
+            label = session.handle
+        }
         if (freezing) {
-            println("Congelado (" + kind + "): " + name)
+            println("Congelado (" + kind + "): " + label)
             println("Credenciais revogadas: " + mapField(result, "revoked"))
             println("Incidente: " + mapField(result, "incidentId"))
             println("")
-            println("Reverter: kof cloud unfreeze " + kind + " " + name)
+            var undo = "kof cloud unfreeze " + kind
+            if (name.length > 0) {
+                undo = undo + " " + name
+            }
+            println("Reverter: " + undo)
         } else {
-            println("Descongelado (" + kind + "): " + name)
+            println("Descongelado (" + kind + "): " + label)
             println("Configuracao preservada; status anterior restaurado.")
             println("Credenciais revogadas no freeze NAO voltam — emita novas se precisar.")
         }

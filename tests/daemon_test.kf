@@ -75,6 +75,10 @@ test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
     // sem trava — mesmo precedente dos acima. Trava as duas linhas.
     assert(help.indexOf("freeze service|device <nome|id>") >= 0, "freeze documentado")
     assert(help.indexOf("unfreeze service|device <nome|id>") >= 0, "unfreeze documentado")
+    // Alvo `account` (F17 s2 parcial): o help precisa anunciar as duas formas
+    // sem id, senao o operador nao descobre a contencao da conta inteira.
+    assert(help.indexOf("freeze account") >= 0, "freeze account documentado")
+    assert(help.indexOf("unfreeze account") >= 0, "unfreeze account documentado")
 }
 
 test "daemon: paths ficam no espaco do usuario", "daemon-paths" {

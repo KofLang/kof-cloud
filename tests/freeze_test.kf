@@ -2,6 +2,7 @@ import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.model.Errors
 import kofcloud.model.Incident
+import kofcloud.model.Service
 import kofcloud.store.Store
 import testkit.Support
 
@@ -84,6 +85,108 @@ test "contencao: freeze de device cobre todos os servicos dele", "freeze-unit" {
     }
 }
 
+test "contencao: freeze de conta cobre devices, servicos e kfs_ e restaura cada status", "freeze-unit" {
+    var registry = Registry(freezePath("acct"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var other = registry.createAccount("ana", "ana@e.com", "segredo")
+    var nb = registry.registerDevice(account, "nb", "pk")
+    var desk = registry.registerDevice(account, "desk", "pk2")
+    var foreign = registry.registerDevice(other, "outro", "pk3")
+    var a = registry.publishService(account, nb.id, "a", "127.0.0.1", 8081, "http", "AUTHENTICATED", "", "")
+    var b = registry.publishService(account, desk.id, "b", "127.0.0.1", 8082, "http", "AUTHENTICATED", "", "")
+    var foreignSvc = registry.publishService(other, foreign.id, "c", "127.0.0.1", 8083, "http", "PUBLIC", "", "")
+    // Estado misto: um servico ja suspenso antes do freeze deve continuar
+    // suspenso depois do unfreeze (restaura o status anterior de CADA alvo).
+    registry.setServiceStatus(b.id, "SUSPENDED")
+    var ta = registry.issueServiceToken(account.id, a.id, 24)
+    var tb = registry.issueServiceToken(account.id, b.id, 24)
+    var keep = registry.issueServiceToken(other.id, foreignSvc.id, 24)
+
+    var result = registry.freezeAccount(account.id)
+    assert(result.ok, "congelou a conta")
+    assert(result.revoked == 2, "revogou as 2 kfs_ da conta")
+    assert(result.incidentId.length > 0, "incidente da conta aberto")
+    assert(registry.serviceByServiceToken(ta) == null, "kfs_ de a revogada")
+    assert(registry.serviceByServiceToken(tb) == null, "kfs_ de b revogada")
+    assert(registry.serviceByServiceToken(keep) != null, "kfs_ de outra conta intacta")
+
+    var frozenNb = registry.deviceById(nb.id)
+    var frozenDesk = registry.deviceById(desk.id)
+    if (frozenNb != null) {
+        assert(frozenNb.status == "SUSPENDED", "device nb suspenso")
+    }
+    if (frozenDesk != null) {
+        assert(frozenDesk.status == "SUSPENDED", "device desk suspenso")
+    }
+    var frozenA = registry.serviceById(a.id)
+    var frozenB = registry.serviceById(b.id)
+    if (frozenA != null) {
+        assert(frozenA.status == "SUSPENDED", "servico a suspenso")
+    }
+    if (frozenB != null) {
+        assert(frozenB.status == "SUSPENDED", "servico b suspenso")
+    }
+    var foreignDevice = registry.deviceById(foreign.id)
+    if (foreignDevice != null) {
+        assert(foreignDevice.status == "ACTIVE", "device de outra conta intacto")
+    }
+    // Nada da conta roteia enquanto congelada.
+    assert(registry.resolveRoute(a.hostname) == null, "hostname de a sem rota")
+    assert(registry.resolveRoute(b.hostname) == null, "hostname de b sem rota")
+
+    assert(registry.unfreezeAccount(account.id), "descongelou a conta")
+    var backNb = registry.deviceById(nb.id)
+    var backDesk = registry.deviceById(desk.id)
+    if (backNb != null) {
+        assert(backNb.status == "ACTIVE", "nb volta ACTIVE")
+    }
+    if (backDesk != null) {
+        assert(backDesk.status == "ACTIVE", "desk volta ACTIVE")
+    }
+    var backA = registry.serviceById(a.id)
+    var backB = registry.serviceById(b.id)
+    if (backA != null) {
+        assert(statusIsRoutable(backA.status), "a volta a rotear (" + backA.status + ")")
+    }
+    if (backB != null) {
+        assert(backB.status == "SUSPENDED", "b volta ao SUSPENDED que ja tinha (" + backB.status + ")")
+    }
+    assert(registry.resolveRoute(a.hostname) != null, "hostname de a roteia de novo")
+    // Configuracao preservada.
+    if (backA != null) {
+        assert(backA.hostname == a.hostname, "hostname intacto")
+        assert(backA.allowMethods == a.allowMethods, "allowlist intacta")
+    }
+}
+
+test "contencao: freeze de conta e idempotente na auditoria e no incidente", "freeze-unit" {
+    var registry = Registry(freezePath("acctidem"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+
+    var first = registry.freezeAccount(account.id)
+    var second = registry.freezeAccount(account.id)
+    assert(first.ok, "primeiro freeze ok")
+    assert(second.ok, "segundo freeze ok (idempotente na acao)")
+    // `raiseIncident` nao duplica: o segundo freeze nao abre outro e por isso
+    // devolve incidentId vazio (mesmo contrato do freeze de service/device).
+    assert(first.incidentId.length > 0, "primeiro abre incidente")
+    assert(second.incidentId == "", "segundo nao abre incidente novo")
+    var frozen = 0
+    for (var incident in registry.incidentsForAccount(account.id, false)) {
+        if (incident.kind == incidentFreezeAccount() && incident.resolvedAt == 0) {
+            frozen = frozen + 1
+        }
+    }
+    assert(frozen == 1, "um incidente aberto de freeze_account")
+    assert(registry.unfreezeAccount(account.id), "unfreeze")
+    var after = registry.serviceById(service.id)
+    if (after != null) {
+        assert(statusIsRoutable(after.status), "servico volta a rotear")
+    }
+}
+
 test "contencao: alvo alheio nao congela", "freeze-unit" {
     var registry = Registry(freezePath("owner"))
     var mel = registry.createAccount("mel", "mel@e.com", "segredo")
@@ -135,4 +238,16 @@ test "contencao: HTTP freeze/unfreeze e incidente listado", "freeze" {
     assert(statusOf(httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"service\"}", accountToken)) == 400, "sem id 400")
     assert(statusOf(httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"edge\",\"id\":\"x\"}", accountToken)) == 400, "alvo invalido 400")
     assert(statusOf(httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"service\",\"id\":\"naoexiste\"}", accountToken)) == 404, "inexistente 404")
+
+    // Alvo `account`: sem id (o token decide a conta). Congela os devices e
+    // servicos do dono, abre o incidente e restaura no unfreeze.
+    var acctFreeze = httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"account\"}", accountToken)
+    assert(statusOf(acctFreeze) == 200, "freeze account 200")
+    var acctResult = json.decode<Map<String, String>>(bodyOf(acctFreeze))
+    assert(mapField(acctResult, "incidentId").length > 0, "incidente da conta devolvido")
+    var acctListed = httpPostJson(controlPort, "/v1/incidents", "{}", accountToken)
+    assert(bodyOf(acctListed).indexOf("freeze_account") >= 0, "incidente freeze_account listado")
+    var acctUnfreeze = httpPostJson(controlPort, "/v1/unfreeze", "{\"target\":\"account\"}", accountToken)
+    assert(statusOf(acctUnfreeze) == 200, "unfreeze account 200")
+    assert(statusOf(httpPostJson(controlPort, "/v1/unfreeze", "{\"target\":\"account\"}", accountToken)) == 200, "unfreeze account idempotente")
 }

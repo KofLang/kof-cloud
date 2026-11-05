@@ -48,6 +48,10 @@ String incidentFreezeDevice() {
     return "freeze_device"
 }
 
+String incidentFreezeAccount() {
+    return "freeze_account"
+}
+
 // Severidade por sinal. Pura: a mesma entrada sempre da o mesmo nivel.
 String incidentSeverityFor(String kind) {
     if (kind == incidentBulkDeviceRevokes()) {
@@ -56,7 +60,7 @@ String incidentSeverityFor(String kind) {
     if (kind == incidentBulkTokenRevokes() || kind == incidentEdgeRefusals()) {
         return severityWarn()
     }
-    if (kind == incidentFreezeService() || kind == incidentFreezeDevice()) {
+    if (kind == incidentFreezeService() || kind == incidentFreezeDevice() || kind == incidentFreezeAccount()) {
         return severityWarn()
     }
     return severityInfo()
@@ -78,6 +82,9 @@ String incidentSummaryFor(String kind) {
     }
     if (kind == incidentFreezeDevice()) {
         return "device frozen for incident containment"
+    }
+    if (kind == incidentFreezeAccount()) {
+        return "account frozen for incident containment"
     }
     return kind
 }

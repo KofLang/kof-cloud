@@ -602,8 +602,18 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   ele — configuração (serviços, domínios, allowlist) nunca é tocada.
   `POST /v1/freeze` e `/v1/unfreeze` (`{target,id}`; alvo alheio/inexistente
   → `404 KCF128` opaco; `KCF126`/`KCF127` para entrada inválida). CLI:
-  `kof cloud freeze|unfreeze service|device <nome|id>`. **Pendente:** alvos
-  `account` e `edge` (o segundo exige coordenação multi-Edge, Fase 16).
+  `kof cloud freeze|unfreeze service|device <nome|id>`.
+
+  **Implementado (account):** `freezeAccount`/`unfreezeAccount` congelam
+  todos os devices e serviços da conta e revogam todas as `kfs_` dela
+  (incidente `freeze_account`, WARN); o alvo é sempre a conta do token
+  (`{"target":"account"}`, sem `id` — id de terceiro nunca escolhe conta).
+  A marca de status anterior é **por alvo** e só é gravada se ainda não
+  existir: um servidor que já estava `SUSPENDED` volta `SUSPENDED`, e um
+  segundo freeze não sobrescreve o estado original (reversibilidade; o
+  mesmo guarda foi aplicado a `freezeService`/`freezeDevice`). Prova:
+  `tests/freeze_test.kf` (`freeze-unit` ×2 + HTTP). **Pendente:** alvo
+  `edge` (exige coordenação multi-Edge, Fase 16).
 * **Slice 3 — comunicação e post-mortem.** Status page mínima (lê os
   incidentes globais; sem login), notificação por webhook configurável
   (conta cadastra URL + segredo; payload assinado Ed25519), e template

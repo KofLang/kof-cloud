@@ -699,7 +699,8 @@ String webhookJson(WebhookConfig? config) {
 
 // Contencao (Fase 17 slice 2): freeze suspende o alvo, revoga as credenciais
 // vivas e registra o incidente; unfreeze restaura exatamente o status
-// anterior. Alvo: `service` ou `device` (id). Alvo alheio -> 404 opaco.
+// anterior. Alvo: `service`, `device` (id) ou `account` (a propria conta do
+// token; nao aceita id de terceiro). Alvo alheio -> 404 opaco.
 HttpResult handleFreeze(Registry registry, String? authHeader, String bodyText, Bool freezing) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
@@ -708,19 +709,22 @@ HttpResult handleFreeze(Registry registry, String? authHeader, String bodyText, 
     var body = decodeBody(bodyText)
     var targetKind = mapField(body, "target")
     var targetId = mapField(body, "id")
-    if (targetId.length == 0) {
-        return HttpResult(400, errorJson(errTargetRequired()))
-    }
-    if (targetKind != "service" && targetKind != "device") {
+    if (targetKind != "service" && targetKind != "device" && targetKind != "account") {
         return HttpResult(400, errorJson(errInvalidTarget()))
+    }
+    // `account` e sempre o dono do token: o id nao escolhe a conta.
+    if (targetKind != "account" && targetId.length == 0) {
+        return HttpResult(400, errorJson(errTargetRequired()))
     }
     var out = mapOf()
     if (freezing) {
         var result = FreezeResult(false, "", 0, "")
         if (targetKind == "service") {
             result = registry.freezeService(account.id, targetId)
-        } else {
+        } else if (targetKind == "device") {
             result = registry.freezeDevice(account.id, targetId)
+        } else {
+            result = registry.freezeAccount(account.id)
         }
         if (result.ok == false) {
             return HttpResult(404, errorJson(errTargetNotFound()))
@@ -733,8 +737,10 @@ HttpResult handleFreeze(Registry registry, String? authHeader, String bodyText, 
     var restored = false
     if (targetKind == "service") {
         restored = registry.unfreezeService(account.id, targetId)
-    } else {
+    } else if (targetKind == "device") {
         restored = registry.unfreezeDevice(account.id, targetId)
+    } else {
+        restored = registry.unfreezeAccount(account.id)
     }
     if (restored == false) {
         return HttpResult(404, errorJson(errTargetNotFound()))

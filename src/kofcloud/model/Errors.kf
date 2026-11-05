@@ -186,7 +186,7 @@ String errTargetRequired() {
 }
 
 String errInvalidTarget() {
-    return "KCF127: target must be service or device"
+    return "KCF127: target must be service, device or account"
 }
 
 String errTargetNotFound() {
@@ -320,10 +320,10 @@ String errHint(String raw) {
         return "Nenhum webhook cadastrado — use `kof cloud webhook set <url> --secret <segredo>`."
     }
     if (raw.indexOf("KCF126") >= 0) {
-        return "Informe o id do alvo: `kof cloud freeze service <nome|id>` ou `device <nome|id>`."
+        return "Informe o id do alvo: `kof cloud freeze service <nome|id>` / `device <nome|id>` (ou `account`, sem id)."
     }
     if (raw.indexOf("KCF127") >= 0) {
-        return "Alvo invalido: use `service` ou `device`."
+        return "Alvo invalido: use `service`, `device` ou `account`."
     }
     if (raw.indexOf("KCF128") >= 0) {
         return "Alvo nao encontrado nesta conta — confira `kof cloud service list` / `device list`."

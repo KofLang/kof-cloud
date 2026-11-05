@@ -127,8 +127,8 @@ doctor [--file kofcloud.json]   (diagnostico: login, control, device, tunel, ser
 audit [--sbom] [--verify]               (trilha de auditoria da conta; --sbom = inventario local dos fontes)
 scan [--file <caminho>] [--tls-cert <pem>]      (varredura local de segredos no manifesto; exit 1 com achado)
 webhook set <url> --secret <s> | show | remove | test
-freeze service|device <nome|id>
-unfreeze service|device <nome|id>
+freeze service|device <nome|id> | account
+unfreeze service|device <nome|id> | account
 incidents [--all] [--resolve <id>]
 logs [--tail <linhas>] [--runtime]   (marcos de sessao; --runtime = eventos reais do Agent; teto 256 KiB por arquivo)
 serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]
@@ -148,7 +148,7 @@ identidade/cifra, registry, backoff, integração do control plane, E2E,
 domínio próprio, métricas, rate limit, suspensão/auditoria, frames
 fatiados, idle timeout, conexões por serviço, deploy, daemon, hot-reload,
 doctor, presença do túnel, eventos do agent, teto de corpo WAF, detectar
-WAF, timeout de upstream, allowlist WAF, painel somente-leitura, rotação de kfs_, security.txt, incidentes, contenção, status page, webhook de incidentes, cadeia de auditoria, scan de ambiente/PEM e higiene de credenciais (41 suites). Ver `docs/15-tests.md` para a matriz.
+WAF, timeout de upstream, allowlist WAF, painel somente-leitura, rotação de kfs_, security.txt, incidentes, contenção (service/device/account), status page, webhook de incidentes, cadeia de auditoria, scan de ambiente/PEM, higiene de credenciais e painel de gestão completa (42 suites). Ver `docs/15-tests.md` para a matriz.
 
 ## Segurança
 

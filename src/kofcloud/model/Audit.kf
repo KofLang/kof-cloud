@@ -115,3 +115,11 @@ String auditDeviceFrozen() {
 String auditDeviceUnfrozen() {
     return "device.unfrozen"
 }
+
+String auditAccountFrozen() {
+    return "account.frozen"
+}
+
+String auditAccountUnfrozen() {
+    return "account.unfrozen"
+}
