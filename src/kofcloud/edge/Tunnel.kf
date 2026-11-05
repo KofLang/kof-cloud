@@ -258,7 +258,7 @@ void refuseTunnel(EdgeState state, Conn conn, String reason) {
 // Detector de recusas no Edge (Fase 17 slice 1). Amostra por processo e so
 // para ABRIR o incidente global (idempotente no Registry): um Edge sadio
 // recusa poucas vezes; rajada (>= limite na janela) e sinal de problema.
-// Estado local em vez de anel global: cada RefusalProbe tem sua janela.
+// Estado local em vez de anel global: cada sonda tem sua janela.
 Int edgeRefusalThreshold() {
     return limitEdgeRefusalThreshold()
 }
@@ -267,7 +267,21 @@ Long edgeRefusalWindowMs() {
     return limitEdgeRefusalWindowMs()
 }
 
-class RefusalProbe {
+// Abuse prevention: rajada de 401 no Edge (forca bruta de `kfs_`). Mesmas
+// garantias da sonda de recusas. Limiar/janela proprios porque 401 honesto
+// (token vencido, cliente em loop de configuracao) e mais comum que recusa
+// de tunel.
+Int edgeAuthFailureThreshold() {
+    return limitEdgeAuthFailureThreshold()
+}
+
+Long edgeAuthFailureWindowMs() {
+    return limitEdgeAuthFailureWindowMs()
+}
+
+// Sonda de janela deslizante simples (contador + inicio). Uma instancia por
+// sinal: recusas de tunel e falhas de autenticacao nao dividem contador.
+class RateProbe {
     Int count
     Long windowStart
 
@@ -277,15 +291,29 @@ class RefusalProbe {
     }
 }
 
-void noteEdgeRefusalIncident(EdgeState state) {
+// Conta uma ocorrencia e diz se o limiar foi atingido DENTRO da janela.
+// Fonte unica dos dois detectores do Edge: o reset e o incremento vivem
+// aqui, entao um deles nao pode esquecer o reset e nunca abrir o incidente.
+Bool probeHit(RateProbe probe, Int threshold, Long windowMs) {
     var now = time.now()
-    var probe = state.refusalProbe
-    if (now - probe.windowStart > edgeRefusalWindowMs()) {
+    if (now - probe.windowStart > windowMs) {
         probe.count = 0
         probe.windowStart = now
     }
     probe.count = probe.count + 1
-    if (probe.count == edgeRefusalThreshold()) {
+    return probe.count == threshold
+}
+
+void noteEdgeRefusalIncident(EdgeState state) {
+    if (probeHit(state.refusalProbe, edgeRefusalThreshold(), edgeRefusalWindowMs())) {
         state.registry.raiseIncident(incidentEdgeRefusals(), "")
+    }
+}
+
+// Registrado so quando o Edge responde 401 (token ausente ou de outro
+// servico). Nao carrega hostname, token nem caminho: o incidente e global.
+void noteEdgeAuthFailureIncident(EdgeState state) {
+    if (probeHit(state.authFailureProbe, edgeAuthFailureThreshold(), edgeAuthFailureWindowMs())) {
+        state.registry.raiseIncident(incidentEdgeAuthFailures(), "")
     }
 }

@@ -250,6 +250,29 @@ Int limitEdgeRefusalWindowMs() {
     return window
 }
 
+//
+// Abuse prevention (Fase 17 slice 1): rajada de 401 no Edge. Servico
+// AUTHENTICATED responde 401 quando o `kfs_` apresentado nao e daquele
+// servico; uma rajada e forca bruta (ou cliente mal configurado em loop).
+// Limiar mais alto que o das recusas de tunel de proposito: um cliente
+// honesto com token vencido tambem gera 401, e uma rajada de tres seria
+// ruido. Mesma semantica de recuo: zerado/negativo volta ao default.
+Int limitEdgeAuthFailureThreshold() {
+    var threshold = config.int("kofcloud.limits.edgeAuthFailureThreshold", 25)
+    if (threshold <= 0) {
+        threshold = 25
+    }
+    return threshold
+}
+
+Int limitEdgeAuthFailureWindowMs() {
+    var window = config.int("kofcloud.limits.edgeAuthFailureWindowMs", 60000)
+    if (window <= 0) {
+        window = 60000
+    }
+    return window
+}
+
 // Limiar do detector de revogacao em lote (por conta, Fase 17 slice 1):
 // quantas revogacoes (device ou token) dentro da janela abrem o incidente.
 // Fonte unica do `Registry.detectBulkRevokes` — os dois ramos (device e

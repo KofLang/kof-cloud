@@ -603,7 +603,22 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   do Edge: ≥10 recusas de túnel na janela → `edge_refusals` (WARN).
   `POST /v1/incidents` lista (conta + globais; `all` = só globais) e
   `resolveId` fecha (alheio → `404 KCF125`). CLI: `kof cloud incidents
-  [--all] [--resolve <id>]`. Pendentes: pico de 401/429 por hostname,
+  [--all] [--resolve <id>]`.
+
+  **Implementado (abuse prevention — rajada de 401):** o front já responde
+  `401` a credencial ausente/errada em serviço `AUTHENTICATED`; agora esse
+  caminho alimenta uma sonda própria (`RateProbe` no `EdgeState`, separada da
+  de recusas de túnel) e ≥25 falhas em 60 s abrem `edge_auth_failures`
+  (WARN, global). Limiar mais alto de propósito: cliente honesto com `kfs_`
+  vencido também gera 401. A sonda **não** guarda hostname, token nem
+  caminho — o incidente é agregado. As duas sondas compartilham
+  `probeHit` (reset+incremento num lugar só), então uma não pode esquecer a
+  janela. Limiar/janela em `util/Limits.kf`
+  (`kofcloud.limits.edgeAuthFailureThreshold/WindowMs`, recuo seguro).
+  Prova: `tests/incidents_test.kf` (`incident-unit` + `incident-auth` puro +
+  `incident-auth-e2e` com Edge real e token errado). **Pendentes:** pico de
+  429 por hostname (o rate limit já conta por hostname, mas abrir incidente
+  por hostname violaria a regra de não ter cardinalidade por cliente),
   expiração em massa de `kfs_`, Edge sem heartbeat.
 
 * **Slice 2 — contenção em um comando.** `kof cloud freeze <alvo>`

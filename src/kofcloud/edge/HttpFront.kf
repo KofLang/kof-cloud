@@ -78,6 +78,10 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     if (exposureRequiresAuth(service.exposure)) {
         var provided = bearerFrom(headerValue(request.headers, "authorization"))
         if (state.authorize(service, provided) == false) {
+            // Sinal de abuse prevention: token ausente/errado e o que uma
+            // forca bruta de `kfs_` produz. Conta o fato (nunca o token, o
+            // host nem o path) e abre incidente global na rajada.
+            noteEdgeAuthFailureIncident(state)
             var deny = unauthorizedResponse(errAuthRequired())
             conn.send(deny)
             conn.close()

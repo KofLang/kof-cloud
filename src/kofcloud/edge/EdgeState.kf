@@ -20,7 +20,11 @@ class EdgeState {
     Int serviceConnLimit
     Int bodyLimit
     Int upstreamWaitMs
-    RefusalProbe refusalProbe
+    // Duas sondas independentes (Fase 17 slice 1 + abuse prevention): recusas
+    // de tunel e falhas de autenticacao nao podem dividir contador, senao uma
+    // rajada de 401 disfarcaria recusas de tunel e vice-versa.
+    RateProbe refusalProbe
+    RateProbe authFailureProbe
     Bool wafEnforce
 
     constructor(registry: Registry) {
@@ -35,7 +39,8 @@ class EdgeState {
         this.serviceConnLimit = limitServiceConns()
         this.bodyLimit = limitHttpBodyBytes()
         this.upstreamWaitMs = limitTunnelIdleMs()
-        this.refusalProbe = RefusalProbe()
+        this.refusalProbe = RateProbe()
+        this.authFailureProbe = RateProbe()
         this.wafEnforce = false
     }
 

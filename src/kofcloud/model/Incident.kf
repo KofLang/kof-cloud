@@ -39,6 +39,13 @@ String incidentEdgeRefusals() {
     return "edge_refusals"
 }
 
+// Abuse prevention: rajada de 401 em servico AUTHENTICATED. O rate limit por
+// hostname ja segura o volume (100/min); o sinal e para o operador enxergar
+// tentativa de forca bruta de `kfs_` que passaria despercebida no agregado.
+String incidentEdgeAuthFailures() {
+    return "edge_auth_failures"
+}
+
 // Contencao (slice 2): o incidente registra o alvo congelado.
 String incidentFreezeService() {
     return "freeze_service"
@@ -57,7 +64,7 @@ String incidentSeverityFor(String kind) {
     if (kind == incidentBulkDeviceRevokes()) {
         return severityCrit()
     }
-    if (kind == incidentBulkTokenRevokes() || kind == incidentEdgeRefusals()) {
+    if (kind == incidentBulkTokenRevokes() || kind == incidentEdgeRefusals() || kind == incidentEdgeAuthFailures()) {
         return severityWarn()
     }
     if (kind == incidentFreezeService() || kind == incidentFreezeDevice() || kind == incidentFreezeAccount()) {
@@ -76,6 +83,9 @@ String incidentSummaryFor(String kind) {
     }
     if (kind == incidentEdgeRefusals()) {
         return "the edge refused many tunnels in a short window"
+    }
+    if (kind == incidentEdgeAuthFailures()) {
+        return "many failed service-token authentications at the edge in a short window"
     }
     if (kind == incidentFreezeService()) {
         return "service frozen for incident containment"

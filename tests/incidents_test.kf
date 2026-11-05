@@ -1,10 +1,13 @@
+import kofcloud.agent.Agent
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.model.Errors
 import kofcloud.model.Incident
 import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
 import kofcloud.store.Store
+import kofcloud.util.Limits
 import testkit.Support
 
 // Fase 17 slice 1 — deteccao e severidade.
@@ -35,6 +38,15 @@ test "incidentes: severidade e resumo por sinal", "incident-unit" {
     assert(bulkRevokeThreshold() == limitBulkRevokeThreshold(), "lote delega na fonte")
     assert(bulkRevokeWindowMs() == 60000, "janela de lote travada")
     assert(bulkRevokeWindowMs() == limitBulkRevokeWindowMs(), "janela de lote delega na fonte")
+    assert(incidentSeverityFor(incidentEdgeAuthFailures()) == "WARN", "401 em rajada e WARN")
+    assert(incidentSummaryFor(incidentEdgeAuthFailures()).length > 0, "resumo do 401 presente")
+    assert(edgeAuthFailureThreshold() == 25, "limiar de 401 travado")
+    assert(edgeAuthFailureThreshold() == limitEdgeAuthFailureThreshold(), "401 delega na fonte")
+    assert(edgeAuthFailureWindowMs() == 60000, "janela de 401 travada")
+    assert(edgeAuthFailureWindowMs() == limitEdgeAuthFailureWindowMs(), "janela de 401 delega na fonte")
+    // Sinais distintos: vocabulario fechado, mesmo nivel por desenho.
+    assert(incidentEdgeAuthFailures() != incidentEdgeRefusals(), "sinais separados")
+    assert(incidentSeverityFor(incidentEdgeAuthFailures()) == incidentSeverityFor(incidentEdgeRefusals()), "mesmo nivel")
     assert(errIncidentNotFound().indexOf("KCF125") >= 0, "codigo KCF125")
     assert(errHint(errIncidentNotFound()).length > 0, "Hint presente")
 }
@@ -157,6 +169,144 @@ test "incidentes: rajada de recusas do Edge abre incidente global", "incident-ed
     var fresh = EdgeState(Registry(incidentsPath("edge2")))
     noteEdgeRefusalIncident(fresh)
     assert(fresh.registry.allIncidents().size == 0, "uma recusa nao e incidente")
+}
+
+test "incidentes: rajada de 401 no Edge abre incidente, controlada nao", "incident-auth" {
+    var registry = Registry(incidentsPath("auth"))
+    var edgeState = EdgeState(registry)
+    edgeState.authFailureProbe.count = edgeAuthFailureThreshold() - 1
+    edgeState.authFailureProbe.windowStart = time.now()
+    noteEdgeAuthFailureIncident(edgeState)
+    var list = registry.incidentsForAccount("", true)
+    assert(list.size == 1, "limiar de 401 abre o global")
+    if (list.size == 1) {
+        assert(list.get(0).kind == incidentEdgeAuthFailures(), "sinal do 401")
+        assert(list.get(0).accountId.length == 0, "escopo global")
+        assert(list.get(0).severity == "WARN", "WARN")
+        // Privacidade: nada de hostname/token/caminho no resumo.
+        assert(list.get(0).summary.indexOf("kfs_") < 0, "sem credencial no resumo")
+        assert(list.get(0).summary.indexOf(".") < 0, "sem hostname no resumo")
+    }
+
+    // Uma rajada abaixo do limiar nao abre.
+    var quiet = EdgeState(Registry(incidentsPath("auth2")))
+    noteEdgeAuthFailureIncident(quiet)
+    assert(quiet.registry.allIncidents().size == 0, "um 401 nao e incidente")
+
+    // Sondas independentes: nutrir a de 401 nao antecipa a de recusas.
+    var shared = EdgeState(Registry(incidentsPath("auth3")))
+    shared.authFailureProbe.count = edgeAuthFailureThreshold() - 1
+    noteEdgeAuthFailureIncident(shared)
+    noteEdgeRefusalIncident(shared)
+    var kinds = shared.registry.allIncidents()
+    assert(kinds.size == 1, "recusa nao foi contada pela sonda de 401")
+    if (kinds.size == 1) {
+        assert(kinds.get(0).kind == incidentEdgeAuthFailures(), "so o sinal de 401 abriu")
+    }
+
+    // Janela vencida zera o contador (sonda cheia de antes nao abre agora).
+    var stale = EdgeState(Registry(incidentsPath("auth4")))
+    stale.authFailureProbe.count = edgeAuthFailureThreshold() - 1
+    stale.authFailureProbe.windowStart = time.now() - edgeAuthFailureWindowMs() - 1000
+    noteEdgeAuthFailureIncident(stale)
+    assert(stale.registry.allIncidents().size == 0, "janela vencida reseta antes de contar")
+}
+
+// E2E do caminho real: um servico AUTHENTICATED publicado, token errado
+// batendo no Edge. O 401 tem que contar na sonda de falhas de autenticacao
+// (e nao na de recusas de tunel), e um token bom nao pode contar nada.
+test "incidentes: 401 real no Edge alimenta a sonda de autenticacao", "incident-auth-e2e" {
+    var localSvc = 19631
+    var controlPort = 19632
+    var tunnelPort = 19633
+    var httpPort = 19634
+
+    var app = web.app()
+    app.get("/") { return "svc-auth" }
+    var server = spawn { app.listen(localSvc) }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-inc-authe-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-inc-authe-edge-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var accountId = mapField(json.decode<Map<String, String>>(bodyOf(created)), "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"secret\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}"
+    var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
+    assert(statusOf(published) == 200, "AUTHENTICATED publicado")
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
+
+    // Sem o Agent a rota existe mas o device esta OFFLINE: o 401 por
+    // credencial acontece ANTES da checagem de sessao (ordem do front) e e
+    // exatamente o caminho do atacante. O token honesto, porem, cairia em
+    // 503 — entao para ele subimos o Agent como no e2e de AUTHENTICATED.
+    var agentStop = "/tmp/kofcloud-inc-authe-agent-" + crypto.randomHex(4) + ".txt"
+    File(agentStop).delete()
+
+    // A sonda e pre-carregada para o limiar ser atingido com 3 requests: 25
+    // 401 de verdade esbarrariam no rate limit por hostname (100/min), que
+    // nao e o que este teste exercita.
+    var base = edgeAuthFailureThreshold() - 3
+    edgeState.authFailureProbe.count = base
+    edgeState.authFailureProbe.windowStart = time.now()
+
+    // Dois 401: abaixo do limiar, nada abre.
+    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", "kfs_errado1")) == 401, "errado -> 401")
+    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", "kfs_errado2")) == 401, "errado -> 401")
+    assert(registry.allIncidents().size == 0, "dois 401 nao abrem")
+    assert(edgeState.authFailureProbe.count == base + 2, "sonda contou os dois")
+    assert(edgeState.refusalProbe.count == 0, "sonda de recusas intacta")
+
+    // Terceiro 401 fecha o limiar (3) e abre o incidente global.
+    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", "kfs_errado3")) == 401, "errado -> 401")
+    var incidents = registry.allIncidents()
+    assert(incidents.size == 1, "limiar abre o global")
+    if (incidents.size == 1) {
+        assert(incidents.get(0).kind == incidentEdgeAuthFailures(), "sinal do 401")
+        assert(incidents.get(0).accountId.length == 0, "escopo global, nao da conta")
+    }
+
+    // Token honesto nao conta nem reabre (incidente segue idempotente).
+    // Sobe o Agent para a rota ficar ONLINE e o token bom chegar ao servico.
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+    var minted = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
+    assert(statusOf(minted) == 200, "token de servico emitido")
+    var serviceToken = mapField(json.decode<Map<String, String>>(bodyOf(minted)), "token")
+    var before = edgeState.authFailureProbe.count
+    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", serviceToken)) == 200, "token bom -> 200")
+    assert(edgeState.authFailureProbe.count == before, "200 nao incrementa a sonda")
+    assert(registry.allIncidents().size == 1, "sem incidente duplicado")
+
+    // O incidente nao carrega hostname nem token (regra de privacidade).
+    assert(incidents.get(0).summary.indexOf("secret.mel") < 0, "sem hostname no incidente")
+    assert(incidents.get(0).summary.indexOf("kfs_") < 0, "sem token no incidente")
+
+    writeTextTo(edgeStop, "stop")
+    writeTextTo(agentStop, "stop")
+    assert(waitForPort(controlPort, 60), "encerra")
 }
 
 test "incidentes: template de post-mortem tem as 5 secoes e sem dado de cliente", "postmortem-template" {
