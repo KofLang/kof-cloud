@@ -500,6 +500,14 @@ sem mudar formato público):
   (`metrics-latency`). **Pendente:** p50/p99 por hostname (hoje só agregado
   global, porque contar por hostname seria cardinalidade por cliente) e o
   tempo de relay por tamanho.
+
+  **Implementado (tamanho da resposta):** faixas em KiB
+  (`responseSizeBucketLimitsKb`: 1, 4, 16, 64, 256, 1024 + excedente),
+  contadas em `noteHttpFinished` junto dos bytes totais — é o "tempo de relay
+  por tamanho" na forma medível: cruzar a faixa de latência com a de tamanho
+  diz se o p99 vem de muitas trocas pequenas ou de poucas grandes. Resposta
+  zero não entra (não é relay). Rótulo derivado da lista (mesma regra da
+  latência). Prova: `tests/metrics_test.kf` (`metrics-size`).
 * **Slice 2 — relay regional.** `connect` passa a receber a lista de Edges
   (`edgeHost` vira ranking por latência medida no handshake); o Agent
   escolhe o mais próximo e reavalia a cada N minutos. Sem consenso

@@ -80,6 +80,37 @@ String latencyBucketSuffix(Long elapsedMs) {
     return "_gt_" + intToString(limits.get(limits.size - 1))
 }
 
+// Faixas de TAMANHO da resposta (Fase 14 slice 1: "tempo de relay por
+// tamanho"). Sem isso nao ha como dizer se o custo esta no chunk ou na
+// distancia: um p99 alto pode ser muita troca pequena ou poucas trocas
+// grandes. Fonte unica; o rotulo e derivado da lista (mesma regra da
+// latencia). Valores em KiB.
+List<Int> responseSizeBucketLimitsKb() {
+    return listOf(1, 4, 16, 64, 256, 1024)
+}
+
+String responseSizeBucketSuffix(Int responseBytes) {
+    var limits = responseSizeBucketLimitsKb()
+    var i = 0
+    while (i < limits.size) {
+        var limit = limits.get(i)
+        if (responseBytes <= limit * 1024) {
+            return "_kb_le_" + intToString(limit)
+        }
+        i = i + 1
+    }
+    return "_kb_gt_" + intToString(limits.get(limits.size - 1))
+}
+
+// Conta a resposta na faixa de tamanho (so respostas com bytes: recusa
+// pequena de plataforma nao mede relay e viraria ruido na faixa menor).
+void noteResponseSize(Int responseBytes) {
+    if (responseBytes <= 0) {
+        return
+    }
+    observability.counter(metricResponseBytes() + "_size" + responseSizeBucketSuffix(responseBytes))
+}
+
 // Acumula a amostra de latencia: histograma (sum+count, media) + a faixa
 // correspondente. Fonte unica da classificacao — o chamador so passa ms.
 void noteRequestLatency(Long elapsedMs) {
@@ -152,6 +183,7 @@ void noteHttpFinished(String outcome, String deniedDetail, Int requestBytes, Int
     }
     observability.increment(metricRequestBytes(), requestBytes)
     observability.increment(metricResponseBytes(), responseBytes)
+    noteResponseSize(responseBytes)
     noteRequestLatency(elapsedMs)
     observability.gauge(metricStreamsOpen(), 0)
 }

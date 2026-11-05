@@ -281,3 +281,35 @@ test "metricas: contadores do control plane tambem valem sem HTTP", "metrics-reg
     assert(metricHas(exposition, "kofcloud_control_services_published_total"), "publicacao sem HTTP conta")
     assert(metricHas(exposition, "kofcloud_control_domains_verified_total") || metricHas(exposition, "kofcloud_control_domains_registered_total"), "dominio sem HTTP conta")
 }
+
+test "metricas: tamanho da resposta cai em faixa (KiB) e conta", "metrics-size" {
+    // Pura: rotulos derivados da lista unica responseSizeBucketLimitsKb().
+    assert(responseSizeBucketSuffix(0) == "_kb_le_1", "zero na menor faixa")
+    assert(responseSizeBucketSuffix(1024) == "_kb_le_1", "1 KiB inclusivo")
+    assert(responseSizeBucketSuffix(1025) == "_kb_le_4", "acima de 1 KiB")
+    assert(responseSizeBucketSuffix(16384) == "_kb_le_16", "16 KiB inclusivo")
+    assert(responseSizeBucketSuffix(1048576) == "_kb_le_1024", "1 MiB inclusivo")
+    assert(responseSizeBucketSuffix(1048577) == "_kb_gt_1024", "acima de 1 MiB")
+    var limits = responseSizeBucketLimitsKb()
+    assert(limits.size >= 3, "faixas suficientes")
+    assert(limits.get(limits.size - 1) == 1024, "ultima faixa = 1 MiB")
+
+    // Contagem real pela funcao do produto.
+    var before = metricValue(observability.metrics(), "kofcloud_edge_http_response_bytes_total_size_kb_le_16")
+    if (before < 0) {
+        before = 0
+    }
+    noteHttpFinished("ok", "", 10, 16384, 5)
+    var exposition = observability.metrics()
+    assert(metricValue(exposition, "kofcloud_edge_http_response_bytes_total_size_kb_le_16") == before + 1, "16 KiB conta na faixa")
+
+    // Resposta zero nao entra na faixa (nao e relay): com uma resposta real
+    // de 1 KiB antes e outra depois, a le_1 nao pode subir duas vezes.
+    noteHttpFinished("ok", "", 10, 1024, 5)
+    var oneKb = metricValue(observability.metrics(), "kofcloud_edge_http_response_bytes_total_size_kb_le_1")
+    if (oneKb < 0) {
+        oneKb = 0
+    }
+    noteResponseSize(0)
+    assert(metricValue(observability.metrics(), "kofcloud_edge_http_response_bytes_total_size_kb_le_1") == oneKb, "zero nao conta")
+}
