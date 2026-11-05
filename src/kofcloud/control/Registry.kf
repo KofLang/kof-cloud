@@ -645,6 +645,37 @@ class Registry {
         return out
     }
 
+    // Higiene de credenciais (Fase 19 slice 2): credenciais VALIDAS e SEM
+    // expiracao da conta. Nao ha como revoga-las sozinho sem quebrar
+    // consumidores — o relatorio aponta e a rotacao (service rotate --ttl)
+    // e o passo recomendado.
+    List<ServiceToken> tokensWithoutExpiry(String accountId) {
+        var now = time.now()
+        var out = listOf<ServiceToken>()
+        for (var entry in this.serviceTokens) {
+            if (entry.accountId == accountId) {
+                if (entry.expiresAt <= 0 && this.serviceTokenExpired(entry, now) == false) {
+                    out.add(entry)
+                }
+            }
+        }
+        return out
+    }
+
+    // Nomes dos servicos da conta que tem pelo menos uma credencial sem TTL.
+    List<String> servicesWithUnrotatedTokens(String accountId) {
+        var out = listOf<String>()
+        for (var entry in this.tokensWithoutExpiry(accountId)) {
+            var service = this.serviceById(entry.serviceId)
+            if (service != null) {
+                if (out.contains(service.name) == false) {
+                    out.add(service.name)
+                }
+            }
+        }
+        return out
+    }
+
     // Remove credenciais orfas (servico removido ou dispositivo revogado).
     void pruneServiceTokens() {
         var alive = listOf<ServiceToken>()

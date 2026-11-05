@@ -1230,6 +1230,40 @@ Int cmdServiceRotate(List<String> args) {
     }
 }
 
+// Higiene de credenciais (Fase 19 s2): servicos da conta com kfs_ validos
+// SEM expiracao. Leitura; o passo recomendado e `service rotate --ttl`.
+Int cmdServiceTokens(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println(notLoggedInLine())
+        return 1
+    }
+    if (extraPositional(args, 0)) {
+        println("uso: kof cloud service tokens")
+        return 1
+    }
+    try {
+        var raw = requireOk(http.post(session.controlUrl + "/v1/services/token-hygiene", "{}", jsonHeader(session.token)))
+        var result = json.decode<Map<String, String>>(raw)
+        var services = json.decode<List<String>>(mapField(result, "services"))
+        var count = parseIntSafe(mapField(result, "count"), 0)
+        if (count == 0) {
+            println("Higiene ok: nenhuma credencial valida sem expiracao.")
+            return 0
+        }
+        println("Credenciais validas SEM expiracao: " + intToString(count))
+        for (var name in services) {
+            println("  servico: " + name)
+        }
+        println("")
+        println("Rotacione com prazo: kof cloud service rotate <nome> --ttl 24")
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
 Int cmdServiceRotation(List<String> args) {
     var session = loadSession()
     if (session == null) {

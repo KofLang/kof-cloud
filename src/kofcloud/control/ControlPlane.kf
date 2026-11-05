@@ -567,6 +567,24 @@ HttpResult handleListServiceTokens(Registry registry, String? authHeader, String
     return HttpResult(200, serviceTokenListJson(registry.serviceTokensFor(account.id, serviceId)))
 }
 
+// Higiene de credenciais (Fase 19 s2): devolve os servicos da conta com
+// credenciais validas SEM expiracao. So leitura; a acao e `service rotate`.
+HttpResult handleTokenHygiene(Registry registry, String? authHeader) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var names = registry.servicesWithUnrotatedTokens(account.id)
+    var parts = listOf<String>()
+    for (var name in names) {
+        parts.add(json.encode(name))
+    }
+    var out = mapOf()
+    out.put("services", "[" + joinStrings(parts, ",") + "]")
+    out.put("count", intToString(registry.tokensWithoutExpiry(account.id).size))
+    return HttpResult(200, json.encode(out))
+}
+
 // Rotacao assistida (Fase 19 s3): emite uma credencial nova e revoga as
 // anteriores SO quando ja passaram do TTL (overlap sem downtime). Com
 // `prune` tambem limpa as expiradas. O token novo e devolvido uma unica vez.
@@ -1240,6 +1258,13 @@ class ControlPlane {
         }
         app.post("/v1/incidents") {
             var result = handleIncidents(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/services/token-hygiene") {
+            var result = handleTokenHygiene(reg, header("x-kofcloud-token"))
             if (result.code == 200) {
                 return result.body
             }

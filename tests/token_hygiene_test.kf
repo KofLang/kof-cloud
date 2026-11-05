@@ -1,0 +1,86 @@
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.store.Store
+import testkit.Support
+
+// Fase 19 slice 2 — higiene de credenciais: servicos da conta com kfs_
+// validos SEM expiracao (o passo recomendado e `service rotate --ttl`).
+
+String hygienePath(String name) {
+    return "/tmp/kofcloud-hyg-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "higiene: credencial sem TTL aparece; com TTL nao", "hygiene-unit" {
+    var registry = Registry(hygienePath("unit"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var a = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
+    var b = registry.publishService(account, device.id, "api", "127.0.0.1", 3000, "http", "AUTHENTICATED", "", "")
+    registry.issueServiceToken(account.id, a.id)            // sem TTL
+    registry.issueServiceToken(account.id, b.id, 24)        // com TTL
+
+    var unrotated = registry.tokensWithoutExpiry(account.id)
+    assert(unrotated.size == 1, "so a sem TTL")
+    var names = registry.servicesWithUnrotatedTokens(account.id)
+    assert(names.size == 1, "um servico")
+    if (names.size == 1) {
+        assert(names.get(0) == "site", "o servico sem TTL")
+    }
+}
+
+test "higiene: revogar/rotacionar com TTL remove do relatorio", "hygiene-unit" {
+    var registry = Registry(hygienePath("rotate"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var a = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
+    var legacy = registry.issueServiceToken(account.id, a.id)
+    assert(registry.tokensWithoutExpiry(account.id).size == 1, "legado listado")
+    // Revogar o legado tira do relatorio (mesmo sem rotacionar).
+    assert(registry.revokeServiceToken(account.id, a.id, legacy), "revogado")
+    assert(registry.tokensWithoutExpiry(account.id).size == 0, "limpo")
+    // Nova com TTL tambem nao aparece.
+    registry.issueServiceToken(account.id, a.id, 24)
+    assert(registry.tokensWithoutExpiry(account.id).size == 0, "com TTL fora")
+}
+
+test "higiene: escopo e da conta (nao ve de outra)", "hygiene-unit" {
+    var registry = Registry(hygienePath("scope"))
+    var mel = registry.createAccount("mel", "mel@e.com", "segredo")
+    var ana = registry.createAccount("ana", "ana@e.com", "segredo")
+    var melDev = registry.registerDevice(mel, "nb", "pk")
+    var anaDev = registry.registerDevice(ana, "nb", "pk")
+    var melSvc = registry.publishService(mel, melDev.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
+    var anaSvc = registry.publishService(ana, anaDev.id, "api", "127.0.0.1", 3000, "http", "AUTHENTICATED", "", "")
+    registry.issueServiceToken(mel.id, melSvc.id)
+    registry.issueServiceToken(ana.id, anaSvc.id)
+    assert(registry.tokensWithoutExpiry(mel.id).size == 1, "mel ve so o seu")
+    var names = registry.servicesWithUnrotatedTokens(mel.id)
+    assert(names.contains("api") == false, "nao ve o de ana")
+    assert(names.contains("site"), "ve o proprio")
+}
+
+test "higiene: HTTP devolve servicos e contagem", "hygiene" {
+    var controlPort = 19921
+    var registry = Registry(hygienePath("http"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}"
+    var published = httpPostJson(controlPort, "/v1/services", pubBody, token)
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "token sem TTL")
+
+    var hygiene = httpPostJson(controlPort, "/v1/services/token-hygiene", "{}", token)
+    assert(statusOf(hygiene) == 200, "hygiene 200")
+    var result = json.decode<Map<String, String>>(bodyOf(hygiene))
+    assert(mapField(result, "count") == "1", "uma sem TTL")
+    assert(bodyOf(hygiene).indexOf("site") >= 0, "servico listado")
+
+    // Sem token -> 401 (nao ha endpoint aberto).
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/token-hygiene", "{}", "")) == 401, "401 sem token")
+}
