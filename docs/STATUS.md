@@ -61,7 +61,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | conexoes | `tests/conns_test.kf` | 2 |
 | deploy + scan | `tests/deploy_test.kf` | 9 |
 | daemon | `tests/daemon_test.kf` | 13 |
-| doctor | `tests/doctor_test.kf` | 5 |
+| doctor | `tests/doctor_test.kf` | 7 |
 | hot-reload | `tests/reload_test.kf` | 1 |
 | control plane | `tests/control_test.kf` | 4 |
 | presenca | `tests/presence_test.kf` | 1 |
@@ -86,7 +86,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | higiene de credenciais (F19 s2) | `tests/token_hygiene_test.kf` | 4 |
 | painel de gestão completa (F12 s2) | `tests/panel_actions_test.kf` | 2 |
 
-Total: 230 testes. Ver `15-tests.md` para a matriz.
+Total: 232 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

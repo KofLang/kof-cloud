@@ -43,7 +43,7 @@ String usageText() {
     out = out + "  deploy [--file " + defaultManifestPath() + "] [--check] [--plan]  (publica + verifica; --plan so mostra o diff e marca (build)/(artifact); manifesto aceita build/artifact por servico)\n"
     out = out + "  down [--file " + defaultManifestPath() + "] [--prune]  (remove os do manifesto; --prune remove orfaos do device)\n"
     out = out + "  daemon install|status|uninstall   (systemd --user, sem root)\n"
-    out = out + "  doctor [--file " + defaultManifestPath() + "]       (diagnostico: login, control, device, tunel, servicos)\n"
+    out = out + "  doctor [--file " + defaultManifestPath() + "] [--tls-cert <pem>]       (diagnostico: login, control, device, tunel, tls, servicos)\n"
     out = out + "  audit [--sbom]              (trilha de auditoria da conta; --sbom = inventario local dos fontes)\n"
     out = out + "  scan [--file <caminho>] [--tls-cert <pem>]  (segredos no manifesto/ambiente + PEM expirando; exit 1 com achado)\n"
     out = out + "  webhook set <url> --secret <s> | show | remove | test   (incidentes; HMAC-SHA256)\n"

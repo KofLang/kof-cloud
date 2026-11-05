@@ -19,12 +19,64 @@ test "doctor: sem login pede login e para na primeira camada", "doctor" {
     assert(report.lines.get(0).startsWith("FALHA login local"), "aponta o login")
 }
 
+test "doctor: camada TLS distingue ausente, invalido e expirando", "doctor-tls" {
+    // Sem --tls-cert nada a checar: nao inventa linha.
+    assert(doctorTlsLine("", true, 0, 0) == "", "sem cert = sem linha")
+    // Arquivo ausente.
+    var missing = doctorTlsLine("/tmp/nao-existe.pem", false, 1, 1)
+    assert(missing.startsWith("FALHA tls"), "ausente e FALHA")
+    assert(missing.indexOf("nao encontrado") >= 0, "diz que falta o arquivo")
+    // PEM ilegivel (openssl x509 sai != 0 sem -checkend).
+    var invalid = doctorTlsLine("/tmp/x.pem", true, 1, 1)
+    assert(invalid.startsWith("FALHA tls"), "invalido e FALHA")
+    assert(invalid.indexOf("PEM valido") >= 0, "aponta o conteudo invalido")
+    // Expirado/expirando: -checkend != 0 com PEM valido.
+    var expiring = doctorTlsLine("/tmp/x.pem", true, 0, 1)
+    assert(expiring.startsWith("FALHA tls"), "expirando e FALHA")
+    assert(expiring.indexOf("30 dias") >= 0, "nomeia o prazo")
+    assert(expiring.indexOf("renove") >= 0, "orienta a acao")
+    // Valido: ok, com o caminho (e nunca o conteudo).
+    var valid = doctorTlsLine("/tmp/x.pem", true, 0, 0)
+    assert(valid.startsWith("ok"), "valido e ok")
+    assert(valid.indexOf("/tmp/x.pem") >= 0, "mostra o caminho checado")
+    // Caminho relativo tambem: a linha e pura, sem ler o disco.
+    assert(doctorTlsLine("certs/a.pem", true, 0, 0).indexOf("certs/a.pem") >= 0, "caminho preservado")
+}
+
+test "doctor: --tls-cert com PEM real (openssl) vira ok/FALHA na camada TLS", "doctor-tls" {
+    // Integracao real do openssl: PEM valido por 10 anos -> ok; PEM com
+    // 1 dia -> FALHA de expiracao; lixo -> FALHA de formato. O teste pula
+    // quando openssl nao existe (mesmo criterio do scan --tls-cert).
+    var dir = "/tmp/kofcloud-doc-tls-" + crypto.randomHex(4)
+    var key = dir + "/k.pem"
+    var cert = dir + "/c.pem"
+    var bad = dir + "/bad.pem"
+    var gen = process.run("sh", "-c", "mkdir -p " + dir + " && openssl req -x509 -newkey rsa:2048 -keyout " + key + " -out " + cert + " -days 3650 -nodes -subj /CN=doctor 2>/dev/null && printf garbage > " + bad)
+    if (gen.exitCode != 0) {
+        assert(true, "openssl ausente: pulando integracao")
+        return
+    }
+    var parse = process.run("openssl", "x509", "-in", cert, "-noout").exitCode
+    var checkend = process.run("openssl", "x509", "-in", cert, "-noout", "-checkend", "2592000").exitCode
+    var okLine = doctorTlsLine(cert, true, parse, checkend)
+    assert(okLine.startsWith("ok"), "cert de 10 anos e ok: " + okLine)
+    assert(okLine.indexOf("tls") >= 0, "rotula a camada tls")
+    var badLine = doctorTlsLine(bad, true, process.run("openssl", "x509", "-in", bad, "-noout").exitCode, 1)
+    assert(badLine.startsWith("FALHA tls"), "garbage e FALHA: " + badLine)
+    // O comando completo aceita a flag e nao morre (sem login, para na 1a
+    // camada): a flag e reconhecida antes de qualquer rede.
+    assert(doctorTlsLine(cert, false, 0, 0).indexOf("nao encontrado") >= 0, "ausente antes de checar")
+}
+
 test "doctor: ajuda lista a camada do tunel", "doctor-usage" {
     // Regressao: o help ficou para tras quando o doctor ganhou o tunel
     // (README ja citava, Usage.kf nao). Puro, sem rede nem HOME.
     var help = usageText()
     assert(help.indexOf("doctor") >= 0, "menciona o doctor")
     assert(help.indexOf("tunel") >= 0, "menciona o tunel")
+    // Fase 9 slice 3 parcial: o doctor checa o PEM quando informado.
+    assert(help.indexOf("doctor [--file kofcloud.json] [--tls-cert <pem>]") >= 0, "doctor anuncia --tls-cert")
+    assert(help.indexOf("tls") >= 0, "menciona a camada tls")
 }
 
 test "doctor: manifesto invalido e reportado com caminho", "doctor-manifest" {

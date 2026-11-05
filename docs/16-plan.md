@@ -263,14 +263,20 @@ entre cliente e Edge. Cloud robusta de verdade exige HTTPS ponta a ponta
   ausente). Tentar `app.use` com `headerSet` seria redundante — e o
   redirecionamento 301 HTTP→HTTPS fica fora (o `serve` sobe um control
   por porta: com TLS não há listener HTTP para redirecionar).
-* **Slice 3 — SNI por hostname + renovação assistida (parcial: aviso de expiração ✅).**
+* **Slice 3 — SNI por hostname + renovação assistida (parcial: expiração visível ✅).**
   O `serve` com `--tls-cert/--tls-key` roda `openssl x509 -checkend 30d`
   e avisa (nunca bloqueia) quando o PEM expira em menos de 30 dias;
   openssl ausente/erro = sem aviso. Pura `tlsCertExpiringSoon` (exitCode
-  → Bool). Prova: `tests/hosts_test.kf` (`serve-tls` estendido). Pendente:
-  SNI por hostname (mapa em memória, recarregado sem derrubar o Edge —
-  depende do runtime), renovação automática, `domain verify` aceitar o
-  PEM, e expiração visível também no `service status`/`doctor`.
+  → Bool). Prova: `tests/hosts_test.kf` (`serve-tls` estendido).
+  O mesmo julgamento ficou visível fora do `serve`: `kof cloud scan
+  --tls-cert` (Fase 19 slice 2) e, agora, `kof cloud doctor --tls-cert`
+  — camada `tls` distingue ausente / PEM inválido / expira em 30 dias /
+  válido, mostra só o caminho (nunca o conteúdo) e falha o diagnóstico
+  quando o certificado não serve (pura `doctorTlsLine`). Prova:
+  `tests/doctor_test.kf` (`doctor-tls`, com `openssl` real e pula sem ele).
+  Pendente: SNI por hostname (mapa em memória, recarregado sem derrubar o
+  Edge — depende do runtime), renovação automática, `domain verify`
+  aceitar o PEM, e expiração visível também no `service status`.
   ACME de verdade (DNS-01) depende de ES256 no stdlib — sem isso, emissão
   continua externa (ver `12-tls.md`).
 
@@ -709,8 +715,8 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   literal (exit 1 com achado, 0 limpo) — sem login, sem rede, para rodar
   no CI a cada push. Pura `scanManifestSecrets` (nomeia o serviço sem
   vazar o valor). Prova: `tests/deploy_test.kf` (`deploy-scan`) + trava
-  da ajuda. Pendente: dependências, segredos em env, PEM expirando,
-  `kfs_` sem TTL em serviço crítico (exigem openssl/rede/conta).
+  da ajuda. Pendente: dependências e `kfs_` sem TTL em serviço crítico
+  (exigem rede/conta).
 
   **Complemento ✅:** o `scan` agora também olha o **ambiente** (lista curada
   de nomes sensíveis — o Kof não enumera env, `config.env(nome)` lê um por

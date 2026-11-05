@@ -123,7 +123,7 @@ domain remove <hostname>
 deploy [--file kofcloud.json] [--check] [--plan]  (roda build + publica + verifica; --plan so mostra o diff e marca (build)/(artifact))
 down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove orfaos)
 daemon install|status|uninstall   (artefato por SO — systemd/launchd/Windows — sem root, ativação manual)
-doctor [--file kofcloud.json]   (diagnostico: login, control, device, tunel, servicos)
+doctor [--file kofcloud.json] [--tls-cert <pem>]  (diagnostico: login, control, device, tunel, tls, servicos)
 audit [--sbom] [--verify]               (trilha de auditoria da conta; --sbom = inventario local dos fontes)
 scan [--file <caminho>] [--tls-cert <pem>]      (varredura local de segredos no manifesto; exit 1 com achado)
 webhook set <url> --secret <s> | show | remove | test

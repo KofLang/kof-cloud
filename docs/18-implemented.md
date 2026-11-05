@@ -45,7 +45,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | frame DATA fatiado + teto de linha | `Payload.encodeChunks` (blocos de 16 KiB) + `LineCodec` fail-closed + `maxTunnelLineBytes` | `frames_test.kf` |
 | conexoes simultaneas por servico | contador por `serviceId` no Edge + `429 KCF108` antes do OPEN | `conns_test.kf` |
 | deploy declarativo (slice 1) | `kofcloud.json` + `deploy`/`down` sobre publish em lote (idempotente, sem tocar fora do manifesto; `down --prune` poda órfãos do device atual) | `deploy_test.kf` |
-| diagnostico doctor | somente-leitura em camadas (login, control, device, servicos, tunel) + `--file` | `doctor_test.kf` |
+| diagnostico doctor | somente-leitura em camadas (login, control, device, servicos, tunel) + `--file` + `--tls-cert` (PEM ausente/invalido/expirado em 30 dias, sem vazar conteudo) | `doctor_test.kf` |
 | daemon user-level (slice 3) | `cli/Daemon.kf`: unit systemd `--user` + install/status/uninstall | `daemon_test.kf` |
 | presenca real do tunel | espelho bind/unbind no Registry + `GET /v1/presence` filtrado por conta + `status` ONLINE/OFFLINE confirmado | `presence_test.kf` |
 | `security.txt` + `SECURITY.md` + SBOM (Fase 19 s1 parcial) | `/.well-known/security.txt` no Edge (200 `text/plain`, Contact + Policy estáticos) antes de rate limit/rota/auth; sem conta/túnel/serviço; `docs/SECURITY.md` com suporte/reporte/SLA/escopo e trava; `audit --sbom` local (44 fontes + SHA-256, sem login) | `security_test.kf` + `hosts_test.kf` (`audit-sbom`) |

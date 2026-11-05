@@ -40,7 +40,31 @@ String doctorTunnelLine(String presenceRaw, String deviceId, String fetchError) 
     return doctorFailLine("tunel", "sem sessao no Edge — rode: kof cloud connect")
 }
 
+// Linha da camada TLS a partir do resultado de `openssl x509` ja executado
+// (pura, sem rede nem HOME): "" quando nao ha `--tls-cert` (nada a checar).
+// Distingue arquivo ausente, PEM invalido e expiracao em 30 dias — o
+// caminho aparece na mensagem, o conteudo do PEM nunca.
+String doctorTlsLine(String certPath, Bool exists, Int parseExit, Int checkendExit) {
+    if (certPath.length == 0) {
+        return ""
+    }
+    if (exists == false) {
+        return doctorFailLine("tls", certPath + " nao encontrado")
+    }
+    if (parseExit != 0) {
+        return doctorFailLine("tls", certPath + " nao e um PEM valido (openssl x509 falhou)")
+    }
+    if (tlsCertExpiringSoon(checkendExit)) {
+        return doctorFailLine("tls", certPath + " expira em menos de 30 dias — renove o PEM")
+    }
+    return doctorOkLine("tls (" + certPath + ", valido por mais de 30 dias)")
+}
+
 DoctorReport doctorCheck(String manifestPath) {
+    return doctorCheckWith(manifestPath, "")
+}
+
+DoctorReport doctorCheckWith(String manifestPath, String tlsCertPath) {
     var lines = listOf<String>()
     var failed = false
 
@@ -107,6 +131,30 @@ DoctorReport doctorCheck(String manifestPath) {
         failed = true
     }
 
+    // 4b. Certificado TLS do operador, quando informado (Fase 9 slice 3
+    // parcial). So avisa/checa: nao bloqueia o resto do diagnostico. A
+    // decisao vive em doctorTlsLine (pura, com teste).
+    if (tlsCertPath.length > 0) {
+        var exists = fileExists(tlsCertPath)
+        var parseExit = 1
+        var checkendExit = 1
+        if (exists) {
+            try {
+                parseExit = process.run("openssl", "x509", "-in", tlsCertPath, "-noout").exitCode
+                checkendExit = process.run("openssl", "x509", "-in", tlsCertPath, "-noout", "-checkend", "2592000").exitCode
+            } catch (String e) {
+                // openssl ausente: sem como julgar — nao inventa FALHA.
+                parseExit = 0
+                checkendExit = 0
+            }
+        }
+        var tlsLine = doctorTlsLine(tlsCertPath, exists, parseExit, checkendExit)
+        lines.add(tlsLine)
+        if (tlsLine.startsWith("FALHA")) {
+            failed = true
+        }
+    }
+
     // 5. Servicos publicados acessiveis + porta local respondendo.
     if (manifestPath.length == 0) {
         manifestPath = defaultManifestPath()
@@ -142,8 +190,8 @@ DoctorReport doctorCheck(String manifestPath) {
 }
 
 Int cmdDoctor(List<String> args) {
-    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file")) {
-        println("uso: kof cloud doctor [--file kofcloud.json]")
+    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file") || flagMissingValue(args, "--tls-cert") || flagDuplicated(args, "--tls-cert")) {
+        println("uso: kof cloud doctor [--file kofcloud.json] [--tls-cert <pem>]")
         return 1
     }
     // Mesma regra do deploy/down: ausente/vazio/so-espacos = manifesto
@@ -151,7 +199,7 @@ Int cmdDoctor(List<String> args) {
     // Sem isso, `--file "   "` pulava o default no doctorCheck e lia path
     // invalido (reportava "manifesto ausente" em vez do kofcloud.json).
     var file = resolveManifestPath(flagValue(args, "--file"))
-    var report = doctorCheck(file)
+    var report = doctorCheckWith(file, flagValue(args, "--tls-cert").trim())
     for (var line in report.lines) {
         println(line)
     }
