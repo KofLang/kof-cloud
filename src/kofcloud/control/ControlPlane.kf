@@ -898,7 +898,33 @@ HttpResult handleConnect(Registry registry, String? authHeader, String bodyText,
     out.put("edgePort", intToString(edgePort))
     out.put("heartbeatMs", intToString(limitHeartbeatMs()))
     out.put("services", serviceListJson(registry.servicesForDevice(deviceId)))
+    // Lista de Edges para o Agent ranquear por latencia (Fase 14 slice 2).
+    // `kofcloud.edgeHosts` = "host:porta,host:porta"; vazia = so o Edge
+    // principal (comportamento anterior, sem mudanca de contrato).
+    out.put("edges", edgeListJson(edgeHost, edgePort))
     return HttpResult(200, json.encode(out))
+}
+
+// Lista de Edges como JSON de strings "host:porta" (o Agent mede e escolhe).
+// O Edge principal vem primeiro e sempre presente; os extras vem da config.
+String edgeListJson(String primaryHost, Int primaryPort) {
+    var parts = listOf<String>()
+    parts.add(json.encode(primaryHost + ":" + intToString(primaryPort)))
+    var configured = config.str("kofcloud.edgeHosts", "")
+    for (var item in configured.split(",")) {
+        var entry = item.trim()
+        if (entry.length == 0) {
+            continue
+        }
+        if (entry.indexOf(":") <= 0) {
+            continue
+        }
+        var encoded = json.encode(entry)
+        if (parts.contains(encoded) == false) {
+            parts.add(encoded)
+        }
+    }
+    return "[" + joinStrings(parts, ",") + "]"
 }
 
 HttpResult handleListDomains(Registry registry, String? authHeader) {

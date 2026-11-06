@@ -1,0 +1,89 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.store.Store
+import testkit.Support
+
+// Fase 14 slice 2 — o Agent escolhe o Edge mais proximo por latencia medida.
+// O control plane publica a lista; o Agent mede (connect+close) e escolhe.
+
+test "edge select: escolhe o de menor latencia", "edge-select-unit" {
+    var probes = listOf(
+        EdgeProbe("a", 7000, 40),
+        EdgeProbe("b", 7000, 5),
+        EdgeProbe("c", 7000, 22)
+    )
+    var best = chooseFastestEdge(probes)
+    assert(best.host == "b", "menor latencia vence")
+    assert(best.latencyMs == 5, "latencia do escolhido")
+}
+
+test "edge select: ignora quem nao respondeu", "edge-select-unit" {
+    var probes = listOf(
+        EdgeProbe("morto", 7000, -1),
+        EdgeProbe("vivo", 7000, 30)
+    )
+    assert(chooseFastestEdge(probes).host == "vivo", "morto nao e escolhido")
+    // Todos mortos: devolve o primeiro (o backoff cuida), nunca vazio.
+    var allDead = listOf(EdgeProbe("a", 7000, -1), EdgeProbe("b", 7000, -1))
+    assert(chooseFastestEdge(allDead).host == "a", "fallback no primeiro")
+    // Lista vazia: host vazio (o chamador mantem o principal).
+    assert(chooseFastestEdge(listOf<EdgeProbe>()).host == "", "vazio")
+}
+
+test "edge select: parse de host:porta", "edge-select-unit" {
+    var ok = parseEdgeAddress("edge1.example.com:7000")
+    assert(ok.host == "edge1.example.com", "host")
+    assert(ok.port == 7000, "porta")
+    assert(parseEdgeAddress("semporta").host == "", "sem porta descarta")
+    assert(parseEdgeAddress("host:0").host == "", "porta zero descarta")
+    assert(parseEdgeAddress("host:99999").host == "", "porta fora da faixa descarta")
+    assert(parseEdgeAddress(":7000").host == "", "host vazio descarta")
+    assert(parseEdgeAddress("  host:7000  ").host == "host", "espacos aparados")
+}
+
+test "edge select: control plane publica a lista com o principal primeiro", "edge-select" {
+    var controlPort = 19941
+    var registry = Registry("/tmp/kofcloud-es-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 7000)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+
+    var connect = httpPostJson(controlPort, "/v1/connect", "{\"deviceId\":\"" + deviceId + "\"}", token)
+    assert(statusOf(connect) == 200, "connect 200")
+    var body = bodyOf(connect)
+    assert(body.indexOf("\"edges\"") >= 0, "lista de edges presente")
+    assert(body.indexOf("127.0.0.1:7000") >= 0, "principal na lista")
+    // Contrato antigo preservado.
+    assert(body.indexOf("\"edgeHost\"") >= 0, "edgeHost mantido")
+    assert(body.indexOf("\"edgePort\"") >= 0, "edgePort mantido")
+}
+
+test "edge select: mede de verdade e escolhe o Edge que responde", "edge-select-probe" {
+    // Dois listeners: um responde, outro nao existe. A sonda mede o vivo.
+    var livePort = 19942
+    var listener = net.listen(livePort)
+    var serving = spawn {
+        var open = true
+        while (open) {
+            try {
+                var c = listener.accept()
+                c.close()
+            } catch (String e) {
+                open = false
+            }
+        }
+    }
+    assert(waitForPort(livePort, 60), "listener vivo")
+    var probes = probeEdges(listOf("127.0.0.1:19943", "127.0.0.1:" + intToString(livePort)))
+    assert(probes.size == 2, "duas sondas")
+    var best = chooseFastestEdge(probes)
+    assert(best.port == livePort, "escolheu o que responde")
+    assert(best.latencyMs >= 0, "latencia medida")
+    listener.close()
+}

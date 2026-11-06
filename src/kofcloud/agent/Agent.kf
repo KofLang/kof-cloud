@@ -27,6 +27,67 @@ record AgentConfig(String controlUrl, String deviceId, String accountId, String 
 
 record EdgeEndpoint(String host, Int port, Int heartbeatMs, List<Service> services)
 
+// Um Edge candidato e a latencia medida (ms; -1 = nao respondeu).
+record EdgeProbe(String host, Int port, Long latencyMs)
+
+// Escolhe o Edge de menor latencia entre os que responderam. Pura: recebe as
+// sondas ja medidas (o IO fica em probeEdges). Sem nenhum respondendo,
+// devolve o primeiro da lista (o principal) — o Agent tenta e o backoff
+// cuida do resto, em vez de ficar sem destino.
+EdgeProbe chooseFastestEdge(List<EdgeProbe> probes) {
+    if (probes.size == 0) {
+        return EdgeProbe("", 0, -1)
+    }
+    var best = probes.get(0)
+    for (var probe in probes) {
+        if (probe.latencyMs < 0) {
+            continue
+        }
+        if (best.latencyMs < 0 || probe.latencyMs < best.latencyMs) {
+            best = probe
+        }
+    }
+    return best
+}
+
+// "host:porta" -> EdgeProbe (porta invalida = descarta). Pura.
+EdgeProbe parseEdgeAddress(String address) {
+    var trimmed = address.trim()
+    var colon = trimmed.lastIndexOf(":")
+    if (colon <= 0) {
+        return EdgeProbe("", 0, -1)
+    }
+    var host = trimmed.substring(0, colon)
+    var port = parseIntSafe(trimmed.substring(colon + 1), 0)
+    if (port <= 0 || port > 65535) {
+        return EdgeProbe("", 0, -1)
+    }
+    return EdgeProbe(host, port, -1)
+}
+
+// Mede cada Edge com um connect+close (o handshake do tunel e o proximo
+// passo; aqui so a ida e volta TCP). Falha = -1, nunca lanca.
+List<EdgeProbe> probeEdges(List<String> addresses) {
+    var out = listOf<EdgeProbe>()
+    for (var address in addresses) {
+        var parsed = parseEdgeAddress(address)
+        if (parsed.host.length == 0) {
+            continue
+        }
+        var started = time.now()
+        var latency = -1L
+        try {
+            var conn = net.connect(parsed.host, parsed.port)
+            conn.close()
+            latency = time.now() - started
+        } catch (String e) {
+            latency = -1L
+        }
+        out.add(EdgeProbe(parsed.host, parsed.port, latency))
+    }
+    return out
+}
+
 // Pede ao control plane o ponto de entrada do Edge e os servicos efetivos.
 // `edgeHost`/`edgePort` na config sobrescrevem o retorno do control plane
 // (usado pelos testes para rodar em portas arbitrarias).
@@ -44,6 +105,19 @@ EdgeEndpoint fetchEdge(AgentConfig config) {
     }
     if (config.edgePort > 0) {
         port = config.edgePort
+    }
+    // Ranking por latencia (Fase 14 slice 2): o control plane publica a lista
+    // e o Agent escolhe o mais proximo. Override explicito de host/porta
+    // (testes e operador) vence a escolha automatica.
+    if (config.edgeHost.length == 0 && config.edgePort <= 0) {
+        var addresses = json.decode<List<String>>(mapField(map, "edges"))
+        if (addresses.size > 1) {
+            var chosen = chooseFastestEdge(probeEdges(addresses))
+            if (chosen.host.length > 0) {
+                host = chosen.host
+                port = chosen.port
+            }
+        }
     }
     return EdgeEndpoint(
         host,

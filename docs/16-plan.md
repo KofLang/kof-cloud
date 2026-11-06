@@ -481,7 +481,7 @@ best-effort, como hoje).
 com `bytesToString` O(n²) no caminho. Funciona, mas latência é distância +
 custo por byte — cloud rápida precisa dos dois endereçados com medição.
 
-**Estado: slice 1 parcial ✅ (distribuição de latência); slices 2 e 3 pendentes.**
+**Estado: slice 1 ✅ (latência + tamanho); slice 2 ✅ (ranking de Edges); slice 3 pendente.**
 Desenho fatiado (cada slice com benchmark antes/depois, mesmo protocolo,
 sem mudar formato público):
 
@@ -514,6 +514,16 @@ sem mudar formato público):
   distribuído no MVP (cada Edge continua independente; o control plane
   só publica a lista). Prova: e2e com 2 Edges, Agent migra para o mais
   rápido.
+
+  **Implementado ✅ (ranking, sem consenso).** `POST /v1/connect` passa a
+  devolver `edges` (o principal + `kofcloud.edgeHosts`, CSV `host:porta`);
+  o Agent mede cada um com connect+close (`probeEdges`) e escolhe o de menor
+  latência (`chooseFastestEdge`, pura; quem não respondeu é ignorado e, se
+  nenhum responder, fica o principal). Override explícito de host/porta
+  (testes/operador) vence a escolha automática. O contrato antigo
+  (`edgeHost`/`edgePort`) continua. **Pendente:** reavaliar a cada N minutos
+  (hoje a escolha acontece em cada `connect`, que já é o ciclo de reconexão)
+  e o Edge dedicado por conta.
 * **Slice 3 — caminho de bytes O(n).** Tirar `bytesToString`/`base64` via
   String do caminho quente: chunks maiores (64 KiB) + cópia direta de
   bytes quando o stdlib permitir; handshake comprime `services[]`
