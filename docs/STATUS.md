@@ -10,7 +10,7 @@
 | Fases 1–3 (tunel, publish, hostname) | ✅ verde | `e2e_test.kf` |
 | Fase 4 (multi-servico + limites) | ✅ verde | `e2e_multiservice_test.kf`, `limits_test.kf` |
 | Fase 5 (AUTHENTICATED kfs_ + revoke + token-list + TTL) | ✅ verde | `service_token_test.kf` (13), `e2e_authenticated_test.kf` |
-| Fase 6 slice 1 (dominio proprio) | ✅ verde | `domains_test.kf` (sem TLS/SNI — externo) |
+| Fase 6 slice 1 (dominio proprio) | ✅ verde | `domains_test.kf` (sem TLS/SNI — externo; `domain verify --tls-cert` julga o PEM localmente) |
 | Observabilidade (3 slices) | ✅ verde | `metrics_test.kf`, `agent_metrics_test.kf` |
 | Abuse prevention (2 slices) | ✅ verde | `ratelimit_test.kf`, `abuse_test.kf` |
 | Debitos de limites (frame, idle, conns) | ✅ verde | `frames_test.kf`, `idle_test.kf`, `conns_test.kf` |
@@ -51,7 +51,7 @@ o run total imprime `43 passed, 0 failed`. Falha = nome do teste + assert
 | limites | `tests/limits_test.kf` | 6 |
 | service token | `tests/service_token_test.kf` | 13 |
 | erros R6 | `tests/errors_test.kf` | 10 |
-| dominios | `tests/domains_test.kf` | 9 |
+| dominios (+ certificado x hostname) | `tests/domains_test.kf` | 11 |
 | metricas | `tests/metrics_test.kf` | 8 |
 | rate limit | `tests/ratelimit_test.kf` | 2 |
 | agent metrics | `tests/agent_metrics_test.kf` | 3 |
@@ -87,7 +87,7 @@ o run total imprime `43 passed, 0 failed`. Falha = nome do teste + assert
 | painel de gestão completa (F12 s2) | `tests/panel_actions_test.kf` | 2 |
 | ranking de Edges (F14 s2) | `tests/edge_select_test.kf` | 5 |
 
-Total: 245 testes. Ver `15-tests.md` para a matriz.
+Total: 247 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

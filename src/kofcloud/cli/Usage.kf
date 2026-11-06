@@ -38,7 +38,7 @@ String usageText() {
     out = out + "  service rotation <nome>   (quantas credenciais ainda valem)\n"
     out = out + "  domain list\n"
     out = out + "  domain add <hostname> --service <nome>\n"
-    out = out + "  domain verify <hostname>\n"
+    out = out + "  domain verify <hostname> [--tls-cert <pem>]  (com o PEM, confere ANTES que ele cobre o hostname)\n"
     out = out + "  domain remove <hostname>\n"
     out = out + "  deploy [--file " + defaultManifestPath() + "] [--check] [--plan]  (publica + verifica; --plan so mostra o diff e marca (build)/(artifact); manifesto aceita build/artifact por servico)\n"
     out = out + "  down [--file " + defaultManifestPath() + "] [--prune]  (remove os do manifesto; --prune remove orfaos do device)\n"

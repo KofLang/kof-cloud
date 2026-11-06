@@ -66,6 +66,13 @@ caminho HTTPS apenas via `web.app().listenSecure` no target JVM. Ver
   (`Policy.headers` + gate em `req.secure`). O fluxo real da CLI
   (`loginOrCreate` + `registerDevice`) está provado sobre HTTPS em
   `tests/control_test.kf` (`control-tls-cli`).
+* **PEM × hostname ✅ (antes da borda):** `domain verify --tls-cert <pem>`
+  julga o certificado do operador localmente e **antes de qualquer rede** —
+  SAN DNS (fallback CN) cobre o hostname? Curinga vale um rótulo, nunca o
+  domínio base (RFC 6125). Não cobre = `FALHA tls` e a verificação não
+  segue; expira em 30 dias = aviso na linha `ok`; `openssl` ausente = aviso
+  (mesma regra do `doctor`/`scan`). Só caminho e nomes aparecem, nunca o
+  conteúdo. Prova: `tests/domains_test.kf` (`domains-cert`).
 * **Edge público: segue HTTP.** Duas barreiras medidas, não suposições:
   `net` não tem TLS (`KofNet.java` só expõe `listen`/`connect` crus — L2) e o
   handler do `web.app()` devolve `String`, corrompendo bytes altos (L16). O

@@ -94,6 +94,167 @@ String hostOnly(String hostHeader) {
     return hostHeader
 }
 
+// ---- certificado do operador x hostname (Fase 6/9) ----
+//
+// `kof cloud domain verify <host> --tls-cert <pem>` confere, ANTES de tocar
+// a rede, que o PEM que o operador vai instalar cobre o hostname que ele
+// esta verificando. E o erro caro de descobrir depois do CNAME apontado:
+// DNS OK, HTTPS quebrado. Tudo aqui e puro sobre a saida textual do
+// `openssl x509` (sem IO, sem HOME) para testar sem openssl e sem disco.
+//
+// Um nome de certificado casa o hostname quando e igual (caixa ignorada) ou
+// e um curinga de UM rotulo: `*.example.com` cobre `api.example.com`, mas
+// nao cobre `example.com` nem `a.api.example.com` (regra do RFC 6125, que
+// os navegadores seguem).
+Bool certNameCovers(String certName, String hostname) {
+    var name = certName.trim().toLowerCase()
+    var host = hostname.trim().toLowerCase()
+    if (name.length == 0 || host.length == 0) {
+        return false
+    }
+    if (name == host) {
+        return true
+    }
+    if (name.startsWith("*.") == false) {
+        return false
+    }
+    var suffix = name.substring(1)
+    if (host.endsWith(suffix) == false) {
+        return false
+    }
+    var head = host.substring(0, host.length - suffix.length)
+    // O curinga exige exatamente um rotulo a esquerda e nao casa o dominio
+    // base: `head` vazio (example.com) ou com ponto recusa.
+    return head.length > 0 && head.indexOf(".") < 0
+}
+
+// Nomes DNS de `openssl x509 -noout -ext subjectAltName`:
+// "X509v3 Subject Alternative Name: \n    DNS:a.example, DNS:*.b.example".
+// So entradas `DNS:` (IP:/email: ficam fora — nao roteiam hostname).
+// "No extensions in certificate" e saidas vazias viram lista vazia: o
+// chamador cai no CN (`certCommonName`). Separador por varredura manual
+// porque `split` do stdlib trata o argumento como regex.
+List<String> certSanNames(String sanOut) {
+    var out = listOf<String>()
+    var i = 0
+    while (i + 4 <= sanOut.length) {
+        if (sanOut.substring(i, i + 4) == "DNS:") {
+            var j = i + 4
+            var name = ""
+            while (j < sanOut.length) {
+                var c = sanOut.charAt(j)
+                if (c == 44 || c == 10 || c == 13) {
+                    break
+                }
+                name = name + (c as Char)
+                j = j + 1
+            }
+            var clean = name.trim().toLowerCase()
+            if (clean.length > 0 && out.contains(clean) == false) {
+                out.add(clean)
+            }
+            i = j
+        } else {
+            i = i + 1
+        }
+    }
+    return out
+}
+
+// CN de `openssl x509 -noout -subject`: OpenSSL 3 imprime
+// "subject=CN = example.com"; o 1.x imprimia "subject=/CN=example.com".
+// Os dois formatos sao aceitos; "" quando nao ha CN.
+String certCommonName(String subjectOut) {
+    var start = -1
+    var spaced = subjectOut.indexOf("CN = ")
+    if (spaced >= 0) {
+        start = spaced + 5
+    } else {
+        var tight = subjectOut.indexOf("CN=")
+        if (tight >= 0) {
+            start = tight + 3
+        }
+    }
+    if (start < 0) {
+        return ""
+    }
+    var end = start
+    while (end < subjectOut.length) {
+        var c = subjectOut.charAt(end)
+        if (c == 44 || c == 10 || c == 13) {
+            break
+        }
+        end = end + 1
+    }
+    return subjectOut.substring(start, end).trim().toLowerCase()
+}
+
+String certNamesJoined(List<String> names) {
+    var out = ""
+    for (var name in names) {
+        if (out.length == 0) {
+            out = name
+        } else {
+            out = out + ", " + name
+        }
+    }
+    return out
+}
+
+// Veredito do certificado contra o hostname: "" = cobre; senao o motivo
+// (sem prefixo, para o chamador formatar). `parseExit < 0` significa
+// "openssl indisponivel": nao da para julgar, entao nao inventa recusa —
+// mesma honestidade do `doctor` quando o binario falta.
+String certHostVerdict(String hostname, Bool exists, Int parseExit, String sanOut, String subjectOut) {
+    var target = hostname.trim().toLowerCase()
+    if (exists == false) {
+        return "certificado nao encontrado"
+    }
+    if (parseExit < 0) {
+        return ""
+    }
+    if (parseExit != 0) {
+        return "arquivo nao e um PEM valido (openssl x509 falhou)"
+    }
+    var names = certSanNames(sanOut)
+    if (names.size == 0) {
+        var cn = certCommonName(subjectOut)
+        if (cn.length > 0) {
+            names.add(cn)
+        }
+    }
+    if (names.size == 0) {
+        return "certificado sem SAN DNS nem CN — nao cobre " + target
+    }
+    for (var name in names) {
+        if (certNameCovers(name, target)) {
+            return ""
+        }
+    }
+    return "certificado cobre " + certNamesJoined(names) + ", nao " + target
+}
+
+// Linha pronta do `domain verify --tls-cert` (pura): "FALHA tls: …" bloqueia
+// a verificacao (DNS so depois do PEM certo), "ok   tls (…)" segue, e o
+// "aviso tls" segue sem julgar. So o caminho e os nomes do certificado
+// aparecem — nunca o conteudo do PEM.
+String domainCertLine(String certPath, String hostname, Bool exists, Int parseExit, String sanOut, String subjectOut, Bool expiring) {
+    if (certPath.length == 0) {
+        return ""
+    }
+    if (parseExit < 0 && exists) {
+        return "aviso tls (" + certPath + " nao verificado: openssl ausente)"
+    }
+    var verdict = certHostVerdict(hostname, exists, parseExit, sanOut, subjectOut)
+    if (verdict.length > 0) {
+        return "FALHA tls: " + certPath + " — " + verdict
+    }
+    if (expiring) {
+        return "ok   tls (" + certPath + " cobre " + hostname + "; aviso: expira em menos de 30 dias)"
+    }
+    return "ok   tls (" + certPath + " cobre " + hostname + ")"
+}
+
 // Extrai o rotulo do servico de um hostname de conta.
 // "site.mel.kofcloud.io" com handle "mel" -> "site"; senao "".
 String serviceFromHost(String host, String handle) {

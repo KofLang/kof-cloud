@@ -88,9 +88,11 @@ verificação por `net.resolve` contra os destinos esperados do Edge (config
 indistinguível de "resolveu para outro lugar"), rota ativa só depois de
 VERIFIED, poda junto com serviço/dispositivo. Dono verificado antes do DNS
 (sem trabalho de rede para conta alheia). CLI: `domain add --service`,
-`domain verify`, `domain remove`; erros `KCF120`–`KCF124` com `Hint:`.
-Prova: `tests/domains_test.kf` (9 testes: validação, registro/idempotência,
-verificação sem rede, rota/poda, API com service preenchido, Edge via túnel real, Hint + serializadores).
+`domain verify [--tls-cert <pem>]`, `domain remove`; erros `KCF120`–`KCF124`
+com `Hint:`. O `--tls-cert` julga o PEM localmente antes da rede (cobre o
+hostname? expira em 30 dias?) — ver Fase 9 slice 3.
+Prova: `tests/domains_test.kf` (11 testes: validação, registro/idempotência,
+verificação sem rede, rota/poda, API com service preenchido, Edge via túnel real, Hint + serializadores, certificado × hostname puro e com openssl real).
 
 Falta (fatiado de propósito): TLS por SNI no Edge (o Kof não expõe — ver
 `12-tls.md`) e automação de DNS por provedor (Cloudflare/Route53). Sem isso,
@@ -274,9 +276,17 @@ entre cliente e Edge. Cloud robusta de verdade exige HTTPS ponta a ponta
   válido, mostra só o caminho (nunca o conteúdo) e falha o diagnóstico
   quando o certificado não serve (pura `doctorTlsLine`). Prova:
   `tests/doctor_test.kf` (`doctor-tls`, com `openssl` real e pula sem ele).
+  **`domain verify` aceita o PEM ✅** (`--tls-cert <pem>`): antes de qualquer
+  rede, confere SAN DNS (fallback CN) contra o hostname — curinga de um
+  rótulo (RFC 6125), nunca o domínio base — e recusa com `FALHA tls` quando
+  o certificado não cobre (DNS certo com cert errado = HTTPS quebrado
+  descoberto tarde); expirando em 30 dias vira aviso na linha `ok`, e
+  openssl ausente é aviso (nunca recusa inventada). Só caminho e nomes
+  aparecem, nunca o conteúdo do PEM. Provas: `tests/domains_test.kf`
+  (`domains-cert`: puro + `openssl` real, pula sem ele).
   Pendente: SNI por hostname (mapa em memória, recarregado sem derrubar o
-  Edge — depende do runtime), renovação automática, `domain verify`
-  aceitar o PEM, e expiração visível também no `service status`.
+  Edge — depende do runtime), renovação automática, e expiração visível
+  também no `service status`.
   ACME de verdade (DNS-01) depende de ES256 no stdlib — sem isso, emissão
   continua externa (ver `12-tls.md`).
 

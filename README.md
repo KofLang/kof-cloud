@@ -118,7 +118,7 @@ service rotate (<nome>|--all) [--ttl <horas>] [--prune]  (credencial nova; revog
 service rotation <nome>  (quantas credenciais ainda valem)
 domain list
 domain add <hostname> --service <nome>   (dominio proprio, devolve a instrucao CNAME)
-domain verify <hostname>                 (confere o DNS e ativa a rota)
+domain verify <hostname> [--tls-cert <pem>]  (confere o DNS e ativa a rota; --tls-cert julga o PEM antes da rede)
 domain remove <hostname>
 deploy [--file kofcloud.json] [--check] [--plan]  (roda build + publica + verifica; --plan so mostra o diff e marca (build)/(artifact))
 down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove orfaos)

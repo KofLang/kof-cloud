@@ -54,7 +54,14 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 * **`AUTHENTICATED` usa token de conta**, não um provedor de identidade
   federado.
 * **Rate limiting é por processo.** Não é global entre nós.
-* **Certificados são externos.** O operador fornece o PEM.
+* **Certificados são externos.** O operador fornece o PEM. O
+  `domain verify --tls-cert` confere localmente só o que dá para julgar sem
+  confiar na cadeia: SAN/CN cobrindo o hostname (curinga de um rótulo) e
+  expiração em 30 dias. **Não** valida assinatura, cadeia, revogação nem se
+  o PEM é o que o Edge vai realmente servir — o `openssl x509` lê o arquivo,
+  não a configuração de runtime. Também depende do binário `openssl` no
+  PATH: ausente, o veredito é "aviso" (nunca recusa), pela mesma regra do
+  `doctor`/`scan`.
 * **HTTPS no control plane cifra, mas o cliente não autentica o servidor.**
   `kof.http` é trust-all por construção (`JvmWebHttpRuntime.java:112-132`:
   `X509TrustManager` que aceita qualquer certificado +

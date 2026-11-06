@@ -81,6 +81,10 @@ String usoDomainAddLine() {
     return "uso: kof cloud domain add <hostname> --service <nome>"
 }
 
+String usoDomainVerifyLine() {
+    return "uso: kof cloud domain verify <hostname> [--tls-cert <pem>]"
+}
+
 // Uma linha do `domain list`: customs mostram PENDING/VERIFIED (o operador
 // precisa saber se falta o DNS); wildcard/service nao tem ciclo proprio.
 String domainListLine(DomainEntry domain) {
@@ -1373,15 +1377,60 @@ Int cmdDomainAdd(List<String> args) {
     }
 }
 
+// Julga o PEM do operador contra o hostname ANTES de qualquer rede
+// (Fase 6/9: `domain verify --tls-cert`). DNS OK com certificado errado e
+// um HTTPS quebrado descoberto tarde — melhor barrar aqui. O veredito e
+// puro (`domainCertLine`); este trecho so executa o openssl, com o mesmo
+// criterio do `doctor`/`scan`: binario ausente = aviso, nunca recusa
+// inventada. Devolve true quando reprova (o chamador para com exit 1).
+Bool domainTlsBlocks(String certPath, String hostname) {
+    var exists = fileExists(certPath)
+    var parseExit = -1
+    var sanOut = ""
+    var subjectOut = ""
+    var expiring = false
+    if (exists) {
+        try {
+            var parse = process.run("openssl", "x509", "-in", certPath, "-noout")
+            parseExit = parse.exitCode
+            if (parseExit == 0) {
+                sanOut = process.run("openssl", "x509", "-in", certPath, "-noout", "-ext", "subjectAltName").stdout
+                subjectOut = process.run("openssl", "x509", "-in", certPath, "-noout", "-subject").stdout
+                var checkend = process.run("openssl", "x509", "-in", certPath, "-noout", "-checkend", "2592000")
+                expiring = tlsCertExpiringSoon(checkend.exitCode)
+            }
+        } catch (String e) {
+            parseExit = -1
+        }
+    }
+    var line = domainCertLine(certPath, hostname, exists, parseExit, sanOut, subjectOut, expiring)
+    println(line)
+    return line.startsWith("FALHA")
+}
+
 Int cmdDomainVerify(List<String> args) {
-    var session = loadSession()
-    if (session == null) {
-        println(notLoggedInLine())
+    // Flag solta/repetida barra antes de qualquer efeito (precedente:
+    // --service do domain add e --tls-cert do serve).
+    if (flagMissingValue(args, "--tls-cert") || flagDuplicated(args, "--tls-cert") || extraPositional(args, 1)) {
+        println(usoDomainVerifyLine())
         return 1
     }
     var hostname = firstPositional(args).trim()
-    if (hostname.length == 0 || extraPositional(args, 1)) {
-        println("uso: kof cloud domain verify <hostname>")
+    if (hostname.length == 0) {
+        println(usoDomainVerifyLine())
+        return 1
+    }
+    // PEM antes do login: o operador descobre o certificado errado mesmo
+    // sem sessao (e sem tocar o control plane).
+    var certPath = flagValue(args, "--tls-cert").trim()
+    if (certPath.length > 0) {
+        if (domainTlsBlocks(certPath, hostname)) {
+            return 1
+        }
+    }
+    var session = loadSession()
+    if (session == null) {
+        println(notLoggedInLine())
         return 1
     }
     var body = mapOf()

@@ -1,5 +1,6 @@
 import kofcloud.agent.Agent
 import kofcloud.cli.Commands
+import kofcloud.cli.Usage
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.edge.EdgeState
@@ -441,4 +442,91 @@ test "dominio: serializadores puros sem rede", "domains-serial" {
         assert(verified.verifiedAt.length > 0, "VERIFIED carrega verifiedAt")
         assert(domainJson(verified, service.hostname).indexOf("VERIFIED") >= 0, "inventario reflete VERIFIED")
     }
+}
+
+test "dominio: certificado cobre hostname (puro, SAN/CN/curinga)", "domains-cert" {
+    // Fase 6/9: `domain verify --tls-cert` recusa o PEM que nao cobre o
+    // hostname ANTES de tocar a rede. Tudo puro sobre a saida do openssl.
+    // Curinga segue RFC 6125: um rotulo so, nao o dominio base.
+    assert(certNameCovers("example.com", "example.com") == true, "igual cobre")
+    assert(certNameCovers("EXAMPLE.COM", " example.com ") == true, "caixa e padding tolerados")
+    assert(certNameCovers("*.example.com", "api.example.com") == true, "curinga cobre um rotulo")
+    assert(certNameCovers("*.example.com", "example.com") == false, "curinga nao cobre o dominio base")
+    assert(certNameCovers("*.example.com", "a.api.example.com") == false, "curinga nao cobre dois rotulos")
+    assert(certNameCovers("api.example.com", "www.example.com") == false, "nome exato nao cobre outro")
+    assert(certNameCovers("", "example.com") == false, "nome vazio nao cobre")
+    assert(certNameCovers("api.example.com", "") == false, "hostname vazio nao cobre")
+
+    // Saida real do `openssl x509 -noout -ext subjectAltName` (OpenSSL 3).
+    var san = "X509v3 Subject Alternative Name: \n    DNS:example.com, DNS:www.example.com\n"
+    var names = certSanNames(san)
+    assert(names.size == 2, "dois nomes DNS")
+    assert(names.contains("example.com") && names.contains("www.example.com"), "nomes aparados")
+    assert(certSanNames("No extensions in certificate").size == 0, "sem extensao = lista vazia")
+    assert(certSanNames("X509v3 Subject Alternative Name: \n    IP Address:10.0.0.1, email:a@b.c\n").size == 0, "IP/email ficam fora")
+    assert(certSanNames("DNS:*.example.com, DNS:*.example.com").size == 1, "duplicata conta uma vez")
+    assert(certSanNames("X509v3 Subject Alternative Name: \n    DNS:*.Example.COM\n").get(0) == "*.example.com", "san normaliza caixa")
+
+    // CN nos dois formatos do openssl; vazio quando nao ha CN.
+    assert(certCommonName("subject=CN = example.com") == "example.com", "formato OpenSSL 3")
+    assert(certCommonName("subject=/CN=legacy.example") == "legacy.example", "formato OpenSSL 1.x")
+    assert(certCommonName("subject=O = Loja, CN = loja.example, C = BR") == "loja.example", "CN no meio da linha")
+    assert(certCommonName("subject=O = Sem Nome") == "", "sem CN = vazio")
+
+    // Veredito: SAN manda; sem SAN cai no CN; openssl ausente nao inventa recusa.
+    assert(certHostVerdict("www.example.com", true, 0, san, "") == "", "SAN cobre = sem motivo")
+    assert(certHostVerdict("outro.example.com", true, 0, san, "subject=CN = outro.example.com") != "", "SAN presente ignora CN")
+    assert(certHostVerdict("legacy.example", true, 0, "No extensions in certificate", "subject=CN = legacy.example") == "", "sem SAN usa CN")
+    assert(certHostVerdict("nada.example", true, 1, "", "").indexOf("PEM valido") >= 0, "PEM invalido explica")
+    assert(certHostVerdict("nada.example", false, 1, "", "").indexOf("nao encontrado") >= 0, "ausente explica")
+    assert(certHostVerdict("nada.example", true, -1, "", "") == "", "openssl ausente = sem veredito")
+    assert(certHostVerdict("nada.example", true, 0, "No extensions in certificate", "subject=O = x").indexOf("sem SAN DNS nem CN") >= 0, "sem nomes explica")
+
+    // Linha do comando: vazia sem PEM, FALHA bloqueia, aviso nao bloqueia.
+    assert(domainCertLine("", "www.example.com", true, 0, san, "", false) == "", "sem PEM = sem linha")
+    assert(domainCertLine("/c.pem", "www.example.com", true, 0, san, "", false).startsWith("ok   tls"), "cobrindo = ok")
+    assert(domainCertLine("/c.pem", "outro.example.com", true, 0, san, "", false).startsWith("FALHA tls"), "nao cobrindo = FALHA")
+    assert(domainCertLine("/c.pem", "outro.example.com", true, 0, san, "", false).indexOf("outro.example.com") >= 0, "FALHA nomeia o hostname")
+    assert(domainCertLine("/c.pem", "www.example.com", true, 0, san, "", true).indexOf("30 dias") >= 0, "expirando vira aviso na linha ok")
+    assert(domainCertLine("/c.pem", "www.example.com", true, -1, "", "", false).startsWith("aviso tls"), "openssl ausente nao bloqueia")
+    // O conteudo do PEM nunca entra na linha: so o caminho e os nomes.
+    assert(domainCertLine("/c.pem", "www.example.com", true, 1, "", "", false).indexOf("BEGIN") < 0, "sem conteudo do PEM")
+    // Uso: a flag aparece no help e na mensagem de uso (regressao do help).
+    assert(usageText().indexOf("domain verify <hostname> [--tls-cert <pem>]") >= 0, "help anuncia --tls-cert")
+    assert(usoDomainVerifyLine().indexOf("--tls-cert") >= 0, "uso anuncia --tls-cert")
+    // Guardas fail-fast do cmdDomainVerify (puras, sem HOME nem rede).
+    assert(flagMissingValue(listOf("--tls-cert"), "--tls-cert") == true, "cert solto barra")
+    assert(flagDuplicated(listOf("--tls-cert", "a", "--tls-cert", "b"), "--tls-cert") == true, "cert repetido barra")
+}
+
+test "dominio: domain verify --tls-cert com PEM real (openssl)", "domains-cert" {
+    // Integracao real: o mesmo julgamento da linha, agora sobre a saida de
+    // verdade do openssl. Pula quando openssl nao existe (precedente:
+    // doctor-tls), sem transformar ausencia de ferramenta em falha.
+    var dir = "/tmp/kofcloud-dom-cert-" + crypto.randomHex(4)
+    var key = dir + "/k.pem"
+    var cert = dir + "/c.pem"
+    var bad = dir + "/bad.pem"
+    var gen = process.run("sh", "-c", "mkdir -p " + dir + " && openssl req -x509 -newkey rsa:2048 -keyout " + key + " -out " + cert + " -days 365 -nodes -subj /CN=example.com -addext subjectAltName=DNS:example.com,DNS:*.loja.example 2>/dev/null && printf garbage > " + bad)
+    if (gen.exitCode != 0) {
+        assert(true, "openssl ausente: pulando integracao")
+        return
+    }
+    var san = process.run("openssl", "x509", "-in", cert, "-noout", "-ext", "subjectAltName").stdout
+    var subject = process.run("openssl", "x509", "-in", cert, "-noout", "-subject").stdout
+    assert(certHostVerdict("example.com", true, 0, san, subject) == "", "SAN exato aprova")
+    assert(certHostVerdict("api.loja.example", true, 0, san, subject) == "", "curinga do PEM aprova um rotulo")
+    assert(certHostVerdict("loja.example", true, 0, san, subject) != "", "curinga nao aprova o dominio base")
+    assert(certHostVerdict("outro.example", true, 0, san, subject) != "", "hostname fora do PEM reprova")
+    // A linha do comando sobre a saida real: ok quando cobre, FALHA quando nao.
+    assert(domainCertLine(cert, "example.com", true, 0, san, subject, false).startsWith("ok   tls"), "linha ok com PEM real")
+    assert(domainCertLine(cert, "outro.example", true, 0, san, subject, false).startsWith("FALHA tls"), "linha FALHA com PEM real")
+    // O orquestrador (mesmo IO do comando) concorda com as duas pontas.
+    assert(domainTlsBlocks(cert, "example.com") == false, "orquestrador aprova o que cobre")
+    assert(domainTlsBlocks(cert, "outro.example") == true, "orquestrador reprova o que nao cobre")
+    assert(domainTlsBlocks(dir + "/nao-existe.pem", "example.com") == true, "arquivo ausente reprova")
+    // PEM real invalido: o openssl de verdade recusa (parse != 0).
+    var parseBad = process.run("openssl", "x509", "-in", bad, "-noout").exitCode
+    assert(parseBad != 0, "garbage nao parseia")
+    assert(certHostVerdict("example.com", true, parseBad, "", "").indexOf("PEM valido") >= 0, "garbage reprova com motivo")
 }
