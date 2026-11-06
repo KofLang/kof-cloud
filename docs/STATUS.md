@@ -45,7 +45,7 @@ o run total imprime `47 passed, 0 failed`. Falha = nome do teste + assert
 | Suite | Arquivo | Testes |
 |---|---|---|
 | framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 11 |
-| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls/audit-sbom | `tests/hosts_test.kf` | 29 |
+| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls/audit-sbom/host-normalize | `tests/hosts_test.kf` | 29 |
 | identidade/cifra/tokens | `tests/identity_test.kf` | 7 |
 | backoff | `tests/backoff_test.kf` | 3 |
 | registry | `tests/registry_test.kf` | 7 |

@@ -94,6 +94,17 @@ test "rate limit: quarto pedido rapido e 429 com Retry-After", "ratelimit" {
     assert(statusOf(capped) == 429, "quarto -> 429 mesmo com servico saudavel")
     assert(bodyOf(httpGetRaw(httpPort, "/", "files.mel.kofcloud.io")) == "svc-rl", "terceiro host com cota propria segue 200")
 
+    // Host e case-insensitive (RFC 1035): a MESMA requisicao com caixa
+    // trocada tem que rotear e cair na MESMA cota. Sem normalizar, cada
+    // variacao abria bucket novo (evasao do 429 trocando a caixa) e ainda
+    // devolvia 404 para um cliente legal com Host em maiusculas.
+    var caseStart = statusOf(httpGetRaw(httpPort, "/", "FILES.MEL.KOFCLOUD.IO"))
+    assert(caseStart == 200, "Host em maiusculas roteia (mesmo site)")
+    assert(bodyOf(httpGetRaw(httpPort, "/", "Files.Mel.Kofcloud.Io")) == "svc-rl", "caixa mista serve o mesmo conteudo")
+    assert(statusOf(httpGetRaw(httpPort, "/", "FILES.MEL.KOFCLOUD.IO")) == 429, "a caixa nao abre cota nova (mesmo bucket)")
+    // FQDN absoluto (ponto final) e o mesmo nome — cliente honesto.
+    assert(statusOf(httpGetRaw(httpPort, "/", "files.mel.kofcloud.io.")) == 429, "ponto final nao abre cota nova")
+
     // A recusa VENCE: com janela curta (1 s) o mesmo hostname volta a passar.
     // Sem a conversao ms->s do `httpWindowSeconds`, a janela de 1000 ms virava
     // 1000 SEGUNDOS e este host ficaria barrado ~16 min (o default de 60 s

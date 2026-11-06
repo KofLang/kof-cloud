@@ -190,8 +190,12 @@ lento, liberação, isolamento, métrica, Hint).
 `kofcloud.limits.httpRequests` por hostname e janela
 (`kofcloud.limits.httpWindowMs`, defaults 100/60 s); excedeu → `429 KCF107`
 + `Retry-After`, **antes** de rotear (não revela se o host existe, não
-consome túnel). Chave = hostname (o Edge TCP não expõe IP de origem).
-Métrica `_rate_limited`, `Hint:` sem dado de cliente. Prova:
+consome túnel). Chave = hostname (o Edge TCP não expõe IP de origem) **já
+normalizado** por `hostOnly` — apara, remove a porta, abaixa a caixa e tira
+o ponto final de FQDN. Sem isso, `Host: Site...` dava 404 (DNS é
+case-insensitive) e cada variação de caixa abria cota própria (100 pedidos
+em `site.` + 100 em `SITE.` passavam do 429). Métrica `_rate_limited`,
+`Hint:` sem dado de cliente. Prova:
 `tests/ratelimit_test.kf` (2 testes: 4o pedido → 429 com/sem túnel, cota
 isolada por hostname, Retry-After, métrica, Hint). **Janela em segundos:**
 `security.rateLimit` recebe segundos, mas a config é em ms — a conversão vive

@@ -85,13 +85,28 @@ Bool validLabel(String text, Int min, Int max) {
     return true
 }
 
-// Remove a porta de um header Host ("site.mel.kofcloud.io:8080").
+// Normaliza o header Host para a forma que o roteamento usa.
+//
+// DNS e case-insensitive (RFC 1035 §2.3.1) e o hostname publicado e gerado
+// em minusculas, entao `Host: Site.Mel.KofCloud.io` e o mesmo site — sem
+// abaixar a caixa o Edge devolvia 404 para um cliente legal. Pior: a chave
+// do rate limit sai daqui, e cada variacao de caixa ganhava cota propria
+// (trocar a caixa a cada 100 pedidos evadia o 429 por hostname).
+//
+// Tambem remove a porta ("host:8080"), espacos do header e o ponto final de
+// FQDN absoluto ("host." e o mesmo nome; curl/dig mandam assim) — uma vez
+// so, no fim. Host vazio continua vazio (nao ha o que normalizar).
 String hostOnly(String hostHeader) {
-    var index = hostHeader.indexOf(":")
-    if (index >= 0) {
-        return hostHeader.substring(0, index)
+    var host = hostHeader.trim()
+    var colon = host.indexOf(":")
+    if (colon >= 0) {
+        host = host.substring(0, colon)
     }
-    return hostHeader
+    host = host.trim().toLowerCase()
+    if (host.endsWith(".")) {
+        host = host.substring(0, host.length - 1)
+    }
+    return host
 }
 
 // ---- certificado do operador x hostname (Fase 6/9) ----

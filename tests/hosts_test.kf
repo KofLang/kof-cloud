@@ -21,9 +21,18 @@ test "handle: aceita apenas rotulo DNS valido" {
     assert(validHandle("mel_1") == false, "underscore")
 }
 
-test "host only: remove a porta" {
+test "host only: remove a porta e normaliza (DNS nao distingue caixa)", "host-normalize" {
     assert(hostOnly("site.mel.kofcloud.io:8080") == "site.mel.kofcloud.io", "com porta")
     assert(hostOnly("site.mel.kofcloud.io") == "site.mel.kofcloud.io", "sem porta")
+    // DNS e case-insensitive (RFC 1035 §2.3.1) e o Edge compara contra o
+    // hostname minusculo gerado no publish. Normalizar aqui cobre o
+    // roteamento E a chave do rate limit: sem isso cada variacao de caixa
+    // virava bucket proprio (101 pedidos + troca de caixa = evasao do 429).
+    assert(hostOnly("Site.Mel.KofCloud.IO") == "site.mel.kofcloud.io", "caixa")
+    assert(hostOnly("  API.MEL.KOFCLOUD.IO:8080  ") == "api.mel.kofcloud.io", "caixa + porta + espacos")
+    // Ponto final marca FQDN absoluto — mesmo nome, cliente honesto (curl/dig).
+    assert(hostOnly("site.mel.kofcloud.io.") == "site.mel.kofcloud.io", "FQDN com ponto")
+    assert(hostOnly("SITE.MEL.KOFCLOUD.IO.:8080") == "site.mel.kofcloud.io", "tudo junto")
 }
 
 test "address: so loopback publica (anti-SSRF)", "hosts-loopback" {
