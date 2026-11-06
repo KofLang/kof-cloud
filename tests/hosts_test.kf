@@ -420,12 +420,12 @@ test "text: resolveStatePath apara e cai no default", "serve-state" {
     assert(flagDuplicated(listOf("--state", "a"), "--state") == false, "state unico ok")
 }
 
-test "text: sbom cobre os 44 fontes com hash verificavel", "audit-sbom" {
+test "text: sbom cobre os 48 fontes com hash verificavel", "audit-sbom" {
     // Puras (precedente: serve-tls): lista curada em fonte unica (trava
     // quebra se adicionarem modulo — mesmo padrao do errors-hint-all),
     // linha no formato sha256sum, UNREADABLE honesto em vez de hash falso.
     var modules = sbomModules()
-    assert(modules.size == 44, "44 fontes: " + intToString(modules.size))
+    assert(modules.size == 48, "48 fontes: " + intToString(modules.size))
     assert(modules.get(0) == "src/kofcloud/agent/Agent.kf", "primeiro modulo")
     assert(modules.get(modules.size - 1) == "src/Main.kf", "ultimo modulo")
     assert(sbomLine("a/b.kf", "") == "UNREADABLE  a/b.kf", "ilegivel nao vira hash")

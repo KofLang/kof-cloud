@@ -1235,6 +1235,152 @@ Int cmdServiceRotate(List<String> args) {
     }
 }
 
+// ---- credenciais da conta (kfc_) ----
+//
+// O kfc_ autoriza tudo na conta e ate aqui nao tinha ciclo de vida: `logout`
+// apagava so o arquivo local e o valor seguia valido no servidor para sempre.
+// Estes comandos espelham o desenho do kfs_ (inventario sem valores, revogacao
+// por id curto, rotacao com overlap).
+
+record AccountTokenEntry(String id, String createdAt, String? expiresAt)
+
+Int cmdTokenList(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println(notLoggedInLine())
+        return 1
+    }
+    if (extraPositional(args, 0)) {
+        println("uso: kof cloud token list")
+        return 1
+    }
+    try {
+        var raw = requireOk(http.get(session.controlUrl + "/v1/tokens", authHeader(session.token)))
+        var entries = json.decode<List<AccountTokenEntry>>(raw)
+        if (entries.size == 0) {
+            println("nenhuma credencial valida nesta conta")
+            return 0
+        }
+        for (var entry in entries) {
+            var line = entry.id + "  emitida em " + entry.createdAt
+            if (entry.expiresAt != null) {
+                line = line + "  expira em " + entry.expiresAt
+            } else {
+                line = line + "  sem expiracao"
+            }
+            println(line)
+        }
+        println("")
+        println("Revogar: kof cloud token revoke <id|kfc_...>")
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
+Int cmdTokenRevoke(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println(notLoggedInLine())
+        return 1
+    }
+    var target = firstPositional(args).trim()
+    if (target.length == 0 || extraPositional(args, 1)) {
+        println("uso: kof cloud token revoke <id|kfc_...>")
+        return 1
+    }
+    try {
+        var body = mapOf()
+        body.put("token", target)
+        requireOk(http.post(session.controlUrl + "/v1/tokens/revoke", json.encode(body), jsonHeader(session.token)))
+        println("Credencial revogada.")
+        if (target == session.token) {
+            println("Era a credencial desta sessao — rode `kof cloud login` de novo.")
+        }
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
+// Rotaciona a credencial da conta com overlap: a nova e gravada na sessao
+// local na hora (senao o operador se trancaria fora), as antigas so caem
+// depois do TTL. Sem --ttl nada e revogado em silencio.
+Int cmdTokenRotate(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println(notLoggedInLine())
+        return 1
+    }
+    if (extraPositional(args, 0) || flagMissingValue(args, "--ttl") || flagDuplicated(args, "--ttl")) {
+        println("uso: kof cloud token rotate [--ttl <horas>]")
+        return 1
+    }
+    var ttlRaw = flagValue(args, "--ttl").trim()
+    if (validTtlHours(ttlRaw) == false) {
+        println("ttl invalido: " + ttlRaw + " (use horas positivas, ex: --ttl 24)")
+        return 1
+    }
+    var ttl = parseIntSafe(ttlRaw, 0)
+    try {
+        var body = mapOf()
+        if (ttl > 0) {
+            body.put("ttlHours", intToString(ttl))
+        }
+        var raw = requireOk(http.post(session.controlUrl + "/v1/tokens/rotate", json.encode(body), jsonHeader(session.token)))
+        var result = json.decode<Map<String, String>>(raw)
+        var fresh = mapField(result, "token")
+        // Grava a nova credencial ANTES de qualquer outra coisa: a antiga
+        // pode expirar a qualquer momento e o operador nao pode ficar sem.
+        saveSession(LocalSession(session.accountId, session.handle, fresh, session.controlUrl))
+        println("Credencial nova (gravada nesta sessao):")
+        println(fresh)
+        println("")
+        println("Revogadas por expiracao: " + mapField(result, "revoked"))
+        println("Ainda valendo (inclui a nova): " + mapField(result, "pending"))
+        if (ttl > 0) {
+            println("")
+            println("Troque onde usa o kfc_ em ate " + intToString(ttl) + "h; depois rode:")
+            println("  kof cloud token rotation   (para conferir)")
+        } else {
+            println("")
+            println("Sem --ttl a credencial nao expira: rotacione com --ttl para revogar as antigas.")
+        }
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
+Int cmdTokenRotation(List<String> args) {
+    var session = loadSession()
+    if (session == null) {
+        println(notLoggedInLine())
+        return 1
+    }
+    if (extraPositional(args, 0)) {
+        println("uso: kof cloud token rotation")
+        return 1
+    }
+    try {
+        var raw = requireOk(http.post(session.controlUrl + "/v1/tokens/rotation", "{}", jsonHeader(session.token)))
+        var pending = parseIntSafe(mapField(json.decode<Map<String, String>>(raw), "pending"), 0)
+        println("Credenciais validas nesta conta: " + intToString(pending))
+        if (pending <= 1) {
+            println("Rotacao concluida: so a credencial atual vale.")
+        } else {
+            println("Rotacao em andamento: aguarde o TTL das antigas (ou revogue com `token revoke`).")
+        }
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
 // Higiene de credenciais (Fase 19 s2): servicos da conta com kfs_ validos
 // SEM expiracao. Leitura; o passo recomendado e `service rotate --ttl`.
 Int cmdServiceTokens(List<String> args) {
@@ -1833,7 +1979,7 @@ record AuditEntry(String at, String actor, String action, String target, String 
 // na composicao: SBOM de verdade passa root + conteudos; File.readText
 // vive no cmdAudit (precedente: loadManifestFile separa parse de IO).
 List<String> sbomModules() {
-    return listOf("src/kofcloud/agent/Agent.kf", "src/kofcloud/agent/Backoff.kf", "src/kofcloud/agent/Events.kf", "src/kofcloud/agent/Health.kf", "src/kofcloud/agent/Metrics.kf", "src/kofcloud/agent/Relay.kf", "src/kofcloud/cli/Cli.kf", "src/kofcloud/cli/Commands.kf", "src/kofcloud/cli/Daemon.kf", "src/kofcloud/cli/Deploy.kf", "src/kofcloud/cli/Doctor.kf", "src/kofcloud/cli/Local.kf", "src/kofcloud/cli/Usage.kf", "src/kofcloud/control/ControlPlane.kf", "src/kofcloud/control/Metrics.kf", "src/kofcloud/control/Panel.kf", "src/kofcloud/control/Registry.kf", "src/kofcloud/edge/EdgeState.kf", "src/kofcloud/edge/HttpFront.kf", "src/kofcloud/edge/Http.kf", "src/kofcloud/edge/Metrics.kf", "src/kofcloud/edge/Relay.kf", "src/kofcloud/edge/Tunnel.kf", "src/kofcloud/identity/Keys.kf", "src/kofcloud/identity/Tokens.kf", "src/kofcloud/model/Account.kf", "src/kofcloud/model/Audit.kf", "src/kofcloud/model/CustomDomain.kf", "src/kofcloud/model/Device.kf", "src/kofcloud/model/Errors.kf", "src/kofcloud/model/Exposure.kf", "src/kofcloud/model/Service.kf", "src/kofcloud/protocol/Bytes.kf", "src/kofcloud/protocol/Frame.kf", "src/kofcloud/protocol/LineCodec.kf", "src/kofcloud/protocol/Payload.kf", "src/kofcloud/protocol/Session.kf", "src/kofcloud/protocol/Tunnel.kf", "src/kofcloud/protocol/Version.kf", "src/kofcloud/store/Store.kf", "src/kofcloud/util/Hosts.kf", "src/kofcloud/util/Limits.kf", "src/kofcloud/util/Text.kf", "src/Main.kf")
+    return listOf("src/kofcloud/agent/Agent.kf", "src/kofcloud/agent/Backoff.kf", "src/kofcloud/agent/Events.kf", "src/kofcloud/agent/Health.kf", "src/kofcloud/agent/Metrics.kf", "src/kofcloud/agent/Relay.kf", "src/kofcloud/cli/Cli.kf", "src/kofcloud/cli/Commands.kf", "src/kofcloud/cli/Daemon.kf", "src/kofcloud/cli/Deploy.kf", "src/kofcloud/cli/Doctor.kf", "src/kofcloud/cli/Local.kf", "src/kofcloud/cli/Usage.kf", "src/kofcloud/control/ControlPlane.kf", "src/kofcloud/control/Metrics.kf", "src/kofcloud/control/Panel.kf", "src/kofcloud/control/Registry.kf", "src/kofcloud/control/StatusPage.kf", "src/kofcloud/edge/EdgeState.kf", "src/kofcloud/edge/HttpFront.kf", "src/kofcloud/edge/Http.kf", "src/kofcloud/edge/Metrics.kf", "src/kofcloud/edge/Relay.kf", "src/kofcloud/edge/Tunnel.kf", "src/kofcloud/identity/Keys.kf", "src/kofcloud/identity/Tokens.kf", "src/kofcloud/model/Account.kf", "src/kofcloud/model/Audit.kf", "src/kofcloud/model/CustomDomain.kf", "src/kofcloud/model/Device.kf", "src/kofcloud/model/Errors.kf", "src/kofcloud/model/Exposure.kf", "src/kofcloud/model/Incident.kf", "src/kofcloud/model/Service.kf", "src/kofcloud/model/StateCopy.kf", "src/kofcloud/model/Webhook.kf", "src/kofcloud/protocol/Bytes.kf", "src/kofcloud/protocol/Frame.kf", "src/kofcloud/protocol/LineCodec.kf", "src/kofcloud/protocol/Payload.kf", "src/kofcloud/protocol/Session.kf", "src/kofcloud/protocol/Tunnel.kf", "src/kofcloud/protocol/Version.kf", "src/kofcloud/store/Store.kf", "src/kofcloud/util/Hosts.kf", "src/kofcloud/util/Limits.kf", "src/kofcloud/util/Text.kf", "src/Main.kf")
 }
 
 // Linha do SBOM: "sha256  caminho" (formato do sha256sum, verificavel por

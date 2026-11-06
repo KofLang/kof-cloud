@@ -1,0 +1,167 @@
+import kofcloud.cli.Commands
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.identity.Tokens
+import kofcloud.model.Errors
+import kofcloud.store.Store
+import testkit.Support
+
+// Credencial da conta (kfc_) com ciclo de vida (Fase 19 s3, parte que faltava).
+//
+// O kfc_ e o token mais poderoso do sistema: autoriza publicar, revogar
+// dispositivo, congelar conta. Ate aqui ele nao tinha ciclo de vida — `logout`
+// apagava so o arquivo local e o valor seguia valido no servidor para sempre.
+// O desenho espelha o do kfs_ (que ja provou o padrao): hash em repouso, TTL
+// opcional, inventario sem valores, revogacao por id curto, rotacao com
+// overlap.
+
+String accountTokenPath(String name) {
+    return "/tmp/kofcloud-atok-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "credencial de conta: TTL, expiracao e poda preguicosa", "atok-unit" {
+    var registry = Registry(accountTokenPath("ttl"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+
+    // Sem TTL: vale para sempre (comportamento historico preservado).
+    var forever = registry.issueToken(account.id)
+    assert(registry.accountByToken(forever) != null, "sem TTL vale")
+    assert(registry.accountTokensFor(account.id).size == 1, "listada")
+
+    // Com TTL: vale agora.
+    var shortLived = registry.issueToken(account.id, 1)
+    assert(registry.accountByToken(shortLived) != null, "TTL futuro vale")
+    assert(registry.accountTokensFor(account.id).size == 2, "duas validas")
+
+    // Expiracao: o registro vencido nao autoriza nem aparece.
+    var expired = TokenEntry(account.id, tokenHash("kfc_vencido"), time.now() - 10000, time.now() - 1)
+    registry.tokens.add(expired)
+    assert(registry.accountByToken("kfc_vencido") == null, "vencido nao autoriza")
+    assert(registry.accountTokensFor(account.id).size == 2, "vencido nao e listado")
+    // A validacao podou o vencido do estado (nao acumula lixo).
+    assert(registry.tokens.size == 2, "vencido podado na validacao")
+
+    // Estado antigo (sem o campo expiresAt) continua valido: o campo e
+    // nulavel justamente para isso (JSN004 medido).
+    var legacy = TokenEntry(account.id, tokenHash("kfc_antigo"), time.now(), null)
+    registry.tokens.add(legacy)
+    assert(registry.accountByToken("kfc_antigo") != null, "credencial legada vale")
+    assert(registry.accountTokenExpired(legacy, time.now()) == false, "sem campo = sem expiracao")
+}
+
+test "credencial de conta: revogar por valor e por id curto, escopo por conta", "atok-unit" {
+    var registry = Registry(accountTokenPath("revoke"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var ana = registry.createAccount("ana", "a@e.com", "segredo")
+    var melToken = registry.issueToken(mel.id)
+    var anaToken = registry.issueToken(ana.id)
+
+    // Id curto do inventario revoga (unico na conta).
+    var shortId = shortTokenId(tokenHash(melToken))
+    assert(registry.revokeAccountTokenResult(mel.id, shortId) == "revoked", "id curto revoga")
+    assert(registry.accountByToken(melToken) == null, "valor revogado nao autoriza")
+
+    // A credencial da outra conta nao e tocada por um revoke de mel.
+    assert(registry.accountByToken(anaToken) != null, "credencial de ana intacta")
+    // E mel nao consegue revogar a credencial de ana nem pelo valor.
+    assert(registry.revokeAccountTokenResult(mel.id, anaToken) == "", "alheia nao encontrada")
+    assert(registry.accountByToken(anaToken) != null, "ana continua valida")
+
+    // Inexistente: "" (o handler responde 404 KCF064 opaco).
+    assert(registry.revokeAccountTokenResult(mel.id, "kfc_naoexiste") == "", "inexistente")
+    assert(errAccountTokenNotFound().indexOf("KCF064") >= 0, "codigo KCF064")
+    assert(errHint(errAccountTokenNotFound()).length > 0, "tem Hint")
+}
+
+test "credencial de conta: id curto ambiguo pede o valor completo", "atok-unit" {
+    var registry = Registry(accountTokenPath("ambig"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    // Duas credenciais com o MESMO hash so para forcar a ambiguidade do
+    // prefixo (o hash e o que o inventario expoe).
+    var hash = tokenHash("kfc_repetido")
+    registry.tokens.add(TokenEntry(account.id, hash, time.now(), null))
+    registry.tokens.add(TokenEntry(account.id, hash, time.now(), null))
+    var shortId = shortTokenId(hash)
+    assert(registry.revokeAccountTokenResult(account.id, shortId) == "ambiguous", "ambiguo")
+    assert(registry.tokens.size == 2, "nada revogado no ambiguo")
+    // O valor completo resolve a ambiguidade (revoga as duas ocorrencias).
+    assert(registry.revokeAccountTokenResult(account.id, "kfc_repetido") == "revoked", "valor completo")
+    assert(registry.tokens.size == 0, "ambas sairam")
+}
+
+test "credencial de conta: rotacao com overlap nao derruba a antiga antes do TTL", "atok-unit" {
+    var registry = Registry(accountTokenPath("rotate"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var old = registry.issueToken(account.id)
+
+    // Rotacao com TTL: a nova vale, a antiga (sem expiracao) NAO e revogada
+    // em silencio — fica pendente.
+    var result = registry.rotateAccountTokens(account.id, 24)
+    assert(result.token.length > 0, "token novo emitido")
+    assert(result.revoked == 0, "nada revogado antes do prazo")
+    assert(result.pending == 1, "a antiga ainda vale")
+    assert(registry.accountByToken(old) != null, "antiga continua valendo (overlap)")
+    assert(registry.accountByToken(result.token) != null, "nova vale")
+    assert(registry.pendingAccountRotationCount(account.id) == 2, "duas validas")
+
+    // Depois do prazo, a proxima rotacao revoga as vencidas.
+    var expiredOld = TokenEntry(account.id, tokenHash("kfc_velho"), time.now() - 10000, time.now() - 1)
+    registry.tokens.add(expiredOld)
+    var second = registry.rotateAccountTokens(account.id, 24)
+    assert(second.revoked == 1, "vencida revogada na rotacao seguinte")
+    assert(registry.accountByToken("kfc_velho") == null, "vencida nao autoriza")
+    assert(registry.accountByToken(second.token) != null, "nova da segunda rotacao vale")
+}
+
+test "credencial de conta: HTTP lista sem valores, revoga e rotaciona", "atok" {
+    var controlPort = 20011
+    var registry = Registry(accountTokenPath("http"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 20012)
+    var controlTask = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var token = mapField(account, "token")
+    assert(token.startsWith("kfc_"), "token da conta")
+
+    // Inventario: id curto + emissao, NUNCA o valor.
+    var listed = httpGetToken(controlPort, "/v1/tokens", token)
+    assert(statusOf(listed) == 200, "lista 200")
+    assert(bodyOf(listed).indexOf("kfc_") < 0, "inventario nao vaza o valor")
+    assert(bodyOf(listed).indexOf("\"id\"") >= 0, "tem id curto")
+
+    // Sem token: 401.
+    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", "")) == 401, "401 sem token")
+
+    // Rotacao: devolve a nova UMA vez e mantem a antiga valida (overlap).
+    var rotated = httpPostJson(controlPort, "/v1/tokens/rotate", "{\"ttlHours\":\"24\"}", token)
+    assert(statusOf(rotated) == 200, "rotate 200")
+    var fresh = mapField(json.decode<Map<String, String>>(bodyOf(rotated)), "token")
+    assert(fresh.startsWith("kfc_"), "nova credencial")
+    assert(fresh != token, "valor diferente")
+    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", token)) == 200, "antiga ainda vale")
+    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", fresh)) == 200, "nova vale")
+
+    // TTL invalido: 400 KCF062.
+    var badTtl = httpPostJson(controlPort, "/v1/tokens/rotate", "{\"ttlHours\":\"0\"}", fresh)
+    assert(statusOf(badTtl) == 400, "ttl zero recusado")
+    assert(bodyOf(badTtl).indexOf("KCF062") >= 0, "KCF062")
+
+    // Revogar a antiga pelo id curto: 200; ela deixa de autorizar.
+    var oldId = shortTokenId(tokenHash(token))
+    var revoked = httpPostJson(controlPort, "/v1/tokens/revoke", "{\"token\":\"" + oldId + "\"}", fresh)
+    assert(statusOf(revoked) == 200, "revoke 200")
+    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", token)) == 401, "antiga nao autoriza mais")
+    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", fresh)) == 200, "nova segue valida")
+
+    // Revogar inexistente: 404 KCF064 opaco.
+    var missing = httpPostJson(controlPort, "/v1/tokens/revoke", "{\"token\":\"kfc_naoexiste\"}", fresh)
+    assert(statusOf(missing) == 404, "404 opaco")
+    assert(bodyOf(missing).indexOf("KCF064") >= 0, "KCF064")
+
+    // Rotation status: so a nova vale.
+    var status = httpPostJson(controlPort, "/v1/tokens/rotation", "{}", fresh)
+    assert(statusOf(status) == 200, "rotation 200")
+    assert(bodyOf(status).indexOf("\"pending\":\"1\"") >= 0, "uma credencial valida")
+}

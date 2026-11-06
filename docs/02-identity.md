@@ -81,7 +81,18 @@ momento do `device register`.
 | `deviceId` | String \| `""` | escopo de dispositivo, quando aplicável |
 | `scope` | `account` / `device` | |
 | `createdAt` | Long | |
-| `expiresAt` | Long | 0 = sem expiração |
+| `expiresAt` | Long \| ausente | ausente/0 = sem expiração (credencial histórica) |
+
+**Ciclo de vida (Fase 19 s3).** O `kfc_` autoriza tudo na conta, então não
+pode ser eterno por omissão: `kof cloud token list` mostra o inventário (id
+curto + emissão + expiração, nunca o valor), `token revoke <id|kfc_...>`
+mata uma credencial (id curto quando único; 409 `KCF063` se ambíguo; 404
+`KCF064` opaco se não é desta conta) e `token rotate [--ttl <horas>]` emite
+uma nova **com overlap** — a antiga só é revogada depois do prazo, e
+credencial sem expiração nunca é revogada em silêncio (fica contada em
+`pending`). O `rotate` grava a nova na sessão local antes de qualquer outra
+coisa, senão o operador se trancaria fora. `logout` continua sendo só local:
+para invalidar no servidor, use `token revoke`.
 
 ### Service Token (`kfs_`)
 

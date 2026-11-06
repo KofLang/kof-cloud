@@ -847,7 +847,7 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   limit/roteamento/auth — sem conta, sem túnel, sem tocar em serviço
   local (scanner legítimo não é contido); `docs/SECURITY.md` declara
   suporte/reporte/SLA/escopo com trava de regressão; `audit --sbom`
-  imprime o inventário local (44 fontes + SHA-256, sem login, sem rede).
+  imprime o inventário local (48 fontes + SHA-256, sem login, sem rede).
   Prova: `tests/security_test.kf` (`security-unit` + `security` +
   `security-policy`) + `tests/hosts_test.kf` (`audit-sbom`). Pendente:
   o resto do ritmo (`rotate --all` ✅ no slice 3, `scan` ✅ no slice 2,
@@ -883,6 +883,19 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   valem. Credencial **sem** expiração nunca é revogada em silêncio — fica
   contada como pendente até ser revogada à mão. Prova:
   `tests/rotate_test.kf` (5: `rotate-all` com dois serviços independentes).
+  **Credencial da CONTA (`kfc_`) com ciclo de vida ✅.** O `kfc_` é o token
+  mais poderoso do sistema (publica, revoga device, congela conta) e era o
+  único sem ciclo de vida: `logout` apagava só o arquivo local e o valor
+  seguia válido no servidor para sempre. Agora `TokenEntry.expiresAt`
+  (nulável — estado antigo decodifica como "sem expiração", JSN004 medido),
+  expiração preguiçosa na validação, `GET /v1/tokens` (inventário sem
+  valores), `POST /v1/tokens/revoke` (valor ou id curto; 409 `KCF063`
+  ambíguo, 404 `KCF064` opaco) e `POST /v1/tokens/rotate` com overlap
+  (antigas só caem depois do TTL; sem TTL nada é revogado em silêncio).
+  CLI: `kof cloud token list|revoke|rotate|rotation`; o `rotate` grava a
+  nova credencial na sessão local antes de imprimir. Prova:
+  `tests/account_token_test.kf` (5: TTL/poda/legado, revoke por valor e id
+  curto com escopo por conta, ambiguidade, overlap, HTTP fim a fim).
   Pendente: PEMs com 30 dias de antecedência; kill-switch ✅ documentado
   (`docs/SECURITY.md` ## Contenção — procedimento manual reversível com
   o que existe; o `freeze` de um comando da Fase 17 automatiza quando

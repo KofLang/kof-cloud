@@ -124,6 +124,12 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   a menos. Contadores internos usam `Map<String, String>` porque
   `Map<String, Int>` como campo de classe quebra o verificador JVM
   (VerifyError medido; sem issue aberta no Kof ainda).
+* **A expiração de `kfc_` e `kfs_` é preguiçosa.** Credencial vencida só é
+  podada quando alguma validação passa por ela (`accountByToken` /
+  `serviceByServiceToken`). Numa conta ociosa, credenciais vencidas ficam no
+  estado até a próxima validação — não há varredura periódica. `logout`
+  continua sendo **só local**: apaga o arquivo da máquina, não invalida no
+  servidor (para isso existe `kof cloud token revoke`).
 * **A expiração de `kfs_` é preguiçosa — e o incidente também.** Credencial
   vencida só é podada quando alguma validação de token passa por
   `serviceByServiceToken` (o que acontece a cada request AUTHENTICATED no

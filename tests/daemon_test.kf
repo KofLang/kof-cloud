@@ -77,6 +77,8 @@ test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
     assert(help.indexOf("unfreeze service|device <nome|id>") >= 0, "unfreeze documentado")
     // Alvo `account` (F17 s2 parcial): o help precisa anunciar as duas formas
     // sem id, senao o operador nao descobre a contencao da conta inteira.
+    // Credencial da conta (F19 s3): comando novo exige trava no help.
+    assert(help.indexOf("token list|revoke <id|kfc_...>|rotate [--ttl <horas>]|rotation") >= 0, "token documentado")
     assert(help.indexOf("freeze account") >= 0, "freeze account documentado")
     assert(help.indexOf("unfreeze account") >= 0, "unfreeze account documentado")
 }

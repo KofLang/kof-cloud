@@ -29,6 +29,10 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/services/token` | conta | emite credencial `kfs_` do serviço `{serviceId}` (+ `ttlHours` opcional, horas) → `{token,serviceId,ttlHours?}` (TTL inválido = 400 `KCF062`) |
 | `POST` | `/v1/services/tokens` | conta | inventário do serviço `{serviceId}` → `[{serviceId,id,createdAt}]` (id = 8 hex do hash; nunca o valor `kfs_`; 404 opaco se alheio/inexistente) |
 | `POST` | `/v1/services/token/revoke` | conta | revoga UMA credencial `{serviceId,token}` (`token` = `kfs_` completo ou id curto único) → `{revoked:true}` (404 opaco se alheio/inexistente; 409 `KCF063` se o id casa com 2+) |
+| `GET` | `/v1/tokens` | conta | inventário das credenciais **da conta** (`kfc_`) → `[{id,createdAt,expiresAt?}]` (id = 8 hex do hash; nunca o valor; expiradas não aparecem) |
+| `POST` | `/v1/tokens/revoke` | conta | revoga UMA credencial da conta `{token}` (`kfc_` completo ou id curto único) → `{revoked:true}` (409 `KCF063` se o id casa com 2+; 404 `KCF064` opaco se não existe nesta conta) |
+| `POST` | `/v1/tokens/rotate` | conta | rotação com overlap `{ttlHours?}` → `{token,revoked,pending}` (a nova é devolvida **uma vez**; as antigas só caem depois do TTL; `ttlHours` ≤ 0 → 400 `KCF062`) |
+| `POST` | `/v1/tokens/rotation` | conta | `{pending}` = quantas credenciais da conta ainda valem (a nova incluída) |
 | `POST` | `/v1/services/remove` | conta | `{serviceId}` |
 | `POST` | `/v1/services/suspend` | conta | `{serviceId}` → `{suspended:true}` (sai da rota, nada removido) |
 | `POST` | `/v1/services/unsuspend` | conta | `{serviceId}` → `{suspended:false}` |

@@ -79,6 +79,9 @@ Int runCli(List<String> args) {
     if (first == "incidents") {
         return cmdIncidents(rest)
     }
+    if (first == "token") {
+        return runToken(rest)
+    }
     if (first == "logs") {
         return cmdLogs(rest)
     }
@@ -207,5 +210,28 @@ Int runDaemon(List<String> args) {
         return cmdDaemonUninstall(rest)
     }
     println("subcomando desconhecido: daemon " + sub)
+    return 1
+}
+
+Int runToken(List<String> args) {
+    if (args.size == 0) {
+        println("uso: kof cloud token list|revoke|rotate|rotation")
+        return 1
+    }
+    var sub = args.get(0)
+    var rest = args.subList(1, args.size)
+    if (sub == "list") {
+        return cmdTokenList(rest)
+    }
+    if (sub == "revoke") {
+        return cmdTokenRevoke(rest)
+    }
+    if (sub == "rotate") {
+        return cmdTokenRotate(rest)
+    }
+    if (sub == "rotation") {
+        return cmdTokenRotation(rest)
+    }
+    println("subcomando desconhecido: token " + sub)
     return 1
 }

@@ -78,6 +78,12 @@ String auditServiceTokenRevoked() {
     return "service.token_revoked"
 }
 
+// Credencial da CONTA (kfc_) revogada — por `token revoke` ou pela rotacao
+// que passou do prazo. Nunca registra o valor.
+String auditAccountTokenRevoked() {
+    return "account.token_revoked"
+}
+
 String auditServiceSuspended() {
     return "service.suspended"
 }

@@ -48,7 +48,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | diagnostico doctor | somente-leitura em camadas (login, control, device, servicos, tunel) + `--file` + `--tls-cert` (PEM ausente/invalido/expirado em 30 dias, sem vazar conteudo) | `doctor_test.kf` |
 | daemon user-level (slice 3) | `cli/Daemon.kf`: unit systemd `--user` + install/status/uninstall | `daemon_test.kf` |
 | presenca real do tunel | espelho bind/unbind no Registry + `GET /v1/presence` filtrado por conta + `status` ONLINE/OFFLINE confirmado | `presence_test.kf` |
-| `security.txt` + `SECURITY.md` + SBOM (Fase 19 s1 parcial) | `/.well-known/security.txt` no Edge (200 `text/plain`, Contact + Policy estáticos) antes de rate limit/rota/auth; sem conta/túnel/serviço; `docs/SECURITY.md` com suporte/reporte/SLA/escopo e trava; `audit --sbom` local (44 fontes + SHA-256, sem login) | `security_test.kf` + `hosts_test.kf` (`audit-sbom`) |
+| `security.txt` + `SECURITY.md` + SBOM (Fase 19 s1 parcial) | `/.well-known/security.txt` no Edge (200 `text/plain`, Contact + Policy estáticos) antes de rate limit/rota/auth; sem conta/túnel/serviço; `docs/SECURITY.md` com suporte/reporte/SLA/escopo e trava; `audit --sbom` local (48 fontes + SHA-256, sem login) | `security_test.kf` + `hosts_test.kf` (`audit-sbom`) |
 | scan de segredos (Fase 19 s2 parcial) | `kof cloud scan [--file]` local (kfs_/kfc_/password no manifesto, nomeia sem vazar, exit 1 com achado); sem login/rede | `deploy_test.kf` (`deploy-scan`) |
 | higiene de credenciais (F19 s2) | `service tokens` / `/v1/services/token-hygiene`: `kfs_` válidos sem expiração por conta | `token_hygiene_test.kf` |
 | scan de ambiente/PEM (F19 s2) | `scan` cobre manifesto + env sensível + PEM expirando (`--tls-cert`), sem vazar valor | `scan_extra_test.kf` |
@@ -62,6 +62,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | daemon por SO (Fase 13 s1) | `daemonKind` + artefato systemd/launchd/Windows puro; install grava e imprime a ativação (nunca ativa sozinho) | `daemon_test.kf` (`daemon-os`) |
 | allowlist WAF pela CLI | `publish --allow-method`/`--allow-path` (repetíveis) com validação local; `service status` mostra a política | `publish_allow_test.kf` |
 | allowlist WAF (Fase 10 s3) | `allowMethods`/`allowPaths` no publish → `403 KCF111` antes do relay; `KCF113`/`KCF114` para política malformada; `kofcloud.json` cobre os campos (mesma normalização, drift no `--plan`/`--check`/`doctor`) | `waf_allow_test.kf` + `deploy_test.kf` |
+| credencial da conta com ciclo de vida (F19 s3) | `kfc_` com TTL opcional, inventário sem valores, revoke por id curto e rotação com overlap; `token list/revoke/rotate/rotation` | `account_token_test.kf` |
 | teto de resposta + cabeçalho (F14 s3 parcial) | resposta acima do teto → 502 KCF115 com stream cancelado dos dois lados (Agent para de produzir); cabeçalho sem fim → 431 KCF116 | `relay_limit_test.kf` |
 | carga explícita + `migrate`/`state-backup` (F16 s1) | `loadStatus` ok/absent/corrupt (serve avisa), `migrate --dry-run` compara contagens sem escrever, `state-backup` preserva o arquivo antes da troca de backend | `migrate_test.kf` |
 | ranking de Edges (F14 s2) | `/v1/connect` publica `edges`; Agent mede e escolhe o mais rápido | `edge_select_test.kf` |

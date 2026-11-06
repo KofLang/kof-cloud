@@ -20,7 +20,12 @@ import kofcloud.store.Store
 
 // Estado do control plane. Persistido como JSON unico; sem banco no MVP.
 // Tokens sao guardados como hash (nunca em claro).
-record TokenEntry(String accountId, String tokenHash, Long createdAt)
+//
+// `expiresAt` e NULAVEL de proposito: estados gravados antes da Fase 19 s3
+// (credencial de conta com ciclo de vida) nao tem o campo, e `json.decode`
+// exige todo campo nao-nulavel (JSN004 medido). Nulavel ausente decodifica
+// como null — o token antigo continua valido para sempre, como era.
+record TokenEntry(String accountId, String tokenHash, Long createdAt, Long? expiresAt)
 
 record ServiceToken(String serviceId, String accountId, String tokenHash, Long createdAt, Long expiresAt)
 
@@ -446,19 +451,189 @@ class Registry {
         if (token.length == 0) {
             return null
         }
+        var now = time.now()
+        var matched = ""
+        var expired = 0
         for (var entry in this.tokens) {
-            if (tokenMatches(entry.tokenHash, token)) {
-                return this.accountById(entry.accountId)
+            if (this.accountTokenExpired(entry, now)) {
+                expired = expired + 1
+                continue
+            }
+            if (matched.length == 0 && tokenMatches(entry.tokenHash, token)) {
+                matched = entry.accountId
             }
         }
-        return null
+        // Poda preguicosa (mesmo padrao do kfs_): credencial vencida nao
+        // acumula no estado e o proximo `token list` ja nao mostra.
+        if (expired > 0) {
+            this.pruneExpiredAccountTokens()
+        }
+        if (matched.length == 0) {
+            return null
+        }
+        return this.accountById(matched)
+    }
+
+    // ---- credenciais da conta (kfc_) ----
+    //
+    // O kfc_ e o token mais poderoso do sistema: autoriza publicar, revogar
+    // dispositivo, congelar conta. Ate aqui ele nao tinha ciclo de vida —
+    // `logout` so apagava o arquivo local e o valor seguia valido para
+    // sempre no servidor. O desenho abaixo espelha o do kfs_ (que ja provou
+    // o padrao): hash em repouso, TTL opcional, inventario sem valores,
+    // revogacao por id curto e rotacao com overlap.
+
+    Long accountTokenExpiry(Long nowMs, Int ttlHours) {
+        if (ttlHours <= 0) {
+            return 0
+        }
+        return nowMs + ttlHours * 3600000
+    }
+
+    Bool accountTokenExpired(TokenEntry entry, Long nowMs) {
+        var expiresAt = entry.expiresAt
+        if (expiresAt == null) {
+            return false
+        }
+        if (expiresAt <= 0) {
+            return false
+        }
+        return nowMs >= expiresAt
     }
 
     String issueToken(String accountId) {
+        return this.issueToken(accountId, 0)
+    }
+
+    // Emite uma credencial de conta. `ttlHours` <= 0 = sem expiracao (o
+    // comportamento historico do login); > 0 fixa o prazo.
+    String issueToken(String accountId, Int ttlHours) {
         var token = newAccountToken()
-        this.tokens.add(TokenEntry(accountId, tokenHash(token), time.now()))
+        var expiresAt = this.accountTokenExpiry(time.now(), ttlHours)
+        this.tokens.add(TokenEntry(accountId, tokenHash(token), time.now(), expiresAt))
         this.save()
         return token
+    }
+
+    // Credenciais VALIDAS da conta (expiradas nao aparecem — mesma regra do
+    // kfs_: o que nao autoriza nao e listado). Nunca devolve o valor.
+    List<TokenEntry> accountTokensFor(String accountId) {
+        var now = time.now()
+        var out = listOf<TokenEntry>()
+        for (var entry in this.tokens) {
+            if (entry.accountId == accountId && this.accountTokenExpired(entry, now) == false) {
+                out.add(entry)
+            }
+        }
+        return out
+    }
+
+    // Poda preguicosa das credenciais de conta vencidas. Devolve quantas
+    // sairam. Chamada pela validacao (accountByToken) e pelo inventario.
+    Int pruneExpiredAccountTokens() {
+        var now = time.now()
+        var kept = listOf<TokenEntry>()
+        var removed = 0
+        for (var entry in this.tokens) {
+            if (this.accountTokenExpired(entry, now)) {
+                removed = removed + 1
+            } else {
+                kept.add(entry)
+            }
+        }
+        if (removed > 0) {
+            this.tokens = kept
+            this.save()
+        }
+        return removed
+    }
+
+    // Revoga UMA credencial da conta pelo valor completo OU pelo id curto do
+    // inventario (8 hex do hash), desde que unico na conta. Devolve
+    // "revoked" | "ambiguous" | "" (nao encontrado). Nunca confirma nem nega
+    // credencial de outra conta: o filtro e por accountId.
+    String revokeAccountTokenResult(String accountId, String token) {
+        if (token.length == 0) {
+            return ""
+        }
+        var kept = listOf<TokenEntry>()
+        var revoked = false
+        for (var entry in this.tokens) {
+            if (entry.accountId == accountId && tokenMatches(entry.tokenHash, token)) {
+                revoked = true
+            } else {
+                kept.add(entry)
+            }
+        }
+        if (revoked) {
+            this.finishAccountTokenRevoke(accountId, kept)
+            return "revoked"
+        }
+        var matches = 0
+        for (var entry in this.tokens) {
+            if (entry.accountId == accountId && entry.tokenHash.startsWith(token)) {
+                matches = matches + 1
+            }
+        }
+        if (matches == 0) {
+            return ""
+        }
+        if (matches > 1) {
+            return "ambiguous"
+        }
+        var keptShort = listOf<TokenEntry>()
+        for (var entry in this.tokens) {
+            if (entry.accountId == accountId && entry.tokenHash.startsWith(token)) {
+                continue
+            }
+            keptShort.add(entry)
+        }
+        this.finishAccountTokenRevoke(accountId, keptShort)
+        return "revoked"
+    }
+
+    void finishAccountTokenRevoke(String accountId, List<TokenEntry> kept) {
+        this.tokens = kept
+        var owner = this.accountById(accountId)
+        if (owner != null) {
+            // Audita a conta, nunca o token.
+            this.audit(auditActorAccount(owner.handle), auditAccountTokenRevoked(), accountId)
+        }
+        this.save()
+    }
+
+    // Rotacao com overlap: emite a nova e revoga as antigas APENAS quando ja
+    // passaram do prazo. Credencial sem expiracao nao e revogada em silencio
+    // (o operador pode estar usando em CI) — fica contada como pendente.
+    RotateResult rotateAccountTokens(String accountId, Int ttlHours) {
+        var token = this.issueToken(accountId, ttlHours)
+        var now = time.now()
+        var kept = listOf<TokenEntry>()
+        var revoked = 0
+        var pending = 0
+        for (var entry in this.tokens) {
+            if (entry.accountId != accountId) {
+                kept.add(entry)
+                continue
+            }
+            if (tokenMatches(entry.tokenHash, token)) {
+                kept.add(entry)
+            } else if (this.accountTokenExpired(entry, now)) {
+                revoked = revoked + 1
+            } else {
+                kept.add(entry)
+                pending = pending + 1
+            }
+        }
+        if (revoked > 0) {
+            this.finishAccountTokenRevoke(accountId, kept)
+        }
+        return RotateResult(token, revoked, pending)
+    }
+
+    // Quantas credenciais da conta ainda valem (a nova incluida).
+    Int pendingAccountRotationCount(String accountId) {
+        return this.accountTokensFor(accountId).size
     }
 
     String login(String handle, String password) {

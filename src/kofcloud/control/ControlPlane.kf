@@ -802,6 +802,103 @@ String incidentJson(Incident incident) {
     return json.encode(out)
 }
 
+// ---- credenciais da conta (kfc_) ----
+//
+// O kfc_ autoriza tudo na conta; ate aqui nao havia como listar, revogar nem
+// rotacionar. Estes handlers espelham os do kfs_ (mesmo vocabulario de
+// resposta, mesmo 404 opaco, mesmo id curto), com uma diferenca de escopo:
+// o alvo e sempre a conta do token — nao existe id de conta no corpo.
+
+// Inventario: id curto do hash + emissao (+ expiracao quando houver).
+// NUNCA o valor: o kfc_ em claro so existe no instante da emissao.
+String accountTokenJson(TokenEntry entry) {
+    var out = mapOf()
+    out.put("id", shortTokenId(entry.tokenHash))
+    out.put("createdAt", longToString(entry.createdAt))
+    var expiresAt = entry.expiresAt
+    if (expiresAt != null) {
+        if (expiresAt > 0) {
+            out.put("expiresAt", longToString(expiresAt))
+        }
+    }
+    return json.encode(out)
+}
+
+String accountTokenListJson(List<TokenEntry> entries) {
+    var parts = listOf<String>()
+    for (var entry in entries) {
+        parts.add(accountTokenJson(entry))
+    }
+    return "[" + joinStrings(parts, ",") + "]"
+}
+
+HttpResult handleListAccountTokens(Registry registry, String? authHeader) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    return HttpResult(200, accountTokenListJson(registry.accountTokensFor(account.id)))
+}
+
+// Revoga uma credencial da conta (ex.: vazou). Corpo: `{"token": "<kfc_|id>"}`.
+// Id curto ambiguo -> 409 KCF063; inexistente -> 404 KCF064 opaco.
+HttpResult handleRevokeAccountToken(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var body = decodeBody(bodyText)
+    var token = mapField(body, "token")
+    if (token.length == 0) {
+        return HttpResult(400, errorJson(errServiceTokenRequired()))
+    }
+    var outcome = registry.revokeAccountTokenResult(account.id, token)
+    if (outcome == "revoked") {
+        var out = mapOf()
+        out.put("revoked", "true")
+        return HttpResult(200, json.encode(out))
+    }
+    if (outcome == "ambiguous") {
+        return HttpResult(409, errorJson(errAmbiguousToken()))
+    }
+    return HttpResult(404, errorJson(errAccountTokenNotFound()))
+}
+
+// Rotacao com overlap: emite a nova (devolvida UMA vez) e so revoga as
+// antigas que ja passaram do TTL. Sem `ttlHours` a nova nao expira e nada e
+// revogado em silencio — o operador ve `pending`.
+HttpResult handleRotateAccountTokens(Registry registry, String? authHeader, String bodyText) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var body = decodeBody(bodyText)
+    var ttlRaw = mapField(body, "ttlHours")
+    var ttl = 0
+    if (ttlRaw.length > 0) {
+        ttl = parseIntSafe(ttlRaw, 0)
+        if (ttl <= 0) {
+            return HttpResult(400, errorJson(errInvalidTtl()))
+        }
+    }
+    var result = registry.rotateAccountTokens(account.id, ttl)
+    var out = mapOf()
+    out.put("token", result.token)
+    out.put("revoked", intToString(result.revoked))
+    out.put("pending", intToString(result.pending))
+    return HttpResult(200, json.encode(out))
+}
+
+HttpResult handleAccountRotationStatus(Registry registry, String? authHeader) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var out = mapOf()
+    out.put("pending", intToString(registry.pendingAccountRotationCount(account.id)))
+    return HttpResult(200, json.encode(out))
+}
+
 // Erro do revoke de token por outcome: "revoked" nao e erro (o handler
 // responde 200 direto); "ambiguous" -> 409 KCF063 (pede o kfs_ completo);
 // resto ("", nao encontrado/sem dono) -> 404 com corpo reescrito para KCF041
@@ -1262,6 +1359,34 @@ class ControlPlane {
         }
         app.post("/v1/services/tokens") {
             var result = handleListServiceTokens(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.get("/v1/tokens") {
+            var result = handleListAccountTokens(reg, header("x-kofcloud-token"))
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/tokens/revoke") {
+            var result = handleRevokeAccountToken(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/tokens/rotate") {
+            var result = handleRotateAccountTokens(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/tokens/rotation") {
+            var result = handleAccountRotationStatus(reg, header("x-kofcloud-token"))
             if (result.code == 200) {
                 return result.body
             }

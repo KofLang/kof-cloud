@@ -103,6 +103,12 @@ String errAmbiguousToken() {
     return "KCF063: short id matches more than one credential; use the full kfs_ value"
 }
 
+// Credencial da conta (kfc_) nao encontrada nesta conta. Opaco: nunca
+// confirma nem nega a existencia de credencial alheia.
+String errAccountTokenNotFound() {
+    return "KCF064: account credential not found"
+}
+
 // ---- limites ----
 
 String errLimitDevices() {
@@ -342,6 +348,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF125") >= 0) {
         return "Incidente nao encontrado nesta conta — veja `kof cloud incidents`."
+    }
+    if (raw.indexOf("KCF064") >= 0) {
+        return "Credencial nao encontrada nesta conta — veja `kof cloud token list` (o id curto basta quando e unico)."
     }
     if (raw.indexOf("KCF113") >= 0) {
         return "allowMethods aceita so verbos HTTP em maiusculas (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS), separados por virgula."

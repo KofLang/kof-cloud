@@ -53,6 +53,8 @@ String usageText() {
     out = out + "  unfreeze account                    (restaura device e servico ao status anterior)\n"
     out = out + "  incidents [--all] [--resolve <id>]   (abertos da conta + plataforma)\n"
     out = out + "  migrate --from <estado.json> [--to <destino.json>] [--dry-run]\n"
+    out = out + "  state-backup [--file <estado.json>]   (copia o estado ao lado antes de trocar de backend)\n"
+    out = out + "  token list|revoke <id|kfc_...>|rotate [--ttl <horas>]|rotation   (credencial da CONTA)\n"
     out = out + "  logs [--tail <linhas>] [--runtime]  (marcos de sessao; --runtime = eventos reais do Agent)\n"
     out = out + "\n"
     out = out + "  serve [--control-port " + intToString(defaultControlPort()) + "] [--tunnel-port " + intToString(defaultTunnelPort()) + "] [--http-port " + intToString(defaultHttpPort()) + "] [--state <arquivo>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]\n"

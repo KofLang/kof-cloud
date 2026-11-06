@@ -132,6 +132,7 @@ unfreeze service|device <nome|id> | account
 incidents [--all] [--resolve <id>]
 migrate --from <estado.json> [--to <destino.json>] [--dry-run]
 state-backup [--file <estado.json>]
+token list|revoke <id|kfc_...>|rotate [--ttl <horas>]|rotation
 logs [--tail <linhas>] [--runtime]   (marcos de sessao; --runtime = eventos reais do Agent; teto 256 KiB por arquivo)
 serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]
 ```
@@ -150,7 +151,7 @@ identidade/cifra, registry, backoff, integração do control plane, E2E,
 domínio próprio, métricas, rate limit, suspensão/auditoria, frames
 fatiados, idle timeout, conexões por serviço, deploy, daemon, hot-reload,
 doctor, presença do túnel, eventos do agent, teto de corpo WAF, detectar
-WAF, timeout de upstream, allowlist WAF, painel somente-leitura, rotação de kfs_, security.txt, incidentes, contenção (service/device/account), status page, webhook de incidentes, cadeia de auditoria, scan de ambiente/PEM, higiene de credenciais, painel de gestão completa, ranking de Edges e carga explícita/migrate (44 suites). Ver `docs/15-tests.md` para a matriz.
+WAF, timeout de upstream, allowlist WAF, painel somente-leitura, rotação de kfs_, security.txt, incidentes, contenção (service/device/account), status page, webhook de incidentes, cadeia de auditoria, scan de ambiente/PEM, higiene de credenciais, painel de gestão completa, ranking de Edges, carga explícita/migrate, teto de resposta no relay e credencial da conta com ciclo de vida (46 suites). Ver `docs/15-tests.md` para a matriz.
 
 ## Segurança
 
