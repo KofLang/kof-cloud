@@ -84,6 +84,12 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   mede até o cabeçalho chegar — um serviço que manda cabeçalho rápido e
   trava no corpo conta como `ONLINE`.
 * **O Edge fala HTTP/1.1.** Sem pipelining avançado, sem trailers.
+* **A fila de entrada é limitada, a de saída não.** `queueDepth` (64) vale
+  para os itens que chegam a um stream e ainda não foram consumidos; a
+  `outbox` compartilhada do túnel continua sem teto — quem enche é o próprio
+  produtor local, e o escritor drena na velocidade do socket. Um serviço que
+  produza mais rápido que a rede ainda ocupa memória no Agent; o teto de
+  resposta (`maxResponseBytes`) e o de fila por stream limitam o caso comum.
 * **Sem half-close no protocolo.** Um stream termina com `END`/`RESET`; não há
   sinal de "não vou mais escrever, mas ainda leio".
 * **Limites aplicados.** Dispositivos ativos por conta, serviços por

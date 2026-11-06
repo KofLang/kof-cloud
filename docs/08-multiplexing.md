@@ -18,10 +18,14 @@ pública em andamento.
   (`OPEN` no Edge).
 * Um stream carrega um fluxo de bytes bidirecional: `OPEN` → `DATA`* →
   (`END` | `RESET`).
-* **Nenhum stream monopoliza a conexão.** O Edge aplica *round-robin* sobre os
-  streams prontos e limita a profundidade da fila de saída por stream
-  (`limits.queueDepth`, default 64 frames). Fila cheia → o stream recebe
-  `RESET{LIMIT_EXCEEDED}` em vez de bloquear a conexão inteira.
+* **Nenhum stream monopoliza a conexão.** A fila de entrada de cada stream
+  tem teto (`kofcloud.limits.queueDepth`, default 64 itens). Fila cheia → o
+  stream recebe `RESET{LIMIT_EXCEEDED}` e a inbox dele é fechada; o leitor do
+  túnel segue para o próximo frame em vez de bloquear a conexão inteira.
+  A política vive num ponto só (`TunnelSession.routeData`), então Edge e
+  Agent não podem divergir. Marcadores de controle (`END`/`RESET`/`TIMEOUT`/
+  `OPENED`) **não** contam para o teto — são justamente o que desbloqueia o
+  consumidor.
 * `DATA` é limitado a `limits.frameBytes` (1 MiB). Payload maior é fatiado
   em blocos de `limits.sendChunkBytes` (16 KiB) já codificados — um frame por
   bloco; o receptor acumula até `END`. O bloco de envio é bem menor que o
@@ -41,7 +45,9 @@ Edge (por stream)                       Agent (por stream)
   outbox: Channel<String>   ──► DATA    outbox: Channel<String>
 ```
 
-* Cada stream tem **duas** filas com profundidade limitada.
+* Cada stream tem **duas** filas; a de entrada tem profundidade limitada
+  (`queueDepth`, contador explícito porque os canais do Kof são ilimitados —
+  medido: `Channel` só expõe `send`/`receive`, sem `trySend` nem `close`).
 * `RESET` e `END` são enfileirados como frames normais e chegam na ordem.
 * Cancelar = enviar `RESET{s, "CANCELED"}` e descartar a fila daquele stream.
 * O túnel como um todo só fecha quando a conexão TCP cai ou chega `GOAWAY`.
@@ -66,7 +72,7 @@ writer — ver `01-architecture.md` e `12-kof-apis.md`.
 | Limite | Default | Aplicado? |
 |---|---|---|
 | streams simultâneos por túnel | 128 (`kofcloud.limits.streams`) | ✅ — `openStream` recusa; o Edge devolve `429`, o Agent responde `OPENED{ok:false}` + `RESET LIMIT_EXCEEDED` |
-| profundidade de fila por stream | 64 | ⏳ |
+| profundidade de fila por stream | 64 (`kofcloud.limits.queueDepth`) | ✅ — `routeData` recusa com `RESET LIMIT_EXCEEDED` e fecha a inbox do stream; métrica `kofcloud_edge_tunnel_stream_queue_overflow_total` (`queue_depth_test.kf`) |
 | bytes por frame | 1 MiB | ✅ — envio em blocos de 16 KiB (`sendChunkBytes`), recepção recusa acima de `maxTunnelLineBytes` (`frames_test.kf`) |
 | bloco de envio | 16 KiB | ✅ (`kofcloud.limits.sendChunkBytes`) |
 | linha maxima do tunel | 2 MiB + margem | ✅ — `LineCodec` trava em overflow e o leitor derruba a conexao |

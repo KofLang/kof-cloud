@@ -56,6 +56,18 @@ no E1/E2; a fase formaliza os limites por dispositivo.
 Prova: `tests/limits_test.kf` (6 testes) + `tests/e2e_multiservice_test.kf`
 (3 serviços no mesmo túnel, com isolamento de falha).
 
+**Profundidade de fila por stream (parte do contrato de `08-multiplexing.md`).**
+O desenho prometia "fila cheia → `RESET LIMIT_EXCEEDED` em vez de bloquear a
+conexão inteira", mas os canais do Kof são ilimitados (medido: `Channel` só
+tem `send`/`receive`) — um stream cujo consumidor estava lento acumulava
+memória sem teto, e um serviço local que devolvesse gigabytes derrubava o
+Agent inteiro. Agora `TunnelSession` conta os itens pendentes por stream
+(`kofcloud.limits.queueDepth`, 64) e `routeData` é o ponto único da política:
+fila cheia → `RESET LIMIT_EXCEEDED` naquele stream + inbox fechada, e o
+leitor do túnel segue para o próximo frame. Marcadores de controle não contam
+para o teto (são o que desbloqueia o consumidor). Prova:
+`tests/queue_depth_test.kf` (3).
+
 **Health check HTTP com prazo (parte do contrato de `09-flows.md` §6 e `04-service.md`).**
 O check só fazia um connect TCP e `DEGRADED` nunca era emitido: um serviço que
 respondia `500` continuava `ONLINE` no Edge. Agora `agent/Health.kf` faz `GET`

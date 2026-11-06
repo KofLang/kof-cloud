@@ -295,7 +295,9 @@ Bool handleAgentFrame(TunnelSession session, String line) {
         return true
     }
     if (kind == "DATA") {
-        session.deliver(frameField(frame, "s"), frameField(frame, "d"))
+        // Mesma regra do Edge (politica em Session.routeData): fila cheia
+        // recusa o stream, nunca o tunel.
+        session.routeData(frameField(frame, "s"), frameField(frame, "d"))
         return true
     }
     if (kind == "END") {

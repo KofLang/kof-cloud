@@ -196,6 +196,12 @@ void noteStreamOpened() {
     observability.counter("kofcloud_edge_tunnel_streams_total")
 }
 
+// Fila de entrada do stream estourou (consumidor lento): o stream e recusado
+// com RESET LIMIT_EXCEEDED e o tunel segue. Conta o evento, nunca o conteudo.
+void noteStreamQueueOverflow() {
+    observability.counter("kofcloud_edge_tunnel_stream_queue_overflow_total")
+}
+
 // Deteccao WAF (Fase 10, slice 1): conta por padrao nos dois modos
 // (detectar conta e segue; enforce conta e bloqueia). `signature` e o nome
 // do padrao que casou ("traversal", "sqli-union", ...) — nunca corpo, path,

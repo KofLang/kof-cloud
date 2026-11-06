@@ -213,7 +213,12 @@ Bool handleTunnelFrame(EdgeState state, TunnelSession session, String line) {
         return true
     }
     if (kind == "DATA") {
-        session.deliver(frameField(frame, "s"), frameField(frame, "d"))
+        // Fila do stream no teto: recusa AQUELE stream e segue lendo os
+        // outros. Bloquear aqui pararia todos os streams do tunel — a
+        // monopolizacao que o desenho proibe (docs/08-multiplexing.md).
+        if (session.routeData(frameField(frame, "s"), frameField(frame, "d")) == false) {
+            noteStreamQueueOverflow()
+        }
         return true
     }
     if (kind == "END") {

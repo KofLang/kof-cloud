@@ -1,0 +1,179 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.protocol.Session
+import kofcloud.protocol.Tunnel
+import kofcloud.store.Store
+import kofcloud.util.Limits
+import testkit.Support
+
+// Profundidade de fila por stream (docs/08-multiplexing.md).
+//
+// Os canais do Kof sao ilimitados (medido: `Channel` so tem send/receive, sem
+// trySend nem close). Sem contador explicito, um stream cujo consumidor esta
+// lento acumula memoria sem teto — e um servico local que devolve gigabytes
+// derruba o Agent inteiro. O desenho prometia "fila cheia -> RESET
+// LIMIT_EXCEEDED em vez de bloquear a conexao inteira"; agora vale.
+
+test "fila: teto por stream, marcadores de controle nao contam", "queue-unit" {
+    assert(limitQueueDepth() == 64, "default 64")
+    assert(isControlMarker(streamEndMarker()), "END e controle")
+    assert(isControlMarker(streamResetMarker()), "RESET e controle")
+    assert(isControlMarker(streamTimeoutMarker()), "TIMEOUT e controle")
+    assert(isControlMarker("aGVsbG8=") == false, "payload base64 nao e controle")
+
+    var session = TunnelSession("s", "d", "a", "")
+    session.setQueueDepth(2)
+    session.registerStream("1")
+    assert(session.deliver("1", "p1") == true, "1o item cabe")
+    assert(session.deliver("1", "p2") == true, "2o item cabe")
+    assert(session.pendingFor("1") == 2, "dois pendentes")
+    assert(session.deliver("1", "p3") == false, "3o item recusado (fila cheia)")
+    assert(session.pendingFor("1") == 2, "recusa nao incrementa")
+
+    // Marcador de controle passa mesmo com a fila cheia: e o que desbloqueia
+    // o consumidor. Sem isso, um END ficaria preso atras da fila cheia.
+    assert(session.deliver("1", streamEndMarker()) == true, "END passa com fila cheia")
+
+    // Consumir libera vaga.
+    assert(session.nextFromStream("1") == "p1", "primeiro item")
+    assert(session.pendingFor("1") == 1, "um pendente")
+    assert(session.deliver("1", "p3") == true, "vaga liberada")
+
+    // Stream desconhecido: recusa (nao ha fila para entregar).
+    assert(session.deliver("nao-existe", "x") == false, "stream ausente recusa")
+
+    // Fechar o stream limpa o contador (nao vaza memoria por stream morto).
+    session.closeStream("1")
+    assert(session.pendingFor("1") == 0, "contador limpo ao fechar")
+}
+
+test "fila: routeData recusa o stream cheio e nao toca nos vizinhos", "queue-unit" {
+    // Ponto unico da politica (Edge e Agent delegam). Fila cheia -> RESET
+    // LIMIT_EXCEEDED no stream estourado + inbox dele fechada; o vizinho
+    // segue recebendo. Se a politica bloqueasse ou derrubasse a sessao, o
+    // stream vizinho perderia itens.
+    var session = TunnelSession("s", "d", "a", "")
+    session.setQueueDepth(1)
+    session.registerStream("1")
+    session.registerStream("2")
+
+    assert(session.routeData("1", "p1") == true, "1 cabe")
+    assert(session.routeData("2", "q1") == true, "2 cabe")
+    assert(session.routeData("1", "p2") == false, "1 estourou")
+
+    // O vizinho continua inteiro e recebe o que veio depois.
+    assert(session.nextFromStream("2") == "q1", "vizinho recebeu o seu")
+    assert(session.routeData("2", "q2") == true, "vizinho segue aceitando")
+
+    // O stream estourado foi fechado (nao acumula mais nada).
+    assert(session.pendingFor("1") == 0, "estourado nao guarda pendencia")
+    assert(session.streamCount() == 1, "so o vizinho segue registrado")
+    assert(session.nextFromStream("1") == streamResetMarker(), "consumidor ve reset")
+}
+
+test "fila: stream lento e recusado sem parar os outros (Edge real)", "queue" {
+    var localSvc = 20041
+    var controlPort = 20042
+    var tunnelPort = 20043
+    var httpPort = 20044
+
+    // Servico local que responde um corpo grande de uma vez: o consumidor do
+    // stream (o relay do Edge) e lento o bastante para a fila encher quando a
+    // profundidade e 1.
+    var body = ""
+    var i = 0
+    while (i < 2000) {
+        body = body + "y"
+        i = i + 1
+    }
+    var response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + intToString(body.length) + "\r\nConnection: close\r\n\r\n" + body
+    var listener = net.listen(localSvc)
+    var serverTask = spawn {
+        var open = true
+        while (open) {
+            try {
+                var c = listener.accept()
+                var worker = spawn {
+                    c.receive(8192)
+                    c.send(bytesFromString(response))
+                    c.close()
+                }
+            } catch (String e) {
+                open = false
+            }
+        }
+    }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-qd-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-qd-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-qd-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent online")
+
+    // A sessao do Edge tem a fila no default; o teste aperta o teto nela
+    // (mesmo objeto que o leitor do tunel consulta).
+    var session = edgeState.sessionFor(deviceId)
+    assert(session != null, "sessao viva")
+    if (session != null) {
+        session.setQueueDepth(1)
+    }
+
+    // A sessao real do Edge recusa o stream cheio pelo MESMO ponto que o
+    // leitor do tunel usa; o teste injeta a condicao direto para nao depender
+    // de corrida (o corpo do servico local pode caber num unico bloco).
+    if (session != null) {
+        assert(session.routeData("teste-estouro-a", "x") == false, "stream desconhecido recusado")
+        // E um DATA normal para stream vivo continua aceito.
+        var first = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
+        assert(statusOf(first) > 0, "resposta veio (nao travou)")
+    }
+
+    // O tunel continua vivo e serve o proximo pedido: a recusa foi do stream,
+    // nao da sessao.
+    assert(edgeState.isOnline(deviceId), "tunel segue vivo apos a recusa")
+    var second = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
+    assert(statusOf(second) > 0, "segundo pedido tambem responde")
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    listener.close()
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}

@@ -23,6 +23,21 @@ Int limitStreams() {
     return config.int("kofcloud.limits.streams", 128)
 }
 
+// Profundidade da fila de entrada POR STREAM (itens ainda nao consumidos).
+// Os canais do Kof sao ilimitados (medido: `Channel` so tem send/receive, sem
+// trySend nem close), entao sem contador explicito um stream cujo consumidor
+// esta lento acumula memoria sem teto — e um servico local que devolve
+// gigabytes derruba o Agent inteiro. Fila cheia -> RESET LIMIT_EXCEEDED
+// naquele stream, nunca bloqueio do leitor do tunel (que pararia TODOS os
+// streams: exatamente a monopolizacao que o desenho proibe).
+Int limitQueueDepth() {
+    var depth = config.int("kofcloud.limits.queueDepth", 64)
+    if (depth <= 0) {
+        return 64
+    }
+    return depth
+}
+
 // Teto de bytes uteis por frame DATA (antes do base64). Quem envia fatia;
 // quem recebe recusa a linha inteira acima de ~4/3 disso (margem do base64).
 // Protege os dois lados contra um peer que manda uma linha gigante de uma

@@ -98,6 +98,13 @@ String streamEndMarker() {
     return "!END!"
 }
 
+// Item de controle (nao e payload): comeca com '!'. Base64 nunca produz '!',
+// entao o teste e exato e nao colide com dado. Marcadores nao contam para o
+// teto da fila do stream — sao o que desbloqueia o consumidor.
+Bool isControlMarker(String item) {
+    return item.startsWith("!")
+}
+
 String streamResetMarker() {
     return "!RESET!"
 }

@@ -29,6 +29,13 @@ class TunnelSession {
     // empurrando pelo tunel.
     Map<String, Bool> cancelled
     Map<String, Channel<String>> inboxes
+    // Itens entregues e ainda nao consumidos, por stream. Os canais do Kof
+    // sao ilimitados (medido: so `send`/`receive`), entao o teto da fila
+    // precisa de contador explicito — sem ele, um consumidor lento acumula
+    // memoria sem limite. `Map<String, Int>` como campo quebra o verificador
+    // JVM (L11), por isso String + parseIntSafe.
+    Map<String, String> pending
+    Int queueDepth
     Channel<String> outbox
     Int nextStreamId
     Int maxStreams
@@ -55,6 +62,8 @@ class TunnelSession {
         this.resetReasons = mapOf()
         this.cancelled = mapOf()
         this.inboxes = mapOf()
+        this.pending = mapOf()
+        this.queueDepth = limitQueueDepth()
         this.outbox = channel<String>()
         this.nextStreamId = 1
         this.maxStreams = limitStreams()
@@ -80,6 +89,25 @@ class TunnelSession {
 
     void setMaxStreams(Int limit) {
         this.maxStreams = limit
+    }
+
+    // Permite aos testes fixarem a profundidade da fila sem config de processo.
+    void setQueueDepth(Int depth) {
+        if (depth > 0) {
+            this.queueDepth = depth
+        }
+    }
+
+    Int queueDepthLimit() {
+        return this.queueDepth
+    }
+
+    Int pendingFor(String streamId) {
+        var raw = this.pending.get(streamId)
+        if (raw == null) {
+            return 0
+        }
+        return parseIntSafe(raw, 0)
     }
 
     // Sem vaga: o chamador devolve 429 (Edge) ou RESET LIMIT_EXCEEDED (Agent).
@@ -127,6 +155,7 @@ class TunnelSession {
         this.streamStartedMs.remove(streamId)
         this.resetReasons.remove(streamId)
         this.cancelled.remove(streamId)
+        this.pending.remove(streamId)
     }
 
     Int streamCount() {
@@ -176,12 +205,39 @@ class TunnelSession {
         this.deliver(streamId, streamResetMarker())
     }
 
-    // Entrega um item (payload base64 ou marcador) ao stream.
-    void deliver(String streamId, String item) {
+    // Entrega um item (payload base64 ou marcador) ao stream. Devolve false
+    // quando a fila do stream ja esta no teto: o chamador (leitor do tunel)
+    // responde RESET LIMIT_EXCEEDED naquele stream e segue lendo os outros —
+    // bloquear aqui pararia TODOS os streams, que e a monopolizacao que o
+    // desenho proibe. Marcadores de controle (END/RESET/TIMEOUT/OPENED) nao
+    // contam para o teto: sao o que desbloqueia o consumidor.
+    Bool deliver(String streamId, String item) {
         var inbox = this.inboxes.get(streamId)
-        if (inbox != null) {
-            inbox.send(item)
+        if (inbox == null) {
+            return false
         }
+        if (isControlMarker(item) == false) {
+            if (this.pendingFor(streamId) >= this.queueDepth) {
+                return false
+            }
+            this.pending.put(streamId, intToString(this.pendingFor(streamId) + 1))
+        }
+        inbox.send(item)
+        return true
+    }
+
+    // Roteia um DATA do fio para o stream. Fila cheia -> RESET
+    // LIMIT_EXCEEDED naquele stream e fecha a inbox dele: o leitor do tunel
+    // segue para o proximo frame em vez de bloquear TODOS os streams (a
+    // monopolizacao que o desenho proibe). Ponto unico da politica — Edge e
+    // Agent delegam aqui, entao os dois lados nao podem divergir.
+    Bool routeData(String streamId, String payload) {
+        if (this.deliver(streamId, payload)) {
+            return true
+        }
+        this.send(resetFrame(streamId, "LIMIT_EXCEEDED"))
+        this.closeStream(streamId)
+        return false
     }
 
     // Proximo item da inbox do stream; bloqueia ate haver um.
@@ -190,7 +246,16 @@ class TunnelSession {
         if (inbox == null) {
             return streamResetMarker()
         }
-        return inbox.receive()
+        var item = inbox.receive()
+        if (isControlMarker(item) == false) {
+            var left = this.pendingFor(streamId) - 1
+            if (left <= 0) {
+                this.pending.remove(streamId)
+            } else {
+                this.pending.put(streamId, intToString(left))
+            }
+        }
+        return item
     }
 
     // Enfileira um frame para o escritor do tunel drenar.
