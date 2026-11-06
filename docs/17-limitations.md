@@ -91,10 +91,14 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   de corpo (slice 2a), timeout de upstream (slice 2b), detecção/enforce de
   assinaturas em método+path, corpo até 64 KiB e **valores de header** (slice
   1) e allowlist de métodos/paths por serviço (`403 KCF111`, fail-closed só
-  para quem declarou a lista — slice 3). **Falta** um WAF mais profundo: regras
-  por conta e corpo decodificado (JSON base64/URL-encode). As assinaturas são
-  literais: no corpo e nos headers, a barra invertida do JSON não é
-  normalizada, então traversal JSON-escapado não casa ali (casa na query crua).
+  para quem declarou a lista — slice 3). **Percent/form-encoding** é
+  decodificado em **uma** passada antes do casamento (`wafDecodedContains`,
+  sem reconstruir a string), então `%2e%2e%2f`, `union+select` e `%3Cscript`
+  casam; dupla codificação (`%252e`) não é desfeita em cadeia, e base64
+  dentro de JSON/URL-encode aninhado continua fora. **Falta** um WAF mais
+  profundo: regras por conta e corpo estruturalmente decodificado (JSON
+  base64). A barra invertida do JSON não é normalizada: traversal
+  JSON-escapado não casa no corpo nem no header (casa na query crua).
   Headers da plataforma ficam fora da varredura por desenho
   (`wafHeaderIgnored`): `Authorization` é credencial (nunca é lida nem ecoada
   pelo detector), `Host` é rota e `Content-Length`/`Connection` são do

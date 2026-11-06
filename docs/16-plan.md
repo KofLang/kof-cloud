@@ -328,11 +328,21 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   (`Authorization` é credencial e nunca é lida, `Host` é rota,
   `Content-Length`/`Connection`/`X-Forwarded-For` são do protocolo). Path,
   corpo e header casam pela **mesma** lista (`wafSignatureOf`), então um padrão
-  novo vale nos três. Honestidade: as assinaturas são literais, então a barra
-  invertida do JSON não é normalizada (traversal JSON-escapado não casa no
-  corpo nem no header). Prova: `tests/waf_detect_test.kf` (`wafdetect-unit`,
-  `wafdetect`, `wafbody-unit`, `wafdetect-body`, `wafheader-unit`, e os e2e
-  `wafdetect`/`wafenforce` estendidos com ataque em header).
+  novo vale nos três. Honestidade: a barra invertida do JSON não é normalizada
+  (traversal JSON-escapado não casa no corpo nem no header).
+  **Percent/form-encoded ✅ (uma passada):** quando o literal não casa e o
+  texto tem `%` ou `+`, `wafSignatureDecoded` compara o **mesmo vocabulário**
+  contra o texto decodificado — `%2e%2e%2f`, `..%5C`, `union+select`,
+  `%3Cscript`, tautologia form-encoded passam a casar. O matcher usa um
+  buffer circular do tamanho da agulha (`wafDecodedContains`): nada de
+  reconstruir a string, que em Kof é O(n²) e custaria segundos por corpo de
+  64 KiB. `+` vira espaço só em query/corpo (form-encoding real); no valor de
+  header só `%NN`. Decodifica **uma** vez de propósito: `%252e` vira `%2e`,
+  não `.` — cadeia até estabilizar vira falso positivo e esconde o custo.
+  Prova: `tests/waf_detect_test.kf` (`wafencoded-unit` + e2e `wafenforce`
+  estendido: traversal/`union+select` encoded dão 403 antes do relay, query
+  legítima com `+` e UTF-8 percent seguem 200) + `wafdetect-unit`,
+  `wafdetect`, `wafbody-unit`, `wafdetect-body`, `wafheader-unit`.
 * **Slice 2a — teto de corpo por requisição ✅.** `kofcloud.limits.httpBodyBytes`
   (default 1 MiB); o Edge recusa antes do relay quando o `Content-Length`
   declarado passa → `413 KCF110` + métrica `_body_too_large`. Não consome

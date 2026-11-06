@@ -70,7 +70,7 @@ o run total imprime `43 passed, 0 failed`. Falha = nome do teste + assert
 | e2e autenticado | `tests/e2e_authenticated_test.kf` | 1 |
 | eventos do agent | `tests/agent_events_test.kf` | 6 |
 | teto de corpo (WAF) | `tests/waf_body_test.kf` | 2 |
-| detectar WAF + corpo + headers + allowlist (matcher) | `tests/waf_detect_test.kf` | 7 |
+| detectar WAF + corpo + headers + encoded + allowlist (matcher) | `tests/waf_detect_test.kf` | 8 |
 | timeout de upstream (WAF) | `tests/waf_timeout_test.kf` | 2 |
 | allowlist WAF (Fase 10 slice 3) | `tests/waf_allow_test.kf` | 4 |
 | painel somente-leitura | `tests/panel_test.kf` | 3 |
@@ -87,7 +87,7 @@ o run total imprime `43 passed, 0 failed`. Falha = nome do teste + assert
 | painel de gestão completa (F12 s2) | `tests/panel_actions_test.kf` | 2 |
 | ranking de Edges (F14 s2) | `tests/edge_select_test.kf` | 5 |
 
-Total: 247 testes. Ver `15-tests.md` para a matriz.
+Total: 248 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

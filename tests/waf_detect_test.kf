@@ -35,6 +35,37 @@ test "waf detectar: assinaturas puras por padrao", "wafdetect-unit" {
     assert(errHint(errWafDenied()).length > 0, "tem Hint")
 }
 
+test "waf detectar: payload percent/form-encoded vira assinatura", "wafencoded-unit" {
+    // O buraco documentado em 17-limitations: as assinaturas eram literais,
+    // entao `%2e%2e%2f` e `union+select` passavam. Uma passada de decode
+    // bounded resolve os scanners reais sem varrer bytes por byte.
+    assert(wafDetectSignature("GET", "/x/%2e%2e%2f%2e%2e%2fetc/passwd") == "traversal", "traversal %2e%2e%2f")
+    assert(wafDetectSignature("GET", "/x/..%5C..%5Cwin") == "traversal", "traversal %5C (backslash decodificado)")
+    assert(wafDetectSignature("GET", "/search?q=union+select+pw") == "sqli-union", "union+select em query")
+    assert(wafDetectSignature("GET", "/q=%3Cscript%3Ealert(1)") == "xss-script", "xss %3C decodificado")
+    assert(wafDetectSignature("GET", "/login?u=x%27+OR+1%3D1--") == "sqli-tautology", "tautologia form-encoded")
+    assert(wafDetectBodySignature("q=%2e%2e%2f%2e%2e%2fetc%2fpasswd") == "traversal", "traversal no corpo")
+    assert(wafDetectBodySignature("u=union+select+1") == "sqli-union", "union+select no corpo")
+    // Hexaceimal invalido fica como esta: nao inventa ataque nem quebra.
+    assert(wafDetectSignature("GET", "/x/%zz%2") == "", "escape invalido nao casa")
+    assert(wafDetectSignature("GET", "/x/%2541") == "", "percent literal (%25) nao abre cadeia")
+    // Uma passada so: dupla codificacao NAO e desfeita em cadeia (sem
+    // falso positivo caro e sem custo recursivo).
+    assert(wafDetectSignature("GET", "/x/%252e%252e%252f") == "", "dupla codificacao nao decodifica em cadeia")
+    // Legitimo com encoding continua limpo: espaco, acento e `+` de query.
+    assert(wafDetectSignature("GET", "/search?q=nota+fiscal") == "", "query legitima com +")
+    assert(wafDetectSignature("GET", "/busca?q=caf%C3%A9") == "", "utf-8 percent legitimo")
+    assert(wafDetectSignature("GET", "/api/users?page=2") == "", "query numerica")
+    // Decoder puro: bordas de buffer circular (padrao no inicio/fim/atravessa).
+    assert(wafDecodedContains("ab%20cd", "ab cd", false) == true, "match atravessando o ring")
+    assert(wafDecodedContains("%2e%2e%2f", "../", false) == true, "match exato no inicio")
+    assert(wafDecodedContains("x%2e%2e%2f", "../", false) == true, "match no fim")
+    assert(wafDecodedContains("abc", "../", false) == false, "sem match")
+    assert(wafDecodedContains("a+b", "a b", true) == true, "+ vira espaco quando ligado")
+    assert(wafDecodedContains("a+b", "a b", false) == false, "+ literal quando desligado")
+    assert(wafHexValue('f' as Char) == 15 && wafHexValue('A' as Char) == 10 && wafHexValue('g' as Char) == -1, "hex")
+}
+
 test "waf allowlist: matcher puro de metodos e paths", "wafallow-unit" {
     // Listas vazias = sem restricao (servico legado passa tudo).
     assert(wafAllowCheck("GET", "/", listOf<String>(), listOf<String>()) == true, "vazio libera")
@@ -259,6 +290,23 @@ test "waf enforce: ataque vira 403 KCF109 sem tocar no relay; legitimo passa", "
     // Header legitimo segue passando com enforce ligado.
     assert(statusOf(httpGetRawHeaders(httpPort, "/", host, listOf<String>("User-Agent: Mozilla/5.0"))) == 200, "header legitimo passa no enforce")
 
+    // Payload percent/form-encoded (o buraco das assinaturas literais):
+    // bloqueado antes do relay, como o cru. O local continua sem ver nada.
+    var seenBeforeEncoded = reached[0]
+    var encoded = httpGetRaw(httpPort, "/api?q=%2e%2e%2f%2e%2e%2fetc%2fpasswd", host)
+    assert(statusOf(encoded) == 403, "enforce bloqueia traversal percent")
+    assert(bodyOf(encoded).indexOf("KCF109") >= 0, "KCF109 no encoded")
+    assert(responseHeader(encoded, "X-KofCloud-WAF") == "blocked", "encoded marcado blocked")
+    assert(reached[0] == seenBeforeEncoded, "payload encoded nao chegou ao local")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total_traversal") >= 2, "traversal encoded contado")
+    var encodedSqli = httpGetRaw(httpPort, "/api?q=union+select+pw", host)
+    assert(statusOf(encodedSqli) == 403, "enforce bloqueia union+select")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total_sqli_union") >= 1, "union encoded contado")
+    // Encoding legitimo continua passando (senao o WAF quebraria busca real).
+    assert(bodyOf(httpGetRaw(httpPort, "/busca?q=nota+fiscal", host)) == "svc-detect", "query legitima com + passa")
+    assert(bodyOf(httpGetRaw(httpPort, "/busca?q=caf%C3%A9", host)) == "svc-detect", "utf-8 percent legitimo passa")
+    assert(statusOf(httpGetRawHeaders(httpPort, "/", host, listOf<String>("Referer: https://x/?a=1%2Fb"))) == 200, "percent legado no header passa")
+
     // Parada limpa.
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
@@ -386,6 +434,20 @@ test "waf detectar: valores de header completam a cobertura", "wafheader-unit" {
     var malformed = listOf<String>()
     malformed.add("sem-dois-pontos UNION SELECT")
     assert(wafDetectHeadersSignature(malformed) == "", "linha malformada ignorada")
+
+    // Percent-encoding no valor: decodifica UMA passada para o mesmo
+    // vocabulario. `+` NAO vira espaco em header (isso e form-encoding de
+    // query/corpo) — so `%NN`.
+    var encodedHeader = listOf<String>()
+    encodedHeader.add("Referer: http://x/%2e%2e%2f%2e%2e%2fetc/passwd")
+    assert(wafDetectHeadersSignature(encodedHeader) == "traversal", "traversal percent no header")
+    var encodedAgent = listOf<String>()
+    encodedAgent.add("User-Agent: probe%3Cscript%3Ealert(1)")
+    assert(wafDetectHeadersSignature(encodedAgent) == "xss-script", "xss percent no header")
+    // `+` literal no header nao vira espaco: "union+select" continua limpo.
+    var plusHeader = listOf<String>()
+    plusHeader.add("X-Plus: union+select")
+    assert(wafDetectHeadersSignature(plusHeader) == "", "header nao trata + como espaco")
 }
 
 test "waf detectar: corpo pequeno tambem e inspecionado", "wafbody-unit" {
