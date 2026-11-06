@@ -109,6 +109,14 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   a menos. Contadores internos usam `Map<String, String>` porque
   `Map<String, Int>` como campo de classe quebra o verificador JVM
   (VerifyError medido; sem issue aberta no Kof ainda).
+* **A expiração de `kfs_` é preguiçosa — e o incidente também.** Credencial
+  vencida só é podada quando alguma validação de token passa por
+  `serviceByServiceToken` (o que acontece a cada request AUTHENTICATED no
+  Edge, mas não em conta ociosa). Numa conta sem tráfego, credenciais vencidas
+  acumulam no estado sem sinal até a próxima validação; o detector de
+  expiração em massa herda a mesma janela (não há varredura periódica no
+  control plane). Os incidentes são efêmeros no processo: reiniciar o control
+  plane zera as sondas (o incidente já aberto fica no arquivo de estado).
 * **Throughput de payloads grandes é limitado por `bytesToString` O(n²).**
   Medido: ~1 s para 100 KiB em `bytesToBase64`; 1 MiB levaria ~100 s. Por isso
   o envio é fatiado em blocos de 16 KiB (custo total linear no tamanho do

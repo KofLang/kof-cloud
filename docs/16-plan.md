@@ -652,10 +652,24 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   janela em `util/Limits.kf` (`kofcloud.limits.edgeIdleTimeoutThreshold/
   WindowMs`, recuo seguro). Prova: `incident-idle` (puro: limiar, isolada
   não abre, sondas independentes, janela vencida) e `idle-e2e` estendido (o
-  sweeper real derruba a sessão e abre o global). **Pendentes:** pico de
-  429 por hostname (o rate limit já conta por hostname, mas abrir incidente
-  por hostname violaria a regra de não ter cardinalidade por cliente) e
-  expiração em massa de `kfs_`.
+  sweeper real derruba a sessão e abre o global).
+
+  **Implementado (expiração em massa de `kfs_`):** a varredura preguiçosa de
+  `Registry.serviceByServiceToken` (que já podava credencial vencida) passou
+  a atribuir cada vencimento à conta dona e a alimentar uma sonda por conta
+  (`expiryProbes`, janela deslizante em memória — não persistida, como
+  `edgeOnline`): ≥3 vencidas na janela (300 s) abrem `mass_token_expiry`
+  (WARN, escopo da conta). Vencimento isolado é o fluxo normal da rotação por
+  TTL; vários juntos significam rotação quebrada (TTL curto sem re-emissão)
+  ou estado adulterado. A varredura roda **depois** da poda para o incidente
+  nunca atrasar a autenticação que veio antes; o resumo não carrega token,
+  serviço nem hostname. Limiar/janela em `util/Limits.kf`
+  (`kofcloud.limits.massTokenExpiryThreshold/WindowMs`, recuo seguro).
+  Prova: `incident-expiry` (puro: limiar, janela vencida, contas isoladas) e
+  `incident-expiry-sweep` (varredura real: atribuição à conta certa, sem
+  misturar contas). **Pendente (deliberadamente):** pico de 429 por hostname
+  — o rate limit já conta por hostname, mas abrir incidente por hostname
+  violaria a regra de não ter cardinalidade por cliente.
 
 * **Slice 2 — contenção em um comando.** `kof cloud freeze <alvo>`
   (conta|device|service|edge): congela tudo do alvo (suspend + revoga

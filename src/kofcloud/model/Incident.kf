@@ -54,6 +54,15 @@ String incidentEdgeIdleTimeouts() {
     return "edge_idle_timeouts"
 }
 
+// Expiracao em massa de `kfs_` (por conta): varias credenciais vencidas na
+// mesma janela. Um vencimento isolado e rotina; varios juntos significam
+// rotacao mal planejada (TTL curto sem re-emissao) ou relogio/estado
+// adulterado — e o servico cai para cliente legitimo sem ninguem ter mexido.
+// A varredura preguicosa ja poda a cada validacao; aqui ela alimenta a sonda.
+String incidentMassTokenExpiry() {
+    return "mass_token_expiry"
+}
+
 // Contencao (slice 2): o incidente registra o alvo congelado.
 String incidentFreezeService() {
     return "freeze_service"
@@ -78,6 +87,9 @@ String incidentSeverityFor(String kind) {
     if (kind == incidentEdgeIdleTimeouts()) {
         return severityWarn()
     }
+    if (kind == incidentMassTokenExpiry()) {
+        return severityWarn()
+    }
     if (kind == incidentFreezeService() || kind == incidentFreezeDevice() || kind == incidentFreezeAccount()) {
         return severityWarn()
     }
@@ -100,6 +112,9 @@ String incidentSummaryFor(String kind) {
     }
     if (kind == incidentEdgeIdleTimeouts()) {
         return "many idle tunnel sessions dropped at the edge in a short window"
+    }
+    if (kind == incidentMassTokenExpiry()) {
+        return "many service credentials expired in a short window"
     }
     if (kind == incidentFreezeService()) {
         return "service frozen for incident containment"

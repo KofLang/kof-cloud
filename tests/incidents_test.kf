@@ -6,6 +6,7 @@ import kofcloud.model.Incident
 import kofcloud.edge.EdgeState
 import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
+import kofcloud.identity.Tokens
 import kofcloud.store.Store
 import kofcloud.util.Limits
 import testkit.Support
@@ -57,6 +58,12 @@ test "incidentes: severidade e resumo por sinal", "incident-unit" {
     assert(edgeIdleTimeoutWindowMs() == limitEdgeIdleTimeoutWindowMs(), "janela de ociosidade delega na fonte")
     assert(incidentEdgeIdleTimeouts() != incidentEdgeRefusals(), "ociosidade separada das recusas")
     assert(incidentEdgeIdleTimeouts() != incidentEdgeAuthFailures(), "ociosidade separada do 401")
+    // Expiracao em massa de kfs_: detector por conta, nao por Edge. Limiar e
+    // janela proprios (um vencimento isolado e rotina da rotacao por TTL).
+    assert(incidentSeverityFor(incidentMassTokenExpiry()) == "WARN", "expiracao em massa e WARN")
+    assert(incidentSummaryFor(incidentMassTokenExpiry()).length > 0, "resumo da expiracao presente")
+    assert(limitMassTokenExpiryThreshold() == 3, "limiar de expiracao travado")
+    assert(limitMassTokenExpiryWindowMs() == 300000, "janela de expiracao travada")
     assert(errIncidentNotFound().indexOf("KCF125") >= 0, "codigo KCF125")
     assert(errHint(errIncidentNotFound()).length > 0, "Hint presente")
 }
@@ -264,6 +271,100 @@ test "incidentes: quedas por ociosidade no Edge abrem incidente próprio", "inci
     stale.idleTimeoutProbe.windowStart = time.now() - edgeIdleTimeoutWindowMs() - 1000
     noteEdgeIdleTimeoutIncident(stale)
     assert(stale.registry.allIncidents().size == 0, "janela vencida reseta antes de contar")
+}
+
+// Expiracao em massa de kfs_ (Fase 17 slice 1, ultimo sinal do desenho):
+// a varredura preguicosa que poda credencial vencida alimenta a sonda da
+// CONTA dona. Vencimento isolado e rotina da rotacao por TTL; varios na
+// janela significam rotacao quebrada ou estado adulterado.
+test "incidentes: expiração em massa de kfs_ abre incidente da conta", "incident-expiry" {
+    // Sinal e limites travados na fonte unica.
+    assert(incidentSeverityFor(incidentMassTokenExpiry()) == "WARN", "expiracao em massa e WARN")
+    assert(incidentSummaryFor(incidentMassTokenExpiry()).length > 0, "resumo presente")
+    assert(limitMassTokenExpiryThreshold() == 3, "limiar de expiracao travado")
+    assert(limitMassTokenExpiryWindowMs() == 300000, "janela de expiracao travada")
+    assert(incidentMassTokenExpiry() != incidentBulkTokenRevokes(), "sinal distinto do revoke em lote")
+    assert(incidentSummaryFor(incidentMassTokenExpiry()) != incidentSummaryFor(incidentBulkTokenRevokes()), "resumos distintos")
+
+    // Detector puro: abaixo do limiar nao abre; no limiar abre; idempotente.
+    var registry = Registry(incidentsPath("expiry"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    assert(registry.detectMassTokenExpiry(mel.id, time.now(), 1) == null, "uma vencida nao abre")
+    assert(registry.allIncidents().size == 0, "nada aberto ainda")
+    assert(registry.detectMassTokenExpiry(mel.id, time.now(), 1) == null, "duas vencidas nao abrem")
+    var opened = registry.detectMassTokenExpiry(mel.id, time.now(), 1)
+    assert(opened != null, "terceira fecha o limiar")
+    if (opened != null) {
+        assert(opened.kind == incidentMassTokenExpiry(), "sinal da expiracao")
+        assert(opened.accountId == mel.id, "escopo da conta dona")
+        assert(opened.severity == "WARN", "WARN")
+        assert(opened.summary.indexOf("kfs_") < 0, "sem credencial no resumo")
+        assert(opened.summary.indexOf("mel") < 0, "sem handle no resumo")
+    }
+    var again = registry.detectMassTokenExpiry(mel.id, time.now(), 1)
+    assert(again == null, "acima do limiar nao duplica")
+    assert(registry.incidentsForAccount(mel.id, true).size == 1, "um incidente so")
+
+    // Janela vencida reseta: nao carrega contagem antiga para a proxima.
+    var stale = Registry(incidentsPath("expiry2"))
+    var ana = stale.createAccount("ana", "a@e.com", "segredo")
+    stale.detectMassTokenExpiry(ana.id, time.now() - limitMassTokenExpiryWindowMs() - 1000, 2)
+    assert(stale.allIncidents().size == 0, "janela vencida nao soma")
+    assert(stale.detectMassTokenExpiry(ana.id, time.now(), 2) == null, "2 apos reset ainda nao abre")
+    assert(stale.detectMassTokenExpiry(ana.id, time.now(), 1) != null, "3 apos reset abre")
+
+    // Contas isoladas: uma conta vencendo nao conta para outra.
+    var both = Registry(incidentsPath("expiry3"))
+    var um = both.createAccount("uma", "uma@e.com", "segredo")
+    var dois = both.createAccount("duas", "duas@e.com", "segredo")
+    both.detectMassTokenExpiry(um.id, time.now(), 2)
+    assert(both.detectMassTokenExpiry(dois.id, time.now(), 1) == null, "sondas por conta sao separadas")
+    assert(both.allIncidents().size == 0, "nada aberto com 2+1 em contas diferentes")
+}
+
+// Caminho REAL: a varredura preguicosa de `serviceByServiceToken` e quem
+// descobre o vencimento; ela tem que atribuir a conta dona e abrir o
+// incidente dela — nao do vizinho, e sem carregar token nem servico.
+test "incidentes: varredura preguicosa de kfs_ abre o incidente da conta certa", "incident-expiry-sweep" {
+    var registry = Registry(incidentsPath("expirysw"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var ana = registry.createAccount("ana", "a@e.com", "segredo")
+    var melDev = registry.registerDevice(mel, "nb", "pk")
+    var anaDev = registry.registerDevice(ana, "nb", "pk")
+    var melSvc = registry.publishService(mel, melDev.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
+    var anaSvc = registry.publishService(ana, anaDev.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
+
+    // Duas credenciais vencidas de mel e uma de ana, construidas no passado
+    // (sem dormir TTL). Hash so — o valor em claro nunca e persistido.
+    var past = time.now() - 1000
+    var stale = time.now() - 1
+    registry.serviceTokens.add(ServiceToken(melSvc.id, mel.id, tokenHash("kfs_mel_1"), past, stale))
+    registry.serviceTokens.add(ServiceToken(melSvc.id, mel.id, tokenHash("kfs_mel_2"), past, stale))
+    registry.serviceTokens.add(ServiceToken(anaSvc.id, ana.id, tokenHash("kfs_ana_1"), past, stale))
+
+    // Qualquer validacao dispara a varredura. Um token inexistente ja basta.
+    assert(registry.serviceByServiceToken("kfs_nao_existe") == null, "token invalido nao resolve")
+    // mel tem 2 vencidas na janela: abaixo do limiar (3), nada abre.
+    assert(registry.allIncidents().size == 0, "duas vencidas de mel nao abrem")
+    assert(registry.incidentsForAccount(ana.id, false).size == 0, "uma vencida de ana nao abre")
+
+    // Mais uma credencial vencida de mel: a proxima varredura fecha o limiar.
+    registry.serviceTokens.add(ServiceToken(melSvc.id, mel.id, tokenHash("kfs_mel_3"), past, stale))
+    assert(registry.serviceByServiceToken("kfs_nao_existe") == null, "varredura roda de novo")
+    var melIncidents = registry.incidentsForAccount(mel.id, false)
+    assert(melIncidents.size == 1, "terceira vencida de mel abre o incidente da conta")
+    if (melIncidents.size == 1) {
+        assert(melIncidents.get(0).kind == incidentMassTokenExpiry(), "sinal certo")
+        assert(melIncidents.get(0).severity == "WARN", "WARN")
+        // Privacidade: nem servico, nem token, nem hostname no sinal.
+        assert(melIncidents.get(0).summary.indexOf("kfs_") < 0, "sem credencial")
+        assert(melIncidents.get(0).summary.indexOf("site") < 0, "sem nome de servico")
+    }
+    // Ana continua sem incidente: a sonda nao misturou contas.
+    assert(registry.incidentsForAccount(ana.id, false).size == 0, "ana nao herda o incidente de mel")
+
+    // A poda levou as 4 vencidas; as validas (nenhuma aqui) ficariam.
+    assert(registry.serviceTokens.size == 0, "todas as vencidas podadas")
 }
 
 // E2E do caminho real: um servico AUTHENTICATED publicado, token errado

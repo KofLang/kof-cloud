@@ -53,6 +53,11 @@ class Registry {
     // escreve aqui (via bind/unbind); o control plane so le, filtrado por
     // conta. Em deploy multi-processo cada Edge tem o seu mapa.
     Map<String, Bool> edgeOnline
+    // Sondas de expiracao em massa (por conta, Fase 17 slice 1): janela
+    // deslizante em memoria, nao persistida (o padrao e efemero, como
+    // `edgeOnline`). Valor `"<count>;<windowStartMs>"` porque
+    // `Map<String, Int>` como campo de classe quebra o verificador JVM (L11).
+    Map<String, String> expiryProbes
 
     constructor(path: String) {
         this.path = path
@@ -67,6 +72,7 @@ class Registry {
         this.webhooks = listOf<WebhookConfig>()
         this.freezeMarks = mapOf()
         this.edgeOnline = mapOf()
+        this.expiryProbes = mapOf()
         this.maxDevices = limitDevices()
         this.maxServices = limitServices()
         this.edgeHosts = parseEdgeHosts(config.str("kofcloud.edgeHosts", ""))
@@ -288,6 +294,46 @@ class Registry {
             }
         }
         return count
+    }
+
+    // Detector de expiracao em massa de `kfs_` (por conta, Fase 17 slice 1).
+    // Mesma ideia das sondas do Edge: conta quantas credenciais da conta
+    // venceram DENTRO da janela e abre o incidente quando o limiar fecha.
+    // Expiracao isolada e o fluxo normal da rotacao por TTL; varias juntas
+    // significam planejamento quebrado (TTL curto sem re-emissao) ou estado
+    // adulterado — nesse caso o servico cai para cliente legitimo sem acao
+    // do operador. O incidente e da conta porque o dano e da conta; nao
+    // carrega servico, token nem valor (regra de privacidade).
+    // `expiredCount` e o lote vencido desta varredura (uma varredura pode
+    // achar varias de uma vez, entao nao da para somar 1 por vez). O
+    // incidente so abre quando o total na janela ALCANCA o limiar; aberto
+    // ele fica idempotente (`raiseIncident` deduplica por sinal+conta).
+    Incident? detectMassTokenExpiry(String accountId, Long nowMs, Int expiredCount) {
+        if (accountId.length == 0 || expiredCount <= 0) {
+            return null
+        }
+        var count = 0
+        var windowStart = nowMs
+        var saved = this.expiryProbes.get(accountId)
+        if (saved != null) {
+            // Separador `;`: `split` do stdlib trata o argumento como regex e
+            // `|` seria alternancia vazia (sempre zero partes). `;` e literal.
+            var parts = saved.split(";")
+            if (parts.length == 2) {
+                count = parseIntSafe(parts[0], 0)
+                windowStart = parseLongSafe(parts[1], nowMs)
+            }
+        }
+        if (nowMs - windowStart > limitMassTokenExpiryWindowMs()) {
+            count = 0
+            windowStart = nowMs
+        }
+        count = count + expiredCount
+        this.expiryProbes.put(accountId, intToString(count) + ";" + longToString(windowStart))
+        if (count >= limitMassTokenExpiryThreshold()) {
+            return this.raiseIncident(incidentMassTokenExpiry(), accountId)
+        }
+        return null
     }
 
     // Detector de revogacao em lote (por conta, idempotente). Devolve o
@@ -594,11 +640,18 @@ class Registry {
         }
         var now = time.now()
         var kept = listOf<ServiceToken>()
-        var expired = 0
+        // Guarda as vencidas (tipado) para atribuir por conta depois da poda.
+        // Mapa local nao serve: `mapOf()` sem tipo devolve `Object` no `get` e
+        // o verificador JVM recusa (VerifyError medido).
+        var expiredEntries = listOf<ServiceToken>()
+        var expiredAccounts = listOf<String>()
         var matchedServiceId = ""
         for (var entry in this.serviceTokens) {
             if (serviceTokenExpired(entry, now)) {
-                expired = expired + 1
+                expiredEntries.add(entry)
+                if (expiredAccounts.contains(entry.accountId) == false) {
+                    expiredAccounts.add(entry.accountId)
+                }
                 continue
             }
             kept.add(entry)
@@ -611,9 +664,22 @@ class Registry {
             this.save()
         }
         var i = 0
-        while (i < expired) {
+        while (i < expiredEntries.size) {
             noteServiceTokenExpired()
             i = i + 1
+        }
+        // Sinal de expiracao em massa (Fase 17 slice 1): cada varredura que
+        // podou credencial alimenta a sonda da CONTA dona — varias vencendo
+        // na janela e rotacao quebrada, nao rotina. Roda depois da poda para
+        // o incidente nunca atrasar a autenticacao que veio antes.
+        for (var owner in expiredAccounts) {
+            var tally = 0
+            for (var gone in expiredEntries) {
+                if (gone.accountId == owner) {
+                    tally = tally + 1
+                }
+            }
+            this.detectMassTokenExpiry(owner, now, tally)
         }
         if (matchedServiceId.length == 0) {
             return null

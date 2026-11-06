@@ -320,3 +320,28 @@ Long limitBulkRevokeWindowMs() {
     }
     return window
 }
+
+// Limiar do detector de expiracao em massa de `kfs_` (por conta, Fase 17
+// slice 1): quantas credenciais VENCIDAS na janela abrem o incidente. Um
+// vencimento isolado e rotina (a rotacao por TTL faz isso de proposito);
+// varios juntos significam rotacao mal planejada ou estado adulterado.
+// Fonte unica do `Registry.detectMassTokenExpiry` — recuo seguro: zerado/
+// negativo recai no default (limiar desligado nunca abriria o incidente).
+Int limitMassTokenExpiryThreshold() {
+    var threshold = config.int("kofcloud.limits.massTokenExpiryThreshold", 3)
+    if (threshold <= 0) {
+        threshold = 3
+    }
+    return threshold
+}
+
+// Janela do detector de expiracao em massa (ms). Fonte unica do mesmo
+// chamador; a janela viaja como `Long` ate a varredura porque `time.now()`
+// e `Long`. Recuo seguro: zerada/negativa recai no default.
+Long limitMassTokenExpiryWindowMs() {
+    var window = config.int("kofcloud.limits.massTokenExpiryWindowMs", 300000)
+    if (window <= 0) {
+        window = 300000
+    }
+    return window
+}
