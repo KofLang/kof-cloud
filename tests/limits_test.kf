@@ -1,5 +1,8 @@
 import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.Tunnel
 import kofcloud.protocol.Session
+import kofcloud.util.Limits
 
 // Limites por dispositivo: dispositivos ativos por conta, servicos por
 // dispositivo e streams simultaneos por tunel (Fase 4).
@@ -92,4 +95,35 @@ test "session: limite de streams simultaneos e libera ao fechar" {
     session.closeStream(a)
     assert(session.atCapacity() == false, "vaga liberada")
     assert(session.openStream().length > 0, "abre apos liberar")
+}
+
+test "rate limit: a janela em ms vira SEGUNDOS para o stdlib", "ratelimit-unit" {
+    // O bug real que esta trava protege: `security.rateLimit` recebe a janela
+    // em SEGUNDOS (medido com o CLI 0.6.3: janela 1 libera em ~1 s; janela
+    // 1000 segue barrada apos 1,3 s). O Edge passava `httpWindowMs` direto,
+    // entao os 60 s default viravam 60.000 s de bloqueio por hostname — e
+    // 101 requisicoes bastavam para causar isso.
+    assert(httpWindowSeconds(60000) == 60, "60 s default em segundos")
+    assert(httpWindowSeconds(1000) == 1, "1 s")
+    assert(httpWindowSeconds(1500) == 2, "arredonda para cima (nunca recusa menos)")
+    assert(httpWindowSeconds(1) == 1, "janela de 1 ms vira 1 s, nunca 0")
+    // Zerada/negativa recai no default do Retry-After (janela <= 0 no
+    // stdlib devolve false e bloquearia tudo para sempre).
+    assert(httpWindowSeconds(0) == limitHttpRetryAfterSec(), "zero recai no default")
+    assert(httpWindowSeconds(-5) == limitHttpRetryAfterSec(), "negativo recai no default")
+    // O recuo anunciado acompanha a conversao: nunca menor que a espera real.
+    var state = EdgeState(Registry("/tmp/kofcloud-rlunit-" + crypto.randomHex(4) + ".json"))
+    state.setHttpLimits(3, 60000)
+    assert(state.httpRetryAfterSec() == 61, "janela 60 s -> Retry-After 61 s")
+    state.setHttpLimits(3, 1500)
+    assert(state.httpRetryAfterSec() == 3, "janela 1,5 s -> 2 s de janela, Retry-After 3 s")
+
+    // Prova fim a fim do comportamento (nao so da conversao): cota 1 numa
+    // janela de 1 s realmente libera depois de ~1 s. Sem a conversao este
+    // teste ficaria barrado por ~16 minutos.
+    var key = "kofcloud-rlunit-probe-" + crypto.randomHex(4)
+    assert(security.rateLimit(key, 1, httpWindowSeconds(1000)) == true, "primeira passa")
+    assert(security.rateLimit(key, 1, httpWindowSeconds(1000)) == false, "segunda barra")
+    time.sleep(1200)
+    assert(security.rateLimit(key, 1, httpWindowSeconds(1000)) == true, "libera apos a janela")
 }

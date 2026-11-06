@@ -173,7 +173,9 @@ WAF, timeout de upstream, allowlist WAF, painel somente-leitura, rotação de kf
   reconnects, health e streams no próprio processo; nenhuma métrica carrega
   hostname, corpo, credencial ou chave.
 * Abuse prevention: rate limit por hostname no Edge (100 req/60 s,
-  configurável) — excedeu, `429 KCF107` + `Retry-After` antes de rotear,
+  configurável em `httpRequests`/`httpWindowMs`; a janela configurada em ms
+  chega ao stdlib em segundos por um ponto único, `Limits.httpWindowSeconds`)
+  — excedeu, `429 KCF107` + `Retry-After` antes de rotear,
   sem revelar se o host existe e sem consumir o túnel; suspensão reversível
   de serviço/dispositivo (`SUSPENDED`, opaco) + trilha de auditoria
   (`kof cloud audit`, anel de 100 eventos só com metadados).

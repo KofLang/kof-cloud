@@ -127,6 +127,35 @@ Int limitHttpRetryAfterSec() {
     return config.int("kofcloud.limits.httpRetryAfterSec", 60)
 }
 
+// Converte a janela do rate limit de milissegundos (a unidade da config e do
+// `Retry-After`) para SEGUNDOS, que e a unidade de `security.rateLimit`.
+// Fonte unica: antes o Edge passava `httpWindowMs` direto, e o default de
+// 60000 ms virava uma janela de 60000 SEGUNDOS (~16,7 h) — um hostname que
+// batesse no limite ficava fora do ar o resto do dia, e 101 requisicoes
+// bastavam para causar isso. Medido com o CLI 0.6.3 (janela 1 volta em ~1 s;
+// janela 1000 segue barrada apos 1,3 s).
+// Arredonda para cima (nunca para baixo): janela curta demais recusaria menos
+// que o configurado. Zero/negativo recai no default em segundos, pela mesma
+// regra de recuo do `Retry-After` — `security.rateLimit` com janela <= 0
+// devolve false e bloqueia tudo para sempre.
+Int httpWindowSeconds(Int windowMs) {
+    if (windowMs <= 0) {
+        var fallback = limitHttpRetryAfterSec()
+        if (fallback <= 0) {
+            fallback = 60
+        }
+        return fallback
+    }
+    var seconds = windowMs / 1000
+    if (windowMs % 1000 > 0) {
+        seconds = seconds + 1
+    }
+    if (seconds <= 0) {
+        seconds = 1
+    }
+    return seconds
+}
+
 // Conexoes publicas simultaneas EM RELAY por servico (o recurso caro: tunel
 // + servico local). Excedeu -> 429 KCF108 com Retry-After, ANTES de abrir
 // stream. Contagem aproximada sob corrida extrema (check-then-act sem lock;

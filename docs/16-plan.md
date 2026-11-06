@@ -185,7 +185,13 @@ lento, liberação, isolamento, métrica, Hint).
 consome túnel). Chave = hostname (o Edge TCP não expõe IP de origem).
 Métrica `_rate_limited`, `Hint:` sem dado de cliente. Prova:
 `tests/ratelimit_test.kf` (2 testes: 4o pedido → 429 com/sem túnel, cota
-isolada por hostname, Retry-After, métrica, Hint).
+isolada por hostname, Retry-After, métrica, Hint). **Janela em segundos:**
+`security.rateLimit` recebe segundos, mas a config é em ms — a conversão vive
+num ponto só (`Limits.httpWindowSeconds`, teto no arredondamento, mínimo 1 s,
+recuo para o default em valor inválido) e o `Retry-After` deriva dela. Antes
+a janela ia em ms direto: o default de 60 s virava 60.000 s (~16,7 h) de
+bloqueio por hostname, e 101 pedidos bastavam para tirar um site do ar pelo
+resto do dia.
 
 **Estado (slice 2 — suspensão + auditoria): ✅ implementado.**
 `SUSPENDED` reversível para serviço (sai da rota, opaco como PRIVATE) e

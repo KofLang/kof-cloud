@@ -94,9 +94,35 @@ test "rate limit: quarto pedido rapido e 429 com Retry-After", "ratelimit" {
     assert(statusOf(capped) == 429, "quarto -> 429 mesmo com servico saudavel")
     assert(bodyOf(httpGetRaw(httpPort, "/", "files.mel.kofcloud.io")) == "svc-rl", "terceiro host com cota propria segue 200")
 
+    // A recusa VENCE: com janela curta (1 s) o mesmo hostname volta a passar.
+    // Sem a conversao ms->s do `httpWindowSeconds`, a janela de 1000 ms virava
+    // 1000 SEGUNDOS e este host ficaria barrado ~16 min (o default de 60 s
+    // ficava barrado ~16,7 h). O teste nao olha o canto do 429 — olha o
+    // servico voltando.
+    edgeState.setHttpLimits(3, 1000)
+    var recovered = false
+    var tries = 0
+    while (recovered == false && tries < 40) {
+        var probe = httpGetRaw(httpPort, "/", host2)
+        if (statusOf(probe) == 200) {
+            recovered = true
+        } else {
+            time.sleep(100)
+            tries = tries + 1
+        }
+    }
+    assert(recovered, "janela de 1 s libera o hostname de novo")
+    assert(tries > 0, "a recusa foi real: precisou esperar a janela")
+
+    // O recuo segue a janela em vigor: 1000 ms valem 1 s, anunciados como 2 s
+    // (arredonda para cima — o cliente que volta no Retry-After nunca cai
+    // dentro da mesma janela).
+    assert(edgeState.httpRetryAfterSec() == 2, "janela 1 s -> Retry-After 2 s")
+
     // Fonte unica: o recuo do 429 delega no Limits (default 60 s travado;
     // mutacao quebra). Janela valida deriva da janela (60 s -> 61 s);
     // janela zerada recai no default em vez de 429 sem recuo util.
+    edgeState.setHttpLimits(3, 60000)
     assert(limitHttpRetryAfterSec() == 60, "default Retry-After 60 s")
     assert(edgeState.httpRetryAfterSec() == 61, "janela 60 s deriva 61 s")
 

@@ -151,19 +151,19 @@ class EdgeState {
     // Rate limit por hostname solicitado (fixed-window do stdlib). Recusar
     // cedo: antes de rotear, autorizar ou tocar no tunel — o 429 nao revela
     // nada sobre o servico e nao consome recurso downstream.
+    // A janela vai em SEGUNDOS (unidade do stdlib, fonte unica da conversao em
+    // `httpWindowSeconds`): antes `httpWindowMs` ia direto, e o default de
+    // 60 s virava 60.000 s de bloqueio por hostname.
     Bool checkHttpLimit(String host) {
-        return security.rateLimit("kofcloud-edge-host:" + host, this.httpLimit, this.httpWindowMs)
+        return security.rateLimit("kofcloud-edge-host:" + host, this.httpLimit, httpWindowSeconds(this.httpWindowMs))
     }
 
+    // Segundos ate a janela expirar, arredondados PARA CIMA: o cliente que
+    // volta em `Retry-After` nunca bate na mesma janela por arredondamento.
+    // Janela zerada/invalida recai no default (mesma regra do
+    // `httpWindowSeconds`), senao o 429 sairia sem recuo util.
     Int httpRetryAfterSec() {
-        if (this.httpWindowMs <= 0) {
-            var fallback = limitHttpRetryAfterSec()
-            if (fallback <= 0) {
-                fallback = 60
-            }
-            return fallback
-        }
-        return this.httpWindowMs / 1000 + 1
+        return httpWindowSeconds(this.httpWindowMs) + 1
     }
 
     String newSessionId() {

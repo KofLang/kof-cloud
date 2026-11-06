@@ -24,7 +24,7 @@ as duas raízes de `kof.toml`; ver `14-modules.md` #708 e `15-tests.md`.)
 | cifra simétrica | `crypto.encryptAesGcm/decryptAesGcm` | ✅ |
 | aleatório seguro | `crypto.randomHex(n)`, `security.randomInt` | ✅ |
 | comparação segura | `security.constantTimeEquals` | ✅ |
-| rate limit | `security.rateLimit(key, limit, window)` | ✅ |
+| rate limit | `security.rateLimit(key, limit, windowSeconds)` (janela em **segundos**; limite/janela `<= 0` recusa sempre) | ✅ |
 | acordo de chaves | `keyExchange.privateKey/publicKey/shared` (X25519) | ✅ JVM |
 | KDF | `keyExchange.hkdfSha256(Secret, saltHex, infoHex, len)` | ✅ JVM |
 | assinatura | `crypto.sign/verify` (Ed25519) | ✅ JVM |

@@ -48,7 +48,7 @@ o run total imprime `46 passed, 0 failed`. Falha = nome do teste + assert
 | identidade/cifra/tokens | `tests/identity_test.kf` | 7 |
 | backoff | `tests/backoff_test.kf` | 3 |
 | registry | `tests/registry_test.kf` | 7 |
-| limites | `tests/limits_test.kf` | 6 |
+| limites | `tests/limits_test.kf` | 7 |
 | service token | `tests/service_token_test.kf` | 13 |
 | erros R6 | `tests/errors_test.kf` | 10 |
 | dominios (+ certificado x hostname) | `tests/domains_test.kf` | 11 |
@@ -90,7 +90,7 @@ o run total imprime `46 passed, 0 failed`. Falha = nome do teste + assert
 | credencial da conta com ciclo de vida (F19 s3) | `tests/account_token_test.kf` | 5 |
 | teto de resposta + cabeçalho (F14 s3 parcial) | `tests/relay_limit_test.kf` | 3 |
 
-Total: 261 testes. Ver `15-tests.md` para a matriz.
+Total: 262 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

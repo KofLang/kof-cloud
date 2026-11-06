@@ -86,7 +86,10 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   conexões simultâneas por serviço, teto de corpo de requisição
   (`httpBodyBytes`, 413) e validação de entrada (nome/porta/exposure/protocol/
   address loopback) — todos com enforcement. Ver `03-device.md` e
-  `08-multiplexing.md`.
+  `08-multiplexing.md`. **Rate limit é fixed-window por processo**: não há
+  consenso entre nós nem janela deslizante; a janela é config em ms e chega ao
+  `security.rateLimit` em segundos por `Limits.httpWindowSeconds` (arredonda
+  para cima, mínimo 1 s).
 * **WAF (Fase 10) — slices 1–3 feitos; o que não existe ainda.** Prontos: teto
   de corpo (slice 2a), timeout de upstream (slice 2b), detecção/enforce de
   assinaturas em método+path, corpo até 64 KiB e **valores de header** (slice

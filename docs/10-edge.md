@@ -67,7 +67,11 @@ segura o volume. O rate limit é por **hostname solicitado**
 (`kofcloud.limits.httpRequests` / `kofcloud.limits.httpWindowMs`, fixed-window
 do `security.rateLimit`): o Edge TCP não expõe IP de origem, e o hostname é o
 que varredura e força bruta rotacionam menos. Recusado **antes** de rotear —
-o 429 não revela se o host existe nem consome túnel.
+o 429 não revela se o host existe nem consome túnel. A janela é configurada
+em **milissegundos** e convertida para **segundos** (unidade de
+`security.rateLimit`) num único ponto, `httpWindowSeconds` — arredonda para
+cima, mínimo 1 s, e janela zerada/negativa recai no default. O `Retry-After`
+deriva da mesma conversão (+1 s), então limite e recuo não divergem.
 
 ## Por que um listener HTTP próprio
 

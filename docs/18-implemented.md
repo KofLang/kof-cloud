@@ -139,7 +139,9 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 * **Rate limit por hostname (abuse prevention, slice 1)**: 100 req/60 s por
   host (configurável), `429 KCF107` + `Retry-After` antes de rotear — não
   revela existência nem consome túnel; cota isolada por hostname; métrica
-  `_rate_limited` (`ratelimit_test.kf`).
+  `_rate_limited` (`ratelimit_test.kf`). A janela (config em ms) é convertida
+  para a unidade do stdlib (segundos) num único ponto, `httpWindowSeconds`;
+  sem isso o default de 60 s valia 60.000 s de bloqueio por hostname.
 * **Suspensão + auditoria (abuse prevention, slice 2)**: serviço `SUSPENDED`
   sai da rota (opaco), device `SUSPENDED` tem o túnel recusado com
   `DEVICE_SUSPENDED` (fatal); health/API não dessuspendem; enforcement
