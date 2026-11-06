@@ -590,13 +590,29 @@ teto de escala. Cloud robusta separa o que escala junto do que não
 escala — sem reescrever o núcleo (router + túnel + streams continuam
 iguais).
 
-**Estado: ⏳ não iniciado.** Desenho fatiado:
+**Estado: slice 1 parcial ✅ (carga explícita + migrate --dry-run); resto ⏳.** Desenho fatiado:
 
 * **Slice 1 — separar estado do processo.** Registry atrás de interface
   (hoje a classe já concentra tudo): backend arquivo (atual) → backend
   SQLite/Postgres por config. Migração com `kof cloud migrate --dry-run`
   (lê, valida, escreve, compara contagem) antes de trocar. Prova: suíte
   roda igual nos dois backends.
+
+  **Implementado (parte sem banco):** a carga do estado passou a ser
+  **explícita** — `Registry.loadStatus` = `ok` | `absent` | `corrupt`, e o
+  `serve` anuncia em voz alta quando o arquivo existe mas não decodifica
+  (antes virava control plane vazio em silêncio, com a conta "sumida" sem
+  aviso). A validação de forma é explícita (`looksLikeControlState`): o
+  `json.decode` aceita chaves extras e devolve listas vazias, então um JSON
+  qualquer "decodificava" como estado vazio. `kof cloud migrate --from
+  <estado.json> [--to <destino>] [--dry-run]` lê, valida, compara contagens
+  por lista (`StateCounts`/`diffCounts`, puros) e só escreve sem `--dry-run`;
+  origem ilegível é recusada com exit 1 e nada é escrito. Prova:
+  `tests/migrate_test.kf` (5). `kof cloud state-backup [--file <estado>]`
+  preserva o arquivo em disco ao lado (`.bak-<ms>`) antes de qualquer troca
+  de backend, e recusa origem ilegível/ausente em vez de copiar lixo.
+  **Pendente:** backend SQLite/Postgres atrás de
+  interface (o `kof.db` existe, mas o desenho pede a interface primeiro).
 * **Slice 2 — Edge horizontal.** N Edges atrás de qualquercast/DNS-round-
   robin; presença vira pub/sub entre Edges (o `/v1/presence` agrega, com
   TTL curto por entrada); rate limit passa a janela deslizante em store

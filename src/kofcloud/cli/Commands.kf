@@ -13,6 +13,7 @@ import kofcloud.model.Device
 import kofcloud.model.Errors
 import kofcloud.model.Exposure
 import kofcloud.model.Service
+import kofcloud.model.StateCopy
 import kofcloud.util.Hosts
 import kofcloud.util.Limits
 import kofcloud.util.Text
@@ -237,7 +238,7 @@ Bool extraPositional(List<String> args, Int max) {
     var i = 0
     while (i < args.size) {
         var arg = args.get(i)
-        if (arg == "--port" || arg == "--address" || arg == "--exposure" || arg == "--device" || arg == "--ttl" || arg == "--tail" || arg == "--control" || arg == "--control-port" || arg == "--tunnel-port" || arg == "--http-port" || arg == "--state" || arg == "--waf" || arg == "--tls-cert" || arg == "--tls-key" || arg == "--service" || arg == "--file" || arg == "--password") {
+        if (arg == "--port" || arg == "--address" || arg == "--exposure" || arg == "--device" || arg == "--ttl" || arg == "--tail" || arg == "--control" || arg == "--control-port" || arg == "--tunnel-port" || arg == "--http-port" || arg == "--state" || arg == "--waf" || arg == "--tls-cert" || arg == "--tls-key" || arg == "--service" || arg == "--file" || arg == "--password" || arg == "--from" || arg == "--to") {
             i = i + 2
             continue
         }
@@ -1686,6 +1687,109 @@ Int cmdIncidents(List<String> args) {
     }
 }
 
+// Migracao de estado (Fase 16 slice 1): `--dry-run` le a origem, valida e,
+// se houver destino, compara as contagens SEM escrever. Sem --dry-run copia
+// o arquivo validado para o destino (mesmo backend de arquivo; outros
+// backends virão com a interface de store da Fase 16).
+Int cmdMigrate(List<String> args) {
+    if (extraPositional(args, 0) || flagMissingValue(args, "--from") || flagDuplicated(args, "--from") || flagMissingValue(args, "--to") || flagDuplicated(args, "--to")) {
+        println("uso: kof cloud migrate --from <estado.json> [--to <destino.json>] [--dry-run]")
+        return 1
+    }
+    var from = flagValue(args, "--from").trim()
+    var to = flagValue(args, "--to").trim()
+    var dryRun = hasFlag(args, "--dry-run")
+    if (from.length == 0) {
+        println("uso: kof cloud migrate --from <estado.json> [--to <destino.json>] [--dry-run]")
+        return 1
+    }
+    if (fileExists(from) == false) {
+        println("origem nao encontrada: " + from)
+        return 1
+    }
+    var source = Registry(from)
+    if (source.loadStatus == "corrupt") {
+        println("origem ilegivel: " + from)
+        println("O arquivo existe mas nao decodifica como estado do control plane.")
+        println("Nada foi escrito — restaure de um backup ou corrija o JSON.")
+        return 1
+    }
+    var before = source.stateCounts()
+    println("origem: " + from + " (" + source.loadStatus + ")")
+    println("  " + countsLine(before))
+    if (to.length == 0) {
+        println("")
+        println("Nada a comparar (sem --to). Leitura e validacao OK.")
+        return 0
+    }
+    var targetCounts = before
+    if (fileExists(to)) {
+        var target = Registry(to)
+        if (target.loadStatus == "corrupt") {
+            println("destino ilegivel: " + to)
+            return 1
+        }
+        targetCounts = target.stateCounts()
+        println("destino: " + to + " (" + target.loadStatus + ")")
+        println("  " + countsLine(targetCounts))
+    } else {
+        println("destino: " + to + " (nao existe — sera criado)")
+    }
+    var diff = diffCounts(targetCounts, before)
+    if (diff.length > 0) {
+        println("")
+        println("diferencas (destino -> origem):")
+        print(diff)
+    } else {
+        println("")
+        println("contagens identicas.")
+    }
+    if (dryRun) {
+        println("")
+        println("--dry-run: nada foi escrito.")
+        return 0
+    }
+    var raw = readTextOr(from, "")
+    if (writeTextTo(to, raw) == false) {
+        println("falha ao gravar " + to)
+        return 1
+    }
+    println("")
+    println("estado copiado para " + to)
+    return 0
+}
+
+// Copia de seguranca (Fase 16 s1): preserva o estado em disco antes de
+// qualquer troca de backend. Recusa origem ilegivel — a falha e no arquivo,
+// nao no backup, e nao se copia o que nao decodifica.
+Int cmdStateBackup(List<String> args) {
+    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file")) {
+        println("uso: kof cloud state-backup [--file <estado.json>]")
+        return 1
+    }
+    var path = resolveStatePath(flagValue(args, "--file"))
+    var registry = Registry(path)
+    if (registry.loadStatus == "corrupt") {
+        println("origem ilegivel: " + path)
+        println("O arquivo existe mas nao decodifica como estado do control plane.")
+        println("Nada foi copiado — restaure de um backup ou corrija o JSON.")
+        return 1
+    }
+    if (registry.loadStatus == "absent") {
+        println("sem estado em " + path + " — nada a copiar")
+        return 1
+    }
+    var stamp = "" + longToString(time.now())
+    var backup = registry.backupStateFile(stamp)
+    if (backup == "!") {
+        println("falha ao copiar " + path)
+        return 1
+    }
+    println("backup: " + backup)
+    println("  " + countsLine(registry.stateCounts()))
+    return 0
+}
+
 Int cmdLogs(List<String> args) {
     var runtime = hasFlag(args, "--runtime")
     var path = logPath()
@@ -1985,6 +2089,11 @@ Int cmdServe(List<String> args) {
     println("kofcloud edge tunnel    -> 127.0.0.1:" + intToString(tunnelPort))
     println("kofcloud edge public    -> http://127.0.0.1:" + intToString(httpPort))
     println("estado: " + statePath)
+    if (registry.loadStatus == "corrupt") {
+        println("ATENCAO: o arquivo de estado existe mas nao pode ser lido —")
+        println("         o control plane comecou VAZIO. O arquivo nao foi sobrescrito")
+        println("         ate a primeira escrita; faca backup antes de seguir.")
+    }
     println("waf: " + wafMode)
     if (tlsPair.length > 0) {
         println("tls: control plane em HTTPS (cert do operador)")

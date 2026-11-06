@@ -1,0 +1,103 @@
+import kofcloud.cli.Commands
+import kofcloud.control.Registry
+import kofcloud.model.StateCopy
+import kofcloud.store.Store
+
+// Fase 16 slice 1 (parte sem banco): carga explicita + migracao --dry-run.
+// Antes, um estado ilegivel virava control plane vazio em SILENCIO.
+
+String migratePath(String name) {
+    return "/tmp/kofcloud-mig-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "carga: ausente, ok e corrupt sao distinguiveis", "migrate-unit" {
+    var path = migratePath("load")
+    var fresh = Registry(path)
+    assert(fresh.loadStatus == "absent", "arquivo novo = absent")
+    var account = fresh.createAccount("mel", "m@e.com", "segredo")
+    assert(fresh.stateCounts().accounts == 1, "conta gravada")
+
+    var reloaded = Registry(path)
+    assert(reloaded.loadStatus == "ok", "estado bom = ok")
+    assert(reloaded.stateCounts().accounts == 1, "conta relida")
+
+    var corruptPath = migratePath("corrupt")
+    writeTextTo(corruptPath, "{\"isto\": \"nao e estado\"}")
+    var corrupt = Registry(corruptPath)
+    assert(corrupt.loadStatus == "corrupt", "ilegivel = corrupt (nao silencio)")
+    assert(corrupt.stateCounts().accounts == 0, "comeca vazio, mas avisado")
+    // O arquivo NAO foi sobrescrito pela carga.
+    var raw = readTextOr(corruptPath, "")
+    assert(raw.indexOf("nao e estado") >= 0, "arquivo preservado para o operador")
+}
+
+test "diff: identicas nao produzem linhas; divergencia lista a lista", "migrate-unit" {
+    var a = StateCounts(1, 2, 3, 4, 5, 6, 7, 8, 9)
+    assert(diffCounts(a, a) == "", "identicas = vazio")
+    var b = StateCounts(1, 2, 3, 4, 5, 6, 7, 8, 9)
+    var c = StateCounts(2, 2, 3, 4, 5, 6, 7, 8, 9)
+    var diff = diffCounts(b, c)
+    assert(diff.indexOf("accounts: 1 -> 2") >= 0, "conta a diferenca")
+    assert(diff.indexOf("devices") < 0, "lista igual nao aparece")
+    // Deterministico: mesma entrada, mesma saida.
+    assert(diffCounts(b, c) == diff, "estavel")
+    assert(countsLine(a).indexOf("accounts=1") >= 0, "resumo legivel")
+}
+
+test "migrate: dry-run compara sem escrever; copia de verdade escreve", "migrate" {
+    var source = migratePath("src")
+    var target = migratePath("dst")
+    var registry = Registry(source)
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    registry.registerDevice(account, "nb", "pk")
+
+    // dry-run sem destino: so valida.
+    var onlyRead = cmdMigrate(listOf("--from", source, "--dry-run"))
+    assert(onlyRead == 0, "dry-run sem --to ok")
+    // dry-run com destino inexistente: compara e NAO cria o destino.
+    var dry = cmdMigrate(listOf("--from", source, "--to", target, "--dry-run"))
+    assert(dry == 0, "dry-run ok")
+    assert(fileExists(target) == false, "dry-run nao escreve o destino")
+
+    // Copia real.
+    var copied = cmdMigrate(listOf("--from", source, "--to", target))
+    assert(copied == 0, "copia ok")
+    var reloaded = Registry(target)
+    assert(reloaded.loadStatus == "ok", "destino valido")
+    assert(reloaded.stateCounts().accounts == 1, "conta copiada")
+    assert(reloaded.stateCounts().devices == 1, "device copiado")
+}
+
+test "migrate: origem ilegivel e recusada e nada e escrito", "migrate" {
+    var source = migratePath("bad")
+    var target = migratePath("bad-dst")
+    writeTextTo(source, "{ nao e json")
+    var code = cmdMigrate(listOf("--from", source, "--to", target))
+    assert(code == 1, "recusa com exit 1")
+    assert(fileExists(target) == false, "nao escreveu destino")
+    // Origem inexistente tambem recusa.
+    assert(cmdMigrate(listOf("--from", migratePath("nope"))) == 1, "origem ausente")
+}
+test "state-backup: preserva o estado; recusa origem ilegivel e ausente", "migrate" {
+    var source = migratePath("bk")
+    var registry = Registry(source)
+    registry.createAccount("mel", "m@e.com", "segredo")
+    // Preserva o arquivo em disco (conteudo identico), sem tocar no original.
+    var backup = registry.backupStateFile("probe")
+    assert(backup == source + ".bak-probe", "caminho do backup ao lado do original")
+    assert(readTextOr(backup, "") == readTextOr(source, ""), "backup identico")
+    assert(readTextOr(source, "").length > 0, "original intacto")
+
+    // Sem arquivo nao ha o que copiar.
+    var empty = Registry(migratePath("nothing"))
+    assert(empty.backupStateFile("probe") == "", "sem arquivo = sem backup")
+
+    // CLI: copia e responde 0 com o caminho; ilegivel recusa com 1.
+    assert(cmdStateBackup(listOf("--file", source)) == 0, "backup pela CLI")
+    assert(cmdStateBackup(listOf("--file", empty.path)) == 1, "ausente recusado")
+    var bad = migratePath("bk-bad")
+    writeTextTo(bad, "isto nao e estado")
+    assert(cmdStateBackup(listOf("--file", bad)) == 1, "ilegivel recusado")
+    assert(fileExists(source) == true, "original continua no lugar")
+    assert(fileExists(backup) == true, "backup do primeiro run continua")
+}

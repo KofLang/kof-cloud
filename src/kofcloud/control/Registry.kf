@@ -9,6 +9,7 @@ import kofcloud.model.Incident
 import kofcloud.model.Webhook
 import kofcloud.model.Errors
 import kofcloud.model.Service
+import kofcloud.model.StateCopy
 import kofcloud.model.Exposure
 
 import kofcloud.identity.Tokens
@@ -41,6 +42,10 @@ class Registry {
     List<AuditEvent> audit
     List<Incident> incidents
     List<WebhookConfig> webhooks
+    // Resultado da carga: "ok" | "absent" (arquivo novo) | "corrupt" (ilegivel).
+    // Antes a corrupcao virava estado vazio em silencio — o operador via a
+    // conta sumida sem aviso. O serve agora anuncia "corrupt".
+    String loadStatus
     String path
     Int maxDevices
     Int maxServices
@@ -102,11 +107,21 @@ class Registry {
     }
 
     void load() {
+        this.loadStatus = "absent"
         var raw = readTextOr(this.path, "")
         if (raw.length == 0) {
             return
         }
         try {
+            // `json.decode` aceita chaves extras e devolve listas vazias para
+            // campos ausentes — um JSON qualquer "decodifica" como estado
+            // vazio. A forma e validada explicitamente: o arquivo precisa ter
+            // as chaves do ControlState (JSN004 so pega campo faltando em
+            // record aninhado, nao no topo).
+            if (looksLikeControlState(raw) == false) {
+                this.loadStatus = "corrupt"
+                return
+            }
             var state = json.decode<ControlState>(raw)
             this.accounts = state.accounts
             this.devices = state.devices
@@ -117,7 +132,9 @@ class Registry {
             this.audit = state.audit
             this.incidents = state.incidents
             this.webhooks = state.webhooks
+            this.loadStatus = "ok"
         } catch (String e) {
+            this.loadStatus = "corrupt"
             // Estado corrompido: recomeca vazio em vez de derrubar o control
             // plane. O operador ve os dados ausentes e decide.
         }
@@ -347,6 +364,43 @@ class Registry {
             return this.raiseIncident(incidentBulkTokenRevokes(), accountId)
         }
         return null
+    }
+
+    // O arquivo tem a forma de um ControlState? Checa as chaves de topo que
+    // o save() sempre grava. Pura sobre o texto.
+    Bool looksLikeControlState(String raw) {
+        var trimmed = raw.trim()
+        if (trimmed.startsWith("{") == false) {
+            return false
+        }
+        return trimmed.indexOf("\"accounts\"") >= 0
+            && trimmed.indexOf("\"devices\"") >= 0
+            && trimmed.indexOf("\"services\"") >= 0
+    }
+
+    // Copia de seguranca do estado em disco antes de trocar o processo de
+    // banco (Fase 16 s1). Devolve o caminho do backup, "" quando nao ha
+    // arquivo para preservar, ou "!" quando o arquivo existe mas a copia
+    // falhou — aviso explicito, nunca silencio.
+    String backupStateFile(String stamp) {
+        if (fileExists(this.path) == false) {
+            return ""
+        }
+        // Um arquivo ilegivel tambem e preservado: pode ser a unica copia.
+        var target = this.path + ".bak-" + stamp
+        if (File(this.path).copyTo(target) == false) {
+            return "!"
+        }
+        return target
+    }
+
+    // Contagens do estado carregado (migracao --dry-run, Fase 16 s1).
+    StateCounts stateCounts() {
+        return StateCounts(
+            this.accounts.size, this.devices.size, this.services.size,
+            this.tokens.size, this.serviceTokens.size, this.customDomains.size,
+            this.audit.size, this.incidents.size, this.webhooks.size
+        )
     }
 
     void save() {
@@ -1576,3 +1630,5 @@ Int postWebhook(String url, String payload, String signature) {
         return 0
     }
 }
+
+

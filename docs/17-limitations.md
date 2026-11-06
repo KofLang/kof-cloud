@@ -48,6 +48,10 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   encadeado (`audit --verify` acusa adulteração/remoção parcial), mas o
   arquivo de estado pode ser reescrito inteiro por quem tem o disco — WORM
   real (append-only em storage separado) segue pendente.
+* **Estado em arquivo JSON único, sem backend de banco.** A carga agora é
+  explícita (`ok`/`absent`/`corrupt`, com aviso no `serve`) e há
+  `migrate --dry-run`, mas ainda não existe backend SQLite/Postgres atrás de
+  interface (Fase 16 slice 1, parte pendente).
 * **Um nó de control plane, um nó de Edge, em memória + arquivo JSON.** Não há
   consenso distribuído nem banco. É suficiente para provar o fluxo, não para
   produção multi-nó.

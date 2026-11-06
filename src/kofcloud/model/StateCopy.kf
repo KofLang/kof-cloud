@@ -1,0 +1,45 @@
+package kofcloud.model
+
+import kofcloud.util.Text
+
+// Copia de contagens do estado do control plane (Fase 16 slice 1: migracao
+// com `--dry-run` "le, valida, escreve, compara contagem"). Pura: so numeros
+// e nomes de lista — nunca conteudo de conta.
+record StateCounts(Int accounts, Int devices, Int services, Int tokens, Int serviceTokens, Int domains, Int audit, Int incidents, Int webhooks)
+
+// Diferenca entre duas copias. Devolve "" quando identicas, senao uma linha
+// por lista divergente ("accounts: 2 -> 1"). Pura e ordenada (mesma ordem
+// sempre), para o operador comparar sem ruido.
+String diffCounts(StateCounts before, StateCounts after) {
+    var out = ""
+    out = out + diffOne("accounts", before.accounts, after.accounts)
+    out = out + diffOne("devices", before.devices, after.devices)
+    out = out + diffOne("services", before.services, after.services)
+    out = out + diffOne("tokens", before.tokens, after.tokens)
+    out = out + diffOne("serviceTokens", before.serviceTokens, after.serviceTokens)
+    out = out + diffOne("domains", before.domains, after.domains)
+    out = out + diffOne("audit", before.audit, after.audit)
+    out = out + diffOne("incidents", before.incidents, after.incidents)
+    out = out + diffOne("webhooks", before.webhooks, after.webhooks)
+    return out
+}
+
+String diffOne(String label, Int before, Int after) {
+    if (before == after) {
+        return ""
+    }
+    return label + ": " + intToString(before) + " -> " + intToString(after) + "\n"
+}
+
+// Linha de resumo legivel de uma copia.
+String countsLine(StateCounts counts) {
+    return "accounts=" + intToString(counts.accounts)
+        + " devices=" + intToString(counts.devices)
+        + " services=" + intToString(counts.services)
+        + " tokens=" + intToString(counts.tokens)
+        + " serviceTokens=" + intToString(counts.serviceTokens)
+        + " domains=" + intToString(counts.domains)
+        + " audit=" + intToString(counts.audit)
+        + " incidents=" + intToString(counts.incidents)
+        + " webhooks=" + intToString(counts.webhooks)
+}

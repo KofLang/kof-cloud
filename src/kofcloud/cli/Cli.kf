@@ -88,6 +88,12 @@ Int runCli(List<String> args) {
     if (first == "scan") {
         return cmdScan(rest)
     }
+    if (first == "migrate") {
+        return cmdMigrate(rest)
+    }
+    if (first == "state-backup") {
+        return cmdStateBackup(rest)
+    }
     if (first == "serve") {
         return cmdServe(rest)
     }

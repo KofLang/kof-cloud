@@ -130,6 +130,8 @@ webhook set <url> --secret <s> | show | remove | test
 freeze service|device <nome|id> | account
 unfreeze service|device <nome|id> | account
 incidents [--all] [--resolve <id>]
+migrate --from <estado.json> [--to <destino.json>] [--dry-run]
+state-backup [--file <estado.json>]
 logs [--tail <linhas>] [--runtime]   (marcos de sessao; --runtime = eventos reais do Agent; teto 256 KiB por arquivo)
 serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]
 ```
