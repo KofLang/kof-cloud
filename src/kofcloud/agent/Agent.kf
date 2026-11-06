@@ -216,7 +216,7 @@ void connectAndServe(AgentConfig config) {
     if (healthMs <= 0) {
         healthMs = limitHealthMs()
     }
-    var health = spawn { agentHealth(session, endpoint.services, healthMs) }
+    var health = spawn { agentHealth(session, healthMs) }
     var refresher = spawn { agentRefresher(session, config, limitRefreshMs(healthMs)) }
 
     reportAllStatuses(session, endpoint.services)
@@ -385,7 +385,15 @@ void agentIdleSweeper(TunnelSession session) {
 // Reavalia o health dos servicos periodicamente e reporta SO quando o estado
 // muda. Sem isso, um servico que cai depois da conexao continuaria marcado
 // ONLINE no Edge (docs/09-flows.md §6).
-void agentHealth(TunnelSession session, List<Service> services, Int healthMs) {
+//
+// Le a tabela DA SESSAO a cada ciclo — nunca uma lista capturada no spawn:
+// o refresher troca a tabela via setServices (hot-reload) e o health precisa
+// ver o mesmo mapa (o handler do OPEN ja le daqui). Com a lista antiga, um
+// servico removido era sondado e reportado para sempre, e um servico novo
+// nunca era sondado — STATUS preso no UNKNOWN e roteamento afirmando
+// ONLINE ate a primeira queda. Lista do spawn nao atravessa por valor
+// (Map seria copiado; ver o comentario em TunnelSession.servicesByName).
+void agentHealth(TunnelSession session, Int healthMs) {
     var last = mapOf()
     var open = true
     while (open) {
@@ -393,7 +401,13 @@ void agentHealth(TunnelSession session, List<Service> services, Int healthMs) {
         if (session.open == false) {
             open = false
         } else {
-            for (var service in services) {
+            var probed = listOf<String>()
+            for (var name in currentServiceNames(session)) {
+                probed.add(name)
+                var service = session.serviceNamed(name)
+                if (service == null) {
+                    continue
+                }
                 var status = checkService(service)
                 var previous = last.get(service.name)
                 var changed = false
@@ -409,7 +423,37 @@ void agentHealth(TunnelSession session, List<Service> services, Int healthMs) {
                     agentEvent("info", "service " + service.name + " -> " + status)
                 }
             }
+            // Servico removido (saiu da tabela no hot-reload) nao deixa rastro:
+            // o ciclo seguinte ja nao o sonda — e o Edge poda a rota na mesma
+            // troca (resolveRoute deixaria de casar de qualquer jeito).
+            pruneHealthMemory(last, probed)
         }
+    }
+}
+
+// Foto dos nomes servidos nesta sessao (a tabela viva que o refresher troca
+// no hot-reload). Pura sobre o mapa — facilita o teste sem tunel.
+// Devolve List: o chamador itera sem tocar no mapa enquanto ele pode mudar.
+List<String> currentServiceNames(TunnelSession session) {
+    var out = listOf<String>()
+    for (var name in session.servicesByName.keys()) {
+        out.add(name)
+    }
+    return out
+}
+
+// Devolve a memoria do health ao tamanho da tabela: nomes que sumiram (servico
+// removido no hot-reload) saem, e se um dia voltarem reportam de novo como
+// mudanca no primeiro ciclo — em vez de carregar um status morto para sempre.
+void pruneHealthMemory(Map<String, String> last, List<String> probed) {
+    var gone = listOf<String>()
+    for (var name in last.keys()) {
+        if (probed.contains(name) == false) {
+            gone.add(name)
+        }
+    }
+    for (var name in gone) {
+        last.remove(name)
     }
 }
 

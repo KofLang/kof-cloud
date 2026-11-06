@@ -1,6 +1,8 @@
+import kofcloud.agent.Agent
 import kofcloud.agent.Health
 import kofcloud.model.Service
 import kofcloud.protocol.Bytes
+import kofcloud.protocol.Session
 import kofcloud.util.Limits
 import testkit.Support
 
@@ -106,4 +108,125 @@ test "health: 200 = ONLINE, 500 = DEGRADED, sem resposta = DEGRADED, recusa = OF
     for (var c in held) {
         c.close()
     }
+}
+
+test "health: ciclo le a tabela da sessao (hot-reload), memoria poda removido", "health-reload" {
+    // currentServiceNames espelha a tabela viva que o refresher troca via
+    // setServices; pruneHealthMemory devolve a memoria `last` ao tamanho da
+    // tabela. Puro, sem tunel: trava o contrato que o agentHealth usa — o
+    // ciclo sonda o que esta servido AGORA, nao a lista do connect.
+    var session = TunnelSession("s1", "d1", "a1", "")
+    assert(currentServiceNames(session).size == 0, "tabela vazia: nada a sondar")
+    var svc = healthService(8080, "")
+    session.setServices(listOf(svc))
+    var names = currentServiceNames(session)
+    assert(names.size == 1 && names.get(0) == "site", "troca da tabela aparece")
+
+    var last = mapOf()
+    last.put("site", statusOnline())
+    pruneHealthMemory(last, names)
+    assert(last.get("site") == statusOnline(), "presente continua lembrado")
+
+    // Servico removido no hot-reload (trocado por outro nome): sai da tabela
+    // E da memoria — se um dia voltar, o primeiro ciclo reporta de novo como
+    // mudanca.
+    var late = Service("late-id", "acc", "dev", "late", "127.0.0.1", 8081, "http", "late.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "")
+    session.setServices(listOf(late))
+    var swapped = currentServiceNames(session)
+    assert(swapped.size == 1 && swapped.get(0) == "late", "tabela nova, sem tocar na anterior")
+    pruneHealthMemory(last, swapped)
+    assert(last.get("site") == null, "removido sai da memoria")
+}
+
+// Servidor que conta SONDA de health: o check envia "GET ... HTTP/1.1";
+// waitForPort so conecta e fecha (receive vazio). Contar o accept pegaria o
+// ready-check como sonda e deixaria a assercao trivialmente verdadeira.
+void serveCounting(Listener listener, Int[] probes) {
+    var open = true
+    while (open) {
+        try {
+            var peer = listener.accept()
+            var worker = spawn {
+                var got = peer.receive(8192)
+                if (got.length > 0) {
+                    probes[0] = probes[0] + 1
+                }
+                var body = "ok"
+                var head = "HTTP/1.1 200 OK\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n"
+                peer.send(bytesFromString(head + body))
+                peer.close()
+            }
+        } catch (String e) {
+            open = false
+        }
+    }
+}
+
+Int countValue(Int[] counter) {
+    return counter[0]
+}
+
+test "health: apos hot-reload sonda o servico novo e para de sondar o removido", "health-follows-reload" {
+    // Regressao do bug real: agentHealth recebia a List do connect (copiada
+    // pelo spawn) e nunca via a troca do refresher. Um servico removido
+    // continuava sondado para sempre e um novo nunca era sondado (STATUS
+    // ficava UNKNOWN). Aqui a sessao faz o papel do refresher.
+    var firstPort = 20041
+    var latePort = 20042
+    var firstListener = net.listen(firstPort)
+    var firstCount = new Int[1]
+    firstCount[0] = 0
+    var firstServer = spawn { serveCounting(firstListener, firstCount) }
+    var lateListener = net.listen(latePort)
+    var lateCount = new Int[1]
+    lateCount[0] = 0
+    var lateServer = spawn { serveCounting(lateListener, lateCount) }
+    assert(waitForPort(firstPort, 60), "primeiro servico no ar")
+    assert(waitForPort(latePort, 60), "servico tardio no ar")
+
+    var session = TunnelSession("s1", "d1", "a1", "")
+    var first = Service("id-1", "acc", "dev", "first", "127.0.0.1", firstPort, "http", "first.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "")
+    session.setServices(listOf(first))
+    var healthTask = spawn { agentHealth(session, 100) }
+
+    var firstProbed = false
+    var waits = 100
+    while (waits > 0 && firstProbed == false) {
+        if (countValue(firstCount) > 0) {
+            firstProbed = true
+        } else {
+            time.sleep(50)
+            waits = waits - 1
+        }
+    }
+    assert(firstProbed, "servico inicial sondado")
+    assert(countValue(lateCount) == 0, "servico ainda nao publicado nao e sondado")
+
+    // Hot-reload: some `first`, entra `late` (o Edge poda a rota na mesma troca).
+    var late = Service("id-2", "acc", "dev", "late", "127.0.0.1", latePort, "http", "late.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "")
+    session.setServices(listOf(late))
+
+    var lateProbed = false
+    waits = 100
+    while (waits > 0 && lateProbed == false) {
+        if (countValue(lateCount) > 0) {
+            lateProbed = true
+        } else {
+            time.sleep(50)
+            waits = waits - 1
+        }
+    }
+    assert(lateProbed, "servico novo sondado apos a troca")
+
+    // O removido nao pode continuar sendo sondado: deixa varios ciclos
+    // folgados (healthMs=100) e confere que o contador nao andou.
+    var settled = countValue(firstCount)
+    time.sleep(800)
+    assert(countValue(firstCount) == settled, "removido deixa de ser sondado (" + intToString(settled) + " -> " + intToString(countValue(firstCount)) + ")")
+
+    // Encerra a task de health e os listeners.
+    session.close()
+    time.sleep(250)
+    firstListener.close()
+    lateListener.close()
 }

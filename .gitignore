@@ -4,3 +4,6 @@
 /.accept-out/
 /.accept-log
 *.class
+
+# flatt (plano/estado local)
+/.flattapp/

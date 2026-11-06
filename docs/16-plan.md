@@ -138,7 +138,11 @@ padrao no Linux). Prova:
 nao sao tocados; remocao sai da tabela. Junto, handshake por stream: o Edge
 espera OPENED antes de DATA, e OPEN recusado vira 502 em vez de travar o
 relay para sempre (buraco real: publicar-depois-do-connect pendurava a vaga).
-Prova: `tests/reload_test.kf` + OPENED em `tests/protocol_test.kf`.
+O ciclo de health lê a TABELA DA SESSÃO a cada rodada (nunca a lista capturada
+no connect): serviço removido para de ser sondado e a memória poda o nome;
+serviço novo passa a ser sondado no ciclo seguinte (antes, STATUS preso no
+UNKNOWN e removido reportado para sempre).
+Prova: `tests/reload_test.kf` + OPENED em `tests/protocol_test.kf` + `health-reload`/`health-follows-reload` em `tests/health_test.kf`.
 
 **Estado (presenca real do tunel): ✅ implementado.** O Edge espelha
 bind/unbind num mapa do Registry (nao persistido); `GET /v1/presence`
