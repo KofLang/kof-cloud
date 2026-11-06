@@ -318,8 +318,12 @@ test "waf enforce: ataque vira 403 KCF109 sem tocar no relay; legitimo passa", "
 }
 
 // Peer contador para o enforce: responde 200 constante (como o detectar)
-// mas marca cada requisicao REAL que chega ao local. Health check TCP
-// (EOF sem HTTP) nao conta — so o relay conta.
+// mas so marca o que passou PELO RELAY. Health check do Agent virou um
+// `GET /` de verdade (agent/Health.kf, Fase 4): ele tambem chega aqui, e
+// conta-lo corromperia `reached` no meio das assercoes (o probe roda em
+// outra task e pode cair entre `seenBefore = reached[0]` e o `assert`).
+// O Edge assina o relay com `X-Forwarded-For: edge`; o probe nao tem esse
+// header. Distinguir pelo header e deterministico; contar por tempo nao e.
 void serveEnforcePeer(Conn peer, Int[] reached) {
     var req = ""
     var reading = true
@@ -335,7 +339,9 @@ void serveEnforcePeer(Conn peer, Int[] reached) {
         }
     }
     if (req.length > 0 && req.indexOf("HTTP/") >= 0) {
-        reached[0] = reached[0] + 1
+        if (req.toLowerCase().indexOf("x-forwarded-for:") >= 0) {
+            reached[0] = reached[0] + 1
+        }
         var body = "svc-detect"
         var head = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n"
         peer.send(bytesFromString(head + body))
