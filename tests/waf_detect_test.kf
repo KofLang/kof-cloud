@@ -140,6 +140,20 @@ test "waf detectar: ataque conta mas passa; legitimo nao conta", "wafdetect" {
     assert(bodyOf(clean) == "svc-detect", "legitimo segue 200")
     assert(responseHeader(clean, "X-KofCloud-WAF") == "", "legitimo sem marca")
 
+    // Ataque em HEADER (faltava: so path e corpo eram vistos). Detecta e
+    // segue, marcado — o valor do header nunca aparece na resposta nem na
+    // metrica, so o nome do padrao.
+    var headerAttack = httpGetRawHeaders(httpPort, "/", host, listOf<String>("User-Agent: sqlmap/1.7 (UNION SELECT password FROM users)"))
+    assert(statusOf(headerAttack) == 200, "detectar nao bloqueia header")
+    assert(responseHeader(headerAttack, "X-KofCloud-WAF") == "would-block", "header marcado would-block")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total_sqli_union") >= 1, "padrao do header contado")
+
+    // Header legitimo (o mesmo tipo que o navegador manda) nao conta.
+    var baselineHeaders = metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total")
+    var okHeaders = httpGetRawHeaders(httpPort, "/", host, listOf<String>("User-Agent: Mozilla/5.0 (X11; Linux x86_64)", "Cookie: sess=abc123; theme=dark"))
+    assert(statusOf(okHeaders) == 200, "headers legitimos 200")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total") == baselineHeaders, "headers legitimos nao contam")
+
     // Parada limpa.
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
@@ -232,6 +246,19 @@ test "waf enforce: ataque vira 403 KCF109 sem tocar no relay; legitimo passa", "
     // Legitimo depois do ataque: segue 200.
     assert(bodyOf(httpGetRaw(httpPort, "/", host)) == "svc-detect", "legitimo segue 200")
 
+    // Ataque em header com enforce: 403 KCF109 antes do relay (o local nao
+    // recebe mais nada alem do que ja recebeu).
+    var seenBeforeHeader = reached[0]
+    var evilHeader = httpGetRawHeaders(httpPort, "/", host, listOf<String>("X-Probe: ' OR 1=1--"))
+    assert(statusOf(evilHeader) == 403, "enforce bloqueia header")
+    assert(bodyOf(evilHeader).indexOf("KCF109") >= 0, "KCF109 no corpo do header")
+    assert(responseHeader(evilHeader, "X-KofCloud-WAF") == "blocked", "header marcado blocked")
+    assert(reached[0] == seenBeforeHeader, "ataque em header nao chegou ao local")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total_sqli_tautology") >= 1, "padrao do header contado")
+
+    // Header legitimo segue passando com enforce ligado.
+    assert(statusOf(httpGetRawHeaders(httpPort, "/", host, listOf<String>("User-Agent: Mozilla/5.0"))) == 200, "header legitimo passa no enforce")
+
     // Parada limpa.
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
@@ -302,6 +329,63 @@ Int metricValue(String exposition, String name) {
         }
     }
     return -1
+}
+
+test "waf detectar: valores de header completam a cobertura", "wafheader-unit" {
+    // O padrao vale igual em path, corpo e header (lista unica): um ataque
+    // escondido em User-Agent/Referer/Cookie nao passa mais em claro.
+    var agent = listOf<String>()
+    agent.add("User-Agent: sqlmap/1.7 (UNION SELECT password FROM users)")
+    assert(wafDetectHeadersSignature(agent) == "sqli-union", "union no User-Agent")
+    var referer = listOf<String>()
+    referer.add("Referer: http://x/<script>alert(1)</script>")
+    assert(wafDetectHeadersSignature(referer) == "xss-script", "xss no Referer")
+    var cookie = listOf<String>()
+    cookie.add("Cookie: sess=../../etc/passwd")
+    assert(wafDetectHeadersSignature(cookie) == "traversal", "traversal no Cookie")
+    var xff = listOf<String>()
+    xff.add("X-Custom: a%00b")
+    assert(wafDetectHeadersSignature(xff) == "nullbyte", "null byte em header custom")
+
+    // Legitimo nao casa (nomes e valores comuns).
+    var clean = listOf<String>()
+    clean.add("Host: site.mel.kofcloud.io")
+    clean.add("User-Agent: Mozilla/5.0 (X11; Linux x86_64)")
+    clean.add("Accept: text/html,application/xhtml+xml")
+    clean.add("Cookie: sess=abc123; theme=dark")
+    assert(wafDetectHeadersSignature(clean) == "", "headers legitimos")
+
+    // Headers da plataforma ficam fora: Authorization e credencial (nunca
+    // varrida nem ecoada), Host e rota, Content-Length/Connection sao do
+    // protocolo. Um valor com cara de ataque ali nao pode bloquear o
+    // legitimo (nem um token opaco virar 403).
+    assert(wafHeaderIgnored("authorization"), "authorization ignorado")
+    assert(wafHeaderIgnored("Authorization"), "caixa nao fura a lista")
+    assert(wafHeaderIgnored("host"), "host ignorado")
+    assert(wafHeaderIgnored("content-length"), "content-length ignorado")
+    assert(wafHeaderIgnored("x-forwarded-for"), "x-forwarded-for ignorado")
+    assert(wafHeaderIgnored("user-agent") == false, "user-agent inspecionado")
+    assert(wafHeaderIgnored("cookie") == false, "cookie inspecionado")
+    var authHeader = listOf<String>()
+    authHeader.add("Authorization: Bearer ../not-really-a-path")
+    assert(wafDetectHeadersSignature(authHeader) == "", "credencial nao e varrida")
+
+    // Valor acima do teto de inspecao nao e varrido (mesma regra fail-open
+    // do corpo: nao vira custo nem falso positivo).
+    var big = ""
+    var i = 0
+    while (i < wafBodyInspectBytes() + 10) {
+        big = big + "a"
+        i = i + 1
+    }
+    var oversized = listOf<String>()
+    oversized.add("X-Big: " + big + " UNION SELECT")
+    assert(wafDetectHeadersSignature(oversized) == "", "header grande nao inspecionado")
+
+    // Linha malformada (sem dois-pontos) e ignorada, nunca lanca.
+    var malformed = listOf<String>()
+    malformed.add("sem-dois-pontos UNION SELECT")
+    assert(wafDetectHeadersSignature(malformed) == "", "linha malformada ignorada")
 }
 
 test "waf detectar: corpo pequeno tambem e inspecionado", "wafbody-unit" {

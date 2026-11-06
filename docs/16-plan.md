@@ -312,10 +312,17 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   (`"q":"x' OR 1=1--"` casa `sqli-tautology`), corpo acima do teto não é
   varrido. Teto fonte-única: `wafBodyInspectBytes()` delega em
   `limitWafBodyInspectBytes()` (`kofcloud.limits.wafBodyInspectBytes`, default
-  64 KiB, travado com mutação). Honestidade: as assinaturas são literais, então a barra invertida
-  do JSON não é normalizada (traversal JSON-escapado não casa no corpo).
-  Prova: `tests/waf_detect_test.kf` (`wafdetect-unit`, `wafdetect`,
-  `wafbody-unit`, `wafdetect-body`).
+  64 KiB, travado com mutação). **Headers ✅:** `wafDetectHeadersSignature`
+  varre os **valores** dos headers do cliente (User-Agent/Referer/Cookie/X-*)
+  até o mesmo teto; `wafHeaderIgnored` exclui o que é da plataforma
+  (`Authorization` é credencial e nunca é lida, `Host` é rota,
+  `Content-Length`/`Connection`/`X-Forwarded-For` são do protocolo). Path,
+  corpo e header casam pela **mesma** lista (`wafSignatureOf`), então um padrão
+  novo vale nos três. Honestidade: as assinaturas são literais, então a barra
+  invertida do JSON não é normalizada (traversal JSON-escapado não casa no
+  corpo nem no header). Prova: `tests/waf_detect_test.kf` (`wafdetect-unit`,
+  `wafdetect`, `wafbody-unit`, `wafdetect-body`, `wafheader-unit`, e os e2e
+  `wafdetect`/`wafenforce` estendidos com ataque em header).
 * **Slice 2a — teto de corpo por requisição ✅.** `kofcloud.limits.httpBodyBytes`
   (default 1 MiB); o Edge recusa antes do relay quando o `Content-Length`
   declarado passa → `413 KCF110` + métrica `_body_too_large`. Não consome

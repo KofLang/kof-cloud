@@ -159,50 +159,81 @@ Int wafBodyInspectBytes() {
     return limitWafBodyInspectBytes()
 }
 
+// Casamento em fonte unica das assinaturas: path, corpo e headers passam
+// pela MESMA lista (um padrao novo vale nos tres). `target` ja vem em
+// minusculas — o chamador decide o que varrer. `rawBackslash` liga o
+// casamento de `..\` (barra invertida crua), que so faz sentido onde o
+// texto nao veio de JSON (path); corpo/header com JSON escapado usariam
+// `..\\`, que nao e traversal para o servidor local. Ordem fixa
+// (traversal, nullbyte, sqli-union, sqli-tautologia, xss) para o nome do
+// padrao ser deterministico quando o texto casa mais de um.
+String wafSignatureOf(String target, Bool rawBackslash) {
+    if (target.indexOf("..%2f") >= 0 || target.indexOf("..%5c") >= 0 || target.indexOf("../") >= 0) {
+        return "traversal"
+    }
+    if (rawBackslash && target.indexOf("..\\") >= 0) {
+        return "traversal"
+    }
+    if (target.indexOf("%00") >= 0) {
+        return "nullbyte"
+    }
+    if (target.indexOf("union select") >= 0 || target.indexOf("union%20select") >= 0) {
+        return "sqli-union"
+    }
+    if (target.indexOf("or 1=1") >= 0 || target.indexOf("or%201%3d1") >= 0) {
+        return "sqli-tautology"
+    }
+    if (target.indexOf("<script") >= 0 || target.indexOf("%3cscript") >= 0) {
+        return "xss-script"
+    }
+    return ""
+}
+
 // Assinatura sobre o CORPO (slice 1, parte que faltava): o desenho prometia
-// "corpo pequeno" e so metodo+path era inspecionado. O corpo e JSON-escapado
-// antes de casar, para que `"q":"UNION SELECT"` (com aspas e dois-pontos no
-// meio) case igual a `q=UNION SELECT` na query. Corpo acima de
+// "corpo pequeno" e so metodo+path era inspecionado. Corpo acima de
 // `wafBodyInspectBytes()` nao e inspecionado (devolve "").
 String wafDetectBodySignature(String body) {
     if (body.length == 0 || body.length > wafBodyInspectBytes()) {
         return ""
     }
-    var target = body.toLowerCase()
-    if (target.indexOf("union select") >= 0 || target.indexOf("union%20select") >= 0) {
-        return "sqli-union"
-    }
-    if (target.indexOf("or 1=1") >= 0 || target.indexOf("or%201%3d1") >= 0) {
-        return "sqli-tautology"
-    }
-    if (target.indexOf("<script") >= 0 || target.indexOf("%3cscript") >= 0) {
-        return "xss-script"
-    }
-    if (target.indexOf("../") >= 0 || target.indexOf("..%2f") >= 0 || target.indexOf("..%5c") >= 0) {
-        return "traversal"
-    }
-    if (target.indexOf("%00") >= 0) {
-        return "nullbyte"
-    }
-    return ""
+    return wafSignatureOf(body.toLowerCase(), false)
 }
 
 String wafDetectSignature(String method, String path) {
-    var target = (method + " " + path).toLowerCase()
-    if (target.indexOf("..%2f") >= 0 || target.indexOf("..%5c") >= 0 || target.indexOf("../") >= 0 || target.indexOf("..\\") >= 0) {
-        return "traversal"
-    }
-    if (target.indexOf("%00") >= 0) {
-        return "nullbyte"
-    }
-    if (target.indexOf("union select") >= 0 || target.indexOf("union%20select") >= 0) {
-        return "sqli-union"
-    }
-    if (target.indexOf("or 1=1") >= 0 || target.indexOf("or%201%3d1") >= 0) {
-        return "sqli-tautology"
-    }
-    if (target.indexOf("<script") >= 0 || target.indexOf("%3cscript") >= 0) {
-        return "xss-script"
+    return wafSignatureOf((method + " " + path).toLowerCase(), true)
+}
+
+// Headers do WAF NAO inspecionados: os que a plataforma possui (roteamento,
+// tamanho, conexao, credencial). `Authorization` fica de fora de proposito —
+// e credencial, nao entrada do servico local (o Edge ja a consome e nao a
+// repassa em AUTHENTICATED), e varrer segredo nao e papel do detector.
+// `X-KofCloud-Token` so existe no control plane, mas fica listado para a
+// regra nao depender de onde roda. O nome e normalizado aqui: um chamador
+// que passe "Authorization" nao pode furar a lista por caixa.
+Bool wafHeaderIgnored(String name) {
+    var lowerName = name.trim().toLowerCase()
+    return lowerName == "authorization" || lowerName == "host" || lowerName == "content-length" || lowerName == "connection" || lowerName == "x-forwarded-for" || lowerName == "x-kofcloud-token"
+}
+
+// Assinatura sobre os VALORES dos headers (Fase 10 slice 1 — parte que
+// faltava: `17-limitations` listava "assinaturas em headers"). Header com
+// valor acima do teto de inspecao nao e varrido (mesma regra fail-open do
+// corpo). So o nome do padrao sai daqui; valor nunca chega a metrica/log.
+String wafDetectHeadersSignature(List<String> headers) {
+    for (var line in headers) {
+        var colon = line.indexOf(":")
+        if (colon > 0) {
+            var name = line.substring(0, colon).trim().toLowerCase()
+            if (wafHeaderIgnored(name) == false) {
+                var value = line.substring(colon + 1).trim()
+                if (value.length > 0 && value.length <= wafBodyInspectBytes()) {
+                    var hit = wafSignatureOf(value.toLowerCase(), false)
+                    if (hit.length > 0) {
+                        return hit
+                    }
+                }
+            }
+        }
     }
     return ""
 }

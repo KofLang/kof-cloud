@@ -78,12 +78,17 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   `08-multiplexing.md`.
 * **WAF (Fase 10) — slices 1–3 feitos; o que não existe ainda.** Prontos: teto
   de corpo (slice 2a), timeout de upstream (slice 2b), detecção/enforce de
-  assinaturas em método+path e corpo até 64 KiB (slice 1) e allowlist de
-  métodos/paths por serviço (`403 KCF111`, fail-closed só para quem declarou a
-  lista — slice 3). **Falta** um WAF mais profundo: regras por conta, corpo
-  decodificado (JSON base64/URL-encode), e assinaturas em headers. As
-  assinaturas são literais: no corpo, a barra invertida do JSON não é
+  assinaturas em método+path, corpo até 64 KiB e **valores de header** (slice
+  1) e allowlist de métodos/paths por serviço (`403 KCF111`, fail-closed só
+  para quem declarou a lista — slice 3). **Falta** um WAF mais profundo: regras
+  por conta e corpo decodificado (JSON base64/URL-encode). As assinaturas são
+  literais: no corpo e nos headers, a barra invertida do JSON não é
   normalizada, então traversal JSON-escapado não casa ali (casa na query crua).
+  Headers da plataforma ficam fora da varredura por desenho
+  (`wafHeaderIgnored`): `Authorization` é credencial (nunca é lida nem ecoada
+  pelo detector), `Host` é rota e `Content-Length`/`Connection` são do
+  protocolo — só valores de headers do cliente (User-Agent, Referer, Cookie,
+  X-*) são inspecionados, até o mesmo teto de 64 KiB.
   O timeout usa polling (`limitIdleSweepMs`) e o prazo é medido
   desde o último DATA — a granularidade é a do passo de varredura, não exata.
   O teto usa o

@@ -181,3 +181,28 @@ String httpPostRaw(Int port, String path, String host, List<String> extraHeaders
     conn.close()
     return bytesToString(acc)
 }
+
+// GET com headers extras (lista de linhas cruas, ex.: "User-Agent: x").
+// Mesma forma de httpGetRaw; usado para exercitar a inspecao de headers do
+// Edge sem inventar um helper por cenario.
+String httpGetRawHeaders(Int port, String path, String host, List<String> extraHeaders) {
+    var conn = net.connect("127.0.0.1", port)
+    var req = "GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\n"
+    for (var line in extraHeaders) {
+        req = req + line + "\r\n"
+    }
+    req = req + "Connection: close\r\n\r\n"
+    conn.send(bytesFromString(req))
+    var acc = bytesEmpty()
+    var reading = true
+    while (reading) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            reading = false
+        } else {
+            acc = bytesConcat(acc, chunk)
+        }
+    }
+    conn.close()
+    return bytesToString(acc)
+}

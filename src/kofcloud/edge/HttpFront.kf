@@ -150,6 +150,12 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         // Acima de wafBodyInspectBytes() o corpo nao e varrido.
         signature = wafDetectBodySignature(bytesToString(request.body))
     }
+    if (signature.length == 0) {
+        // Valores de header completam a cobertura (User-Agent/Referer/Cookie
+        // carregam payload de scanner). Headers da plataforma ficam fora:
+        // ver wafHeaderIgnored (Authorization e credencial, Host e rota).
+        signature = wafDetectHeadersSignature(request.headers)
+    }
     if (signature.length > 0) {
         noteWafDetected(signature)
         if (state.wafEnforcing()) {
