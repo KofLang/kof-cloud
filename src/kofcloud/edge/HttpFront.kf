@@ -7,6 +7,7 @@ import kofcloud.model.Device
 import kofcloud.model.Errors
 import kofcloud.model.Exposure
 import kofcloud.model.Service
+import kofcloud.protocol.Bytes
 
 import kofcloud.util.Hosts
 import kofcloud.util.Text
@@ -38,6 +39,17 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     var raw = readRequestBytes(conn, maxBytes)
     if (raw.length == 0) {
         conn.close()
+        return
+    }
+    // Sem `\r\n\r\n` dentro do teto de cabecalhos: e lixo ou cabecalho
+    // gigante. Antes, parseRequest recebia o bloco inteiro como "cabecalho"
+    // e o relay repassava o excedente ao servico local — ou seja, o nome
+    // `maxBytes` prometia um teto que nao existia.
+    if (bytesIndexOf(raw, "\r\n\r\n", 0) < 0) {
+        var tooBig = errorResponse(431, errHeaderTooLarge())
+        conn.send(tooBig)
+        conn.close()
+        noteHttpFinished("denied", "KCF116", raw.length, tooBig.length, time.now() - started)
         return
     }
     var request = parseRequest(raw)
@@ -186,12 +198,28 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         noteHttpFinished("denied", "KCF108", raw.length, busy.length, time.now() - started)
         return
     }
+    // Teto da resposta: o mesmo numero que o Edge aceita para ler o pedido
+    // enquanto o corpo nao foi declarado — assim a promessa "maxBytes" vale
+    // nos dois sentidos.
+    var responseCap = state.responseLimitBytes()
+    if (responseCap <= 0 || responseCap > maxBytes) {
+        responseCap = maxBytes
+    }
     var responseBytes = bytesEmpty()
     var relayFinished = new Bool[1]
     relayFinished[0] = false
     try {
         noteStreamOpened()
-        var relayed = relayThroughTunnel(session, service.name, forwarded, maxBytes, state.upstreamTimeoutMs(), relayFinished)
+        var relayed = relayThroughTunnel(session, service.name, forwarded, responseCap, state.upstreamTimeoutMs(), relayFinished)
+        if (relayed.overflowed) {
+            state.releaseServiceConn(service.id)
+            state.noteStreamCancelled()
+            var tooLarge = errorResponse(502, errResponseTooLarge())
+            conn.send(tooLarge)
+            conn.close()
+            noteHttpFinished("upstream_error", "KCF115", raw.length, tooLarge.length, time.now() - started)
+            return
+        }
         if (relayed.timedOut) {
             state.releaseServiceConn(service.id)
             if (relayed.bytes.length > 0) {

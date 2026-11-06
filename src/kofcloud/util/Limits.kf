@@ -159,6 +159,15 @@ Int limitMaxBodyBytes() {
     return config.int("kofcloud.maxBodyBytes", 16777216)
 }
 
+// Teto da resposta do servico local que o Edge acumula por requisicao
+// (bytes). Excedeu -> 502 KCF115 e o stream e cancelado (RESET), para o
+// Agent parar de empurrar bytes. Fonte unica do `maxResponseBytes` do relay
+// (os 16 MiB de `limitMaxBodyBytes` sao o teto do CORPO da REQUISICAO; antes,
+// a resposta herdava esse numero e, ao passar dele, era cortada em silencio).
+Int limitMaxResponseBytes() {
+    return config.int("kofcloud.maxResponseBytes", 16777216)
+}
+
 // Teto do corpo que o WAF inspeciona por assinatura (bytes). Acima disso o
 // corpo NAO e varrido (o teto de corpo do Edge, `httpBodyBytes` 1 MiB, e outro
 // limite). Fonte unica do `wafBodyInspectBytes()` em `util.Text` — 64 KiB

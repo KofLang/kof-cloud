@@ -132,6 +132,12 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   expiração em massa herda a mesma janela (não há varredura periódica no
   control plane). Os incidentes são efêmeros no processo: reiniciar o control
   plane zera as sondas (o incidente já aberto fica no arquivo de estado).
+* **A resposta do serviço local tem teto (`kofcloud.maxResponseBytes`, 16 MiB).**
+  Acima dele o Edge responde `502 KCF115` e cancela o stream — antes o
+  excedente era **cortado em silêncio** e o cliente recebia 200 com corpo
+  incompleto. O Agent agora envia em fluxo e para de produzir quando o Edge
+  cancela, mas o teto continua existindo: respostas maiores exigem aumentar
+  a config (e pagam o custo O(n²) abaixo).
 * **Throughput de payloads grandes é limitado por `bytesToString` O(n²).**
   Medido: ~1 s para 100 KiB em `bytesToBase64`; 1 MiB levaria ~100 s. Por isso
   o envio é fatiado em blocos de 16 KiB (custo total linear no tamanho do

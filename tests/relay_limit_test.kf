@@ -1,0 +1,169 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.model.Errors
+import kofcloud.store.Store
+import kofcloud.util.Limits
+import testkit.Support
+
+// Teto de resposta no relay (Fase 14 slice 3, parte sem stdlib nova).
+//
+// Buraco real: quando a resposta do servico local passava do teto do relay, o
+// Edge apenas PARAVA de acumular e devolvia os bytes parciais como se fossem a
+// resposta inteira — o cliente recebia 200 com corpo cortado, sem nenhum
+// sinal. Truncar em silencio e pior que recusar: o cliente nao tem como saber
+// que faltou dado. Agora o Edge cancela o stream (RESET STREAM_TOO_LARGE), o
+// Agent para de empurrar bytes e o cliente recebe 502 KCF115 explicito.
+
+test "relay limite: codigo e Hint", "relaylimit-unit" {
+    assert(errResponseTooLarge().indexOf("KCF115") >= 0, "codigo KCF115")
+    assert(errHint(errResponseTooLarge()).indexOf("maxResponseBytes") >= 0, "Hint aponta o teto")
+    assert(limitMaxResponseBytes() > 0, "teto positivo")
+}
+
+test "relay limite: resposta acima do teto vira 502 KCF115, nunca 200 truncado", "relaylimit" {
+    var localSvc = 19951
+    var controlPort = 19952
+    var tunnelPort = 19953
+    var httpPort = 19954
+    var responseCap = 1024
+
+    // Servico local cru: responde sempre o mesmo corpo de 4 KiB. web.app()
+    // nao serve aqui (L13: fecha sem headers em corpo grande) e o corpo
+    // precisa ser deterministico para medir o truncamento.
+    var body = ""
+    var i = 0
+    while (i < 4096) {
+        body = body + "x"
+        i = i + 1
+    }
+    var response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + intToString(body.length) + "\r\nConnection: close\r\n\r\n" + body
+    var listener = net.listen(localSvc)
+    var serverTask = spawn {
+        var open = true
+        while (open) {
+            try {
+                var c = listener.accept()
+                var worker = spawn {
+                    c.receive(8192)
+                    c.send(bytesFromString(response))
+                    c.close()
+                }
+            } catch (String e) {
+                open = false
+            }
+        }
+    }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-rl-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    edgeState.setResponseLimit(responseCap)
+    var edgeStop = "/tmp/kofcloud-rl-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-rl-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent online")
+
+    var host = "site.mel.kofcloud.io"
+    var oversized = httpGetRaw(httpPort, "/", host)
+    assert(statusOf(oversized) == 502, "resposta grande -> 502 (nao 200 truncado)")
+    assert(bodyOf(oversized).indexOf("KCF115") >= 0, "KCF115 no corpo")
+    // O corpo do servico NAO vaza na resposta de erro.
+    assert(bodyOf(oversized).indexOf("xxxx") < 0, "sem bytes parciais do servico")
+
+    // A vaga de conexao por servico foi liberada e o stream nao ficou preso:
+    // o proximo pedido tambem chega ao servico (e tambem estoura).
+    var again = httpGetRaw(httpPort, "/", host)
+    assert(statusOf(again) == 502, "segundo pedido tambem 502 (vaga liberada)")
+
+    assert(metricValue(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_response_too_large") >= 1, "recusa contada")
+
+    // Parada limpa.
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    listener.close()
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}
+
+Int metricValue(String exposition, String name) {
+    for (var line in exposition.split("\n")) {
+        var trimmed = line.trim()
+        if (trimmed.startsWith(name + " ")) {
+            return parseIntSafe(trimmed.substring(name.length + 1).trim(), -1)
+        }
+    }
+    return -1
+}
+
+test "relay limite: cabecalho sem fim dentro do teto vira 431 KCF116", "relaylimit-headers" {
+    // O teto de leitura do Edge (`maxBytes`) prometia limitar o pedido, mas
+    // sem `\r\n\r\n` o bloco inteiro virava "cabecalho" e seguia adiante.
+    // Agora e recusado antes de rotear — sem conta, sem tunel, sem servico.
+    var registry = Registry("/tmp/kofcloud-rl-h-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-rl-h-edge-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    var httpTask = spawn { serveHttp(edgeState, 19956, 2048, edgeStop) }
+    assert(waitForPort(19956, 60), "http no ar")
+
+    var conn = net.connect("127.0.0.1", 19956)
+    var line = "X-Flood: "
+    var i = 0
+    while (i < 40) {
+        line = line + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        i = i + 1
+    }
+    conn.send(bytesFromString("GET / HTTP/1.1\r\nHost: x.kofcloud.io\r\n" + line))
+    var response = ""
+    var reading = true
+    while (reading) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            reading = false
+        } else {
+            response = response + bytesToString(chunk)
+        }
+    }
+    conn.close()
+    assert(statusOf(response) == 431, "431 no status")
+    assert(response.indexOf("KCF116") >= 0, "KCF116 no corpo")
+
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(edgeStop).delete()
+}

@@ -303,6 +303,10 @@ Bool handleAgentFrame(TunnelSession session, String line) {
         return true
     }
     if (kind == "RESET") {
+        // Marca antes de entregar: o relay local consulta `isCancelled` a
+        // cada bloco e para de produzir (o Edge cancelou por teto de
+        // resposta ou timeout).
+        session.markCancelled(frameField(frame, "s"))
         session.deliver(frameField(frame, "s"), streamResetMarker())
         return true
     }

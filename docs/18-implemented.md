@@ -62,6 +62,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | daemon por SO (Fase 13 s1) | `daemonKind` + artefato systemd/launchd/Windows puro; install grava e imprime a ativação (nunca ativa sozinho) | `daemon_test.kf` (`daemon-os`) |
 | allowlist WAF pela CLI | `publish --allow-method`/`--allow-path` (repetíveis) com validação local; `service status` mostra a política | `publish_allow_test.kf` |
 | allowlist WAF (Fase 10 s3) | `allowMethods`/`allowPaths` no publish → `403 KCF111` antes do relay; `KCF113`/`KCF114` para política malformada; `kofcloud.json` cobre os campos (mesma normalização, drift no `--plan`/`--check`/`doctor`) | `waf_allow_test.kf` + `deploy_test.kf` |
+| teto de resposta + cabeçalho (F14 s3 parcial) | resposta acima do teto → 502 KCF115 com stream cancelado dos dois lados (Agent para de produzir); cabeçalho sem fim → 431 KCF116 | `relay_limit_test.kf` |
 | carga explícita + `migrate`/`state-backup` (F16 s1) | `loadStatus` ok/absent/corrupt (serve avisa), `migrate --dry-run` compara contagens sem escrever, `state-backup` preserva o arquivo antes da troca de backend | `migrate_test.kf` |
 | ranking de Edges (F14 s2) | `/v1/connect` publica `edges`; Agent mede e escolhe o mais rápido | `edge_select_test.kf` |
 | faixas de tamanho da resposta (F14 s1) | `response_bytes_total_size_kb_le_*` em `noteHttpFinished` | `metrics_test.kf` (`metrics-size`) |

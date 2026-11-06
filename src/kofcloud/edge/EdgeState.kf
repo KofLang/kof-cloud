@@ -19,6 +19,8 @@ class EdgeState {
     Map<String, String> serviceConns
     Int serviceConnLimit
     Int bodyLimit
+    Int responseLimit
+    Int cancelledStreams
     Int upstreamWaitMs
     // Tres sondas independentes (Fase 17 slice 1 + abuse prevention): recusas
     // de tunel, falhas de autenticacao e quedas por ociosidade nao podem
@@ -40,6 +42,8 @@ class EdgeState {
         this.serviceConns = mapOf()
         this.serviceConnLimit = limitServiceConns()
         this.bodyLimit = limitHttpBodyBytes()
+        this.responseLimit = limitMaxResponseBytes()
+        this.cancelledStreams = 0
         this.upstreamWaitMs = limitTunnelIdleMs()
         this.refusalProbe = RateProbe()
         this.authFailureProbe = RateProbe()
@@ -74,6 +78,25 @@ class EdgeState {
 
     Int bodyLimitBytes() {
         return this.bodyLimit
+    }
+
+    // Permite aos testes fixarem o teto de resposta sem config de processo.
+    void setResponseLimit(Int limit) {
+        this.responseLimit = limit
+    }
+
+    Int responseLimitBytes() {
+        return this.responseLimit
+    }
+
+    // Streams cancelados pelo Edge (resposta acima do teto). Contador de
+    // eventos, nunca de conteudo: alimenta a metrica `_response_too_large`.
+    void noteStreamCancelled() {
+        this.cancelledStreams = this.cancelledStreams + 1
+    }
+
+    Int cancelledCount() {
+        return this.cancelledStreams
     }
 
     // Permite aos testes fixarem o limite sem config de processo.

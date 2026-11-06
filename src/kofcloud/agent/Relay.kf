@@ -29,32 +29,48 @@ void agentStream(TunnelSession session, Service service, String streamId) {
         }
     }
 
-    var responseBytes = bytesEmpty()
+    // Resposta em fluxo: cada bloco lido do servico local vira DATA na hora.
+    // Antes a resposta inteira era acumulada em memoria e so entao enviada —
+    // o Agent nao tinha como parar quando o Edge cancelava o stream (teto de
+    // resposta, KCF115) e gastava CPU/tunel com bytes que seriam descartados.
+    var sentAny = false
+    var local = net.connect(service.localAddress, service.localPort)
     try {
-        var local = net.connect(service.localAddress, service.localPort)
         local.send(requestBytes)
-        var response = bytesEmpty()
         var reading = true
         while (reading) {
-            var chunk = local.receive(16384)
-            if (chunk.length == 0) {
+            if (session.isCancelled(streamId)) {
+                // O Edge ja recusou a resposta: para de ler e de enviar.
                 reading = false
             } else {
-                response = bytesConcat(response, chunk)
+                var chunk = local.receive(16384)
+                if (chunk.length == 0) {
+                    reading = false
+                } else {
+                    session.send(dataFrame(streamId, encodePayload(chunk, session.sessionKey)))
+                    sentAny = true
+                }
             }
         }
         local.close()
-        responseBytes = response
-        noteStreamServed()
+        if (session.isCancelled(streamId) == false) {
+            noteStreamServed()
+            session.send(endFrame(streamId))
+        }
     } catch (String e) {
         noteLocalError()
-        responseBytes = localErrorResponse("local service " + service.name + " error: " + e)
+        if (sentAny) {
+            // Ja ha bytes no fio: nao da para trocar por uma resposta de erro
+            // (o cliente receberia 200 com corpo de erro no meio). RESET e o
+            // sinal honesto de resposta incompleta.
+            session.send(resetFrame(streamId, "LOCAL_ERROR"))
+        } else {
+            for (var chunk in encodeChunks(localErrorResponse("local service " + service.name + " error: " + e), session.sessionKey)) {
+                session.send(dataFrame(streamId, chunk))
+            }
+            session.send(endFrame(streamId))
+        }
     }
-
-    for (var chunk in encodeChunks(responseBytes, session.sessionKey)) {
-        session.send(dataFrame(streamId, chunk))
-    }
-    session.send(endFrame(streamId))
     session.closeStream(streamId)
 }
 

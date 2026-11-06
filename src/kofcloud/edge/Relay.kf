@@ -20,7 +20,10 @@ import kofcloud.util.Limits
 // DO stream quando passa `timeoutMs` sem DATA; isso acorda o receive. O
 // `open` compartilhado impede o watchdog de tocar a fila depois que o relay
 // terminou (sessao anti-orphan, como no sweeper do tunel).
-record RelayResult(Byte[] bytes, Bool timedOut)
+// `overflowed`: a resposta passou do teto do relay. O stream ja foi cancelado
+// (RESET STREAM_TOO_LARGE) e `bytes` deve ser DESCARTAVEL — antes o Edge
+// parava de acumular e devolvia o parcial como se fosse a resposta inteira.
+record RelayResult(Byte[] bytes, Bool timedOut, Bool overflowed)
 
 RelayResult relayThroughTunnel(TunnelSession session, String serviceName, Byte[] requestBytes, Int maxBytes, Int timeoutMs, Bool[] finished) {
     var streamId = session.openStream()
@@ -55,16 +58,20 @@ RelayResult relayThroughTunnel(TunnelSession session, String serviceName, Byte[]
                 throw "stream reset by agent"
             } else if (item == streamTimeoutMarker()) {
                 finished[0] = true
-                return RelayResult(acc, true)
+                return RelayResult(acc, true, false)
             } else {
                 acc = bytesConcat(acc, decodePayload(item, session.sessionKey))
                 session.markStreamProgress(streamId)
                 if (acc.length > maxBytes) {
-                    open = false
+                    // Teto estourado: cancela dos dois lados e para de ler.
+                    // Os bytes parciais nao sao devolvidos (seriam um corpo
+                    // cortado com status 200).
+                    session.cancelStream(streamId, "STREAM_TOO_LARGE")
+                    return RelayResult(bytesEmpty(), false, true)
                 }
             }
         }
-        return RelayResult(acc, false)
+        return RelayResult(acc, false, false)
     } finally {
         finished[0] = true
         session.closeStream(streamId)

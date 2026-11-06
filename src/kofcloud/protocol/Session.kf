@@ -18,6 +18,16 @@ class TunnelSession {
     String deviceId
     String accountId
     String sessionKey
+    // Observabilidade do cancelamento (conduta de stream, nao conteudo): o
+    // Edge anota o motivo aqui ANTES de entregar o RESET, porque a inbox do
+    // stream e removida junto — e os dois lados (Edge e Agent) enxergam o
+    // mesmo mapa sem o motivo atravessar o fio como dado.
+    Map<String, String> resetReasons
+    // Streams cancelados pelo peer (RESET recebido). O lado que envia DATA
+    // consulta antes de cada chunk: cancelar so vale se o outro lado parar
+    // de produzir — senao o Edge descarta bytes que o Agent continua
+    // empurrando pelo tunel.
+    Map<String, Bool> cancelled
     Map<String, Channel<String>> inboxes
     Channel<String> outbox
     Int nextStreamId
@@ -42,6 +52,8 @@ class TunnelSession {
         this.deviceId = deviceId
         this.accountId = accountId
         this.sessionKey = sessionKey
+        this.resetReasons = mapOf()
+        this.cancelled = mapOf()
         this.inboxes = mapOf()
         this.outbox = channel<String>()
         this.nextStreamId = 1
@@ -113,6 +125,8 @@ class TunnelSession {
     void closeStream(String streamId) {
         this.inboxes.remove(streamId)
         this.streamStartedMs.remove(streamId)
+        this.resetReasons.remove(streamId)
+        this.cancelled.remove(streamId)
     }
 
     Int streamCount() {
@@ -141,6 +155,25 @@ class TunnelSession {
             }
         }
         return out
+    }
+
+    // Marca o stream como cancelado pelo peer (RESET recebido no fio).
+    void markCancelled(String streamId) {
+        this.cancelled.put(streamId, true)
+    }
+
+    Bool isCancelled(String streamId) {
+        return this.cancelled.get(streamId) != null
+    }
+
+    // Cancela o stream dos dois lados: anota o motivo, envia RESET no fio e
+    // entrega o marcador na inbox local. Usado pelo Edge quando a resposta
+    // passa do teto — o Agent para de empurrar bytes em vez de gastar CPU e
+    // tunel com dados que serao descartados.
+    void cancelStream(String streamId, String reason) {
+        this.resetReasons.put(streamId, reason)
+        this.send(resetFrame(streamId, reason))
+        this.deliver(streamId, streamResetMarker())
     }
 
     // Entrega um item (payload base64 ou marcador) ao stream.

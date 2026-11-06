@@ -557,6 +557,35 @@ sem mudar formato público):
   (hoje vai cheio a cada `connect`). Prova: benchmark mostra queda
   linear no tempo por MiB.
 
+  **Implementado (parte sem stdlib nova): resposta em fluxo + teto honesto.**
+  Dois buracos reais fechados, ambos medidos com teste que falha sem a
+  correção:
+
+  1. **Truncamento silencioso.** Quando a resposta passava do `maxBytes` do
+     relay, o Edge apenas parava de acumular e devolvia os bytes parciais
+     como se fossem a resposta inteira — o cliente recebia **200 com corpo
+     cortado**, sem sinal. Agora o Edge cancela o stream (`RESET
+     STREAM_TOO_LARGE`), descarta o parcial e responde **502 KCF115**; a
+     vaga de conexão é liberada e a métrica
+     `kofcloud_edge_http_upstream_errors_total_response_too_large` conta a
+     recusa. Teto próprio (`kofcloud.maxResponseBytes`, default 16 MiB) em
+     vez de herdar o teto do corpo da requisição.
+  2. **Agent acumulava a resposta inteira antes de enviar.** Sem isso, o
+     cancelamento do Edge não tinha efeito: o Agent continuava lendo o
+     serviço local e empurrando bytes que seriam descartados. Agora cada
+     bloco lido vira DATA na hora e o Agent consulta `isCancelled` a cada
+     bloco — o RESET do Edge para a produção de verdade. Erro local depois
+     de já haver bytes no fio vira `RESET LOCAL_ERROR` (não dá para trocar
+     por uma resposta de erro no meio de um 200).
+  3. **Teto de cabeçalho que não existia.** `readRequestBytes(conn,
+     maxBytes)` prometia limitar o pedido, mas sem `\r\n\r\n` o bloco
+     inteiro virava "cabeçalho" e seguia adiante. Agora é **431 KCF116**
+     antes de rotear.
+
+  Prova: `tests/relay_limit_test.kf` (3: código/Hint, 502 KCF115 fim a fim
+  com vaga liberada e métrica, 431 KCF116). **Pendente:** o ganho O(n) de
+  verdade (base64/slice sobre bytes no stdlib) e o handshake comprimido.
+
 **Regra:** nenhuma otimização sem número antes/depois no `STATUS.md`;
 latência de cauda (p99) vale mais que média.
 

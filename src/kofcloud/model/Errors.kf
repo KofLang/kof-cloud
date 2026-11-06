@@ -205,6 +205,18 @@ String errUpstreamTimeout() {
     return "KCF112: upstream did not respond in time"
 }
 
+// Resposta do servico local acima do teto do relay. Recusa explicita: antes,
+// ao passar do teto, o Edge parava de acumular e devolvia o parcial como se
+// fosse a resposta inteira (200 com corpo cortado, sem sinal).
+String errResponseTooLarge() {
+    return "KCF115: response exceeds the edge limit"
+}
+
+// Cabecalho de requisicao sem fim (`\r\n\r\n`) dentro do teto do Edge.
+String errHeaderTooLarge() {
+    return "KCF116: request headers too large"
+}
+
 // ---- dominio proprio (Fase 6) ----
 
 String errInvalidCustomHostname() {
@@ -345,6 +357,12 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF112") >= 0) {
         return "O servico local nao respondeu a tempo — verifique a aplicacao e o `kof cloud logs --runtime`; o teto e `kofcloud.limits.tunnelIdleMs`."
+    }
+    if (raw.indexOf("KCF116") >= 0) {
+        return "Os cabecalhos da requisicao nao terminaram dentro do teto do Edge — reduza-os ou aumente `kofcloud.maxBodyBytes` no `serve`."
+    }
+    if (raw.indexOf("KCF115") >= 0) {
+        return "A resposta do servico passou do teto do relay — reduza a resposta ou aumente `kofcloud.maxResponseBytes` no `serve`."
     }
     if (raw.indexOf("KCF120") >= 0) {
         return "O dominio precisa ser um hostname externo valido (ex: api.example.com) — sem IP e fora de *.kofcloud.io."

@@ -179,6 +179,8 @@ void noteHttpFinished(String outcome, String deniedDetail, Int requestBytes, Int
         observability.counter(metricHttpUpstreamErrors())
         if (deniedDetail == "KCF112") {
             observability.counter(metricHttpUpstreamErrors() + "_timeout")
+        } else if (deniedDetail == "KCF115") {
+            observability.counter(metricHttpUpstreamErrors() + "_response_too_large")
         }
     }
     observability.increment(metricRequestBytes(), requestBytes)
