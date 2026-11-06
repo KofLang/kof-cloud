@@ -8,6 +8,7 @@
 | Area | Estado | Prova |
 |---|---|---|
 | Fases 1–3 (tunel, publish, hostname) | ✅ verde | `e2e_test.kf` |
+| Health HTTP com prazo (DEGRADED real) | ✅ verde | `health_test.kf` |
 | Fase 4 (multi-servico + limites) | ✅ verde | `e2e_multiservice_test.kf`, `limits_test.kf` |
 | Fase 5 (AUTHENTICATED kfs_ + revoke + token-list + TTL) | ✅ verde | `service_token_test.kf` (13), `e2e_authenticated_test.kf` |
 | Fase 6 slice 1 (dominio proprio) | ✅ verde | `domains_test.kf` (sem TLS/SNI — externo; `domain verify --tls-cert` julga o PEM localmente) |
@@ -26,7 +27,7 @@
 ```bash
 export PATH=/home/mel/tools/jdk-25/bin:$PATH
 KOF=/home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar
-java -jar $KOF test --target jvm --timeout 150   # 46 suites, 0 falhas
+java -jar $KOF test --target jvm --timeout 150   # 47 suites, 0 falhas
 java -jar $KOF build --output /tmp/kofcloud-check # compila sem erro
 ```
 
@@ -37,7 +38,7 @@ Ver `13-kof-apis.md` e `14-modules.md`.
 ## Marcadores por area (goldens)
 
 Cada suite imprime `PASS <nome>` por teste e `0 failed of N tests` no fim;
-o run total imprime `46 passed, 0 failed`. Falha = nome do teste + assert
+o run total imprime `47 passed, 0 failed`. Falha = nome do teste + assert
 + abort sem cleanup (listeners presos ate o `--timeout` matar — ver
 `15-tests.md` sobre sentinelas).
 
@@ -88,9 +89,10 @@ o run total imprime `46 passed, 0 failed`. Falha = nome do teste + assert
 | ranking de Edges (F14 s2) | `tests/edge_select_test.kf` | 5 |
 | carga explícita + migrate (F16 s1) | `tests/migrate_test.kf` | 5 |
 | credencial da conta com ciclo de vida (F19 s3) | `tests/account_token_test.kf` | 5 |
+| health HTTP com prazo (F4) | `tests/health_test.kf` | 2 |
 | teto de resposta + cabeçalho (F14 s3 parcial) | `tests/relay_limit_test.kf` | 3 |
 
-Total: 262 testes. Ver `15-tests.md` para a matriz.
+Total: 264 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

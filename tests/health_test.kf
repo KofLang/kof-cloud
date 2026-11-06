@@ -1,0 +1,109 @@
+import kofcloud.agent.Health
+import kofcloud.model.Service
+import kofcloud.protocol.Bytes
+import kofcloud.util.Limits
+import testkit.Support
+
+// Health check do servico local (docs/04-service.md).
+//
+// Antes o check era so um connect TCP: um servico que aceitava a conexao e
+// devolvia 500 — ou nunca respondia — ficava ONLINE para sempre, e DEGRADED
+// nunca era emitido. Agora e um GET / de verdade com prazo: < 500 = ONLINE,
+// >= 500 ou sem resposta a tempo = DEGRADED, recusa = OFFLINE.
+
+Service healthService(Int port, String allowPaths) {
+    return Service("svc", "acc", "dev", "site", "127.0.0.1", port, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", allowPaths)
+}
+
+// Servidor TCP cru que responde sempre com `raw` depois de ler o pedido.
+void serveRawFixed(Listener listener, String raw) {
+    var open = true
+    while (open) {
+        try {
+            var peer = listener.accept()
+            var worker = spawn {
+                peer.receive(8192)
+                peer.send(bytesFromString(raw))
+                peer.close()
+            }
+        } catch (String e) {
+            open = false
+        }
+    }
+}
+
+// Servidor que aceita e NUNCA responde (conexoes ficam presas ate o fim).
+void serveSilent(Listener listener, List<Conn> held) {
+    var open = true
+    while (open) {
+        try {
+            var peer = listener.accept()
+            held.add(peer)
+        } catch (String e) {
+            open = false
+        }
+    }
+}
+
+test "health: status line e caminho da sonda sao puros", "health-unit" {
+    assert(parseStatusLine("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n") == 200, "200")
+    assert(parseStatusLine("HTTP/1.1 500 Internal Server Error\r\n") == 500, "500")
+    assert(parseStatusLine("HTTP/1.0 404 Not Found") == 404, "sem crlf final")
+    assert(parseStatusLine("garbage") == 0, "nao HTTP")
+    assert(parseStatusLine("") == 0, "vazio")
+    assert(parseStatusLine("HTTP/1.1 abc OK") == 0, "status nao numerico")
+
+    // Sem allowlist: /. Com allowlist: o primeiro caminho literal — `/` pode
+    // nao estar nela e um 403 seria lido como falha de health.
+    var plain = healthService(8080, "")
+    assert(healthPath(plain) == "/", "sem allowlist usa /")
+    var restricted = healthService(8080, "/api/health,/api/*")
+    assert(healthPath(restricted) == "/api/health", "allowlist: primeiro literal")
+    var onlyWild = healthService(8080, "/api/*")
+    assert(healthPath(onlyWild) == "/", "so curinga cai no /")
+    assert(hostHeaderFor(plain) == "site.mel.kofcloud.io", "host do pedido")
+    assert(protocolIsHttp("http") && protocolIsHttp(" HTTP "), "http reconhecido")
+
+    // Fonte unica do prazo: positivo, com recuo seguro.
+    assert(limitHealthTimeoutMs() > 0, "prazo positivo")
+    var healthCycle = limitHealthMs()
+    assert(limitHealthTimeoutMs() < healthCycle, "prazo cabe no ciclo do health")
+}
+
+test "health: 200 = ONLINE, 500 = DEGRADED, sem resposta = DEGRADED, recusa = OFFLINE", "health" {
+    var okPort = 20031
+    var badPort = 20033
+    var silentPort = 20035
+    var deadPort = 20037
+
+    var okListener = net.listen(okPort)
+    var okServer = spawn { serveRawFixed(okListener, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok") }
+    var badListener = net.listen(badPort)
+    var badServer = spawn { serveRawFixed(badListener, "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n") }
+    var silentListener = net.listen(silentPort)
+    var held = listOf<Conn>()
+    var silentServer = spawn { serveSilent(silentListener, held) }
+    assert(waitForPort(okPort, 60), "servico ok no ar")
+    assert(waitForPort(badPort, 60), "servico 500 no ar")
+    assert(waitForPort(silentPort, 60), "servico mudo no ar")
+
+    var okService = healthService(okPort, "")
+    var badService = healthService(badPort, "")
+    var silentService = healthService(silentPort, "")
+    var deadService = healthService(deadPort, "")
+
+    assert(checkService(okService) == statusOnline(), "200 -> ONLINE")
+    assert(checkService(badService) == statusDegraded(), "500 -> DEGRADED (antes: ONLINE so por abrir a porta)")
+    var started = time.now()
+    assert(checkService(silentService) == statusDegraded(), "mudo -> DEGRADED no prazo")
+    var elapsed = time.now() - started
+    assert(elapsed < limitHealthTimeoutMs() * 3, "prazo respeitado (elapsed=" + intToString(elapsed) + "ms)")
+    assert(checkService(deadService) == statusOffline(), "porta fechada -> OFFLINE")
+
+    okListener.close()
+    badListener.close()
+    silentListener.close()
+    for (var c in held) {
+        c.close()
+    }
+}

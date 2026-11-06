@@ -56,6 +56,14 @@ no E1/E2; a fase formaliza os limites por dispositivo.
 Prova: `tests/limits_test.kf` (6 testes) + `tests/e2e_multiservice_test.kf`
 (3 serviços no mesmo túnel, com isolamento de falha).
 
+**Health check HTTP com prazo (parte do contrato de `09-flows.md` §6 e `04-service.md`).**
+O check só fazia um connect TCP e `DEGRADED` nunca era emitido: um serviço que
+respondia `500` continuava `ONLINE` no Edge. Agora `agent/Health.kf` faz `GET`
+de verdade (status < 500 = `ONLINE`, ≥ 500 ou sem resposta no prazo =
+`DEGRADED`, recusa = `OFFLINE`); o prazo (`kofcloud.limits.healthTimeoutMs`,
+2 s) usa o único mecanismo do Kof para `receive` sem timeout: uma task fecha
+a conexão e o receive em voo lança (medido). Prova: `tests/health_test.kf` (2).
+
 ## Fase 5 — autenticação
 
 `PUBLIC` / `AUTHENTICATED` / `PRIVATE` no modelo e no Edge. `PRIVATE` já existe

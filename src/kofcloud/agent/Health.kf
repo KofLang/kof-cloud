@@ -2,16 +2,84 @@ package kofcloud.agent
 
 import kofcloud.model.Service
 
+import kofcloud.protocol.Bytes
 import kofcloud.protocol.Session
 import kofcloud.protocol.Tunnel
+import kofcloud.util.Limits
+import kofcloud.util.Text
 
 // Health check local. O Agent verifica se o servico responde e reporta o
 // estado ao Edge, que para de encaminhar quando o servico esta OFFLINE.
 //
-// MVP: uma conexao TCP bem-sucedida => ONLINE; recusa/timeout => OFFLINE.
-// DEGRADED fica reservado para quando houver checagem HTTP de status.
+// Regra (docs/04-service.md): para `http`, um `GET /` de verdade.
+//   conecta e responde < 500           -> ONLINE
+//   conecta mas responde >= 500        -> DEGRADED
+//   conecta mas nao responde no prazo  -> DEGRADED
+//   recusa conexao / fecha antes       -> OFFLINE
+// Antes so havia o connect TCP: um servico que aceitava e devolvia 500 (ou
+// nunca respondia) ficava ONLINE para sempre, e DEGRADED nunca era emitido.
+//
+// O prazo existe porque `receive` bloqueia e o Kof nao tem recv com timeout
+// (L3): uma task fecha a conexao depois de `limitHealthTimeoutMs()`, e o
+// receive em voo lanca (medido). Fechar o Conn de outra task e o mesmo
+// mecanismo do stopFile dos listeners.
 
 String checkService(Service service) {
+    if (protocolIsHttp(service.protocol) == false) {
+        return checkTcp(service)
+    }
+    var status = statusOffline()
+    var request = "GET " + healthPath(service) + " HTTP/1.1\r\nHost: " + hostHeaderFor(service) + "\r\nConnection: close\r\n\r\n"
+    var conn = healthConnect(service)
+    if (conn == null) {
+        return statusOffline()
+    }
+    var closer = spawn { healthDeadline(conn) }
+    try {
+        conn.send(bytesFromString(request))
+        var head = readResponseHead(conn)
+        if (head.length == 0) {
+            // Aceitou a conexao mas nao respondeu nada: nao serve http.
+            status = statusDegraded()
+        } else {
+            var code = parseStatusLine(head)
+            if (code >= 500) {
+                status = statusDegraded()
+            } else if (code >= 100) {
+                status = statusOnline()
+            } else {
+                status = statusDegraded()
+            }
+        }
+    } catch (String e) {
+        // So se chega aqui depois do connect: a conexao abriu e a resposta
+        // nao veio (o deadline fechou) ou veio quebrada. OFF-line e a
+        // recusa de conexao, tratada acima.
+        status = statusDegraded()
+    }
+    closeQuietly(conn)
+    return status
+}
+
+// Connect com resultado nulavel: a recusa e um valor (OFFLINE), nao um
+// throw que atravessaria a task do deadline. `Conn` nao e classe real (L1),
+// mas funciona como variavel local — inclusive nulavel.
+Conn? healthConnect(Service service) {
+    try {
+        return net.connect(service.localAddress, service.localPort)
+    } catch (String e) {
+        return null
+    }
+}
+
+// Deadline da checagem: fecha a conexao depois do prazo e o receive em voo
+// lanca. Fechar de novo uma conexao ja fechada e no-op.
+void healthDeadline(Conn conn) {
+    time.sleep(limitHealthTimeoutMs())
+    closeQuietly(conn)
+}
+
+String checkTcp(Service service) {
     try {
         var conn = net.connect(service.localAddress, service.localPort)
         conn.close()
@@ -28,5 +96,83 @@ void reportStatus(TunnelSession session, Service service) {
 void reportAllStatuses(TunnelSession session, List<Service> services) {
     for (var service in services) {
         reportStatus(session, service)
+    }
+}
+
+// Caminho checado. `service.allowPaths` e a allowlist do Edge (Fase 10 s3);
+// quando ela existe, `/` pode nao estar nela e um 403 seria lido como falha
+// de health — o primeiro caminho permitido sem curinga e a sonda honesta.
+String healthPath(Service service) {
+    for (var candidate in splitList(service.allowPaths)) {
+        if (candidate.startsWith("/") && candidate.indexOf("*") < 0) {
+            return candidate
+        }
+    }
+    return "/"
+}
+
+// Host do pedido: o hostname publico (o servico pode depender de vhost).
+String hostHeaderFor(Service service) {
+    if (service.hostname.length > 0) {
+        return service.hostname
+    }
+    return service.localAddress
+}
+
+Bool protocolIsHttp(String protocol) {
+    return protocol.trim().toLowerCase() == "http"
+}
+
+// Le ate o fim do cabecalho da resposta (ou do teto dele).
+String readResponseHead(Conn conn) {
+    var acc = bytesEmpty()
+    var found = false
+    while (found == false) {
+        var chunk = conn.receive(receiveChunkBytes())
+        if (chunk.length == 0) {
+            break
+        }
+        acc = bytesConcat(acc, chunk)
+        if (bytesIndexOf(acc, "\r\n\r\n", 0) >= 0) {
+            found = true
+        }
+        if (acc.length > limitHealthHeadBytes()) {
+            break
+        }
+    }
+    return bytesToString(acc)
+}
+
+Int limitHealthHeadBytes() {
+    return 16384
+}
+
+// Codigo numerico da status line ("HTTP/1.1 200 OK" -> 200). Puro: 0 quando
+// a linha nao e um status HTTP.
+Int parseStatusLine(String head) {
+    var end = head.indexOf("\r\n")
+    if (end < 0) {
+        end = head.length
+    }
+    var line = head.substring(0, end)
+    if (line.startsWith("HTTP/") == false) {
+        return 0
+    }
+    var space = line.indexOf(" ")
+    if (space < 0) {
+        return 0
+    }
+    var rest = line.substring(space + 1).trim()
+    if (rest.length < 3) {
+        return 0
+    }
+    return parseIntSafe(rest.substring(0, 3), 0)
+}
+
+void closeQuietly(Conn conn) {
+    try {
+        conn.close()
+    } catch (String e) {
+        // Ja fechada (pelo deadline). Nada a fazer.
     }
 }

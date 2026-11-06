@@ -62,6 +62,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | daemon por SO (Fase 13 s1) | `daemonKind` + artefato systemd/launchd/Windows puro; install grava e imprime a ativação (nunca ativa sozinho) | `daemon_test.kf` (`daemon-os`) |
 | allowlist WAF pela CLI | `publish --allow-method`/`--allow-path` (repetíveis) com validação local; `service status` mostra a política | `publish_allow_test.kf` |
 | allowlist WAF (Fase 10 s3) | `allowMethods`/`allowPaths` no publish → `403 KCF111` antes do relay; `KCF113`/`KCF114` para política malformada; `kofcloud.json` cobre os campos (mesma normalização, drift no `--plan`/`--check`/`doctor`) | `waf_allow_test.kf` + `deploy_test.kf` |
+| health HTTP com prazo (F4) | `GET` real ao serviço local: < 500 = ONLINE, ≥ 500 ou sem resposta no prazo = DEGRADED, recusa = OFFLINE | `health_test.kf` |
 | credencial da conta com ciclo de vida (F19 s3) | `kfc_` com TTL opcional, inventário sem valores, revoke por id curto e rotação com overlap; `token list/revoke/rotate/rotation` | `account_token_test.kf` |
 | teto de resposta + cabeçalho (F14 s3 parcial) | resposta acima do teto → 502 KCF115 com stream cancelado dos dois lados (Agent para de produzir); cabeçalho sem fim → 431 KCF116 | `relay_limit_test.kf` |
 | carga explícita + `migrate`/`state-backup` (F16 s1) | `loadStatus` ok/absent/corrupt (serve avisa), `migrate --dry-run` compara contagens sem escrever, `state-backup` preserva o arquivo antes da troca de backend | `migrate_test.kf` |

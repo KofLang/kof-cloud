@@ -87,15 +87,24 @@ para autenticação própria hoje.
 
 ## Health check
 
-O **Agent** verifica localmente cada serviço publicado (uma conexão TCP a
-`localAddress:localPort`; para `http`, um `GET /`). Resultado:
+O **Agent** verifica localmente cada serviço publicado: para `http`, um
+`GET` de verdade ao serviço local (prazo `kofcloud.limits.healthTimeoutMs`,
+default 2 s), com `Host` do hostname público e o primeiro caminho literal da
+allowlist quando ela existe (`/` pode não estar nela e um `403` não é falha
+de saúde). Resultado:
 
 | Estado | Condição |
 |---|---|
-| `ONLINE` | conecta e responde |
-| `OFFLINE` | recusa conexão / timeout |
-| `DEGRADED` | conecta mas responde ≥ 500 ou timeout parcial |
+| `ONLINE` | conecta e responde com status < 500 |
+| `OFFLINE` | recusa a conexão |
+| `DEGRADED` | conecta mas responde ≥ 500 (ou status inválido), ou não responde dentro do prazo |
 | `UNKNOWN` | ainda não verificado |
+
+Antes o check era só um connect TCP: um serviço que aceitava a conexão e
+devolvia `500` — ou nunca respondia — ficava `ONLINE` para sempre, e
+`DEGRADED` nunca era emitido. O prazo usa o único mecanismo disponível no
+Kof (sem `recv` com timeout, L3): uma task fecha a conexão depois do prazo e
+o `receive` em voo lança.
 
 O estado vai ao Edge no frame `STATUS`. Quando um serviço fica `OFFLINE`, o Edge
 **para de encaminhar** para ele e devolve `503` — sem derrubar os outros

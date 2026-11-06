@@ -77,6 +77,12 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 * **TLS no Edge público não existe** (L2: `net` sem TLS; L16: handler
   `web.app()` devolve `String` e corrompe binário). O Edge faz HTTP com
   terminador externo. Ver `12-tls.md`.
+* **O health check lê só a linha de status da resposta.** O `GET` do Agent
+  não segue o corpo nem revalida a cada requisição do Edge: um serviço que
+  responde `200` e depois falha é detectado na próxima checagem (ciclo
+  `kofcloud.limits.healthMs`, 5 s), não na hora. O prazo é por checagem e
+  mede até o cabeçalho chegar — um serviço que manda cabeçalho rápido e
+  trava no corpo conta como `ONLINE`.
 * **O Edge fala HTTP/1.1.** Sem pipelining avançado, sem trailers.
 * **Sem half-close no protocolo.** Um stream termina com `END`/`RESET`; não há
   sinal de "não vou mais escrever, mas ainda leio".
