@@ -273,6 +273,28 @@ Int limitEdgeAuthFailureWindowMs() {
     return window
 }
 
+// Edge sem heartbeat (Fase 17 slice 1): quantas sessoes mudas o sweeper
+// derruba dentro da janela ate abrir o incidente global. Derrubar uma sessao
+// ociosa e rotina (Agent parado, notebook suspenso); varias em sequencia
+// significam loop de reconexao. Limiar baixo de proposito: o custo de olhar
+// e baixo, e cada queda e um tunel que caiu na pratica. Mesma semantica de
+// recuo: zerado/negativo volta ao default.
+Int limitEdgeIdleTimeoutThreshold() {
+    var threshold = config.int("kofcloud.limits.edgeIdleTimeoutThreshold", 5)
+    if (threshold <= 0) {
+        threshold = 5
+    }
+    return threshold
+}
+
+Int limitEdgeIdleTimeoutWindowMs() {
+    var window = config.int("kofcloud.limits.edgeIdleTimeoutWindowMs", 300000)
+    if (window <= 0) {
+        window = 300000
+    }
+    return window
+}
+
 // Limiar do detector de revogacao em lote (por conta, Fase 17 slice 1):
 // quantas revogacoes (device ou token) dentro da janela abrem o incidente.
 // Fonte unica do `Registry.detectBulkRevokes` — os dois ramos (device e

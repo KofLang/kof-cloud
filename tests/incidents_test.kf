@@ -47,6 +47,16 @@ test "incidentes: severidade e resumo por sinal", "incident-unit" {
     // Sinais distintos: vocabulario fechado, mesmo nivel por desenho.
     assert(incidentEdgeAuthFailures() != incidentEdgeRefusals(), "sinais separados")
     assert(incidentSeverityFor(incidentEdgeAuthFailures()) == incidentSeverityFor(incidentEdgeRefusals()), "mesmo nivel")
+    // Edge sem heartbeat: quedas por ociosidade repetidas. Limiar baixo
+    // (cada queda e um tunel que caiu de verdade) e janela folgada (300 s).
+    assert(incidentSeverityFor(incidentEdgeIdleTimeouts()) == "WARN", "quedas por ociosidade e WARN")
+    assert(incidentSummaryFor(incidentEdgeIdleTimeouts()).length > 0, "resumo das quedas presente")
+    assert(edgeIdleTimeoutThreshold() == 5, "limiar de ociosidade travado")
+    assert(edgeIdleTimeoutThreshold() == limitEdgeIdleTimeoutThreshold(), "ociosidade delega na fonte")
+    assert(edgeIdleTimeoutWindowMs() == 300000, "janela de ociosidade travada")
+    assert(edgeIdleTimeoutWindowMs() == limitEdgeIdleTimeoutWindowMs(), "janela de ociosidade delega na fonte")
+    assert(incidentEdgeIdleTimeouts() != incidentEdgeRefusals(), "ociosidade separada das recusas")
+    assert(incidentEdgeIdleTimeouts() != incidentEdgeAuthFailures(), "ociosidade separada do 401")
     assert(errIncidentNotFound().indexOf("KCF125") >= 0, "codigo KCF125")
     assert(errHint(errIncidentNotFound()).length > 0, "Hint presente")
 }
@@ -209,6 +219,50 @@ test "incidentes: rajada de 401 no Edge abre incidente, controlada nao", "incide
     stale.authFailureProbe.count = edgeAuthFailureThreshold() - 1
     stale.authFailureProbe.windowStart = time.now() - edgeAuthFailureWindowMs() - 1000
     noteEdgeAuthFailureIncident(stale)
+    assert(stale.registry.allIncidents().size == 0, "janela vencida reseta antes de contar")
+}
+
+test "incidentes: quedas por ociosidade no Edge abrem incidente próprio", "incident-idle" {
+    var registry = Registry(incidentsPath("idle"))
+    var edgeState = EdgeState(registry)
+    edgeState.idleTimeoutProbe.count = edgeIdleTimeoutThreshold() - 1
+    edgeState.idleTimeoutProbe.windowStart = time.now()
+    noteEdgeIdleTimeoutIncident(edgeState)
+    var list = registry.incidentsForAccount("", true)
+    assert(list.size == 1, "limiar de quedas abre o global")
+    if (list.size == 1) {
+        assert(list.get(0).kind == incidentEdgeIdleTimeouts(), "sinal de ociosidade")
+        assert(list.get(0).accountId.length == 0, "escopo global (sem device)")
+        assert(list.get(0).severity == "WARN", "WARN")
+        // Privacidade: o sinal nao carrega device, hostname nem token.
+        assert(list.get(0).summary.indexOf(".") < 0, "sem hostname no resumo")
+        assert(list.get(0).summary.indexOf("kfs_") < 0, "sem credencial no resumo")
+    }
+
+    // Uma queda isolada nao e incidente (Agent parado e rotina).
+    var quiet = EdgeState(Registry(incidentsPath("idle2")))
+    noteEdgeIdleTimeoutIncident(quiet)
+    assert(quiet.registry.allIncidents().size == 0, "uma queda nao e incidente")
+
+    // Sondas independentes: quedas nao antecipam recusas nem 401.
+    var shared = EdgeState(Registry(incidentsPath("idle3")))
+    shared.idleTimeoutProbe.count = edgeIdleTimeoutThreshold() - 1
+    noteEdgeIdleTimeoutIncident(shared)
+    noteEdgeRefusalIncident(shared)
+    noteEdgeAuthFailureIncident(shared)
+    var kinds = shared.registry.allIncidents()
+    assert(kinds.size == 1, "so a sonda de ociosidade abriu")
+    if (kinds.size == 1) {
+        assert(kinds.get(0).kind == incidentEdgeIdleTimeouts(), "sinal de ociosidade")
+    }
+    assert(shared.refusalProbe.count == 1, "recusas contaram na propria sonda")
+    assert(shared.authFailureProbe.count == 1, "401 contou na propria sonda")
+
+    // Janela vencida zera o contador.
+    var stale = EdgeState(Registry(incidentsPath("idle4")))
+    stale.idleTimeoutProbe.count = edgeIdleTimeoutThreshold() - 1
+    stale.idleTimeoutProbe.windowStart = time.now() - edgeIdleTimeoutWindowMs() - 1000
+    noteEdgeIdleTimeoutIncident(stale)
     assert(stale.registry.allIncidents().size == 0, "janela vencida reseta antes de contar")
 }
 

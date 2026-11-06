@@ -1,6 +1,6 @@
 # STATUS — estado medido do KofCloud
 
- retrato honesto em 2026-10-24: o que esta verde, como provar, o que falta.
+ retrato honesto em 2026-11-04: o que esta verde, como provar, o que falta.
  Nada aqui e aspiracional — cada linha tem prova executavel.
 
 ## Estado
@@ -52,7 +52,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | service token | `tests/service_token_test.kf` | 13 |
 | erros R6 | `tests/errors_test.kf` | 10 |
 | dominios | `tests/domains_test.kf` | 9 |
-| metricas | `tests/metrics_test.kf` | 7 |
+| metricas | `tests/metrics_test.kf` | 8 |
 | rate limit | `tests/ratelimit_test.kf` | 2 |
 | agent metrics | `tests/agent_metrics_test.kf` | 3 |
 | abuso | `tests/abuse_test.kf` | 3 |
@@ -76,7 +76,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | painel somente-leitura | `tests/panel_test.kf` | 3 |
 | rotacao de kfs_ (Fase 19 s3) | `tests/rotate_test.kf` | 5 |
 | `security.txt` + `SECURITY.md` (Fase 19 s1 parcial) | `tests/security_test.kf` | 3 |
-| incidentes (Fase 17 s1 + template pós-mortem s3) | `tests/incidents_test.kf` | 10 |
+| incidentes (Fase 17 s1 + template pós-mortem s3) | `tests/incidents_test.kf` | 11 |
 | contenção (Fase 17 s2) | `tests/freeze_test.kf` | 8 |
 | status page (Fase 17 s3 parcial) | `tests/status_page_test.kf` | 5 |
 | publish com allowlist pela CLI (F10 s3) | `tests/publish_allow_test.kf` | 3 |
@@ -86,7 +86,7 @@ o run total imprime `31 passed, 0 failed`. Falha = nome do teste + assert
 | higiene de credenciais (F19 s2) | `tests/token_hygiene_test.kf` | 4 |
 | painel de gestão completa (F12 s2) | `tests/panel_actions_test.kf` | 2 |
 
-Total: 235 testes. Ver `15-tests.md` para a matriz.
+Total: 237 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

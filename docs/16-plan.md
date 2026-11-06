@@ -624,10 +624,21 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   janela. Limiar/janela em `util/Limits.kf`
   (`kofcloud.limits.edgeAuthFailureThreshold/WindowMs`, recuo seguro).
   Prova: `tests/incidents_test.kf` (`incident-unit` + `incident-auth` puro +
-  `incident-auth-e2e` com Edge real e token errado). **Pendentes:** pico de
+  `incident-auth-e2e` com Edge real e token errado).
+
+  **Implementado (Edge sem heartbeat — quedas por ociosidade):** o sweeper
+  que já derrubava sessão muda (só PING) agora alimenta uma terceira sonda
+  (`idleTimeoutProbe`, separada das outras duas): ≥5 quedas por ociosidade
+  em 300 s abrem `edge_idle_timeouts` (WARN, global). Uma queda isolada é
+  rotina (Agent parado, notebook suspenso); a sequência é o sinal de Agent
+  preso em reconexão. O incidente não carrega device nem hostname. Limiar e
+  janela em `util/Limits.kf` (`kofcloud.limits.edgeIdleTimeoutThreshold/
+  WindowMs`, recuo seguro). Prova: `incident-idle` (puro: limiar, isolada
+  não abre, sondas independentes, janela vencida) e `idle-e2e` estendido (o
+  sweeper real derruba a sessão e abre o global). **Pendentes:** pico de
   429 por hostname (o rate limit já conta por hostname, mas abrir incidente
-  por hostname violaria a regra de não ter cardinalidade por cliente),
-  expiração em massa de `kfs_`, Edge sem heartbeat.
+  por hostname violaria a regra de não ter cardinalidade por cliente) e
+  expiração em massa de `kfs_`.
 
 * **Slice 2 — contenção em um comando.** `kof cloud freeze <alvo>`
   (conta|device|service|edge): congela tudo do alvo (suspend + revoga

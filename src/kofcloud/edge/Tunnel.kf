@@ -173,6 +173,7 @@ void tunnelIdleSweeper(EdgeState state, TunnelSession session, String deviceId, 
                 state.unbind(deviceId, sessionId)
                 session.close()
                 noteTunnelRefused("IDLE_TIMEOUT")
+                noteEdgeIdleTimeoutIncident(state)
                 open = false
             } else {
                 for (var streamId in session.idleStreams(state.streamIdleMs)) {
@@ -279,6 +280,16 @@ Long edgeAuthFailureWindowMs() {
     return limitEdgeAuthFailureWindowMs()
 }
 
+// Edge sem heartbeat: quedas por ociosidade na janela. Limiar/janela
+// proprios porque uma queda isolada e esperada (Agent parado).
+Int edgeIdleTimeoutThreshold() {
+    return limitEdgeIdleTimeoutThreshold()
+}
+
+Long edgeIdleTimeoutWindowMs() {
+    return limitEdgeIdleTimeoutWindowMs()
+}
+
 // Sonda de janela deslizante simples (contador + inicio). Uma instancia por
 // sinal: recusas de tunel e falhas de autenticacao nao dividem contador.
 class RateProbe {
@@ -292,8 +303,8 @@ class RateProbe {
 }
 
 // Conta uma ocorrencia e diz se o limiar foi atingido DENTRO da janela.
-// Fonte unica dos dois detectores do Edge: o reset e o incremento vivem
-// aqui, entao um deles nao pode esquecer o reset e nunca abrir o incidente.
+// Fonte unica dos detectores do Edge: o reset e o incremento vivem aqui,
+// entao um deles nao pode esquecer o reset e nunca abrir o incidente.
 Bool probeHit(RateProbe probe, Int threshold, Long windowMs) {
     var now = time.now()
     if (now - probe.windowStart > windowMs) {
@@ -315,5 +326,15 @@ void noteEdgeRefusalIncident(EdgeState state) {
 void noteEdgeAuthFailureIncident(EdgeState state) {
     if (probeHit(state.authFailureProbe, edgeAuthFailureThreshold(), edgeAuthFailureWindowMs())) {
         state.registry.raiseIncident(incidentEdgeAuthFailures(), "")
+    }
+}
+
+// "Edge sem heartbeat": o sweeper derruba a sessao que passou do idle so
+// com PING. Uma queda isolada e rotina; quedas repetidas na janela sao um
+// Agent preso em reconexao (cada reconexao volta muda e cai de novo).
+// Mesmo mecanismo das outras sondas; sinal proprio e global (sem device).
+void noteEdgeIdleTimeoutIncident(EdgeState state) {
+    if (probeHit(state.idleTimeoutProbe, edgeIdleTimeoutThreshold(), edgeIdleTimeoutWindowMs())) {
+        state.registry.raiseIncident(incidentEdgeIdleTimeouts(), "")
     }
 }

@@ -1,6 +1,7 @@
 import kofcloud.agent.Agent
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
+import kofcloud.model.Incident
 import kofcloud.edge.EdgeState
 import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
@@ -86,6 +87,11 @@ test "idle: Edge derruba sessao ociosa e Agent reconecta", "idle-e2e" {
     var edgeState = EdgeState(registry)
     // Ociosidade curta so neste teste (default de producao: 120 s).
     edgeState.setIdleMs(8000, 30000)
+    // Sonda de "Edge sem heartbeat" pre-carregada para UMA queda fechar o
+    // limiar: o teste nao espera 5 reconexoes (~40 s de ociosidade cada).
+    // E o caminho real do sweeper que e exercitado — o disparo e que acelera.
+    edgeState.idleTimeoutProbe.count = edgeIdleTimeoutThreshold() - 1
+    edgeState.idleTimeoutProbe.windowStart = time.now()
     var edgeStop = "/tmp/kofcloud-idle-edge-" + crypto.randomHex(4) + ".txt"
     var agentStop = "/tmp/kofcloud-idle-agent-" + crypto.randomHex(4) + ".txt"
     File(edgeStop).delete()
@@ -148,6 +154,17 @@ test "idle: Edge derruba sessao ociosa e Agent reconecta", "idle-e2e" {
     // O túnel novo serve sem intervencao.
     assert(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-idle", "tunel novo serve")
     assert(metricValue(observability.metrics(), "kofcloud_edge_tunnel_refused_total_idle_timeout") >= 1, "kill contado")
+    // Edge sem heartbeat (Fase 17 s1): a queda por ociosidade alimentou a
+    // sonda propria e, no limiar, abriu o incidente global — sem device nem
+    // hostname no sinal.
+    var idleIncidents = registry.allIncidents()
+    assert(idleIncidents.size == 1, "queda por ociosidade abre o global")
+    if (idleIncidents.size == 1) {
+        assert(idleIncidents.get(0).kind == incidentEdgeIdleTimeouts(), "sinal de ociosidade")
+        assert(idleIncidents.get(0).accountId.length == 0, "escopo global")
+        assert(idleIncidents.get(0).summary.indexOf("site.mel") < 0, "sem hostname no incidente")
+    }
+    assert(edgeState.refusalProbe.count == 0, "queda por ociosidade nao e recusa de tunel")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)

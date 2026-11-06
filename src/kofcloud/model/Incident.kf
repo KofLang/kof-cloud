@@ -46,6 +46,14 @@ String incidentEdgeAuthFailures() {
     return "edge_auth_failures"
 }
 
+// Edge sem heartbeat: sessao muda (so PING) e derrubada pelo sweeper de
+// ociosidade. Uma sessao derrubada e rotina; varias na mesma janela
+// significam Agent preso em loop de reconexao (rede, DNS, credencial) — o
+// padrao e o sinal, nao a sessao isolada.
+String incidentEdgeIdleTimeouts() {
+    return "edge_idle_timeouts"
+}
+
 // Contencao (slice 2): o incidente registra o alvo congelado.
 String incidentFreezeService() {
     return "freeze_service"
@@ -67,6 +75,9 @@ String incidentSeverityFor(String kind) {
     if (kind == incidentBulkTokenRevokes() || kind == incidentEdgeRefusals() || kind == incidentEdgeAuthFailures()) {
         return severityWarn()
     }
+    if (kind == incidentEdgeIdleTimeouts()) {
+        return severityWarn()
+    }
     if (kind == incidentFreezeService() || kind == incidentFreezeDevice() || kind == incidentFreezeAccount()) {
         return severityWarn()
     }
@@ -86,6 +97,9 @@ String incidentSummaryFor(String kind) {
     }
     if (kind == incidentEdgeAuthFailures()) {
         return "many failed service-token authentications at the edge in a short window"
+    }
+    if (kind == incidentEdgeIdleTimeouts()) {
+        return "many idle tunnel sessions dropped at the edge in a short window"
     }
     if (kind == incidentFreezeService()) {
         return "service frozen for incident containment"
