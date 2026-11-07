@@ -484,6 +484,15 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   `_invalid_response`) e os bytes/headers do upstream **não** são ecoados.
   Prova: `tests/framing_test.kf` (`framing-badresp-unit` + e2e: DELETE
   responde lixo → 502, corpo sem vazamento, métrica contada).
+* **Slice 2k — linha de requisição validada ✅.** O parser aproveitava as
+  partes que existiam: medido, `GE T / HTTP/1.1` virava método `GE` e path
+  `T`, e uma linha de STATUS (`HTTP/1.1 200 OK`) era aceita como pedido. Agora
+  `requestLineIsValid` (pura) exige exatamente três partes, método `token`
+  (sem espaço/controle), path absoluto e versão `HTTP/1.0`/`1.1`; linha
+  inválida deixa o método vazio e o `HttpFront` responde `400 KCF132`
+  (+ métrica `_invalid_request_line`) antes de rotear. Prova:
+  `tests/framing_test.kf` (`framing-reqline-unit` + e2e: quatro partes e
+  status-line → 400).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task

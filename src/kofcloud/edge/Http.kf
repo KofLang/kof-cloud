@@ -243,6 +243,37 @@ List<String> splitLines(String text) {
     return out
 }
 
+// Linha de requisicao valida? `METODO SP PATH SP HTTP/<versao>` com exatamente
+// tres partes nao vazias (RFC 9112 §3). Medido: `GE T / HTTP/1.1` virava
+// metodo `GE` e path `T` (split(" ") aproveitando as partes), e uma linha de
+// STATUS (`HTTP/1.1 200 OK`) era aceita como requisicao — o Edge respondia um
+// pedido que ninguem fez. Pura.
+Bool requestLineIsValid(String line) {
+    var parts = line.split(" ")
+    if (parts.length != 3) {
+        return false
+    }
+    var method = parts[0]
+    var path = parts[1]
+    var version = parts[2]
+    if (method.length == 0 || path.length == 0) {
+        return false
+    }
+    // Metodo e `token` (RFC 9110 §5.6.2): sem separador, espaco nem controle.
+    var i = 0
+    while (i < method.length) {
+        var c = method.charAt(i) as Int
+        if (c <= 32 || c >= 127) {
+            return false
+        }
+        i = i + 1
+    }
+    if (path.indexOf(" ") >= 0 || path.charAt(0) != '/') {
+        return false
+    }
+    return version == "HTTP/1.0" || version == "HTTP/1.1"
+}
+
 HttpRequest parseRequest(Byte[] raw) {
     var headEnd = bytesIndexOf(raw, "\r\n\r\n", 0)
     var head = ""
@@ -260,12 +291,14 @@ HttpRequest parseRequest(Byte[] raw) {
     if (lines.size > 0) {
         var requestLine = lines.get(0)
         var parts = requestLine.split(" ")
-        if (parts.length >= 3) {
+        if (requestLineIsValid(requestLine)) {
             method = parts[0]
             path = parts[1]
             version = parts[2]
         }
     }
+    // Linha invalida deixa `method` vazio de proposito: o chamador recusa com
+    // 400 antes de rotear (ver HttpFront) em vez de inventar metodo/path.
     var headers = listOf<String>()
     var i = 1
     while (i < lines.size) {

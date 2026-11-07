@@ -135,6 +135,16 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         noteHttpFinished("denied", "KCF118", raw.length, badBoundary.length, time.now() - started)
         return
     }
+    // Linha de requisicao fora do formato: recusa antes de rotear. Antes o
+    // parser aproveitava as partes que existiam (`GE T / HTTP/1.1` virava
+    // metodo `GE` e path `T`) e uma linha de status passava como pedido.
+    if (request.method.length == 0) {
+        var badLine = errorResponse(400, errInvalidRequestLine())
+        conn.send(badLine)
+        conn.close()
+        noteHttpFinished("denied", "KCF132", raw.length, badLine.length, time.now() - started)
+        return
+    }
     // Host ambiguo (ausente, duplicado ou com caractere invalido): recusa
     // antes de rotear. O Edge repassa o pedido reconstruido ao servico local;
     // se roteia por um Host e entrega outro, o roteamento vira sugestao — um

@@ -255,6 +255,14 @@ String errInvalidUpstreamResponse() {
     return "KCF131: upstream sent an invalid HTTP response"
 }
 
+// Linha de requisicao fora de `METODO SP PATH SP HTTP/1.x` (duas partes, quatro
+// partes, metodo com espaco/controle, path relativo). Antes o parser
+// aproveitava as partes que existiam: `GE T / HTTP/1.1` virava metodo `GE` e
+// path `T`, e uma linha de status era aceita como pedido.
+String errInvalidRequestLine() {
+    return "KCF132: invalid or ambiguous request line"
+}
+
 // ---- dominio proprio (Fase 6) ----
 
 String errInvalidCustomHostname() {
@@ -407,6 +415,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF119") >= 0) {
         return "O `Host` do pedido esta ausente, duplicado ou tem caractere invalido — mande exatamente um hostname valido (ex: `Host: site.mel.kofcloud.io`); o Edge roteia por ele e nao adivinha qual vale."
+    }
+    if (raw.indexOf("KCF132") >= 0) {
+        return "A linha de requisicao nao esta no formato `METODO SP PATH SP HTTP/1.1` — mande exatamente tres partes, metodo sem espaco e path comecando por `/`."
     }
     if (raw.indexOf("KCF131") >= 0) {
         return "O servico local respondeu algo que nao e HTTP (linha de status invalida) — confira a aplicacao e o `kof cloud logs --runtime`; o Edge nao repassa bytes que nao consegue enquadrar."

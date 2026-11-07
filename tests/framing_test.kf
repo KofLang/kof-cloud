@@ -257,6 +257,32 @@ test "framing: resposta nao-HTTP do upstream vira 502 KCF131", "framing-badresp-
     assert(errHint(errInvalidUpstreamResponse()).indexOf("HTTP") >= 0, "Hint explica")
 }
 
+
+test "framing: linha de requisicao fora do formato vira 400 KCF132", "framing-reqline-unit" {
+    // Tres partes, metodo token, path absoluto e versao HTTP/1.x.
+    assert(requestLineIsValid("GET / HTTP/1.1"), "GET simples")
+    assert(requestLineIsValid("POST /api/x?y=1 HTTP/1.0"), "query e 1.0")
+    assert(requestLineIsValid("DELETE / HTTP/1.1"), "outro metodo")
+    assert(requestLineIsValid("GE T / HTTP/1.1") == false, "quatro partes")
+    assert(requestLineIsValid("GET /") == false, "duas partes")
+    assert(requestLineIsValid("HTTP/1.1 200 OK") == false, "linha de status")
+    assert(requestLineIsValid("GET  / HTTP/1.1") == false, "espaco duplo")
+    assert(requestLineIsValid("GET x HTTP/1.1") == false, "path relativo")
+    assert(requestLineIsValid("GET / HTTP/2.0") == false, "versao nao suportada")
+    assert(requestLineIsValid("G\tT / HTTP/1.1") == false, "tab no metodo")
+    // Parser: linha invalida deixa método vazio (o chamador recusa); válida
+    // preenche método/path/versão.
+    var ok = parseRequest(bytesFromString("GET /a HTTP/1.1\r\nHost: x\r\n\r\n"))
+    assert(ok.method == "GET" && ok.path == "/a" && ok.version == "HTTP/1.1", "parser valido")
+    var bad = parseRequest(bytesFromString("GE T / HTTP/1.1\r\nHost: x\r\n\r\n"))
+    assert(bad.method == "", "linha de 4 partes nao inventa metodo")
+    var status = parseRequest(bytesFromString("HTTP/1.1 200 OK\r\n\r\n"))
+    assert(status.method == "", "status line nao vira pedido")
+    // Codigo e Hint (R6).
+    assert(errInvalidRequestLine().indexOf("KCF132") >= 0, "codigo KCF132")
+    assert(errHint(errInvalidRequestLine()).indexOf("METODO") >= 0, "Hint explica")
+}
+
 // Troca crua: manda os bytes e le ate o Edge fechar (Connection: close).
 String rawExchange(Int port, String raw) {
     var conn = net.connect("127.0.0.1", port)
@@ -359,6 +385,27 @@ test "framing: enquadramento ambiguo vira 400 KCF118 e gigante vira 413", "frami
         }
     }
     assert(hostCounted, "recusa por Host contada")
+
+    // Linha de requisicao fora do formato: 400 KCF132 antes de rotear. Sem
+    // isso "GE T / HTTP/1.1" virava metodo "GE" + path "T" e seguia adiante.
+    var badLine = rawExchange(httpPort, "GE T / HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
+    assert(statusOf(badLine) == 400, "linha de 4 partes -> 400; recebeu " + intToString(statusOf(badLine)))
+    assert(bodyOf(badLine).indexOf("KCF132") >= 0, "KCF132 no corpo")
+    var statusLine = rawExchange(httpPort, "HTTP/1.1 200 OK\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
+    assert(statusOf(statusLine) == 400, "status line como pedido -> 400")
+    assert(bodyOf(statusLine).indexOf("KCF132") >= 0, "KCF132 na status line")
+
+    var lineCounted = false
+    var lineWaits = 100
+    while (lineWaits > 0 && lineCounted == false) {
+        if (metricValue(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_request_line") >= 1) {
+            lineCounted = true
+        } else {
+            time.sleep(50)
+            lineWaits = lineWaits - 1
+        }
+    }
+    assert(lineCounted, "recusa por linha de requisicao contada")
 
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)
