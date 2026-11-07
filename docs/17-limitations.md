@@ -62,6 +62,10 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   produção multi-nó.
 * **`AUTHENTICATED` usa token de conta**, não um provedor de identidade
   federado.
+* **Presença é por processo do Edge.** `/v1/presence` responde as sessões
+  vivas *neste* Edge; com control plane e Edge separados, ou com mais de um
+  Edge, a lista fica vazia/parcial (ausência, não mentira). Não há pub/sub
+  entre nós — é o slice 2 da Fase 16.
 * **Rate limiting é por processo.** Não é global entre nós.
 * **Certificados são externos.** O operador fornece o PEM. O
   `domain verify --tls-cert` confere localmente só o que dá para julgar sem

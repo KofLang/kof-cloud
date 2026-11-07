@@ -1,0 +1,110 @@
+import kofcloud.agent.Agent
+import kofcloud.cli.Commands
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.model.Device
+import kofcloud.store.Store
+import kofcloud.util.Limits
+import testkit.Support
+
+// Presença do dispositivo no `device list`.
+//
+// A lista mostrava só o status de cadastro (ACTIVE/REVOKED/SUSPENDED) — diz
+// se o device existe, nunca se ele está CONECTADO. Para responder "este
+// notebook está no ar?" o operador precisava cruzar `status` + `presence`;
+// agora a linha traz a presença REAL confirmada pelo Edge, com a mesma regra
+// do `status` e do `doctor`. Consulta falhou = "desconhecido", nunca um
+// OFFLINE inventado.
+
+Device deviceFixture(String id, String name, String status) {
+    return Device(id, "acc-1", name, "pk", status, 0L, 0L)
+}
+
+test "device list: presenca por linha, falha nao vira OFFLINE", "devpresence-unit" {
+    var online = deviceFixture("dev-111", "notebook", "ACTIVE")
+    var offline = deviceFixture("dev-222", "servidor", "ACTIVE")
+    var suspended = deviceFixture("dev-333", "antigo", "SUSPENDED")
+    var presence = "[\"dev-111\"]"
+
+    var l1 = deviceListLine(online, presence, "")
+    assert(l1.indexOf("notebook") == 0, "comeca pelo nome")
+    assert(l1.indexOf("dev-111") >= 0, "id presente")
+    assert(l1.indexOf("ACTIVE") >= 0, "status de cadastro")
+    assert(l1.indexOf("tunel: ONLINE") >= 0, "presenca confirmada")
+
+    var l2 = deviceListLine(offline, presence, "")
+    assert(l2.indexOf("tunel: OFFLINE") >= 0, "ausente da presenca = OFFLINE")
+
+    // Suspenso continua com o cadastro visivel (a presenca e outro eixo).
+    var l3 = deviceListLine(suspended, presence, "")
+    assert(l3.indexOf("SUSPENDED") >= 0, "cadastro suspenso")
+    assert(l3.indexOf("tunel: OFFLINE") >= 0, "suspenso nao fica online")
+
+    // Falha na consulta: nao inventa OFFLINE (nem ONLINE).
+    var l4 = deviceListLine(online, "", "falha de rede")
+    assert(l4.indexOf("tunel: desconhecido") >= 0, "erro e desconhecido")
+    assert(l4.indexOf("tunel: ONLINE") < 0, "nao afirma online")
+    assert(l4.indexOf("tunel: OFFLINE") < 0, "nao afirma offline")
+
+    // Id vazio nunca casa por engano: bodyContainsId("") devolve false, entao
+    // a linha cai em OFFLINE em vez de "encontrar" o id vazio na lista.
+    assert(deviceListLine(deviceFixture("", "x", "ACTIVE"), "[\"\"]", "").indexOf("tunel: OFFLINE") >= 0, "id vazio nao casa")
+}
+
+test "device list: fim a fim mostra ONLINE com tunel vivo e OFFLINE sem", "devpresence" {
+    var controlPort = 20061
+    var tunnelPort = 20062
+
+    var registry = Registry("/tmp/kofcloud-dp-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var edgeStop = "/tmp/kofcloud-dp-edge-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+
+    // Antes do connect: presenca vazia -> OFFLINE.
+    var presenceBefore = httpGetToken(controlPort, "/v1/presence", accountToken)
+    assert(statusOf(presenceBefore) == 200, "presence acessivel")
+    var device = Device(deviceId, accountId, "notebook", "pubkey", "ACTIVE", 0L, 0L)
+    var before = deviceListLine(device, bodyOf(presenceBefore), "")
+    assert(before.indexOf("tunel: OFFLINE") >= 0, "sem tunel = OFFLINE")
+
+    // Com o Agent conectado: ONLINE.
+    var agentStop = "/tmp/kofcloud-dp-agent-" + crypto.randomHex(4) + ".txt"
+    File(agentStop).delete()
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+    var presenceAfter = httpGetToken(controlPort, "/v1/presence", accountToken)
+    var after = deviceListLine(device, bodyOf(presenceAfter), "")
+    assert(after.indexOf("tunel: ONLINE") >= 0, "tunel vivo = ONLINE")
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}

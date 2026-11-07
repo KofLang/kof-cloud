@@ -56,6 +56,16 @@ no E1/E2; a fase formaliza os limites por dispositivo.
 Prova: `tests/limits_test.kf` (6 testes) + `tests/e2e_multiservice_test.kf`
 (3 serviços no mesmo túnel, com isolamento de falha).
 
+**Presença visível no `device list` (parte do contrato de `03-device.md`).**
+O doc dizia que "sem heartbeat por 3× o control plane marca o dispositivo
+`OFFLINE`" — esse estado não existe: `status` é o ciclo de vida
+(`ACTIVE`/`REVOKED`/`SUSPENDED`) e presença é um eixo efêmero decidido pelo
+Edge. O `device list` mostrava só o cadastro, então responder "este notebook
+está no ar?" exigia cruzar dois comandos. Agora a linha traz
+`tunel: ONLINE|OFFLINE|desconhecido (motivo)` via `/v1/presence`, com a mesma
+regra do `status`/`doctor`; falha na consulta nunca vira `OFFLINE` inventado.
+Prova: `tests/device_presence_test.kf` (2).
+
 **Teto de conexões públicas simultâneas (parte do contrato de `10-edge.md`).**
 A tabela prometia "1024 conexões públicas simultâneas → `503` + fecha", mas o
 `serveHttp` spawnava uma task por `accept` sem teto: uma rajada de conexões

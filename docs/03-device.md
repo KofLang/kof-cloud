@@ -53,10 +53,26 @@ Regras:
 O dispositivo se declara presente por:
 
 1. o handshake do túnel (`HELLO` → `WELCOME`) — presença forte;
-2. `heartbeat` periódico (default 15 s) — mantém `lastSeenAt` fresco.
+2. `PING`/`PONG` a cada `heartbeatMs` (default 15 s) — mantém a sessão viva;
+3. `POST /v1/heartbeat` — atualiza `lastSeenAt` no control plane.
 
-Sem heartbeat por `3 × interval`, o control plane marca o dispositivo
-`OFFLINE` e o Edge derruba a sessão correspondente.
+**Quem decide presença é o Edge, não o control plane.** O Edge espelha
+`bind`/`unbind` das sessões num mapa em memória e `GET /v1/presence` responde
+os devices da conta com sessão viva *naquele* Edge. Não existe estado
+`OFFLINE` persistido no cadastro do dispositivo: `status` é
+`ACTIVE`/`REVOKED`/`SUSPENDED` (ciclo de vida), e presença é um eixo
+separado, efêmero. Sem frames úteis por `kofcloud.limits.tunnelIdleMs`
+(120 s), o Edge derruba a sessão e o Agent reconecta com backoff.
+
+`kof cloud device list` mostra os dois eixos na mesma linha:
+
+```
+notebook  <deviceId>  ACTIVE  tunel: ONLINE
+servidor  <deviceId>  ACTIVE  tunel: OFFLINE
+```
+
+Se a consulta de presença falhar, a coluna vira `desconhecido (motivo)` —
+nunca um `OFFLINE` inventado.
 
 ## Revogação
 

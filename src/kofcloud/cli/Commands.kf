@@ -445,6 +445,22 @@ Int cmdStatus(List<String> args) {
 
 // ---- dispositivos ----
 
+// Linha do `device list`: nome, id, status de cadastro e presenca REAL
+// confirmada pelo Edge (`/v1/presence`), nao inferida do processo local.
+// Puro: recebe o corpo do presence ja buscado (mesma regra do `status` e do
+// `doctor` — `bodyContainsId`). Lista de dispositivos sem saber qual esta
+// vivo obriga o operador a cruzar dois comandos para responder "este
+// notebook esta no ar?".
+String deviceListLine(Device device, String presenceRaw, String presenceError) {
+    var presence = "OFFLINE"
+    if (presenceError.length > 0) {
+        presence = "desconhecido (" + presenceError + ")"
+    } else if (bodyContainsId(presenceRaw, device.id)) {
+        presence = "ONLINE"
+    }
+    return device.name + "  " + device.id + "  " + device.status + "  tunel: " + presence
+}
+
 Int cmdDeviceList(List<String> args) {
     if (extraPositional(args, 0)) {
         println("uso: kof cloud device list")
@@ -461,8 +477,17 @@ Int cmdDeviceList(List<String> args) {
             println("nenhum dispositivo registrado")
             return 0
         }
+        // Presenca: uma falha na consulta nao esconde a lista — a coluna vira
+        // "desconhecido", nunca um OFFLINE inventado.
+        var presenceRaw = ""
+        var presenceError = ""
+        try {
+            presenceRaw = requireOk(http.get(session.controlUrl + "/v1/presence", authHeader(session.token)))
+        } catch (String e) {
+            presenceError = e
+        }
         for (var device in devices) {
-            println(device.name + "  " + device.id + "  " + device.status)
+            println(deviceListLine(device, presenceRaw, presenceError))
         }
         return 0
     } catch (String e) {
