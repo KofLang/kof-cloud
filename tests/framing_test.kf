@@ -1,0 +1,264 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.Http
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.model.Errors
+import kofcloud.util.Limits
+import kofcloud.util.Text
+import testkit.Support
+
+// Enquadramento do corpo no Edge (RFC 9112 §6).
+//
+// O `Content-Length` e a fronteira do corpo que o Edge repassa ao servico
+// local. Duas falhas medidas com o CLI 0.6.3:
+//  * `999999999999` era lido com parseIntSafe e virava NEGATIVO (corpo
+//    descartado em silencio); `4294967306` fazia wrap para 10 e o Edge
+//    repassava 30 bytes com um header mentiroso — request smuggling.
+//  * `Content-Length` duplicado divergente e `Transfer-Encoding` passavam
+//    adiante (o servico local recebia uma fronteira que nao era a do Edge).
+// Agora o valor e Long, e enquadramento ambiguo e recusado com 400 KCF118
+// antes de rotear; bytes alem do declarado ficam fora do corpo relayado.
+
+test "framing: Content-Length unico em Long, duplicado/TE invalidos", "framing-unit" {
+    // Ausente = sem corpo.
+    var none = parseContentLength(listOf<String>())
+    assert(none.invalid == false && none.value == 0L, "sem header = 0")
+    // Valor simples e espaco em volta.
+    var plain = parseContentLength(listOf<String>("Host: x", "Content-Length: 42"))
+    assert(plain.invalid == false && plain.value == 42L, "42")
+    var spaced = parseContentLength(listOf<String>("content-length:   7  "))
+    assert(spaced.invalid == false && spaced.value == 7L, "espacos")
+    // Dois iguais sao aceitos (o RFC permite); divergentes sao smuggling.
+    var equalDup = parseContentLength(listOf<String>("Content-Length: 7", "content-length: 7"))
+    assert(equalDup.invalid == false && equalDup.value == 7L, "duplicado igual")
+    var divergent = parseContentLength(listOf<String>("Content-Length: 3", "Content-Length: 4"))
+    assert(divergent.invalid, "duplicado divergente invalido")
+    // Nao numerico, vazio, sinal, hex, espaco interno.
+    assert(parseContentLength(listOf<String>("Content-Length: abc")).invalid, "nao numerico")
+    assert(parseContentLength(listOf<String>("Content-Length:")).invalid, "vazio")
+    assert(parseContentLength(listOf<String>("Content-Length: -5")).invalid, "negativo")
+    assert(parseContentLength(listOf<String>("Content-Length: +5")).invalid, "com sinal")
+    assert(parseContentLength(listOf<String>("Content-Length: 0x10")).invalid, "hex")
+    assert(parseContentLength(listOf<String>("Content-Length: 5 5")).invalid, "espaco interno")
+    // Nome fora da forma canonica: o Edge nao reconheceria, alguns servidores
+    // locais reconhecem — divergencia de fronteira.
+    assert(parseContentLength(listOf<String>("Content-Length : 5")).invalid, "espaco antes dos dois pontos")
+    assert(parseContentLength(listOf<String>("Content-Length")).invalid, "header sem valor")
+    // Chunked nao e decodificado pelo Edge: o header inteiro e recusado.
+    assert(parseContentLength(listOf<String>("Transfer-Encoding: chunked")).invalid, "transfer-encoding")
+    assert(parseContentLength(listOf<String>("Transfer-Encoding: identity", "Content-Length: 4")).invalid, "TE mesmo com CL")
+    // Acima de 2^31 continua valido como Long (nada de wrap/negativo).
+    var huge = parseContentLength(listOf<String>("Content-Length: 4294967306"))
+    assert(huge.invalid == false && huge.value == 4294967306L, "4294967306 sem wrap")
+    var giant = parseContentLength(listOf<String>("Content-Length: 999999999999"))
+    assert(giant.invalid == false && giant.value == 999999999999L, "999999999999 nao vira negativo")
+    assert(giant.value > (limitMaxBodyBytes() as Long), "gigante acima do teto de leitura")
+    // Codigo e Hint existem (R6).
+    assert(errInvalidContentLength().indexOf("KCF118") >= 0, "codigo KCF118")
+    assert(errHint(errInvalidContentLength()).indexOf("Content-Length") >= 0, "Hint explica o enquadramento")
+}
+
+// Troca crua: manda os bytes e le ate o Edge fechar (Connection: close).
+String rawExchange(Int port, String raw) {
+    var conn = net.connect("127.0.0.1", port)
+    conn.send(bytesFromString(raw))
+    var out = ""
+    var reading = true
+    while (reading) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            reading = false
+        } else {
+            out = out + bytesToString(chunk)
+        }
+    }
+    conn.close()
+    return out
+}
+
+Int metricValue(String exposition, String name) {
+    for (var line in exposition.split("\n")) {
+        var trimmed = line.trim()
+        if (trimmed.startsWith(name + " ")) {
+            return parseIntSafe(trimmed.substring(name.length + 1).trim(), -1)
+        }
+    }
+    return -1
+}
+
+test "framing: enquadramento ambiguo vira 400 KCF118 e gigante vira 413", "framing" {
+    var httpPort = 19958
+    var registry = Registry("/tmp/kofcloud-framing-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-framing-edge-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var host = "x.kofcloud.io"
+    // Duplicado divergente: 400 antes de rotear (sem rota, o desfecho
+    // antigo seria 404). O corpo curto mantem o teste rapido em qualquer
+    // implementacao.
+    var dup = rawExchange(httpPort, "POST / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 3\r\nContent-Length: 4\r\nConnection: close\r\n\r\nabcd")
+    assert(statusOf(dup) == 400, "CL duplicado divergente -> 400 (recebido " + intToString(statusOf(dup)) + ")")
+    assert(bodyOf(dup).indexOf("KCF118") >= 0, "KCF118 no corpo")
+
+    // Transfer-Encoding: o Edge nao decodifica chunked; repassar o header
+    // faria o servico local esperar um corpo que nunca chega.
+    var chunked = rawExchange(httpPort, "POST / HTTP/1.1\r\nHost: " + host + "\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\nabcd")
+    assert(statusOf(chunked) == 400, "chunked -> 400")
+    assert(bodyOf(chunked).indexOf("KCF118") >= 0, "KCF118 no chunked")
+
+    // Valor que fazia wrap em Int (4294967306 -> 10): agora e Long e cai no
+    // teto de leitura/politica (413), nunca em 404 com corpo de 10 bytes.
+    var wrapped = rawExchange(httpPort, "POST / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 4294967306\r\nConnection: close\r\n\r\n0123456789LEFTOVERLEFTOVERLEFTOVER")
+    assert(statusOf(wrapped) == 413, "CL 4294967306 -> 413 (sem wrap); recebido " + intToString(statusOf(wrapped)))
+    assert(bodyOf(wrapped).indexOf("KCF110") >= 0, "KCF110 no corpo")
+
+    // Valor que virava negativo: mesmo desfecho (413), nunca corpo descartado.
+    var negative = rawExchange(httpPort, "POST / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 999999999999\r\nConnection: close\r\n\r\nabcd")
+    assert(statusOf(negative) == 413, "CL 999999999999 -> 413 (nao negativo)")
+    assert(bodyOf(negative).indexOf("KCF110") >= 0, "KCF110 no corpo do gigante")
+
+    // Enquadramento valido atravessa: sem rota, 404 opaco (nao 400/413).
+    var plain = httpPostRaw(httpPort, "/", host, listOf<String>(), "ok")
+    assert(statusOf(plain) == 404, "CL valido chega ao roteamento")
+
+    // Conta por motivo, sem ecoar o valor do header.
+    var counted = false
+    var waits = 100
+    while (waits > 0 && counted == false) {
+        if (metricValue(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_framing") >= 1) {
+            counted = true
+        } else {
+            time.sleep(50)
+            waits = waits - 1
+        }
+    }
+    assert(counted, "recusa por enquadramento contada")
+
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(edgeStop).delete()
+}
+
+// Servico local que anota exatamente o corpo recebido (nao o header).
+void captureLocal(Conn peer, String[] body) {
+    var req = ""
+    var headEnd = -1
+    while (headEnd < 0) {
+        var chunk = peer.receive(4096)
+        if (chunk.length == 0) {
+            peer.close()
+            return
+        }
+        req = req + bytesToString(chunk)
+        headEnd = req.indexOf("\r\n\r\n")
+    }
+    var head = req.substring(0, headEnd)
+    var declared = parseContentLength(splitLines(head))
+    var current = req.substring(headEnd + 4)
+    var want = 0
+    if (declared.invalid == false) {
+        want = declared.value as Int
+    }
+    while (current.length < want) {
+        var chunk = peer.receive(4096)
+        if (chunk.length == 0) {
+            break
+        }
+        current = current + bytesToString(chunk)
+    }
+    // A sonda de health do Agent tambem conecta aqui; so o POST e medido.
+    if (head.indexOf("POST ") == 0) {
+        body[0] = current
+    }
+    var resp = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
+    peer.send(bytesFromString(resp))
+    peer.close()
+}
+
+test "framing: corpo relayado tem exatamente o tamanho declarado", "framing-relay" {
+    var localSvc = 19960
+    var controlPort = 19961
+    var tunnelPort = 19962
+    var httpPort = 19963
+    // Corpo real 24 bytes, declarado 10: o excedente nao pode chegar ao
+    // servico local nem virar a proxima requisicao.
+    var malicious = "0123456789LEFTOVERLEFTOVER"
+
+    var received = new String[1]
+    received[0] = ""
+    var localListener = net.listen(localSvc)
+    var localTask = spawn {
+        var serving = true
+        while (serving) {
+            try {
+                var peer = localListener.accept()
+                var worker = spawn { captureLocal(peer, received) }
+            } catch (String e) {
+                serving = false
+            }
+        }
+    }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-framing-relay-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-framing-relay-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-framing-relay-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent online")
+
+    var host = "site.mel.kofcloud.io"
+    var smuggled = rawExchange(httpPort, "POST / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 10\r\nConnection: close\r\n\r\n" + malicious)
+    assert(statusOf(smuggled) == 200, "pedido entregue")
+    assert(received[0].length == 10, "servico local recebe 10 bytes; recebeu " + intToString(received[0].length))
+    assert(received[0] == "0123456789", "sem excedente no corpo")
+    assert(received[0].indexOf("LEFTOVER") < 0, "bytes alem do declarado nao chegam ao servico")
+
+    // Caminho legitimo continua intacto.
+    var normal = httpPostRaw(httpPort, "/", host, listOf<String>(), "ok")
+    assert(statusOf(normal) == 200, "corpo normal entregue")
+    assert(received[0] == "ok", "corpo normal chega inteiro")
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    localListener.close()
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}

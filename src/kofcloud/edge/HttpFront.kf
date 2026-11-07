@@ -122,6 +122,19 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         noteHttpFinished("denied", "KCF110", raw.length, bodyOverflow.length, time.now() - started)
         return
     }
+    // Fronteira de corpo ambigua/nao suportada (Content-Length duplicado
+    // divergente, nao numerico, ou Transfer-Encoding): 400 antes de rotear.
+    // Sem isso o Edge repassava ao servico local um Content-Length diferente
+    // do corpo enviado (request smuggling) ou um header chunked que o servico
+    // esperaria indefinidamente. A leitura ja parou no teto de bytes, entao
+    // este 400 nao depende de consumir o corpo.
+    if (read.badLength) {
+        var badBoundary = errorResponse(400, errInvalidContentLength())
+        conn.send(badBoundary)
+        conn.close()
+        noteHttpFinished("denied", "KCF118", raw.length, badBoundary.length, time.now() - started)
+        return
+    }
     var service = state.route(host)
     if (service == null) {
         // Opaco: host desconhecido e servico nao roteavel (PRIVATE) respondem
@@ -186,9 +199,11 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     // WAF slice 2: teto de corpo por requisicao. Checado ANTES do relay (nao
     // consome stream, nao toca no Agent, nao le o corpo). Chaveado por
     // Content-Length DECLARADO — corpo sem Content-Length (transfer-encoding
-    // de requisicao) esta fora do MVP do Edge e nao passa por aqui.
-    var declared = contentLengthOf(request.headers)
-    if (declared > state.bodyLimitBytes()) {
+    // de requisicao) ja foi recusado acima (400 KCF118), entao aqui o valor
+    // declarado e a fronteira confiavel do corpo. Comparacao em Long: um
+    // valor valido mas acima de 2^31 nao pode virar negativo.
+    var declared = parseContentLength(request.headers).value
+    if (declared > (state.bodyLimitBytes() as Long)) {
         var tooLarge = errorResponse(413, errBodyTooLarge())
         conn.send(tooLarge)
         conn.close()

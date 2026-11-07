@@ -46,15 +46,83 @@ String headerValue(List<String> headers, String name) {
     return ""
 }
 
-Int contentLengthOf(List<String> headers) {
-    var value = headerValue(headers, "content-length")
-    return parseIntSafe(value, 0)
+// Enquadramento de corpo lido de `Content-Length` (RFC 9112 §6). O Edge nao
+// implementa `Transfer-Encoding` (chunked) e nao tem keep-alive: cada pedido
+// e uma conexao. Mesmo assim o valor declarado precisa ser confiavel, porque
+// e ele que delimita o corpo que vai ao servico local.
+//
+// `invalid` cobre os casos em que a fronteira e ambigua:
+//  * valor nao-numerico/vazio/negativo/com sinal (inclui "5 5", "+5", "0x10")
+//  * dois `Content-Length` com valores DIFERENTES (request smuggling; dois
+//    iguais sao aceitos, como o RFC permite)
+//  * `Transfer-Encoding` presente (o Edge nao decodifica chunked; repassar o
+//    header com corpo vazio faria o servico local esperar para sempre)
+//  * nome fora da forma canonica (`Content-Length : 5`, ou o header sem
+//    valor): alguns servidores aceitam, outros nao — a divergencia entre o
+//    que o Edge via e o que o servico local ve e exatamente o smuggling.
+// `value` e Long de proposito: parseIntSafe estoura acima de 2^31 e um
+// `Content-Length: 999999999999` virava NEGATIVO (corpo descartado em
+// silencio), enquanto `4294967306` voltava a 10 (wrap) e o Edge repassava
+// 30 bytes com `Content-Length: 10` mentiroso — smuggling para o servico.
+record ContentLength(Long value, Bool invalid, String detail)
+
+ContentLength parseContentLength(List<String> headers) {
+    var seen = -1L
+    for (var line in headers) {
+        var colon = line.indexOf(":")
+        if (colon < 0) {
+            var bare = line.trim().toLowerCase()
+            if (bare == "content-length" || bare == "transfer-encoding") {
+                return ContentLength(0L, true, "cabecalho de enquadramento sem valor")
+            }
+            continue
+        }
+        var name = line.substring(0, colon)
+        var lower = name.trim().toLowerCase()
+        var framing = lower == "transfer-encoding" || lower == "content-length"
+        // `Content-Length : 5`: o Edge so reconhece o nome canonico, alguns
+        // servidores locais aceitam o espaco. O servico veria um corpo que o
+        // Edge nao leu — recusa em vez de escolher um dos dois.
+        if (framing && name != name.trim()) {
+            return ContentLength(0L, true, "espaco antes dos dois pontos")
+        }
+        if (lower == "transfer-encoding") {
+            return ContentLength(0L, true, "transfer-encoding nao suportado")
+        }
+        if (lower != "content-length") {
+            continue
+        }
+        var raw = line.substring(colon + 1).trim()
+        if (raw.length == 0) {
+            return ContentLength(0L, true, "content-length vazio")
+        }
+        var i = 0
+        while (i < raw.length) {
+            var c = raw.charAt(i) as Int
+            if (c < 48 || c > 57) {
+                return ContentLength(0L, true, "content-length nao numerico")
+            }
+            i = i + 1
+        }
+        var parsed = parseLongSafe(raw, -1L)
+        if (parsed < 0L) {
+            return ContentLength(0L, true, "content-length fora do alcance")
+        }
+        if (seen >= 0L && seen != parsed) {
+            return ContentLength(0L, true, "content-length divergente")
+        }
+        seen = parsed
+    }
+    if (seen < 0L) {
+        return ContentLength(0L, false, "")
+    }
+    return ContentLength(seen, false, "")
 }
 
-// Resultado da leitura crua de um pedido: os bytes lidos e se o teto de
-// leitura do Edge cortou o pedido antes do fim. Sem esse sinal, um corpo
-// cortado seguiria para o servico local como se fosse a requisicao inteira.
-record HttpRead(Byte[] bytes, Bool overflowed)
+// Resultado da leitura crua de um pedido: os bytes lidos, se o teto de
+// leitura do Edge cortou o pedido antes do fim e se o enquadramento do corpo
+// e invalido/ambiguo (nesse caso o chamador recusa com 400 KCF118).
+record HttpRead(Byte[] bytes, Bool overflowed, Bool badLength)
 
 // Le a requisicao inteira: headers ate \r\n\r\n + corpo por Content-Length.
 //
@@ -71,7 +139,7 @@ HttpRead readRequestBytes(Conn conn, Int maxBytes) {
     while (headEnd < 0) {
         var chunk = conn.receive(receiveChunkBytes())
         if (chunk.length == 0) {
-            return HttpRead(acc, false)
+            return HttpRead(acc, false, false)
         }
         acc = bytesConcat(acc, chunk)
         headEnd = bytesIndexOf(acc, "\r\n\r\n", 0)
@@ -79,19 +147,27 @@ HttpRead readRequestBytes(Conn conn, Int maxBytes) {
             // Sem terminador de cabecalho dentro do teto: 431 no chamador
             // (o `overflowed` tambem vale, mas o terminador ausente e o
             // diagnostico mais preciso).
-            return HttpRead(acc, true)
+            return HttpRead(acc, true, false)
         }
     }
     var head = bytesToString(bytesSlice(acc, 0, headEnd))
     var headers = splitLines(head)
-    var total = headEnd + 4 + contentLengthOf(headers)
+    // Fronteira de corpo ambigua (duplicado divergente, nao numerico,
+    // Transfer-Encoding): recusa ANTES de ler/relayar. Repassar com o
+    // Content-Length original daria ao servico local um corpo com tamanho
+    // diferente do declarado — request smuggling.
+    var declared = parseContentLength(headers)
+    if (declared.invalid) {
+        return HttpRead(acc, false, true)
+    }
     // Tamanho declarado acima do teto: recusa ANTES de ler o corpo. Ler e
     // depois recusar deixaria um cliente hostil forcar `maxBytes` de
     // acumulacao por conexao.
-    if (total > maxBytes) {
-        return HttpRead(acc, true)
+    if (declared.value > (maxBytes as Long)) {
+        return HttpRead(acc, true, false)
     }
-    while (acc.length < total) {
+    var total = ((headEnd + 4) as Long) + declared.value
+    while ((acc.length as Long) < total) {
         var chunk = conn.receive(receiveChunkBytes())
         if (chunk.length == 0) {
             break
@@ -99,9 +175,14 @@ HttpRead readRequestBytes(Conn conn, Int maxBytes) {
         acc = bytesConcat(acc, chunk)
     }
     if (acc.length > maxBytes) {
-        return HttpRead(acc, true)
+        return HttpRead(acc, true, false)
     }
-    return HttpRead(acc, false)
+    // Bytes alem do declarado (pipelining ou smuggling) ficam fora do corpo:
+    // o servico local recebe exatamente o que o Content-Length prometeu.
+    if ((acc.length as Long) > total) {
+        acc = bytesSlice(acc, 0, total as Int)
+    }
+    return HttpRead(acc, false, false)
 }
 
 List<String> splitLines(String text) {

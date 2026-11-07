@@ -51,7 +51,8 @@ encaminha pelo túnel. **A aplicação do usuário nunca fica exposta diretament
 |---|---|---|
 | conexões públicas simultâneas | 1024 (`kofcloud.limits.publicConns`) | `503 KCF117` + fecha, no `accept` antes de ler o pedido; métrica `kofcloud_edge_http_connections_refused_total` (`conn_limit_test.kf`) |
 | conexões simultaneas por servico | 64 (`kofcloud.limits.serviceConns`) | `429 KCF108` + `Retry-After` (antes do OPEN; aproximado sob corrida, ver abaixo) |
-| corpo de requisicao | 1 MiB (`kofcloud.limits.httpBodyBytes`) | `413 KCF110` (antes do relay; por `Content-Length` declarado) |
+| corpo de requisicao | 1 MiB (`kofcloud.limits.httpBodyBytes`) | `413 KCF110` (antes do relay; por `Content-Length` declarado, lido em Long) |
+| enquadramento do corpo | `Content-Length` único e numérico | `400 KCF118`: duplicado divergente, valor não numérico/vazio/com sinal, `Content-Length : 5`, header sem valor, ou `Transfer-Encoding` presente (chunked não implementado); antes de rotear; métrica `_invalid_framing` (`framing_test.kf`) |
 | espera de resposta do servico | 120 s (`kofcloud.limits.tunnelIdleMs`) | `504 KCF112` se nada chegou; parcial entregue se ja havia bytes |
 | assinatura WAF | detectar: conta e segue, resposta marcada `X-KofCloud-WAF: would-block` (metodo+path, corpo e valores de header do cliente ate 64 KiB; `Authorization`/`Host`/`Content-Length`/`Connection`/`X-Forwarded-For` fora por desenho) | `serve --waf=enforce`: casa vira `403 KCF109` + `X-KofCloud-WAF: blocked` antes do relay, sem stream, sem Agent |
 | requisições por hostname e janela | 100 / 60 s | `429 KCF107` + `Retry-After` |
@@ -115,6 +116,7 @@ O corpo das respostas de erro do Edge também viaja como `KCFnnn`:
 | `403` | `KCF109` blocked by edge protection | assinatura WAF casou com enforce ligado (`serve --waf=enforce`); antes do relay, sem stream (+ header `blocked`, métrica `_waf_denied` só com o nome do padrão); no detectar a resposta segue com `would-block` |
 | `413` | `KCF110` request body too large | `Content-Length` acima de `kofcloud.limits.httpBodyBytes`; recusado antes do relay |
 | `504` | `KCF112` upstream did not respond in time | servico local mudo alem de `kofcloud.limits.tunnelIdleMs`; watchdog entrega RESET no stream |
+| `400` | `KCF118` invalid or ambiguous request framing | `Content-Length` duplicado divergente, nao numerico ou com sinal, nome fora da forma canonica, ou `Transfer-Encoding`; recusado antes de rotear. O Edge usa o declarado como fronteira do corpo que repassa — bytes alem dele ficam fora, para o servico local nunca receber um corpo de tamanho diferente do anunciado |
 
 ## Observabilidade mínima
 
@@ -128,7 +130,7 @@ export Prometheus em `observability.metrics()`, servido sem auth em
 | `kofcloud_edge_tunnel_refused_total{,_motivo}` | counter | recusas (`_version`, `_unknown_device`, `_revoked_device`, `_auth`) |
 | `kofcloud_edge_tunnel_sessions_open` | gauge | sessões de túnel vivas |
 | `kofcloud_edge_http_requests_total` | counter | requisições públicas terminadas |
-| `kofcloud_edge_http_denied_total{,_motivo}` | counter | negadas (`_no_route`, `_auth_required`, `_device_offline`, `_service_down`, `_rate_limited`, `_service_overloaded`, `_other`) |
+| `kofcloud_edge_http_denied_total{,_motivo}` | counter | negadas (`_no_route`, `_auth_required`, `_device_offline`, `_service_down`, `_rate_limited`, `_service_overloaded`, `_body_too_large`, `_waf_denied`, `_waf_allow_denied`, `_too_many_public_conns`, `_invalid_framing`, `_other`) |
 | `kofcloud_edge_http_upstream_errors_total` | counter | falhas de relay (502) |
 | `kofcloud_edge_http_request_bytes_total` | counter | bytes de pedido somados |
 | `kofcloud_edge_http_response_bytes_total` | counter | bytes de resposta somados |

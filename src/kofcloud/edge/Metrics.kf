@@ -172,6 +172,8 @@ void noteHttpFinished(String outcome, String deniedDetail, Int requestBytes, Int
             observability.counter(metricHttpDenied() + "_waf_denied")
         } else if (deniedDetail == "KCF117") {
             observability.counter(metricHttpDenied() + "_too_many_public_conns")
+        } else if (deniedDetail == "KCF118") {
+            observability.counter(metricHttpDenied() + "_invalid_framing")
         } else if (deniedDetail == "KCF111") {
             observability.counter(metricHttpDenied() + "_waf_allow_denied")
         } else {

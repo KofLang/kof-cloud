@@ -392,8 +392,19 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   (default 1 MiB); o Edge recusa antes do relay quando o `Content-Length`
   declarado passa → `413 KCF110` + métrica `_body_too_large`. Não consome
   stream nem toca no Agent; corpo exatamente no teto passa. Corpo sem
-  `Content-Length` (transfer-encoding de requisição) está fora do MVP do
-  Edge e não é medido. Prova: `tests/waf_body_test.kf` (2 testes).
+  `Content-Length` (transfer-encoding de requisição) é **recusado** com
+  `400 KCF118` — ver o slice de enquadramento abaixo, que fechou o buraco.
+  Prova: `tests/waf_body_test.kf` (2 testes).
+* **Slice 2c — enquadramento do corpo ✅.** O `Content-Length` é a fronteira
+  do corpo que o Edge repassa, mas era lido com `parseIntSafe` (Int): valores
+  acima de 2^31 davam wrap (`4294967306` → 10, smuggling de 30 bytes) ou
+  negativo (`999999999999`, corpo descartado em silêncio). Além disso,
+  duplicado divergente e `Transfer-Encoding` passavam adiante. Agora
+  `parseContentLength` devolve **Long** + flag `invalid` (duplicado
+  divergente, valor não numérico/vazio/com sinal, nome fora da forma canônica,
+  `Transfer-Encoding`), o Edge responde `400 KCF118` antes de rotear e o corpo
+  relayado é fatiado **exatamente** no declarado. Prova:
+  `tests/framing_test.kf` (3: unit, e2e 400/413, relay com corpo mentiroso).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task

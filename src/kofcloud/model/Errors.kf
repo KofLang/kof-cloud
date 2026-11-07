@@ -228,6 +228,15 @@ String errTooManyPublicConns() {
     return "KCF117: too many concurrent public connections"
 }
 
+// Enquadramento de corpo ambiguo ou nao suportado: Content-Length duplicado
+// com valores diferentes, Content-Length nao numerico/negativo, ou
+// Transfer-Encoding (chunked nao implementado). Recusar e mais seguro que
+// adivinhar a fronteira: uma diferenca entre o declarado e o corpo real e
+// request smuggling contra o servico local.
+String errInvalidContentLength() {
+    return "KCF118: invalid or ambiguous request framing"
+}
+
 // ---- dominio proprio (Fase 6) ----
 
 String errInvalidCustomHostname() {
@@ -374,6 +383,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF117") >= 0) {
         return "O Edge esta com muitas conexoes simultaneas — tente de novo em instantes; o teto e `kofcloud.limits.publicConns`."
+    }
+    if (raw.indexOf("KCF118") >= 0) {
+        return "O enquadramento do corpo e ambiguo: use um unico `Content-Length` numerico (sem sinal) e nao use `Transfer-Encoding` — o Edge nao decodifica chunked."
     }
     if (raw.indexOf("KCF116") >= 0) {
         return "Os cabecalhos da requisicao nao terminaram dentro do teto do Edge — reduza-os ou aumente `kofcloud.maxBodyBytes` no `serve`."

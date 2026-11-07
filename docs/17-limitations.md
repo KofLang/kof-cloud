@@ -26,6 +26,11 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 ## Fora do MVP (por decisão)
 
 * HTTP/2 e HTTP/3.
+* `Transfer-Encoding` / chunked: **não decodificado** — o Edge recusa o pedido
+  com `400 KCF118` em vez de repassar um header que o serviço local esperaria
+  indefinidamente. Pedido com corpo precisa de um `Content-Length` único,
+  numérico e canônico; é ele que delimita o corpo repassado (bytes além do
+  declarado são descartados, nunca viram uma segunda requisição).
 * QUIC, UDP forwarding, TCP forwarding genérico.
 * CDN, edge distribuído, relay regional.
 * Domínio próprio: registro + verificação + rota (Fase 6 slice 1) ✅; sem
