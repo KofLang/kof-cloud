@@ -598,6 +598,25 @@ Byte[] sanitizeResponse(Byte[] response, String method) {
     if (bodiless) {
         body = bytesEmpty()
     }
+    // `Content-Length` do upstream x corpo real (RFC 9112 §6.3). Medido: um
+    // `Content-Length: 2` com 7 bytes entregava os 7 (o excedente e lixo no
+    // fim do stream) e um `Content-Length: 100` com 2 bytes mantinha o header
+    // mentiroso. O declarado e reescrito para o tamanho REAL do corpo — o
+    // cliente fecha por EOF de qualquer forma, mas parar de mentir e barato.
+    // Chunked ja foi decodificado, entao a regra vale igual. 304 e HEAD
+    // ficam de fora: ali o CL descreve a representacao do GET, nao o corpo.
+    var declaredLength = -1L
+    for (var line in lines) {
+        if (headerNameOf(line) == "content-length") {
+            declaredLength = parseLongSafe(line.substring(line.indexOf(":") + 1).trim(), -1L)
+        }
+    }
+    var rewriteLength = statusAllowsBody(code, method)
+    if (rewriteLength && declaredLength >= 0L) {
+        if (declaredLength < body.length as Long) {
+            body = bytesSlice(body, 0, declaredLength as Int)
+        }
+    }
     // 1xx e 204 nao tem `Content-Length` (RFC 9110 §8.6); 304 e HEAD mantem,
     // porque ali o valor descreve a representacao que o GET devolveria.
     var dropLength = code >= 100 && code < 200 || code == 204
@@ -618,6 +637,10 @@ Byte[] sanitizeResponse(Byte[] response, String method) {
             continue
         }
         if (dropLength && name == "content-length") {
+            continue
+        }
+        if (rewriteLength && name == "content-length") {
+            out = out + "\r\nContent-Length: " + intToString(body.length)
             continue
         }
         out = out + "\r\n" + line

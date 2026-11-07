@@ -466,6 +466,16 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   `statusCodeOf` lê a linha de status sem parsear header. Prova:
   `tests/framing_test.kf` (`framing-status-unit` + e2e: HEAD devolve 204 com
   corpo no upstream e o cliente recebe corpo vazio).
+* **Slice 2i — `Content-Length` da resposta reconciliado ✅.** Medido: um
+  upstream com `Content-Length: 2` e 7 bytes de corpo entregava os 7 (o
+  excedente vira lixo no fim do stream), e um `Content-Length: 100` com 2
+  bytes mantinha o header mentiroso. Agora `sanitizeResponse` corta o corpo no
+  declarado e reescreve o header para o tamanho **real** — o Edge fecha por
+  EOF de qualquer forma, mas parar de mentir é barato. `304`/`HEAD` ficam de
+  fora (o CL descreve a representação do GET) e sem CL o Edge não inventa um.
+  Corpo chunked decodificado cai na mesma regra (não ganha TE nem CL falso).
+  Prova: `tests/framing_test.kf` (`framing-resp-cl-unit` + e2e: PUT responde
+  CL 100 com 2 bytes e o cliente recebe `Content-Length: 2`).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task

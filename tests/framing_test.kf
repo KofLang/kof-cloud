@@ -211,6 +211,36 @@ test "framing: 1xx/204/304 e HEAD nunca entregam corpo", "framing-status-unit" {
     assert(chunk204.toLowerCase().indexOf("transfer-encoding") < 0, "204 chunked sem TE")
 }
 
+
+test "framing: Content-Length da resposta e reconciliado com o corpo real", "framing-resp-cl-unit" {
+    // Medido: CL 2 com 7 bytes entregava os 7 (lixo no fim do stream) e
+    // CL 100 com 2 bytes mantinha o header mentiroso.
+    var over = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nokEXTRA"), "GET"))
+    assert(bodyOf(over) == "ok", "excedente cortado no declarado")
+    assert(responseHeader(over, "content-length") == "2", "CL do excedente inalterado")
+    var under = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nok"), "GET"))
+    assert(bodyOf(under) == "ok", "corpo curto intacto")
+    assert(responseHeader(under, "content-length") == "2", "CL reescrito para o real")
+    var exact = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"), "GET"))
+    assert(bodyOf(exact) == "ok" && responseHeader(exact, "content-length") == "2", "CL exato nao muda")
+    // Sem CL o Edge nao inventa um: o close delimita (comportamento de antes).
+    var noCl = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nok"), "GET"))
+    assert(bodyOf(noCl) == "ok", "sem CL o corpo passa")
+    assert(noCl.toLowerCase().indexOf("content-length") < 0, "sem CL nao ganha CL")
+    // HEAD e 304 mantem o CL original: descreve a representacao do GET.
+    var head = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nok"), "HEAD"))
+    assert(bodyOf(head) == "" && responseHeader(head, "content-length") == "100", "HEAD mantem CL e perde corpo")
+    var n304 = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 304 Not Modified\r\nContent-Length: 3\r\n\r\nabc"), "GET"))
+    assert(bodyOf(n304) == "" && responseHeader(n304, "content-length") == "3", "304 mantem CL")
+    // Chunked decodificado ganha o CL do corpo decodificado.
+    var chunk = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n"), "GET"))
+    assert(bodyOf(chunk) == "hello", "chunked decodificado")
+    assert(chunk.toLowerCase().indexOf("transfer-encoding") < 0, "sem TE")
+    // CL invalido do upstream nao vira corte nem header novo.
+    var badCl = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: abc\r\n\r\nok"), "GET"))
+    assert(bodyOf(badCl) == "ok", "CL invalido nao corta")
+}
+
 // Troca crua: manda os bytes e le ate o Edge fechar (Connection: close).
 String rawExchange(Int port, String raw) {
     var conn = net.connect("127.0.0.1", port)
@@ -364,6 +394,11 @@ void captureLocal(Conn peer, String[] body, String[] headOut) {
     if (head.indexOf("HEAD ") == 0) {
         resp = "HTTP/1.1 204 No Content\r\nContent-Length: 5\r\n\r\nhello"
     }
+    // PUT responde com CL MENTIROSO (declara 100, manda 2): o cliente tem que
+    // receber o corpo real e um CL que nao minta (o Edge delimita por close).
+    if (head.indexOf("PUT ") == 0) {
+        resp = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 100\r\n\r\nok"
+    }
     peer.send(bytesFromString(resp))
     peer.close()
 }
@@ -488,6 +523,12 @@ test "framing: corpo relayado tem exatamente o tamanho declarado", "framing-rela
     assert(statusOf(noContent) == 204, "204 chega; recebeu " + intToString(statusOf(noContent)))
     assert(bodyOf(noContent) == "", "204 sem corpo; recebeu '" + bodyOf(noContent) + "'")
     assert(noContent.toLowerCase().indexOf("content-length") < 0, "204 sem Content-Length")
+
+    // CL mentiroso do upstream: corpo real entregue e header reconciliado.
+    var lied = rawExchange(httpPort, "PUT / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+    assert(statusOf(lied) == 200, "put atendido")
+    assert(bodyOf(lied) == "ok", "corpo real entregue; recebeu '" + bodyOf(lied) + "'")
+    assert(responseHeader(lied, "content-length") == "2", "CL reconciliado com o corpo real; recebeu " + responseHeader(lied, "content-length"))
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
