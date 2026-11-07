@@ -270,6 +270,12 @@ test "framing: linha de requisicao fora do formato vira 400 KCF132", "framing-re
     assert(requestLineIsValid("GET x HTTP/1.1") == false, "path relativo")
     assert(requestLineIsValid("GET / HTTP/2.0") == false, "versao nao suportada")
     assert(requestLineIsValid("G\tT / HTTP/1.1") == false, "tab no metodo")
+    // Path: caractere de controle quebraria a linha ao reconstruir o pedido.
+    assert(requestLineIsValid("GET /a\rb HTTP/1.1") == false, "CR no path")
+    assert(requestLineIsValid("GET /a\tb HTTP/1.1") == false, "tab no path")
+    assert(requestLineIsValid("GET /a b HTTP/1.1") == false, "espaco no path (4 partes)")
+    assert(requestLineIsValid("GET http://evil.example/x HTTP/1.1") == false, "URI absoluta")
+    assert(requestLineIsValid("GET /a%20b?q=1 HTTP/1.1"), "percent-encoded e query passam")
     // Parser: linha invalida deixa método vazio (o chamador recusa); válida
     // preenche método/path/versão.
     var ok = parseRequest(bytesFromString("GET /a HTTP/1.1\r\nHost: x\r\n\r\n"))
@@ -278,6 +284,8 @@ test "framing: linha de requisicao fora do formato vira 400 KCF132", "framing-re
     assert(bad.method == "", "linha de 4 partes nao inventa metodo")
     var status = parseRequest(bytesFromString("HTTP/1.1 200 OK\r\n\r\n"))
     assert(status.method == "", "status line nao vira pedido")
+    var ctrlPath = parseRequest(bytesFromString("GET /a\rb HTTP/1.1\r\nHost: x\r\n\r\n"))
+    assert(ctrlPath.method == "", "CR no path nao vira pedido")
     // Codigo e Hint (R6).
     assert(errInvalidRequestLine().indexOf("KCF132") >= 0, "codigo KCF132")
     assert(errHint(errInvalidRequestLine()).indexOf("METODO") >= 0, "Hint explica")
@@ -394,6 +402,10 @@ test "framing: enquadramento ambiguo vira 400 KCF118 e gigante vira 413", "frami
     var statusLine = rawExchange(httpPort, "HTTP/1.1 200 OK\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
     assert(statusOf(statusLine) == 400, "status line como pedido -> 400")
     assert(bodyOf(statusLine).indexOf("KCF132") >= 0, "KCF132 na status line")
+    // CR no path: sem a validacao a linha se partia ao repassar (injection).
+    var crPath = rawExchange(httpPort, "GET /a\rb HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
+    assert(statusOf(crPath) == 400, "CR no path -> 400; recebeu " + intToString(statusOf(crPath)))
+    assert(bodyOf(crPath).indexOf("KCF132") >= 0, "KCF132 no CR do path")
 
     var lineCounted = false
     var lineWaits = 100

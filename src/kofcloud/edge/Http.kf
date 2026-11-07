@@ -268,8 +268,19 @@ Bool requestLineIsValid(String line) {
         }
         i = i + 1
     }
-    if (path.indexOf(" ") >= 0 || path.charAt(0) != '/') {
+    if (path.charAt(0) != '/') {
         return false
+    }
+    // Path: nada de espaco nem controle. `\r`/`\t` no path quebravam a linha
+    // ao reconstruir o pedido para o servico local (header injection): medido,
+    // `GET /a\rb` produzia uma linha partida e o resto virava header.
+    var p = 0
+    while (p < path.length) {
+        var pc = path.charAt(p) as Int
+        if (pc <= 32 || pc == 127) {
+            return false
+        }
+        p = p + 1
     }
     return version == "HTTP/1.0" || version == "HTTP/1.1"
 }

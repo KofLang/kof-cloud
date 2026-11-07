@@ -493,6 +493,14 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   (+ métrica `_invalid_request_line`) antes de rotear. Prova:
   `tests/framing_test.kf` (`framing-reqline-unit` + e2e: quatro partes e
   status-line → 400).
+* **Slice 2l — path sem caractere de controle ✅.** Mesma classe da linha:
+  medido, `GET /a\rb HTTP/1.1` pós-validação ainda passava (o `\r` não é
+  espaço), e ao reconstruir o pedido a linha se partia — o resto virava um
+  header para o serviço local (injection). `requestLineIsValid` agora rejeita
+  qualquer caractere ≤ 32 ou DEL no path, além de exigir `/` inicial; URI
+  absoluta (`http://…`) segue recusada por não começar com `/`. Prova:
+  `tests/framing_test.kf` (`framing-reqline-unit` estendido + e2e: CR no
+  path → 400 KCF132).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task
