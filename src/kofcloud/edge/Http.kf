@@ -426,6 +426,44 @@ Byte[] errorResponse(Int status, String message) {
     return bytesFromString(out)
 }
 
+// Sanitiza a resposta do servico local antes de entrega-la ao cliente
+// (lado simetrico do `serializeRequest`). O Edge fecha a conexao publica
+// sempre (`Connection: close`) e delimita o corpo pelo EOF, mas repassava os
+// headers do upstream sem tocar: um `Connection: keep-alive` no servico local
+// pedia ao cliente para REUSAR uma conexao que o Edge fecha (o cliente perde
+// a proxima requisicao), e `Proxy-Authenticate`/`Trailer`/`Upgrade` vazavam
+// semantica de outra conexao. Regras:
+//  * hop-by-hop (mesma lista do request) saem;
+//  * tokens nomeados no `Connection` do upstream saem;
+//  * um unico `Connection: close` do Edge entra no lugar;
+//  * sem `\r\n\r\n` (resposta crua/incompleta) a resposta volta intacta —
+//    nao ha header para reescrever e inventariar um seria pior.
+Byte[] sanitizeResponse(Byte[] response) {
+    var end = bytesIndexOf(response, "\r\n\r\n", 0)
+    if (end < 0) {
+        return response
+    }
+    var head = bytesToString(bytesSlice(response, 0, end))
+    var lines = splitLines(head)
+    var dropTokens = connectionTokens(lines)
+    var out = ""
+    var first = true
+    for (var line in lines) {
+        if (first) {
+            out = line
+            first = false
+            continue
+        }
+        var name = headerNameOf(line)
+        if (name.length == 0 || isHopByHopHeader(name) || dropTokens.contains(name)) {
+            continue
+        }
+        out = out + "\r\n" + line
+    }
+    var rebuilt = bytesFromString(out + "\r\nConnection: close")
+    return bytesConcat(rebuilt, bytesSlice(response, end, response.length))
+}
+
 // Marca a resposta do relay no modo detectar: insere
 // `X-KofCloud-WAF: would-block` no fim dos headers. So bytes: localiza o
 // `\r\n\r\n`, cola o header, preserva o corpo intacto (o corpo nunca vira

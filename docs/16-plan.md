@@ -436,6 +436,16 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   o seu `Connection: close` e `X-Forwarded-For`. Prova:
   `tests/framing_test.kf` (`framing-hop-unit` + e2e no relay: o serviço local
   não vê nenhum deles; mutação reversa quebra os dois).
+* **Slice 2f — resposta sanitizada ✅.** O lado simétrico: o relay repassava
+  os bytes do serviço local sem tocar, então `Connection: keep-alive`,
+  `Keep-Alive`, `Proxy-Authenticate` e tokens nomeados no `Connection` do
+  upstream chegavam ao cliente — que era convidado a reusar um socket que o
+  Edge fecha (a próxima requisição se perde). Agora `sanitizeResponse` (pura)
+  remove os hop-by-hop e os tokens nomeados, escreve o `Connection: close` do
+  Edge e preserva status, headers fim-a-fim e corpo byte a byte; resposta sem
+  `\r\n\r\n` volta intacta (nada é inventado). Vale também para a resposta
+  parcial do timeout. Prova: `tests/framing_test.kf` (`framing-resp-unit` +
+  e2e: o cliente vê `connection: close` e nenhum `Keep-Alive`).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task

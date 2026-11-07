@@ -121,6 +121,29 @@ test "framing: hop-by-hop e tokens do Connection nao atravessam o Edge", "framin
     assert(out.endsWith("ok"), "corpo intacto")
 }
 
+
+test "framing: resposta do upstream perde hop-by-hop e anuncia close", "framing-resp-unit" {
+    // Upstream que anuncia keep-alive, hop-by-hop e um token nomeado: o
+    // cliente veria "reuse esta conexao" para um socket que o Edge fecha.
+    var upstream = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: keep-alive, X-Trace\r\nKeep-Alive: timeout=5\r\nX-Trace: abc\r\nProxy-Authenticate: Basic\r\nContent-Length: 2\r\n\r\nok"
+    var out = bytesToString(sanitizeResponse(bytesFromString(upstream)))
+    assert(statusOf(out) == 200, "status preservado")
+    assert(out.indexOf("Keep-Alive") < 0, "sem Keep-Alive")
+    assert(out.indexOf("X-Trace") < 0, "sem token nomeado no Connection")
+    assert(out.indexOf("Proxy-Authenticate") < 0, "sem proxy-authenticate")
+    assert(out.indexOf("Connection: close") >= 0, "Edge anuncia close")
+    assert(out.indexOf("Content-Type: text/plain") >= 0, "header fim-a-fim preservado")
+    assert(out.endsWith("\r\n\r\nok"), "corpo intacto e cabecalho refeito")
+    // Sem `\r\n\r\n` (resposta crua) nada e inventado.
+    var raw = "nao e http"
+    assert(bytesToString(sanitizeResponse(bytesFromString(raw))) == raw, "crua volta intacta")
+    // Resposta que ja esta correta nao muda de significado.
+    var clean = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok"
+    var cleanOut = bytesToString(sanitizeResponse(bytesFromString(clean)))
+    assert(cleanOut.indexOf("Connection: close") >= 0, "close entra")
+    assert(bodyOf(cleanOut) == "ok", "corpo preservado")
+}
+
 // Troca crua: manda os bytes e le ate o Edge fechar (Connection: close).
 String rawExchange(Int port, String raw) {
     var conn = net.connect("127.0.0.1", port)
@@ -261,7 +284,9 @@ void captureLocal(Conn peer, String[] body, String[] headOut) {
         headOut[0] = head
         body[0] = current
     }
-    var resp = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
+    // Anuncia keep-alive de proposito: o Edge fecha a conexao publica sempre,
+    // entao esse header nao pode chegar ao cliente.
+    var resp = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: keep-alive\r\nKeep-Alive: timeout=5\r\nContent-Length: 2\r\n\r\nok"
     peer.send(bytesFromString(resp))
     peer.close()
 }
@@ -363,10 +388,14 @@ test "framing: corpo relayado tem exatamente o tamanho declarado", "framing-rela
     assert(seenHead[0].indexOf("X-Private") < 0, "sem token nomeado no servico")
     assert(seenHead[0].indexOf("Connection: close") >= 0, "Edge escreve o seu Connection")
 
-    // Caminho legitimo continua intacto.
+    // Caminho legitimo continua intacto — e a resposta ao CLIENTE tambem
+    // passa pela sanitizacao: o keep-alive do servico local nao sobrevive.
     var normal = httpPostRaw(httpPort, "/", host, listOf<String>(), "ok")
     assert(statusOf(normal) == 200, "corpo normal entregue")
     assert(received[0] == "ok", "corpo normal chega inteiro")
+    assert(bodyOf(normal) == "ok", "corpo do cliente preservado")
+    assert(responseHeader(normal, "connection") == "close", "cliente recebe close; recebeu " + responseHeader(normal, "connection"))
+    assert(normal.indexOf("Keep-Alive") < 0, "keep-alive do upstream nao chega ao cliente")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
