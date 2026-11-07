@@ -186,6 +186,21 @@ Int httpWindowSeconds(Int windowMs) {
     return seconds
 }
 
+// Conexoes publicas SIMULTANEAS aceitas pelo Edge (uma task por conexao).
+// docs/10-edge.md prometia 1024 com 503; nao existia teto nenhum — cada
+// accept criava uma task sem limite, entao uma rajada de conexoes abertas e
+// ociosas (slowloris) consumia uma task e um socket por conexao ate a
+// exaustao da maquina. Excedeu -> 503 KCF117 + fecha, antes de ler o pedido.
+// Contagem aproximada sob corrida (check-then-act sem lock, L3): erra por
+// poucas unidades, nunca recusa a menos nem trava.
+Int limitPublicConns() {
+    var limit = config.int("kofcloud.limits.publicConns", 1024)
+    if (limit <= 0) {
+        return 1024
+    }
+    return limit
+}
+
 // Conexoes publicas simultaneas EM RELAY por servico (o recurso caro: tunel
 // + servico local). Excedeu -> 429 KCF108 com Retry-After, ANTES de abrir
 // stream. Contagem aproximada sob corrida extrema (check-then-act sem lock;

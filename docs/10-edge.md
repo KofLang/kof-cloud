@@ -49,15 +49,16 @@ encaminha pelo túnel. **A aplicação do usuário nunca fica exposta diretament
 
 | Limite | Default | Efeito ao exceder |
 |---|---|---|
-| conexões públicas simultâneas | 1024 | `503` + fecha |
+| conexões públicas simultâneas | 1024 (`kofcloud.limits.publicConns`) | `503 KCF117` + fecha, no `accept` antes de ler o pedido; métrica `kofcloud_edge_http_connections_refused_total` (`conn_limit_test.kf`) |
 | conexões simultaneas por servico | 64 (`kofcloud.limits.serviceConns`) | `429 KCF108` + `Retry-After` (antes do OPEN; aproximado sob corrida, ver abaixo) |
 | corpo de requisicao | 1 MiB (`kofcloud.limits.httpBodyBytes`) | `413 KCF110` (antes do relay; por `Content-Length` declarado) |
 | espera de resposta do servico | 120 s (`kofcloud.limits.tunnelIdleMs`) | `504 KCF112` se nada chegou; parcial entregue se ja havia bytes |
 | assinatura WAF | detectar: conta e segue, resposta marcada `X-KofCloud-WAF: would-block` (metodo+path, corpo e valores de header do cliente ate 64 KiB; `Authorization`/`Host`/`Content-Length`/`Connection`/`X-Forwarded-For` fora por desenho) | `serve --waf=enforce`: casa vira `403 KCF109` + `X-KofCloud-WAF: blocked` antes do relay, sem stream, sem Agent |
 | requisições por hostname e janela | 100 / 60 s | `429 KCF107` + `Retry-After` |
-| header total | 16 KiB | `431` |
-| corpo | 16 MiB | `413` |
+| header total | teto de leitura do Edge | `431 KCF116` (sem `\r\n\r\n` dentro do teto) |
+| resposta do serviço local | 16 MiB (`kofcloud.maxResponseBytes`) | `502 KCF115` + stream cancelado (nunca trunca) |
 | streams por túnel | 128 | `RESET{LIMIT_EXCEEDED}` |
+| itens na fila de um stream | 64 (`kofcloud.limits.queueDepth`) | `RESET{LIMIT_EXCEEDED}` no stream, túnel segue |
 
 Os limites existem para proteger **as duas pontas**: a infraestrutura KofCloud e
 a máquina do usuário. A contagem por serviço é aproximada sob corrida extrema

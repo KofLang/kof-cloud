@@ -1,0 +1,86 @@
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.model.Errors
+import kofcloud.util.Limits
+import testkit.Support
+
+// Teto de conexoes publicas simultaneas no Edge (docs/10-edge.md).
+//
+// A tabela prometia "1024 conexoes publicas simultaneas -> 503 + fecha", mas
+// o serveHttp criava uma task por accept sem teto nenhum: uma rajada de
+// conexoes abertas e ociosas (slowloris) consumia uma task e um socket por
+// conexao ate exaurir a maquina. A recusa acontece ANTES de ler o pedido.
+//
+// Contagem aproximada sob corrida (check-then-act sem lock, L3): erra por
+// poucas unidades, nunca recusa a menos nem trava.
+
+String publicConnPath(String name) {
+    return "/tmp/kofcloud-pc-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "conexoes publicas: fonte unica e codigo de erro", "connlimit-unit" {
+    assert(limitPublicConns() == 1024, "default 1024 (o valor documentado)")
+    assert(errTooManyPublicConns().indexOf("KCF117") >= 0, "KCF117")
+    assert(errHint(errTooManyPublicConns()).indexOf("publicConns") >= 0, "Hint aponta o teto")
+
+    var registry = Registry(publicConnPath("unit"))
+    var state = EdgeState(registry)
+    assert(state.publicConnCount() == 0, "comeca zerado")
+    assert(state.publicConnLimitValue() == limitPublicConns(), "teto vem da fonte unica")
+
+    // Reserva/libera pareados.
+    state.setPublicConnLimit(2)
+    assert(state.tryAcquirePublicConn() == true, "1a vaga")
+    assert(state.tryAcquirePublicConn() == true, "2a vaga")
+    assert(state.publicConnCount() == 2, "duas abertas")
+    assert(state.tryAcquirePublicConn() == false, "3a recusada no teto")
+    assert(state.publicConnCount() == 2, "recusa nao incrementa")
+    state.releasePublicConn()
+    assert(state.publicConnCount() == 1, "liberou uma")
+    assert(state.tryAcquirePublicConn() == true, "vaga reaberta")
+    // Liberar abaixo de zero nao acontece (nao ha vaga negativa).
+    state.releasePublicConn()
+    state.releasePublicConn()
+    state.releasePublicConn()
+    assert(state.publicConnCount() == 0, "piso em zero")
+}
+
+test "conexoes publicas: teto de 1 recusa a segunda com 503 e libera ao fechar", "connlimit" {
+    var httpPort = 20051
+    var registry = Registry(publicConnPath("e2e"))
+    var state = EdgeState(registry)
+    state.setPublicConnLimit(1)
+    var edgeStop = "/tmp/kofcloud-pc-stop-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    // A vaga unica e tomada ANTES de subir o servidor: o waitForPort sonda a
+    // porta abrindo uma conexao, e ela ocuparia a vaga e sairia — deixando o
+    // teste depender de corrida. Reservando de antemao, a sonda e recusada
+    // (503) e o accept responde na mesma hora.
+    assert(state.tryAcquirePublicConn(), "segura a vaga")
+    var httpTask = spawn { serveHttp(state, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(httpPort, 60), "http no ar (sonda recusada com 503, sem pendurar)")
+    var attempts = 100
+
+    // A segunda e recusada com 503 KCF117.
+    var second = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
+    assert(statusOf(second) == 503, "segunda conexao -> 503")
+    assert(bodyOf(second).indexOf("KCF117") >= 0, "KCF117 no corpo")
+
+    // Liberar a vaga: um pedido novo volta a ser atendido
+    // (404 opaco, porque nao ha rota — o que importa e nao ser 503).
+    state.releasePublicConn()
+    attempts = 100
+    while (attempts > 0 && state.publicConnCount() > 0) {
+        time.sleep(20)
+        attempts = attempts - 1
+    }
+    assert(state.publicConnCount() == 0, "vaga liberada ao fechar")
+    var third = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
+    assert(statusOf(third) == 404, "atendido de novo (404 sem rota, nao 503)")
+
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(edgeStop).delete()
+}

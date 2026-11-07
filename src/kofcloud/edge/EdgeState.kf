@@ -21,6 +21,10 @@ class EdgeState {
     Int bodyLimit
     Int responseLimit
     Int cancelledStreams
+    // Conexoes publicas abertas agora (uma task por conexao). `Int` simples:
+    // a contagem e do processo, sem chave — nao precisa de mapa.
+    Int publicConns
+    Int publicConnLimit
     Int upstreamWaitMs
     // Tres sondas independentes (Fase 17 slice 1 + abuse prevention): recusas
     // de tunel, falhas de autenticacao e quedas por ociosidade nao podem
@@ -44,6 +48,8 @@ class EdgeState {
         this.bodyLimit = limitHttpBodyBytes()
         this.responseLimit = limitMaxResponseBytes()
         this.cancelledStreams = 0
+        this.publicConns = 0
+        this.publicConnLimit = limitPublicConns()
         this.upstreamWaitMs = limitTunnelIdleMs()
         this.refusalProbe = RateProbe()
         this.authFailureProbe = RateProbe()
@@ -97,6 +103,38 @@ class EdgeState {
 
     Int cancelledCount() {
         return this.cancelledStreams
+    }
+
+    // Permite aos testes fixarem o teto sem config de processo.
+    void setPublicConnLimit(Int limit) {
+        if (limit > 0) {
+            this.publicConnLimit = limit
+        }
+    }
+
+    Int publicConnLimitValue() {
+        return this.publicConnLimit
+    }
+
+    Int publicConnCount() {
+        return this.publicConns
+    }
+
+    // Reserva uma vaga de conexao publica. False = teto atingido: o chamador
+    // responde 503 KCF117 e fecha, ANTES de ler o pedido (nao aloca buffer
+    // nem stream). Sempre pareado com releasePublicConn no fim da task.
+    Bool tryAcquirePublicConn() {
+        if (this.publicConns >= this.publicConnLimit) {
+            return false
+        }
+        this.publicConns = this.publicConns + 1
+        return true
+    }
+
+    void releasePublicConn() {
+        if (this.publicConns > 0) {
+            this.publicConns = this.publicConns - 1
+        }
     }
 
     // Permite aos testes fixarem o limite sem config de processo.

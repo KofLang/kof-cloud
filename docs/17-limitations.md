@@ -138,6 +138,10 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   mesmo ponto que emite para o stdout (`agent/Events.kf`). Cada arquivo tem
   teto próprio (256 KiB, corta o início). Nenhum dos dois recebe conteúdo de
   requisição, credencial ou chave.
+* **Os contadores de conexão são aproximados sob corrida** (check-then-act
+  sem lock, L3). Vale para as conexões públicas simultâneas (1024) e para as
+  conexões por serviço (64): o pior caso estoura por poucas unidades, nunca
+  recusa a menos nem trava.
 * **Contador por serviço é aproximado sob corrida** (check-then-act sem lock;
   o Kof não expõe mutex, L3): pode estourar em poucas unidades, nunca recusa
   a menos. Contadores internos usam `Map<String, String>` porque

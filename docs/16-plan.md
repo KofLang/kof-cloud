@@ -56,6 +56,17 @@ no E1/E2; a fase formaliza os limites por dispositivo.
 Prova: `tests/limits_test.kf` (6 testes) + `tests/e2e_multiservice_test.kf`
 (3 serviços no mesmo túnel, com isolamento de falha).
 
+**Teto de conexões públicas simultâneas (parte do contrato de `10-edge.md`).**
+A tabela prometia "1024 conexões públicas simultâneas → `503` + fecha", mas o
+`serveHttp` spawnava uma task por `accept` sem teto: uma rajada de conexões
+abertas e ociosas (slowloris) consumia uma task e um socket por conexão até
+exaurir a máquina. Agora `EdgeState.tryAcquirePublicConn` reserva a vaga no
+`accept` (antes de ler o pedido) e `handlePublicConnection` libera em
+`finally` — sem isso, uma exceção no relay vazaria a vaga e o Edge acabaria
+recusando todo mundo. Excedeu → `503 KCF117` + métrica
+`kofcloud_edge_http_connections_refused_total`. Prova:
+`tests/conn_limit_test.kf` (2).
+
 **Profundidade de fila por stream (parte do contrato de `08-multiplexing.md`).**
 O desenho prometia "fila cheia → `RESET LIMIT_EXCEEDED` em vez de bloquear a
 conexão inteira", mas os canais do Kof são ilimitados (medido: `Channel` só

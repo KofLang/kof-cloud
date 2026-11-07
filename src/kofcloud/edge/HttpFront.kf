@@ -27,7 +27,16 @@ void serveHttp(EdgeState state, Int port, Int maxBytes, String stopFile) {
     while (open) {
         try {
             var conn = listener.accept()
-            var worker = spawn { handlePublicConnection(state, conn, maxBytes) }
+            // Teto de conexoes simultaneas (docs/10-edge.md): recusa AQUI,
+            // antes de spawnar a task e sem ler o pedido. Sem isso, uma
+            // rajada de conexoes abertas e ociosas consome uma task e um
+            // socket por conexao ate exaurir a maquina.
+            if (state.tryAcquirePublicConn() == false) {
+                refusePublicConnection(conn)
+                notePublicConnRefused()
+            } else {
+                var worker = spawn { handlePublicConnection(state, conn, maxBytes) }
+            }
         } catch (String e) {
             open = false
         }
@@ -35,6 +44,27 @@ void serveHttp(EdgeState state, Int port, Int maxBytes, String stopFile) {
 }
 
 void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
+    try {
+        servePublicConnection(state, conn, maxBytes)
+    } finally {
+        // A vaga e liberada em TODOS os caminhos (resposta, erro, throw).
+        // Sem finally, uma excecao no relay vazaria a vaga para sempre e o
+        // Edge acabaria recusando todo mundo.
+        state.releasePublicConn()
+    }
+}
+
+// Recusa por teto de conexoes: 503 (o servico pode voltar) sem ler nada.
+void refusePublicConnection(Conn conn) {
+    try {
+        conn.send(errorResponse(503, errTooManyPublicConns()))
+    } catch (String e) {
+        // Cliente ja saiu; nada a fazer.
+    }
+    conn.close()
+}
+
+void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     var started = time.now()
     var read = readRequestBytes(conn, maxBytes)
     var raw = read.bytes

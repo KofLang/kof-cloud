@@ -170,6 +170,8 @@ void noteHttpFinished(String outcome, String deniedDetail, Int requestBytes, Int
             observability.counter(metricHttpDenied() + "_body_too_large")
         } else if (deniedDetail == "KCF109") {
             observability.counter(metricHttpDenied() + "_waf_denied")
+        } else if (deniedDetail == "KCF117") {
+            observability.counter(metricHttpDenied() + "_too_many_public_conns")
         } else if (deniedDetail == "KCF111") {
             observability.counter(metricHttpDenied() + "_waf_allow_denied")
         } else {
@@ -194,6 +196,12 @@ void noteHttpFinished(String outcome, String deniedDetail, Int requestBytes, Int
 // fluxo; o valor global exato vive na sessao).
 void noteStreamOpened() {
     observability.counter("kofcloud_edge_tunnel_streams_total")
+}
+
+// Conexao publica recusada pelo teto de simultaneas. Conta o evento, nunca
+// o cliente (o Edge TCP nao expoe IP de origem).
+void notePublicConnRefused() {
+    observability.counter("kofcloud_edge_http_connections_refused_total")
 }
 
 // Fila de entrada do stream estourou (consumidor lento): o stream e recusado
