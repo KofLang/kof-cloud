@@ -47,6 +47,22 @@ test "credencial de conta: TTL, expiracao e poda preguicosa", "atok-unit" {
     registry.tokens.add(legacy)
     assert(registry.accountByToken("kfc_antigo") != null, "credencial legada vale")
     assert(registry.accountTokenExpired(legacy, time.now()) == false, "sem campo = sem expiracao")
+
+    // TTL longo nao pode estourar: `ttlHours * 3600000` em Int (32 bits)
+    // estourava acima de 596 h e `--ttl 720` (30 dias) virava um instante no
+    // PASSADO — a credencial nascia vencida. Medido com o CLI 0.6.3:
+    // 720 * 3600000 = -1702967296 em Int; em Long = 2592000000.
+    var now = time.now()
+    assert(tokenExpiryAt(now, 0) == 0, "sem TTL = 0")
+    assert(tokenExpiryAt(now, -3) == 0, "TTL negativo = 0")
+    assert(tokenExpiryAt(now, 1) == now + 3600000, "1 h em ms")
+    assert(tokenExpiryAt(now, 720) == now + 2592000000, "720 h (30 dias) em ms")
+    assert(tokenExpiryAt(now, 720) > now, "TTL longo continua no futuro")
+    // Fonte unica: os dois caminhos (kfc_/kfs_) delegam na mesma funcao.
+    assert(registry.accountTokenExpiry(now, 720) == tokenExpiryAt(now, 720), "kfc_ delega")
+    assert(registry.serviceTokenExpiry(now, 720) == tokenExpiryAt(now, 720), "kfs_ delega")
+    var longLived = registry.issueToken(account.id, 720)
+    assert(registry.accountByToken(longLived) != null, "kfc_ de 30 dias nasce valido")
 }
 
 test "credencial de conta: revogar por valor e por id curto, escopo por conta", "atok-unit" {

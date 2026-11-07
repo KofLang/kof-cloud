@@ -153,6 +153,11 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   estado até a próxima validação — não há varredura periódica. `logout`
   continua sendo **só local**: apaga o arquivo da máquina, não invalida no
   servidor (para isso existe `kof cloud token revoke`).
+  O instante de expiração é calculado em `Long` (`tokenExpiryAt`, fonte única
+  de kfc_/kfs_): `Int` no Kof é 32 bits, então `ttlHours * 3600000` estourava
+  acima de 596 h (~24,8 dias) e um `--ttl 720` (30 dias) nascia vencido — 401
+  imediato. `ttlHours` continua `Int` (até ~2,1 bilhões de horas); a
+  multiplicação é a única aritmética larga.
 * **A expiração de `kfs_` é preguiçosa — e o incidente também.** Credencial
   vencida só é podada quando alguma validação de token passa por
   `serviceByServiceToken` (o que acontece a cada request AUTHENTICATED no

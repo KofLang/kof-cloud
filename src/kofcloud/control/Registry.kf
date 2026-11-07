@@ -484,10 +484,7 @@ class Registry {
     // revogacao por id curto e rotacao com overlap.
 
     Long accountTokenExpiry(Long nowMs, Int ttlHours) {
-        if (ttlHours <= 0) {
-            return 0
-        }
-        return nowMs + ttlHours * 3600000
+        return tokenExpiryAt(nowMs, ttlHours)
     }
 
     Bool accountTokenExpired(TokenEntry entry, Long nowMs) {
@@ -818,10 +815,7 @@ class Registry {
     // `expiresAt` em ms desde a epoca; 0 = sem expiracao (tokens antigos e o
     // default de emissao). Expirado nao autoriza nem aparece no inventario.
     Long serviceTokenExpiry(Long nowMs, Int ttlHours) {
-        if (ttlHours <= 0) {
-            return 0
-        }
-        return nowMs + ttlHours * 3600000
+        return tokenExpiryAt(nowMs, ttlHours)
     }
 
     Bool serviceTokenExpired(ServiceToken entry, Long nowMs) {
@@ -1771,6 +1765,20 @@ List<String> parseEdgeHosts(String raw) {
         out.add(current.toLowerCase())
     }
     return out
+}
+
+// Instante de expiracao de uma credencial (`kfc_` e `kfs_`) a partir de um TTL
+// em horas; 0 = sem expiracao (comportamento historico). Fonte unica dos dois
+// caminhos: eles tinham o corpo identico e o mesmo defeito — `ttlHours *
+// 3600000` era aritmetica de Int (32 bits), que estoura acima de 596 horas
+// (24,8 dias): `--ttl 720` (30 dias) virava `nowMs - 1702967296`, um instante
+// no PASSADO, e a credencial nascia vencida (401 imediato, some do inventario).
+// Medido com o CLI 0.6.3. Multiplicacao em Long de proposito.
+Long tokenExpiryAt(Long nowMs, Int ttlHours) {
+    if (ttlHours <= 0) {
+        return 0
+    }
+    return nowMs + (ttlHours as Long) * 3600000L
 }
 
 // Epoch em MILISSEGUNDOS nao cabe em Int; parseLongSafe le Long (o projeto

@@ -184,6 +184,18 @@ test "token de servico: expiracao opcional poda na validacao", "token-ttl" {
     // As validas sobrevivem a poda.
     assert(registry.serviceByServiceToken(forever) != null, "sem TTL intacto apos poda")
     assert(registry.serviceByServiceToken(timed) != null, "com TTL intacto apos poda")
+    // TTL longo (720 h = 30 dias) nao pode estourar: em Int (32 bits),
+    // `720 * 3600000` = -1702967296 e a credencial nasceria vencida
+    // (medido com o CLI 0.6.3). Em Long = 2592000000, no futuro.
+    var longTtl = registry.issueServiceToken(mel.id, service.id, 720)
+    assert(registry.serviceByServiceToken(longTtl) != null, "kfs_ de 30 dias nasce valido")
+    var marked = false
+    for (var entry in registry.serviceTokensFor(mel.id, service.id)) {
+        if (entry.serviceId == service.id && entry.expiresAt > time.now()) {
+            marked = true
+        }
+    }
+    assert(marked, "kfs_ de 30 dias tem expiracao no futuro")
 }
 
 test "token de servico: revoke aceita id curto unico, recusa ambiguo", "token-short" {

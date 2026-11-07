@@ -957,6 +957,11 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   nova credencial na sessão local antes de imprimir. Prova:
   `tests/account_token_test.kf` (5: TTL/poda/legado, revoke por valor e id
   curto com escopo por conta, ambiguidade, overlap, HTTP fim a fim).
+  **TTL longo (30 dias) não estourava por acaso:** `ttlHours * 3600000` era
+  aritmética de `Int` (32 bits), que estoura acima de 596 h — `--ttl 720`
+  nascia vencido (401 imediato). O cálculo agora é `Long` e fonte única
+  (`tokenExpiryAt`, usada por kfc_ e kfs_); medido com o CLI 0.6.3
+  (`720 * 3600000` em Int = `-1702967296`).
   Pendente: PEMs com 30 dias de antecedência; kill-switch ✅ documentado
   (`docs/SECURITY.md` ## Contenção — procedimento manual reversível com
   o que existe; o `freeze` de um comando da Fase 17 automatiza quando
