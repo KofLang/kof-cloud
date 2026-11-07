@@ -426,6 +426,82 @@ Byte[] errorResponse(Int status, String message) {
     return bytesFromString(out)
 }
 
+// Tamanho de chunk em hexadecimal; -1 fora do formato (digito invalido ou
+// vazio). Reusa `wafHexValue` (util.Text) — a mesma tabela de digitos do
+// decoder do WAF, sem uma segunda implementacao para divergir.
+Long parseHexSafe(String text, Long fallback) {
+    if (text.length == 0) {
+        return fallback
+    }
+    var acc = 0L
+    var i = 0
+    while (i < text.length) {
+        var digit = wafHexValue(text.charAt(i))
+        if (digit < 0) {
+            return fallback
+        }
+        acc = acc * 16L + (digit as Long)
+        i = i + 1
+    }
+    return acc
+}
+
+// Decodifica um corpo `Transfer-Encoding: chunked` (RFC 9112 §7.1) para
+// bytes simples. O Edge nao tem keep-alive e delimita a resposta pelo EOF,
+// mas o header chunked e hop-by-hop e sai no `sanitizeResponse`: sem
+// decodificar, o cliente recebia o enquadramento (`5\r\nhello\r\n0`) como se
+// fosse o corpo — medido. Parser tolerante a proposito (chunk extensions
+// `;x=y` ignoradas, CRLF final opcional) e com teto de iteracao: corpo
+// malformado nao pode virar laco infinito no Edge.
+record ChunkedBody(Byte[] body, Bool valid)
+
+ChunkedBody decodeChunked(Byte[] data) {
+    var out = bytesEmpty()
+    var at = 0
+    var guard = 0
+    while (at < data.length) {
+        guard = guard + 1
+        if (guard > 100000) {
+            return ChunkedBody(out, false)
+        }
+        var pad = -1
+        var scan = at
+        while (scan + 1 < data.length) {
+            if (data[scan] == 13 && data[scan + 1] == 10) {
+                pad = scan
+                break
+            }
+            scan = scan + 1
+        }
+        if (pad < 0) {
+            return ChunkedBody(out, false)
+        }
+        var sizeText = bytesToString(bytesSlice(data, at, pad)).trim()
+        var semi = sizeText.indexOf(";")
+        if (semi >= 0) {
+            sizeText = sizeText.substring(0, semi).trim()
+        }
+        var size = parseHexSafe(sizeText, -1L)
+        if (size < 0L) {
+            return ChunkedBody(out, false)
+        }
+        var bodyStart = pad + 2
+        if (size == 0L) {
+            return ChunkedBody(out, true)
+        }
+        var bodyEnd = bodyStart + (size as Int)
+        if (bodyEnd > data.length) {
+            return ChunkedBody(out, false)
+        }
+        out = bytesConcat(out, bytesSlice(data, bodyStart, bodyEnd))
+        at = bodyEnd
+        if (at + 1 < data.length && data[at] == 13 && data[at + 1] == 10) {
+            at = at + 2
+        }
+    }
+    return ChunkedBody(out, false)
+}
+
 // Sanitiza a resposta do servico local antes de entrega-la ao cliente
 // (lado simetrico do `serializeRequest`). O Edge fecha a conexao publica
 // sempre (`Connection: close`) e delimita o corpo pelo EOF, mas repassava os
@@ -435,6 +511,8 @@ Byte[] errorResponse(Int status, String message) {
 // semantica de outra conexao. Regras:
 //  * hop-by-hop (mesma lista do request) saem;
 //  * tokens nomeados no `Connection` do upstream saem;
+//  * `Transfer-Encoding: chunked` e DECODIFICADO: o header e hop-by-hop e o
+//    enquadramento nao pode chegar ao cliente como corpo;
 //  * um unico `Connection: close` do Edge entra no lugar;
 //  * sem `\r\n\r\n` (resposta crua/incompleta) a resposta volta intacta —
 //    nao ha header para reescrever e inventariar um seria pior.
@@ -446,6 +524,26 @@ Byte[] sanitizeResponse(Byte[] response) {
     var head = bytesToString(bytesSlice(response, 0, end))
     var lines = splitLines(head)
     var dropTokens = connectionTokens(lines)
+    var chunked = false
+    for (var line in lines) {
+        if (headerNameOf(line) == "transfer-encoding") {
+            var value = line.substring(line.indexOf(":") + 1).trim().toLowerCase()
+            if (value.indexOf("chunked") >= 0) {
+                chunked = true
+            }
+        }
+    }
+    var body = bytesSlice(response, end + 4, response.length)
+    if (chunked) {
+        var decoded = decodeChunked(body)
+        // Corpo chunked que nao fecha: entrega o que decodificou (o close do
+        // Edge delimita) em vez de vazar o enquadramento cru.
+        body = decoded.body
+    }
+    // A fatia do separador vem antes do corpo de proposito: `end` aponta o
+    // primeiro `\r` de `\r\n\r\n` e manter os 4 bytes deixa a resposta
+    // bem formada mesmo quando o corpo foi substituido pelo decodificado.
+    var separator = bytesSlice(response, end, end + 4)
     var out = ""
     var first = true
     for (var line in lines) {
@@ -461,7 +559,7 @@ Byte[] sanitizeResponse(Byte[] response) {
         out = out + "\r\n" + line
     }
     var rebuilt = bytesFromString(out + "\r\nConnection: close")
-    return bytesConcat(rebuilt, bytesSlice(response, end, response.length))
+    return bytesConcat(bytesConcat(rebuilt, separator), body)
 }
 
 // Marca a resposta do relay no modo detectar: insere

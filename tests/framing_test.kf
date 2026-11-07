@@ -144,6 +144,37 @@ test "framing: resposta do upstream perde hop-by-hop e anuncia close", "framing-
     assert(bodyOf(cleanOut) == "ok", "corpo preservado")
 }
 
+
+test "framing: resposta chunked do upstream e decodificada", "framing-chunked-unit" {
+    // Transfer-Encoding e hop-by-hop: sai. Sem decodificar, o cliente
+    // recebia o ENQUADRAMENTO como corpo ("5\r\nhello\r\n0") — medido.
+    var one = decodeChunked(bytesFromString("5\r\nhello\r\n0\r\n\r\n"))
+    assert(one.valid && bytesToString(one.body) == "hello", "chunk unico")
+    var multi = decodeChunked(bytesFromString("2\r\nab\r\n3\r\ncde\r\n0\r\n\r\n"))
+    assert(multi.valid && bytesToString(multi.body) == "abcde", "varios chunks")
+    // Extensao de chunk (`;k=v`) e ignorada; CRLF final opcional.
+    var ext = decodeChunked(bytesFromString("3;nome=valor\r\nabc\r\n0\r\n\r\n"))
+    assert(ext.valid && bytesToString(ext.body) == "abc", "extensao ignorada")
+    // Malformado: nao lanca, nao entra em laco — devolve o que deu e invalido.
+    assert(decodeChunked(bytesFromString("zz\r\nabc\r\n")).valid == false, "tamanho nao hex")
+    assert(decodeChunked(bytesFromString("9\r\nabc")).valid == false, "corpo curto")
+    assert(decodeChunked(bytesFromString("")).valid == false, "vazio")
+    // Hex em Long (reusa a tabela do WAF).
+    assert(parseHexSafe("1a", -1L) == 26L, "hex minusculo")
+    assert(parseHexSafe("FF", -1L) == 255L, "hex maiusculo")
+    assert(parseHexSafe("x", -1L) == -1L, "invalido")
+    // Resposta completa: header chunked sai, corpo decodificado, close entra.
+    var upstream = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Type: text/plain\r\n\r\n5\r\nhello\r\n0\r\n\r\n"
+    var out = bytesToString(sanitizeResponse(bytesFromString(upstream)))
+    assert(out.toLowerCase().indexOf("transfer-encoding") < 0, "sem transfer-encoding")
+    assert(out.indexOf("Connection: close") >= 0, "close do Edge")
+    assert(out.indexOf("Content-Type: text/plain") >= 0, "header fim-a-fim preservado")
+    assert(bodyOf(out) == "hello", "corpo decodificado, sem enquadramento")
+    // Sem chunked, o corpo continua byte a byte (inclusive CRLF).
+    var plain = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\na\r\nb"
+    assert(bodyOf(bytesToString(sanitizeResponse(bytesFromString(plain)))) == "a\r\nb", "corpo cru intacto")
+}
+
 // Troca crua: manda os bytes e le ate o Edge fechar (Connection: close).
 String rawExchange(Int port, String raw) {
     var conn = net.connect("127.0.0.1", port)
@@ -287,6 +318,11 @@ void captureLocal(Conn peer, String[] body, String[] headOut) {
     // Anuncia keep-alive de proposito: o Edge fecha a conexao publica sempre,
     // entao esse header nao pode chegar ao cliente.
     var resp = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: keep-alive\r\nKeep-Alive: timeout=5\r\nContent-Length: 2\r\n\r\nok"
+    // GET responde CHUNKED (o POST continua fixo, e o que os asserts medem):
+    // o cliente tem que receber o corpo decodificado, nunca o enquadramento.
+    if (head.indexOf("GET ") == 0) {
+        resp = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n"
+    }
     peer.send(bytesFromString(resp))
     peer.close()
 }
@@ -396,6 +432,15 @@ test "framing: corpo relayado tem exatamente o tamanho declarado", "framing-rela
     assert(bodyOf(normal) == "ok", "corpo do cliente preservado")
     assert(responseHeader(normal, "connection") == "close", "cliente recebe close; recebeu " + responseHeader(normal, "connection"))
     assert(normal.indexOf("Keep-Alive") < 0, "keep-alive do upstream nao chega ao cliente")
+
+    // Resposta chunked do upstream: o cliente ve o corpo decodificado e
+    // nenhum Transfer-Encoding (que e hop-by-hop).
+    var chunkedResp = rawExchange(httpPort, "GET / HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
+    assert(statusOf(chunkedResp) == 200, "chunked chega como 200")
+    assert(chunkedResp.toLowerCase().indexOf("transfer-encoding") < 0, "sem Transfer-Encoding")
+    assert(chunkedResp.indexOf("5\r\nhello") < 0, "sem enquadramento de chunk no corpo")
+    assert(bodyOf(chunkedResp) == "hello world", "corpo decodificado; recebeu '" + bodyOf(chunkedResp) + "'")
+    assert(responseHeader(chunkedResp, "connection") == "close", "close do Edge")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)

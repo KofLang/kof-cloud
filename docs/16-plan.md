@@ -446,6 +446,16 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   `\r\n\r\n` volta intacta (nada é inventado). Vale também para a resposta
   parcial do timeout. Prova: `tests/framing_test.kf` (`framing-resp-unit` +
   e2e: o cliente vê `connection: close` e nenhum `Keep-Alive`).
+* **Slice 2g — resposta chunked decodificada ✅.** `Transfer-Encoding` e
+  hop-by-hop, então saía no `sanitizeResponse` — mas o corpo chunked ficava
+  como veio: medido, o cliente recebia o **enquadramento** (`5\r\nhello\r\n0`)
+  como se fosse conteúdo. O Edge agora detecta o header, decodifica
+  (`decodeChunked`, parser tolerante a extensões `;k=v`, com teto de iteração
+  e flag `valid`) e entrega o corpo simples; `parseHexSafe` reusa a tabela de
+  dígitos do WAF. Corpo chunked malformado entrega o que decodificou (o close
+  delimita), nunca o enquadramento. Prova: `tests/framing_test.kf`
+  (`framing-chunked-unit` + e2e: GET no serviço local responde chunked e o
+  cliente lê `hello world`).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task
