@@ -83,6 +83,44 @@ test "framing: Host unico, nao vazio e sem caractere invalido", "framing-host-un
     assert(errHint(errInvalidHost()).indexOf("Host") >= 0, "Hint explica o Host")
 }
 
+
+test "framing: hop-by-hop e tokens do Connection nao atravessam o Edge", "framing-hop-unit" {
+    // Hop-by-hop padrao: valem para a conexao cliente-Edge, nunca para a
+    // conexao Edge-servico local. `proxy-authorization` e o caso caro: e
+    // credencial de proxy e era repassada em claro ao servico.
+    assert(headerIsForwarded("Keep-Alive: timeout=5", listOf<String>(), false) == false, "keep-alive")
+    assert(headerIsForwarded("Proxy-Authorization: Basic x", listOf<String>(), false) == false, "proxy-authorization")
+    assert(headerIsForwarded("Proxy-Authenticate: Basic", listOf<String>(), false) == false, "proxy-authenticate")
+    assert(headerIsForwarded("Upgrade: websocket", listOf<String>(), false) == false, "upgrade")
+    assert(headerIsForwarded("TE: trailers", listOf<String>(), false) == false, "te")
+    assert(headerIsForwarded("Trailer: X-Sum", listOf<String>(), false) == false, "trailer")
+    assert(headerIsForwarded("Connection: keep-alive", listOf<String>(), false) == false, "connection")
+    assert(headerIsForwarded("Transfer-Encoding: chunked", listOf<String>(), false) == false, "transfer-encoding")
+    // Tokens nomeados no Connection sao hop-by-hop por declaracao.
+    var tokens = connectionTokens(listOf<String>("Connection: close, X-Private", "Connection: TE"))
+    assert(tokens.contains("x-private") && tokens.contains("close") && tokens.contains("te"), "tokens normalizados")
+    assert(headerIsForwarded("X-Private: v", tokens, false) == false, "token nomeado nao passa")
+    // `X-Forwarded-For` do cliente e descartado (o Edge escreve o seu).
+    assert(headerIsForwarded("X-Forwarded-For: 1.2.3.4", listOf<String>(), false) == false, "xff do cliente")
+    // End-to-end continua passando.
+    assert(headerIsForwarded("Host: site.mel.kofcloud.io", listOf<String>(), false), "host")
+    assert(headerIsForwarded("Content-Type: application/json", listOf<String>(), false), "content-type")
+    assert(headerIsForwarded("Cookie: a=1", listOf<String>(), false), "cookie")
+    // Credenciais so caem em servico AUTHENTICATED (o Edge ja as consumiu).
+    assert(headerIsForwarded("Authorization: Bearer x", listOf<String>(), false), "authorization em PUBLIC passa")
+    assert(headerIsForwarded("Authorization: Bearer x", listOf<String>(), true) == false, "authorization em AUTHENTICATED cai")
+    assert(headerIsForwarded("X-KofCloud-Token: kfc_x", listOf<String>(), true) == false, "token administrativo cai")
+    // Reconstrucao real: o pedido que chega ao servico nao tem nenhum deles.
+    var raw = bytesFromString("POST / HTTP/1.1\r\nHost: site.mel.kofcloud.io\r\nKeep-Alive: timeout=5\r\nUpgrade: websocket\r\nProxy-Authorization: Basic c2VjcmV0\r\nTE: trailers\r\nConnection: keep-alive, X-Private\r\nX-Private: v\r\nX-Forwarded-For: 1.2.3.4\r\nContent-Length: 2\r\n\r\nok")
+    var out = bytesToString(serializeRequest(parseRequest(raw), "edge", false))
+    assert(out.indexOf("Keep-Alive") < 0 && out.indexOf("Upgrade") < 0, "sem keep-alive/upgrade")
+    assert(out.indexOf("Proxy-Authorization") < 0 && out.indexOf("TE:") < 0, "sem proxy-auth/TE")
+    assert(out.indexOf("X-Private") < 0 && out.indexOf("1.2.3.4") < 0, "sem token nomeado nem xff do cliente")
+    assert(out.indexOf("Host: site.mel.kofcloud.io") >= 0, "Host preservado")
+    assert(out.indexOf("X-Forwarded-For: edge") >= 0, "Edge assina o seu XFF")
+    assert(out.endsWith("ok"), "corpo intacto")
+}
+
 // Troca crua: manda os bytes e le ate o Edge fechar (Connection: close).
 String rawExchange(Int port, String raw) {
     var conn = net.connect("127.0.0.1", port)
@@ -315,6 +353,15 @@ test "framing: corpo relayado tem exatamente o tamanho declarado", "framing-rela
     time.sleep(300)
     assert(received[0] == afterInjected, "pedido recusado nao chega ao servico local")
     assert(received[0].indexOf("evil.example.com") < 0, "Host injetado nunca chega a aplicacao")
+
+    // Hop-by-hop e tokens do Connection: chegam ao Edge, nunca ao servico.
+    var withHop = rawExchange(httpPort, "POST / HTTP/1.1\r\nHost: " + host + "\r\nKeep-Alive: timeout=5\r\nUpgrade: websocket\r\nProxy-Authorization: Basic c2VjcmV0\r\nTE: trailers\r\nConnection: keep-alive, X-Private\r\nX-Private: v\r\nContent-Length: 2\r\n\r\nok")
+    assert(statusOf(withHop) == 200, "pedido com hop-by-hop e atendido")
+    assert(seenHead[0].indexOf("Keep-Alive") < 0, "sem Keep-Alive no servico")
+    assert(seenHead[0].indexOf("Upgrade") < 0, "sem Upgrade no servico")
+    assert(seenHead[0].indexOf("Proxy-Authorization") < 0, "sem credencial de proxy no servico")
+    assert(seenHead[0].indexOf("X-Private") < 0, "sem token nomeado no servico")
+    assert(seenHead[0].indexOf("Connection: close") >= 0, "Edge escreve o seu Connection")
 
     // Caminho legitimo continua intacto.
     var normal = httpPostRaw(httpPort, "/", host, listOf<String>(), "ok")

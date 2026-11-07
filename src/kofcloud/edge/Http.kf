@@ -275,6 +275,97 @@ HttpRequest parseRequest(Byte[] raw) {
     return HttpRequest(method, path, version, headers, body)
 }
 
+// Nome do cabecalho (minusculo, sem espaco em volta) ou "" se a linha nao
+// tem dois pontos. Fonte unica para as decisoes de repasse abaixo.
+String headerNameOf(String line) {
+    var colon = line.indexOf(":")
+    if (colon < 0) {
+        return ""
+    }
+    return line.substring(0, colon).trim().toLowerCase()
+}
+
+// Cabecalhos hop-by-hop (RFC 9110 §7.6.1): valem para UMA conexao e nao
+// podem ser repassados por um intermediario. `proxy-connection` nao e
+// padrao, mas e o que proxies reais emitem — tratar como hop-by-hop e o
+// comportamento conservador. `transfer-encoding` ja foi recusado com 400
+// KCF118 antes daqui; fica na lista por defesa em profundidade.
+Bool isHopByHopHeader(String name) {
+    if (name == "connection") {
+        return true
+    }
+    if (name == "keep-alive") {
+        return true
+    }
+    if (name == "proxy-authenticate") {
+        return true
+    }
+    if (name == "proxy-authorization") {
+        return true
+    }
+    if (name == "te") {
+        return true
+    }
+    if (name == "trailer") {
+        return true
+    }
+    if (name == "transfer-encoding") {
+        return true
+    }
+    if (name == "upgrade") {
+        return true
+    }
+    return name == "proxy-connection"
+}
+
+// Tokens nomeados na(s) linha(s) `Connection: close, X-Private`. Esses
+// cabecalhos sao hop-by-hop por declaracao do cliente (RFC 9110 §7.6.1) e
+// nao atravessam o Edge — sem isso um `Connection: X-Private` fazia o Edge
+// repassar um header que ele nao entende mas o servico local trataria.
+List<String> connectionTokens(List<String> headers) {
+    var tokens = listOf<String>()
+    for (var line in headers) {
+        if (headerNameOf(line) != "connection") {
+            continue
+        }
+        var value = line.substring(line.indexOf(":") + 1)
+        for (var item in value.split(",")) {
+            var token = item.trim().toLowerCase()
+            if (token.length > 0 && tokens.contains(token) == false) {
+                tokens.add(token)
+            }
+        }
+    }
+    return tokens
+}
+
+// Um header do cliente vai ao servico local? Pura de proposito: o teste
+// trava cada regra sem subir o Edge.
+Bool headerIsForwarded(String line, List<String> dropTokens, Bool dropCredential) {
+    var name = headerNameOf(line)
+    if (name.length == 0) {
+        return false
+    }
+    if (isHopByHopHeader(name)) {
+        return false
+    }
+    if (dropTokens.contains(name)) {
+        return false
+    }
+    // `Host` vai (o servico local precisa dele e o pedido ja foi validado);
+    // `X-Forwarded-For` do cliente e descartado — o Edge escreve o seu.
+    if (name == "x-forwarded-for") {
+        return false
+    }
+    if (dropCredential && name == "authorization") {
+        return false
+    }
+    if (dropCredential && name == "x-kofcloud-token") {
+        return false
+    }
+    return true
+}
+
 // Reconstroi a requisicao para o servico local, forçando Connection: close
 // (determinismo: o servico fecha ao terminar, e o Agent le ate EOF) e
 // anexando X-Forwarded-For.
@@ -284,15 +375,9 @@ HttpRequest parseRequest(Byte[] raw) {
 // (que reserva Authorization para JWT) recuse a requisicao.
 Byte[] serializeRequest(HttpRequest request, String clientIp, Bool dropCredential) {
     var out = request.method + " " + request.path + " " + request.version + "\r\n"
+    var dropTokens = connectionTokens(request.headers)
     for (var line in request.headers) {
-        var lower = line.toLowerCase()
-        if (lower.startsWith("connection:") || lower.startsWith("proxy-connection:") || lower.startsWith("x-forwarded-for:")) {
-            // reescrito abaixo
-        } else if (dropCredential && lower.startsWith("authorization:")) {
-            // credencial consumida pelo Edge
-        } else if (dropCredential && lower.startsWith("x-kofcloud-token:")) {
-            // credencial administrativa nunca vai ao servico
-        } else {
+        if (headerIsForwarded(line, dropTokens, dropCredential)) {
             out = out + line + "\r\n"
         }
     }

@@ -425,6 +425,17 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   ordem do enquadramento: rate limit primeiro). Prova:
   `tests/framing_test.kf` (`framing-host-unit` + e2e: duplicado/ausente →
   400, aplicação vê um único `Host`; mutação removendo a checagem quebra).
+* **Slice 2e — cabeçalhos hop-by-hop ✅.** O Edge reconstruía o pedido com
+  todos os headers do cliente: `Keep-Alive`, `Upgrade`, `TE`, `Trailer`,
+  `Proxy-Authenticate` e — o caso caro — `Proxy-Authorization` (credencial de
+  proxy) chegavam em claro ao serviço local; um token nomeado num
+  `Connection: keep-alive, X-Private` também atravessava. Medido com
+  `serializeRequest`. Agora `headerIsForwarded` (pura) descarta os
+  hop-by-hop do RFC 9110 §7.6.1 (+ `proxy-connection` legado) e os tokens
+  nomeados em `Connection` (`connectionTokens`, normalizados); o Edge escreve
+  o seu `Connection: close` e `X-Forwarded-For`. Prova:
+  `tests/framing_test.kf` (`framing-hop-unit` + e2e no relay: o serviço local
+  não vê nenhum deles; mutação reversa quebra os dois).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task
