@@ -71,7 +71,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | carga explícita + `migrate`/`state-backup` (F16 s1) | `loadStatus` ok/absent/corrupt (serve avisa), `migrate --dry-run` compara contagens sem escrever, `state-backup` preserva o arquivo antes da troca de backend | `migrate_test.kf` |
 | ranking de Edges (F14 s2) | `/v1/connect` publica `edges`; Agent mede e escolhe o mais rápido | `edge_select_test.kf` |
 | faixas de tamanho da resposta (F14 s1) | `response_bytes_total_size_kb_le_*` em `noteHttpFinished` | `metrics_test.kf` (`metrics-size`) |
-| painel — gestão completa (F12 s2) | formulários no `serve --panel` chamando as rotas `/v1` da CLI; `confirm()` nas destrutivas | `panel_actions_test.kf` |
+| painel — gestão completa (F12 s2) | formulários no `serve --panel` chamando as rotas `/v1` da CLI; `confirm()` nas destrutivas; 'Adicionar domínio' envia `service` (nome) — o `serviceId` fazia a rota devolver 404 KCF122; recarrega devices/presença após cada ação | `panel_actions_test.kf` |
 | painel somente-leitura (Fase 12 s1) | `serve --panel` → `GET /panel` estático (`control/Panel.kf`) lendo `/v1` com o token colado na página | `panel_test.kf` |
 | timeout de upstream (WAF 2b) | watchdog entrega RESET no stream → `504 KCF112` (ou parcial) + métrica `_timeout` | `waf_timeout_test.kf` |
 | teto de corpo (WAF 2a) | `kofcloud.limits.httpBodyBytes` → `413 KCF110` antes do relay + métrica `_body_too_large` | `waf_body_test.kf` |

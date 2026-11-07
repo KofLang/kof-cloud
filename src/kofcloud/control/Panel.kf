@@ -175,7 +175,9 @@ function acao(tipo){
   } else if(tipo === 'domain-add'){
     var h=document.getElementById('domhost').value.trim();
     var s=document.getElementById('domsvc').value.trim();
-    p = api('/v1/domains','POST',{hostname: h, serviceId: idPorNome(STATE.svcs, s)});
+    // A API le `service` (NOME do servico), nao `serviceId`: mandar o id
+    // devolvia 404 KCF122 e o botao nunca funcionava.
+    p = api('/v1/domains','POST',{hostname: h, service: s});
   } else if(tipo === 'domain-verify'){
     p = api('/v1/domains/verify','POST',{hostname: document.getElementById('domhost').value.trim()});
   } else if(tipo === 'domain-remove'){
@@ -187,9 +189,15 @@ function acao(tipo){
    .catch(function(e){ erro('falha: ' + e.message); });
 }
 function carregarListas(){
-  Promise.all([api('/v1/services'), api('/v1/domains')]).then(function(r){
-    var svcs=r[0], doms=r[1];
+  Promise.all([api('/v1/services'), api('/v1/domains'), api('/v1/devices'), api('/v1/presence')]).then(function(r){
+    var svcs=r[0], doms=r[1], devs=r[2], online=r[3];
     STATE.svcs = svcs;
+    STATE.devs = devs;
+    document.getElementById('devs').innerHTML = tabela(['nome','id','status','tunel'], devs.map(function(d){
+      var vivo = online.indexOf(d.id || d.deviceId) >= 0;
+      return [esc(d.name), esc(d.id || d.deviceId), esc(d.status),
+              vivo ? '<span class=\"on\">ONLINE</span>' : '<span class=\"off\">OFFLINE</span>'];
+    }));
     document.getElementById('svcs').innerHTML = tabela(['nome','hostname','exposicao','status'], svcs.map(function(s){
       var st = s.status === 'ONLINE' ? '<span class=\"on\">' : (s.status === 'OFFLINE' ? '<span class=\"off\">' : '<span class=\"pend\">');
       return [esc(s.name), 'https://'+esc(s.hostname), esc(s.exposure), st + esc(s.status) + '</span>'];

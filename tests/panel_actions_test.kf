@@ -87,6 +87,34 @@ test "painel s2: as rotas que o painel chama funcionam (publica e remove)", "pan
     assert(statusOf(page) == 200, "painel segue publico")
 }
 
+test "painel s2: adicionar dominio usa o NOME do servico (contrato da API)", "panel-actions" {
+    // Bug real: o botao mandava `serviceId` e a API le `service` (nome) —
+    // todo "Adicionar dominio" pelo painel devolvia 404 KCF122. O teste
+    // trava o contrato: o HTML manda `service:` e a rota aceita esse corpo.
+    var html = panelHtml()
+    assert(html.indexOf("service: s") >= 0, "painel envia o nome do servico")
+    assert(html.indexOf("serviceId: idPorNome(STATE.svcs, s)") < 0, "nao envia serviceId no domain add")
+
+    var controlPort = 19932
+    var registry = Registry("/tmp/kofcloud-pa2-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    control.enablePanel()
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "publicou")
+
+    // Corpo exato que o painel envia agora.
+    var added = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"api.example.com\",\"service\":\"site\"}", token)
+    assert(statusOf(added) == 200, "dominio adicionado pelo painel")
+    assert(bodyOf(added).indexOf("CNAME api.example.com") >= 0, "instrucao CNAME devolvida")
+}
+
 Bool isHexChar(Char c) {
     var v = c as Int
     var digit = v >= 48 && v <= 57

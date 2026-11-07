@@ -588,8 +588,17 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   remover domínio, revogar dispositivo, revogar todas as credenciais) pedem
   `confirm()`. O `kfs_` aparece **uma única vez** na emissão e nunca em
   listagem; o token da conta continua só na memória da aba. Prova:
-  `tests/panel_actions_test.kf` (2 — o HTML expõe cada ação, e o e2e
-  publica/suspende/emite/remove pelas rotas que o painel usa).
+  `tests/panel_actions_test.kf` (3 — o HTML expõe cada ação, o e2e
+  publica/suspende/emite/remove pelas rotas que o painel usa, e o contrato do
+  "Adicionar domínio").
+
+  **Bug corrigido (contrato do domínio).** O botão "Adicionar domínio" enviava
+  `serviceId`, mas `POST /v1/domains` lê `service` (o **nome** do serviço) —
+  todo domínio adicionado pelo painel devolvia `404 KCF122` e o botão nunca
+  funcionava. Agora manda o nome, e o teste trava o contrato nos dois lados
+  (HTML e rota). Junto: `carregarListas` passou a recarregar dispositivos e
+  presença, então suspender/revogar pelo painel atualiza a tabela em vez de
+  deixar a linha velha na tela.
 * **Slice 3 — onboarding guiado.** Criar conta → baixar desktop client →
   publish do primeiro serviço em 3 telas, com diagnóstico embutido
   (reaproveita a lógica do `doctor`, camada por camada). Prova: fluxo
