@@ -13,7 +13,7 @@
 | Fase 5 (AUTHENTICATED kfs_ + revoke + token-list + TTL) | ✅ verde | `service_token_test.kf` (13), `e2e_authenticated_test.kf` |
 | Fase 6 slice 1 (dominio proprio) | ✅ verde | `domains_test.kf` (sem TLS/SNI — externo; `domain verify --tls-cert` julga o PEM localmente) |
 | Observabilidade (3 slices) | ✅ verde | `metrics_test.kf`, `agent_metrics_test.kf` |
-| Enquadramento `Content-Length` no Edge | ✅ verde | `framing_test.kf` (3: Long, 400 KCF118, corpo relayado fatiado) |
+| Enquadramento `Content-Length` + `Host` no Edge | ✅ verde | `framing_test.kf` (4: Long, 400 KCF118, 400 KCF119, corpo relayado fatiado) |
 | Abuse prevention (2 slices) | ✅ verde | `ratelimit_test.kf`, `abuse_test.kf` |
 | Debitos de limites (frame, idle, conns) | ✅ verde | `frames_test.kf`, `idle_test.kf`, `conns_test.kf` |
 | Fase 7 slices 1–4 (deploy, --check, daemon, doctor) | ✅ verde | `deploy_test.kf`, `daemon_test.kf`, `doctor_test.kf` |
@@ -94,10 +94,10 @@ o run total imprime `51 passed, 0 failed`. Falha = nome do teste + assert
 | teto de resposta + cabeçalho + leitura (F14 s3 parcial) | `tests/relay_limit_test.kf` | 4 |
 | profundidade de fila por stream (F4) | `tests/queue_depth_test.kf` | 3 |
 | teto de conexões públicas (F4) | `tests/conn_limit_test.kf` | 2 |
-| enquadramento `Content-Length` (F10/F14) | `tests/framing_test.kf` | 3 |
-
-Total: 277 testes. Ver `15-tests.md` para a matriz.
+| enquadramento `Content-Length` + `Host` (F10/F14) | `tests/framing_test.kf` | 4 |
 | presença no `device list` (F4) | `tests/device_presence_test.kf` | 2 |
+
+Total: 278 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

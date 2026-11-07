@@ -237,6 +237,14 @@ String errInvalidContentLength() {
     return "KCF118: invalid or ambiguous request framing"
 }
 
+// `Host` ausente, duplicado ou com caractere invalido. O Edge roteia por ele
+// e reconstroi o pedido para o servico local: dois valores (ou nenhum)
+// deixam o roteamento e a aplicacao vendo destinos diferentes — host-header
+// injection. Recusar e o unico desfecho que nao escolhe um dos dois.
+String errInvalidHost() {
+    return "KCF119: missing or ambiguous Host header"
+}
+
 // ---- dominio proprio (Fase 6) ----
 
 String errInvalidCustomHostname() {
@@ -386,6 +394,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF118") >= 0) {
         return "O enquadramento do corpo e ambiguo: use um unico `Content-Length` numerico (sem sinal) e nao use `Transfer-Encoding` — o Edge nao decodifica chunked."
+    }
+    if (raw.indexOf("KCF119") >= 0) {
+        return "O `Host` do pedido esta ausente, duplicado ou tem caractere invalido — mande exatamente um hostname valido (ex: `Host: site.mel.kofcloud.io`); o Edge roteia por ele e nao adivinha qual vale."
     }
     if (raw.indexOf("KCF116") >= 0) {
         return "Os cabecalhos da requisicao nao terminaram dentro do teto do Edge — reduza-os ou aumente `kofcloud.maxBodyBytes` no `serve`."

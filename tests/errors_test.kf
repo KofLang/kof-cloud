@@ -417,6 +417,7 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     emitted.add(errHeaderTooLarge())
     emitted.add(errTooManyPublicConns())
     emitted.add(errInvalidContentLength())
+    emitted.add(errInvalidHost())
     emitted.add(errInvalidCustomHostname())
     emitted.add(errDomainTaken())
     emitted.add(errDomainNotFound())
@@ -427,7 +428,7 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     emitted.add(errIncidentNotFound())
     emitted.add(errInvalidWebhook())
     emitted.add(errWebhookNotFound())
-    assert(emitted.size == 52, "52 construtores emitem codigo")
+    assert(emitted.size == 53, "53 construtores emitem codigo")
     for (var msg in emitted) {
         assert(errHint(msg).length > 0, msg + " via construtor tem Hint")
     }
@@ -478,6 +479,7 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     codes.add("KCF116")
     codes.add("KCF117")
     codes.add("KCF118")
+    codes.add("KCF119")
     codes.add("KCF120")
     codes.add("KCF121")
     codes.add("KCF122")

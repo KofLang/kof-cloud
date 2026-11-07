@@ -415,6 +415,16 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   `Transfer-Encoding`), o Edge responde `400 KCF118` antes de rotear e o corpo
   relayado é fatiado **exatamente** no declarado. Prova:
   `tests/framing_test.kf` (3: unit, e2e 400/413, relay com corpo mentiroso).
+* **Slice 2d — `Host` não ambíguo ✅.** Fechado o outro lado da mesma classe:
+  o Edge roteia pelo `Host` e reconstrói o pedido para o serviço local, mas
+  com **dois** `Host` ele roteava pelo primeiro e repassava os dois — o
+  serviço local via o segundo (`Host: evil.example.com` chegava à aplicação),
+  host-header injection. Medido com `parseRequest`/`serializeRequest`.
+  `hostIsUnambiguous` (pura) exige exatamente um `Host`, não vazio, sem
+  caractere de controle/espaço; senão `400 KCF119` antes de rotear (mesma
+  ordem do enquadramento: rate limit primeiro). Prova:
+  `tests/framing_test.kf` (`framing-host-unit` + e2e: duplicado/ausente →
+  400, aplicação vê um único `Host`; mutação removendo a checagem quebra).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task

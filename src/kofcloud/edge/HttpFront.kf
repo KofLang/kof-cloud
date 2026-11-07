@@ -135,6 +135,18 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         noteHttpFinished("denied", "KCF118", raw.length, badBoundary.length, time.now() - started)
         return
     }
+    // Host ambiguo (ausente, duplicado ou com caractere invalido): recusa
+    // antes de rotear. O Edge repassa o pedido reconstruido ao servico local;
+    // se roteia por um Host e entrega outro, o roteamento vira sugestao — um
+    // `Host: evil.example.com` extra chegava a aplicacao. Mesma ordem do
+    // enquadramento: rate limit antes (o flood paga a cota do hostname).
+    if (hostIsUnambiguous(request.headers) == false) {
+        var badHost = errorResponse(400, errInvalidHost())
+        conn.send(badHost)
+        conn.close()
+        noteHttpFinished("denied", "KCF119", raw.length, badHost.length, time.now() - started)
+        return
+    }
     var service = state.route(host)
     if (service == null) {
         // Opaco: host desconhecido e servico nao roteavel (PRIVATE) respondem

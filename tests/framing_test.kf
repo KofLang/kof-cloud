@@ -61,6 +61,28 @@ test "framing: Content-Length unico em Long, duplicado/TE invalidos", "framing-u
     assert(errHint(errInvalidContentLength()).indexOf("Content-Length") >= 0, "Hint explica o enquadramento")
 }
 
+
+test "framing: Host unico, nao vazio e sem caractere invalido", "framing-host-unit" {
+    // Um Host normal passa.
+    assert(hostIsUnambiguous(listOf<String>("Host: site.mel.kofcloud.io")), "um Host")
+    assert(hostIsUnambiguous(listOf<String>("host: Site.Mel.KofCloud.IO:443", "X-Outro: 1")), "case/porta/outros headers")
+    // Ausente, vazio, duplicado (mesmo igual) e caractere de controle: ambiguos.
+    assert(hostIsUnambiguous(listOf<String>()) == false, "sem Host")
+    assert(hostIsUnambiguous(listOf<String>("Host:")) == false, "Host vazio")
+    assert(hostIsUnambiguous(listOf<String>("Host:   ")) == false, "Host so espacos")
+    assert(hostIsUnambiguous(listOf<String>("Host: a.kofcloud.io", "Host: b.kofcloud.io")) == false, "duplicado divergente")
+    assert(hostIsUnambiguous(listOf<String>("Host: a.kofcloud.io", "host: a.kofcloud.io")) == false, "duplicado igual tambem")
+    // Espaco dentro do valor quebraria a linha ao reconstruir o pedido.
+    assert(hostIsUnambiguous(listOf<String>("Host: a b.kofcloud.io")) == false, "espaco no valor")
+    assert(hostIsUnambiguous(listOf<String>("Host: a.kofcloud.io\rX-Injected: 1")) == false, "controle no valor")
+    // Header parecido nao conta como Host.
+    assert(hostIsUnambiguous(listOf<String>("X-Host: a", "X-Host: b")) == false, "so headers parecidos = sem Host")
+    assert(hostIsUnambiguous(listOf<String>("Host: a.kofcloud.io", "X-Host: b")) == true, "Host + parecido")
+    // Codigo e Hint (R6).
+    assert(errInvalidHost().indexOf("KCF119") >= 0, "codigo KCF119")
+    assert(errHint(errInvalidHost()).indexOf("Host") >= 0, "Hint explica o Host")
+}
+
 // Troca crua: manda os bytes e le ate o Edge fechar (Connection: close).
 String rawExchange(Int port, String raw) {
     var conn = net.connect("127.0.0.1", port)
@@ -140,13 +162,37 @@ test "framing: enquadramento ambiguo vira 400 KCF118 e gigante vira 413", "frami
     }
     assert(counted, "recusa por enquadramento contada")
 
+    // Host ambiguo: duplicado, ausente e com caractere invalido -> 400 KCF119
+    // antes de rotear (sem rota, o desfecho antigo seria 404 — mas com dois
+    // Host o Edge roteava pelo primeiro e repassava os dois ao servico).
+    var dupHost = rawExchange(httpPort, "GET / HTTP/1.1\r\nHost: " + host + "\r\nHost: evil.example.com\r\nConnection: close\r\n\r\n")
+    assert(statusOf(dupHost) == 400, "Host duplicado -> 400; recebido " + intToString(statusOf(dupHost)))
+    assert(bodyOf(dupHost).indexOf("KCF119") >= 0, "KCF119 no duplicado")
+    var noHost = rawExchange(httpPort, "GET / HTTP/1.1\r\nConnection: close\r\n\r\n")
+    assert(statusOf(noHost) == 400, "Host ausente -> 400")
+    assert(bodyOf(noHost).indexOf("KCF119") >= 0, "KCF119 no ausente")
+    var badHost = rawExchange(httpPort, "GET / HTTP/1.1\r\nHost: " + host + "\r\nX-KofCloud-Token: a\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
+    assert(statusOf(badHost) == 400, "Host repetido com header no meio -> 400")
+
+    var hostCounted = false
+    var hostWaits = 100
+    while (hostWaits > 0 && hostCounted == false) {
+        if (metricValue(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_host") >= 1) {
+            hostCounted = true
+        } else {
+            time.sleep(50)
+            hostWaits = hostWaits - 1
+        }
+    }
+    assert(hostCounted, "recusa por Host contada")
+
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)
     File(edgeStop).delete()
 }
 
 // Servico local que anota exatamente o corpo recebido (nao o header).
-void captureLocal(Conn peer, String[] body) {
+void captureLocal(Conn peer, String[] body, String[] headOut) {
     var req = ""
     var headEnd = -1
     while (headEnd < 0) {
@@ -174,6 +220,7 @@ void captureLocal(Conn peer, String[] body) {
     }
     // A sonda de health do Agent tambem conecta aqui; so o POST e medido.
     if (head.indexOf("POST ") == 0) {
+        headOut[0] = head
         body[0] = current
     }
     var resp = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
@@ -192,13 +239,15 @@ test "framing: corpo relayado tem exatamente o tamanho declarado", "framing-rela
 
     var received = new String[1]
     received[0] = ""
+    var seenHead = new String[1]
+    seenHead[0] = ""
     var localListener = net.listen(localSvc)
     var localTask = spawn {
         var serving = true
         while (serving) {
             try {
                 var peer = localListener.accept()
-                var worker = spawn { captureLocal(peer, received) }
+                var worker = spawn { captureLocal(peer, received, seenHead) }
             } catch (String e) {
                 serving = false
             }
@@ -248,6 +297,24 @@ test "framing: corpo relayado tem exatamente o tamanho declarado", "framing-rela
     assert(received[0].length == 10, "servico local recebe 10 bytes; recebeu " + intToString(received[0].length))
     assert(received[0] == "0123456789", "sem excedente no corpo")
     assert(received[0].indexOf("LEFTOVER") < 0, "bytes alem do declarado nao chegam ao servico")
+    // O Host que roteou e o unico que a aplicacao ve.
+    assert(seenHead[0].indexOf("Host: " + host) >= 0, "Host roteado chega ao servico")
+    var hostLines = 0
+    for (var line in seenHead[0].split("\n")) {
+        if (line.trim().toLowerCase().startsWith("host:")) {
+            hostLines = hostLines + 1
+        }
+    }
+    assert(hostLines == 1, "servico local ve exatamente um Host; viu " + intToString(hostLines))
+
+    // Host injetado nem chega ao relay: 400 KCF119 antes de abrir stream.
+    var injected = rawExchange(httpPort, "POST / HTTP/1.1\r\nHost: " + host + "\r\nHost: evil.example.com\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+    assert(statusOf(injected) == 400, "Host duplicado -> 400; recebido " + intToString(statusOf(injected)))
+    assert(bodyOf(injected).indexOf("KCF119") >= 0, "KCF119 no duplicado")
+    var afterInjected = received[0]
+    time.sleep(300)
+    assert(received[0] == afterInjected, "pedido recusado nao chega ao servico local")
+    assert(received[0].indexOf("evil.example.com") < 0, "Host injetado nunca chega a aplicacao")
 
     // Caminho legitimo continua intacto.
     var normal = httpPostRaw(httpPort, "/", host, listOf<String>(), "ok")

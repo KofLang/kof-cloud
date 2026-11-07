@@ -119,6 +119,43 @@ ContentLength parseContentLength(List<String> headers) {
     return ContentLength(seen, false, "")
 }
 
+// Validacao do `Host` do pedido (RFC 9112 §3.2). O Edge roteia por ele e o
+// repassa ao servico local; se o valor que roteou e o que a aplicacao le
+// divergem, o roteamento vira sugestao. Medido: com dois `Host`, o Edge
+// roteava pelo PRIMEIRO e repassava AMBOS — o servico local via o segundo
+// (`Host: evil.example.com` chegava la), host-header injection classica.
+// Regras: exatamente um `Host`, nao vazio, e sem caracteres de controle ou
+// espaco (que quebrariam a linha ao reconstruir o pedido).
+Bool hostIsUnambiguous(List<String> headers) {
+    var count = 0
+    for (var line in headers) {
+        var colon = line.indexOf(":")
+        if (colon < 0) {
+            continue
+        }
+        if (line.substring(0, colon).trim().toLowerCase() != "host") {
+            continue
+        }
+        count = count + 1
+        if (count > 1) {
+            return false
+        }
+        var value = line.substring(colon + 1).trim()
+        if (value.length == 0) {
+            return false
+        }
+        var i = 0
+        while (i < value.length) {
+            var c = value.charAt(i) as Int
+            if (c < 33 || c == 127) {
+                return false
+            }
+            i = i + 1
+        }
+    }
+    return count == 1
+}
+
 // Resultado da leitura crua de um pedido: os bytes lidos, se o teto de
 // leitura do Edge cortou o pedido antes do fim e se o enquadramento do corpo
 // e invalido/ambiguo (nesse caso o chamador recusa com 400 KCF118).
