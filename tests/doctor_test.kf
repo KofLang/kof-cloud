@@ -57,7 +57,7 @@ test "doctor: --tls-cert com PEM real (openssl) vira ok/FALHA na camada TLS", "d
         return
     }
     var parse = process.run("openssl", "x509", "-in", cert, "-noout").exitCode
-    var checkend = process.run("openssl", "x509", "-in", cert, "-noout", "-checkend", "2592000").exitCode
+    var checkend = process.run("openssl", "x509", "-in", cert, "-noout", "-checkend", tlsCheckendWindowSec()).exitCode
     var okLine = doctorTlsLine(cert, true, parse, checkend)
     assert(okLine.startsWith("ok"), "cert de 10 anos e ok: " + okLine)
     assert(okLine.indexOf("tls") >= 0, "rotula a camada tls")

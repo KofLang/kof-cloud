@@ -410,6 +410,12 @@ test "text: resolveTlsPair exige o par cert+key", "serve-tls" {
     // separada do IO para testar sem openssl e sem disco.
     assert(tlsCertExpiringSoon(0) == false, "valido alem do prazo: sem aviso")
     assert(tlsCertExpiringSoon(1) == true, "expira dentro: avisa")
+    // Janela do `-checkend` em fonte unica (30 dias = 2592000 s): os 5 pontos
+    // que consultam o openssl (serve, domain status/verify, scan, doctor) e os
+    // testes que geram PEM real passam por aqui — mudar o prazo muda todos
+    // juntos. Valor travado + mutacao quebra.
+    assert(tlsCheckendWindowSec() == "2592000", "janela de 30 dias travada")
+    assert(parseIntSafe(tlsCheckendWindowSec(), 0) == 30 * 24 * 60 * 60, "30 dias em segundos")
 }
 
 test "text: resolveStatePath apara e cai no default", "serve-state" {

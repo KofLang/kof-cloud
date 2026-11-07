@@ -141,7 +141,7 @@ DoctorReport doctorCheckWith(String manifestPath, String tlsCertPath) {
         if (exists) {
             try {
                 parseExit = process.run("openssl", "x509", "-in", tlsCertPath, "-noout").exitCode
-                checkendExit = process.run("openssl", "x509", "-in", tlsCertPath, "-noout", "-checkend", "2592000").exitCode
+                checkendExit = process.run("openssl", "x509", "-in", tlsCertPath, "-noout", "-checkend", tlsCheckendWindowSec()).exitCode
             } catch (String e) {
                 // openssl ausente: sem como julgar — nao inventa FALHA.
                 parseExit = 0

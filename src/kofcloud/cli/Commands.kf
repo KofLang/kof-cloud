@@ -1543,7 +1543,7 @@ Bool domainTlsBlocks(String certPath, String hostname) {
             if (parseExit == 0) {
                 sanOut = process.run("openssl", "x509", "-in", certPath, "-noout", "-ext", "subjectAltName").stdout
                 subjectOut = process.run("openssl", "x509", "-in", certPath, "-noout", "-subject").stdout
-                var checkend = process.run("openssl", "x509", "-in", certPath, "-noout", "-checkend", "2592000")
+                var checkend = process.run("openssl", "x509", "-in", certPath, "-noout", "-checkend", tlsCheckendWindowSec())
                 expiring = tlsCertExpiringSoon(checkend.exitCode)
             }
         } catch (String e) {
@@ -2152,6 +2152,14 @@ String controlScheme(String tlsPair) {
 // Aviso, nunca bloqueio (precedente: artifact ausente no deploy): cortar
 // o serve por relogio torto seria pior que servir com cert velho. Pura na
 // decisao (exitCode -> Bool); IO (process.run) vive no cmdServe.
+// A janela (30 dias, em segundos — unidade que `-checkend` entende) e
+// fonte unica dos 5 pontos que consultam o openssl (cmdServe, domain
+// status/verify, scan, doctor) + os testes que geram PEM real: mudar o prazo
+// muda todos juntos, sem cacar literais `2592000` espalhados.
+String tlsCheckendWindowSec() {
+    return "2592000"
+}
+
 Bool tlsCertExpiringSoon(Int checkendExitCode) {
     return checkendExitCode != 0
 }
@@ -2204,7 +2212,7 @@ Int cmdServe(List<String> args) {
         // ausente/erro = sem aviso (nao ha o que checar); expiracao nao
         // bloqueia o serve (aviso, nunca bloqueio — o operador decide).
         try {
-            var check = process.run("openssl", "x509", "-in", tlsCertPath, "-noout", "-checkend", "2592000")
+            var check = process.run("openssl", "x509", "-in", tlsCertPath, "-noout", "-checkend", tlsCheckendWindowSec())
             if (tlsCertExpiringSoon(check.exitCode)) {
                 println("aviso: certificado TLS expira em menos de 30 dias — renove o PEM")
             }

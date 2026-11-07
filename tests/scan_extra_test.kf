@@ -52,14 +52,14 @@ test "scan: PEM expirado/expirando e detectado com openssl", "scan-tls" {
     // Certificado valido por 1 dia: expira em menos de 30 -> achado.
     var gen = process.run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", keyPath, "-out", certPath, "-days", "1", "-nodes", "-subj", "/CN=localhost")
     assert(gen.exitCode == 0, "openssl gerou o par")
-    var check = process.run("openssl", "x509", "-in", certPath, "-noout", "-checkend", "2592000")
+    var check = process.run("openssl", "x509", "-in", certPath, "-noout", "-checkend", tlsCheckendWindowSec())
     assert(tlsCertExpiringSoon(check.exitCode), "1 dia expira em 30")
     // Valido por 365 dias: nao expira em 30.
     var longPath = dir + "/long.pem"
     var longKey = dir + "/long.key"
     var gen2 = process.run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", longKey, "-out", longPath, "-days", "365", "-nodes", "-subj", "/CN=localhost")
     assert(gen2.exitCode == 0, "segundo par")
-    var check2 = process.run("openssl", "x509", "-in", longPath, "-noout", "-checkend", "2592000")
+    var check2 = process.run("openssl", "x509", "-in", longPath, "-noout", "-checkend", tlsCheckendWindowSec())
     assert(tlsCertExpiringSoon(check2.exitCode) == false, "365 dias nao expira em 30")
 }
 

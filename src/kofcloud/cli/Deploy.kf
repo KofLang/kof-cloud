@@ -797,7 +797,7 @@ Int cmdScan(List<String> args) {
         if (fileExists(certPath) == false) {
             findings.add("tls: certificado nao encontrado: " + certPath)
         } else {
-            var check = process.run("openssl", "x509", "-in", certPath, "-noout", "-checkend", "2592000")
+            var check = process.run("openssl", "x509", "-in", certPath, "-noout", "-checkend", tlsCheckendWindowSec())
             if (tlsCertExpiringSoon(check.exitCode)) {
                 findings.add("tls: " + certPath + " expira em menos de 30 dias (ou nao e um PEM valido) — renove antes do vencimento")
             }
