@@ -175,6 +175,42 @@ test "framing: resposta chunked do upstream e decodificada", "framing-chunked-un
     assert(bodyOf(bytesToString(sanitizeResponse(bytesFromString(plain)))) == "a\r\nb", "corpo cru intacto")
 }
 
+
+test "framing: 1xx/204/304 e HEAD nunca entregam corpo", "framing-status-unit" {
+    // Codigo e regra puras.
+    assert(statusCodeOf("HTTP/1.1 204 No Content") == 204, "codigo 204")
+    assert(statusCodeOf("HTTP/1.0 304 Not Modified") == 304, "codigo 304")
+    assert(statusCodeOf("HTTP/1.1 200 OK") == 200, "codigo 200")
+    assert(statusCodeOf("lixo") == -1, "sem status")
+    assert(statusCodeOf("HTTP/1.1 20 OK") == -1, "codigo de 2 digitos")
+    assert(statusAllowsBody(200, "GET"), "200 GET tem corpo")
+    assert(statusAllowsBody(404, "POST"), "404 tem corpo")
+    assert(statusAllowsBody(200, "HEAD") == false, "HEAD sem corpo")
+    assert(statusAllowsBody(204, "GET") == false, "204 sem corpo")
+    assert(statusAllowsBody(304, "GET") == false, "304 sem corpo")
+    assert(statusAllowsBody(100, "POST") == false, "1xx sem corpo")
+    // 204/1xx perdem tambem o Content-Length; 304 e HEAD mantem (descrevem
+    // a representacao do GET).
+    var n204 = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 204 No Content\r\nContent-Length: 5\r\n\r\nhello"), "GET"))
+    assert(bodyOf(n204) == "", "204 sem corpo")
+    assert(n204.toLowerCase().indexOf("content-length") < 0, "204 sem Content-Length")
+    var n100 = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 100 Continue\r\nContent-Length: 0\r\n\r\nx"), "POST"))
+    assert(bodyOf(n100) == "" && n100.toLowerCase().indexOf("content-length") < 0, "1xx sem corpo nem CL")
+    var n304 = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 304 Not Modified\r\nContent-Length: 3\r\nETag: x\r\n\r\nabc"), "GET"))
+    assert(bodyOf(n304) == "", "304 sem corpo")
+    assert(n304.indexOf("Content-Length: 3") >= 0 && n304.indexOf("ETag: x") >= 0, "304 mantem CL e ETag")
+    var head = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"), "HEAD"))
+    assert(bodyOf(head) == "", "HEAD sem corpo")
+    assert(head.indexOf("Content-Length: 2") >= 0, "HEAD mantem o CL do GET")
+    // GET comum segue intacto.
+    var get = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"), "GET"))
+    assert(bodyOf(get) == "ok", "GET preservado")
+    // 204 chunked: decodifica e descarta (nunca vaza enquadramento).
+    var chunk204 = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 204 No Content\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n"), "GET"))
+    assert(bodyOf(chunk204) == "", "204 chunked sem corpo")
+    assert(chunk204.toLowerCase().indexOf("transfer-encoding") < 0, "204 chunked sem TE")
+}
+
 // Troca crua: manda os bytes e le ate o Edge fechar (Connection: close).
 String rawExchange(Int port, String raw) {
     var conn = net.connect("127.0.0.1", port)
@@ -323,6 +359,11 @@ void captureLocal(Conn peer, String[] body, String[] headOut) {
     if (head.indexOf("GET ") == 0) {
         resp = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n"
     }
+    // HEAD responde 204 COM corpo de proposito (servidor mal comportado): o
+    // Edge nao pode entregar esses bytes ao cliente.
+    if (head.indexOf("HEAD ") == 0) {
+        resp = "HTTP/1.1 204 No Content\r\nContent-Length: 5\r\n\r\nhello"
+    }
     peer.send(bytesFromString(resp))
     peer.close()
 }
@@ -441,6 +482,12 @@ test "framing: corpo relayado tem exatamente o tamanho declarado", "framing-rela
     assert(chunkedResp.indexOf("5\r\nhello") < 0, "sem enquadramento de chunk no corpo")
     assert(bodyOf(chunkedResp) == "hello world", "corpo decodificado; recebeu '" + bodyOf(chunkedResp) + "'")
     assert(responseHeader(chunkedResp, "connection") == "close", "close do Edge")
+
+    // 204 com corpo: o cliente nao recebe os bytes nem um Content-Length falso.
+    var noContent = rawExchange(httpPort, "HEAD / HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
+    assert(statusOf(noContent) == 204, "204 chega; recebeu " + intToString(statusOf(noContent)))
+    assert(bodyOf(noContent) == "", "204 sem corpo; recebeu '" + bodyOf(noContent) + "'")
+    assert(noContent.toLowerCase().indexOf("content-length") < 0, "204 sem Content-Length")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)

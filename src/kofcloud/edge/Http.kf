@@ -502,6 +502,50 @@ ChunkedBody decodeChunked(Byte[] data) {
     return ChunkedBody(out, false)
 }
 
+// Codigo numerico da linha de status (`HTTP/1.1 204 No Content` -> 204);
+// -1 se ausente ou nao numerico. Puro.
+Int statusCodeOf(String statusLine) {
+    var firstSpace = statusLine.indexOf(" ")
+    if (firstSpace < 0) {
+        return -1
+    }
+    var rest = statusLine.substring(firstSpace + 1).trim()
+    var end = rest.indexOf(" ")
+    var digits = rest
+    if (end >= 0) {
+        digits = rest.substring(0, end)
+    }
+    if (digits.length != 3) {
+        return -1
+    }
+    var value = 0
+    var i = 0
+    while (i < digits.length) {
+        var c = digits.charAt(i) as Int
+        if (c < 48 || c > 57) {
+            return -1
+        }
+        value = value * 10 + (c - 48)
+        i = i + 1
+    }
+    return value
+}
+
+// Status que NAO pode carregar corpo (RFC 9110 §6.4.1): 1xx, 204 e 304. O
+// Edge repassava o corpo do upstream como veio; um 204/304 com bytes depois
+// do header fazia o cliente ler como corpo da PROXIMA resposta (a conexao
+// fecha, entao o efeito e bytes inventados no fim do stream). `HEAD` entra
+// pela mesma razao: os headers descrevem o GET, o corpo nao existe.
+Bool statusAllowsBody(Int code, String method) {
+    if (method == "HEAD") {
+        return false
+    }
+    if (code >= 100 && code < 200) {
+        return false
+    }
+    return code != 204 && code != 304
+}
+
 // Sanitiza a resposta do servico local antes de entrega-la ao cliente
 // (lado simetrico do `serializeRequest`). O Edge fecha a conexao publica
 // sempre (`Connection: close`) e delimita o corpo pelo EOF, mas repassava os
@@ -513,10 +557,16 @@ ChunkedBody decodeChunked(Byte[] data) {
 //  * tokens nomeados no `Connection` do upstream saem;
 //  * `Transfer-Encoding: chunked` e DECODIFICADO: o header e hop-by-hop e o
 //    enquadramento nao pode chegar ao cliente como corpo;
+//  * 1xx/204/304 e `HEAD` nao levam corpo (ver `statusAllowsBody`); 1xx/204
+//    tambem perdem o `Content-Length`, que nao vale para eles;
 //  * um unico `Connection: close` do Edge entra no lugar;
 //  * sem `\r\n\r\n` (resposta crua/incompleta) a resposta volta intacta —
 //    nao ha header para reescrever e inventariar um seria pior.
 Byte[] sanitizeResponse(Byte[] response) {
+    return sanitizeResponse(response, "")
+}
+
+Byte[] sanitizeResponse(Byte[] response, String method) {
     var end = bytesIndexOf(response, "\r\n\r\n", 0)
     if (end < 0) {
         return response
@@ -524,6 +574,11 @@ Byte[] sanitizeResponse(Byte[] response) {
     var head = bytesToString(bytesSlice(response, 0, end))
     var lines = splitLines(head)
     var dropTokens = connectionTokens(lines)
+    var code = -1
+    if (lines.size > 0) {
+        code = statusCodeOf(lines.get(0))
+    }
+    var bodiless = statusAllowsBody(code, method) == false
     var chunked = false
     for (var line in lines) {
         if (headerNameOf(line) == "transfer-encoding") {
@@ -540,6 +595,12 @@ Byte[] sanitizeResponse(Byte[] response) {
         // Edge delimita) em vez de vazar o enquadramento cru.
         body = decoded.body
     }
+    if (bodiless) {
+        body = bytesEmpty()
+    }
+    // 1xx e 204 nao tem `Content-Length` (RFC 9110 §8.6); 304 e HEAD mantem,
+    // porque ali o valor descreve a representacao que o GET devolveria.
+    var dropLength = code >= 100 && code < 200 || code == 204
     // A fatia do separador vem antes do corpo de proposito: `end` aponta o
     // primeiro `\r` de `\r\n\r\n` e manter os 4 bytes deixa a resposta
     // bem formada mesmo quando o corpo foi substituido pelo decodificado.
@@ -554,6 +615,9 @@ Byte[] sanitizeResponse(Byte[] response) {
         }
         var name = headerNameOf(line)
         if (name.length == 0 || isHopByHopHeader(name) || dropTokens.contains(name)) {
+            continue
+        }
+        if (dropLength && name == "content-length") {
             continue
         }
         out = out + "\r\n" + line

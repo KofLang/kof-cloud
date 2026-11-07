@@ -300,7 +300,7 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
                 // resposta no meio. Os headers do upstream tambem passam pela
                 // sanitizacao: keep-alive anunciado nao pode sobreviver a um
                 // corpo que o Edge cortou.
-                var partial = sanitizeResponse(relayed.bytes)
+                var partial = sanitizeResponse(relayed.bytes, request.method)
                 conn.send(partial)
                 conn.close()
                 noteHttpFinished("upstream_error", "KCF105", raw.length, partial.length, time.now() - started)
@@ -347,7 +347,7 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     // Hop-by-hop do upstream nao vale para a conexao publica: o Edge fecha
     // sempre. Sem isso um `Connection: keep-alive` do servico local pedia ao
     // cliente para reusar uma conexao que o Edge ja fecha.
-    responseBytes = sanitizeResponse(responseBytes)
+    responseBytes = sanitizeResponse(responseBytes, request.method)
     // Modo detectar com assinatura casada: a resposta do relay segue, mas
     // marcada (`would-block`) — o operador ve o que o enforce bloquearia
     // sem quebrar nada hoje. Sem assinatura, bytes intactos.

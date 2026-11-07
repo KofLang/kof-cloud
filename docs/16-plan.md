@@ -456,6 +456,16 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   delimita), nunca o enquadramento. Prova: `tests/framing_test.kf`
   (`framing-chunked-unit` + e2e: GET no serviço local responde chunked e o
   cliente lê `hello world`).
+* **Slice 2h — status sem corpo ✅.** `1xx`, `204` e `304` não levam corpo
+  (RFC 9110 §6.4.1) e `HEAD` também não, mas o Edge repassava os bytes do
+  upstream como vinham: medido, um `204`/`304` com corpo fazia o cliente ler
+  aqueles bytes (a conexão fecha, então virariam lixo no fim do stream).
+  Agora `statusAllowsBody` (pura, por código + método) descarta o corpo e
+  `1xx`/`204` perdem também o `Content-Length` (que não vale para eles),
+  enquanto `304`/`HEAD` o mantêm — ali ele descreve a representação do GET.
+  `statusCodeOf` lê a linha de status sem parsear header. Prova:
+  `tests/framing_test.kf` (`framing-status-unit` + e2e: HEAD devolve 204 com
+  corpo no upstream e o cliente recebe corpo vazio).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task
