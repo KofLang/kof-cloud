@@ -65,7 +65,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | health HTTP com prazo (F4) | `GET` real ao serviço local: < 500 = ONLINE, ≥ 500 ou sem resposta no prazo = DEGRADED, recusa = OFFLINE; o ciclo lê a tabela viva da sessão a cada rodada (hot-reload), não a lista do connect — removido para de ser sondado, novo passa a ser | `health_test.kf` |
 | profundidade de fila por stream (F4) | teto de 64 itens por stream; fila cheia → `RESET LIMIT_EXCEEDED` no stream, túnel segue (política única em `routeData`) | `queue_depth_test.kf` |
 | credencial da conta com ciclo de vida (F19 s3) | `kfc_` com TTL opcional, inventário sem valores, revoke por id curto e rotação com overlap; `token list/revoke/rotate/rotation` | `account_token_test.kf` |
-| teto de resposta + cabeçalho (F14 s3 parcial) | resposta acima do teto → 502 KCF115 com stream cancelado dos dois lados (Agent para de produzir); cabeçalho sem fim → 431 KCF116 | `relay_limit_test.kf` |
+| teto de resposta + cabeçalho + leitura (F14 s3 parcial) | resposta acima do teto → 502 KCF115 com stream cancelado dos dois lados (Agent para de produzir); cabeçalho sem fim → 431 KCF116; corpo acima do teto de leitura → 413 KCF110 sem acumular (declarado ou real) | `relay_limit_test.kf` |
 | carga explícita + `migrate`/`state-backup` (F16 s1) | `loadStatus` ok/absent/corrupt (serve avisa), `migrate --dry-run` compara contagens sem escrever, `state-backup` preserva o arquivo antes da troca de backend | `migrate_test.kf` |
 | ranking de Edges (F14 s2) | `/v1/connect` publica `edges`; Agent mede e escolhe o mais rápido | `edge_select_test.kf` |
 | faixas de tamanho da resposta (F14 s1) | `response_bytes_total_size_kb_le_*` em `noteHttpFinished` | `metrics_test.kf` (`metrics-size`) |

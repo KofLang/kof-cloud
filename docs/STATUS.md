@@ -90,10 +90,10 @@ o run total imprime `48 passed, 0 failed`. Falha = nome do teste + assert
 | carga explícita + migrate (F16 s1) | `tests/migrate_test.kf` | 5 |
 | credencial da conta com ciclo de vida (F19 s3) | `tests/account_token_test.kf` | 5 |
 | health HTTP com prazo (F4) | `tests/health_test.kf` | 4 |
-| teto de resposta + cabeçalho (F14 s3 parcial) | `tests/relay_limit_test.kf` | 3 |
-
-Total: 269 testes. Ver `15-tests.md` para a matriz.
+| teto de resposta + cabeçalho + leitura (F14 s3 parcial) | `tests/relay_limit_test.kf` | 4 |
 | profundidade de fila por stream (F4) | `tests/queue_depth_test.kf` | 3 |
+
+Total: 270 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

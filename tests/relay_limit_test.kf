@@ -120,6 +120,31 @@ test "relay limite: resposta acima do teto vira 502 KCF115, nunca 200 truncado",
     File(edgeStop).delete()
 }
 
+// Le ate o fim da conexao (o Edge responde e fecha: Connection: close).
+String readAll(Conn conn) {
+    var out = ""
+    var reading = true
+    while (reading) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            reading = false
+        } else {
+            out = out + bytesToString(chunk)
+        }
+    }
+    return out
+}
+
+// Fecha a conexao depois do prazo: sem isso, uma implementacao que bloqueia
+// esperando o corpo declarado deixaria o teste pendurado no receive.
+void closeAfter(Conn conn, Int ms) {
+    time.sleep(ms)
+    try {
+        conn.close()
+    } catch (String e) {
+    }
+}
+
 Int metricValue(String exposition, String name) {
     for (var line in exposition.split("\n")) {
         var trimmed = line.trim()
@@ -162,6 +187,91 @@ test "relay limite: cabecalho sem fim dentro do teto vira 431 KCF116", "relaylim
     conn.close()
     assert(statusOf(response) == 431, "431 no status")
     assert(response.indexOf("KCF116") >= 0, "KCF116 no corpo")
+
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(edgeStop).delete()
+}
+
+// Teto ABSOLUTO de leitura do pedido: vale para cabecalho + corpo. Antes o
+// laco do corpo so olhava o `Content-Length` declarado, entao um cliente
+// hostil (ou um bug) mandava `Content-Length: 100000000` e o Edge tentava
+// acumular tudo em memoria; o 413 de politica (`httpBodyBytes`) so vinha
+// depois da leitura inteira — o teto era de politica, nao de leitura.
+// Agora a leitura recusa sem ler o corpo quando o declarado passa do teto, e
+// tambem corta bytes REAIS acima dele (Content-Length mentiroso).
+test "relay limite: corpo acima do teto de LEITURA e recusado sem acumular", "relaylimit-readcap" {
+    var readCap = 4096
+    var registry = Registry("/tmp/kofcloud-rl-c-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    // Teto de POLITICA bem maior que o de leitura: a recusa que este teste
+    // prova e a da leitura (o 413 de politica continua no seu proprio teste).
+    edgeState.setBodyLimit(1024 * 1024)
+    var edgeStop = "/tmp/kofcloud-rl-c-edge-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    var httpTask = spawn { serveHttp(edgeState, 19957, readCap, edgeStop) }
+    assert(waitForPort(19957, 60), "http no ar")
+
+    // (1) Declarado acima do teto, SEM corpo: a recusa tem que sair so com o
+    // cabecalho. Sem o corte por `total`, o Edge ficaria bloqueado no receive
+    // esperando 1 MiB que nunca vem (o deadline abaixo fecha a conexao e o
+    // teste falharia por resposta vazia).
+    var conn = net.connect("127.0.0.1", 19957)
+    var closer = spawn { closeAfter(conn, 3000) }
+    conn.send(bytesFromString("POST / HTTP/1.1\r\nHost: x.kofcloud.io\r\nContent-Length: 1000000\r\nConnection: close\r\n\r\n"))
+    var response = readAll(conn)
+    conn.close()
+    assert(statusOf(response) == 413, "declarado acima do teto -> 413 so com o cabecalho (vazio = bloqueou esperando corpo)")
+    assert(response.indexOf("KCF110") >= 0, "KCF110 no corpo")
+    // A metrica e gravada pela task do Edge (spawn) DEPOIS do close: o
+    // cliente pode ler antes. Espera limitada em vez de assert imediato.
+    var deniedCounted = false
+    var waits = 100
+    while (waits > 0 && deniedCounted == false) {
+        if (metricValue(observability.metrics(), "kofcloud_edge_http_denied_total_body_too_large") >= 1) {
+            deniedCounted = true
+        } else {
+            time.sleep(50)
+            waits = waits - 1
+        }
+    }
+    assert(deniedCounted, "recusa contada")
+
+    // (2) Content-Length MENTIROSO (declara 5000, mas o teto de leitura e
+    // 4096): o corpo real estoura o teto. O cabecalho viaja num chunk e o
+    // corpo noutro, entao o corte tem que acontecer no laco do CORPO — sem
+    // ele o pedido passaria adiante e cairia no 404 de rota.
+    var liar = net.connect("127.0.0.1", 19957)
+    liar.send(bytesFromString("POST / HTTP/1.1\r\nHost: x.kofcloud.io\r\nContent-Length: 5000\r\nConnection: close\r\n\r\n"))
+    time.sleep(100)
+    var blob = ""
+    var i = 0
+    while (i < 5000) {
+        blob = blob + "a"
+        i = i + 1
+    }
+    liar.send(bytesFromString(blob))
+    var liedResponse = readAll(liar)
+    liar.close()
+    assert(statusOf(liedResponse) == 413, "corpo real acima do teto -> 413 (nao segue ao roteamento)")
+
+    // (3) Content-Length SUBDECLARADO (declara 100, manda 5000): o `total`
+    // fica abaixo do teto e o corte pelo declarado nao pega — quem recusa e
+    // o teto sobre os bytes REAIS ao fim da leitura. Sem ele o pedido
+    // passaria adiante e cairia no 404 de rota.
+    var sneak = net.connect("127.0.0.1", 19957)
+    sneak.send(bytesFromString("POST / HTTP/1.1\r\nHost: x.kofcloud.io\r\nContent-Length: 100\r\nConnection: close\r\n\r\n"))
+    time.sleep(100)
+    sneak.send(bytesFromString(blob))
+    var sneakResponse = readAll(sneak)
+    sneak.close()
+    assert(statusOf(sneakResponse) == 413, "bytes reais acima do teto -> 413 mesmo com declarado pequeno")
+
+    // Teto de leitura NAO afeta pedido pequeno: mesma instancia, corpo curto.
+    var small = httpPostRaw(19957, "/", "x.kofcloud.io", listOf<String>(), "ok")
+    // Sem rota, o pequeno cai no 404 opaco — prova que atravessou a leitura
+    // (nao foi barrado pelo teto).
+    assert(statusOf(small) == 404, "pedido pequeno passa pela leitura e chega ao roteamento")
 
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)

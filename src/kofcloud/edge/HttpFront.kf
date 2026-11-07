@@ -36,7 +36,8 @@ void serveHttp(EdgeState state, Int port, Int maxBytes, String stopFile) {
 
 void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     var started = time.now()
-    var raw = readRequestBytes(conn, maxBytes)
+    var read = readRequestBytes(conn, maxBytes)
+    var raw = read.bytes
     if (raw.length == 0) {
         conn.close()
         return
@@ -75,6 +76,20 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         conn.send(limited)
         conn.close()
         noteHttpFinished("denied", "KCF107", raw.length, limited.length, time.now() - started)
+        return
+    }
+    // Corpo que estourou o teto ABSOLUTO de leitura: recusado antes do
+    // parsing semantico e antes do relay. Sem isso o Edge acumulava o corpo
+    // inteiro (o `Content-Length` declarado mandava) e o 413 de politica so
+    // vinha DEPOIS — um limite de politica, nao de leitura. A ordem importa:
+    // rate limit primeiro (flood de corpos enormes gasta a cota do hostname,
+    // nao vira caminho barato de abuso) e o security.txt acima continua sem
+    // rate limit e sem tocar no corpo.
+    if (read.overflowed) {
+        var bodyOverflow = errorResponse(413, errBodyTooLarge())
+        conn.send(bodyOverflow)
+        conn.close()
+        noteHttpFinished("denied", "KCF110", raw.length, bodyOverflow.length, time.now() - started)
         return
     }
     var service = state.route(host)

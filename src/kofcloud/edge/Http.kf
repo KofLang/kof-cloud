@@ -51,24 +51,46 @@ Int contentLengthOf(List<String> headers) {
     return parseIntSafe(value, 0)
 }
 
+// Resultado da leitura crua de um pedido: os bytes lidos e se o teto de
+// leitura do Edge cortou o pedido antes do fim. Sem esse sinal, um corpo
+// cortado seguiria para o servico local como se fosse a requisicao inteira.
+record HttpRead(Byte[] bytes, Bool overflowed)
+
 // Le a requisicao inteira: headers ate \r\n\r\n + corpo por Content-Length.
-Byte[] readRequestBytes(Conn conn, Int maxBytes) {
+//
+// `maxBytes` e o teto ABSOLUTO de leitura e vale para o pedido inteiro
+// (cabecalho + corpo). O laco do corpo respeitava so o `total` declarado,
+// entao um `Content-Length` gigante fazia o Edge acumular tudo em memoria —
+// o 413 de politica so chegava DEPOIS da leitura completa, e a promessa
+// "maxBytes" valia apenas para o cabecalho. Quem para no teto sai marcado
+// como `overflowed` e o chamador recusa (413 KCF110 / 431 KCF116); carregar
+// mais nunca ajuda o cliente honesto, e relayar corpo cortado seria pior.
+HttpRead readRequestBytes(Conn conn, Int maxBytes) {
     var acc = bytesEmpty()
     var headEnd = -1
     while (headEnd < 0) {
         var chunk = conn.receive(receiveChunkBytes())
         if (chunk.length == 0) {
-            return acc
+            return HttpRead(acc, false)
         }
         acc = bytesConcat(acc, chunk)
         headEnd = bytesIndexOf(acc, "\r\n\r\n", 0)
         if (acc.length > maxBytes) {
-            return acc
+            // Sem terminador de cabecalho dentro do teto: 431 no chamador
+            // (o `overflowed` tambem vale, mas o terminador ausente e o
+            // diagnostico mais preciso).
+            return HttpRead(acc, true)
         }
     }
     var head = bytesToString(bytesSlice(acc, 0, headEnd))
     var headers = splitLines(head)
     var total = headEnd + 4 + contentLengthOf(headers)
+    // Tamanho declarado acima do teto: recusa ANTES de ler o corpo. Ler e
+    // depois recusar deixaria um cliente hostil forcar `maxBytes` de
+    // acumulacao por conexao.
+    if (total > maxBytes) {
+        return HttpRead(acc, true)
+    }
     while (acc.length < total) {
         var chunk = conn.receive(receiveChunkBytes())
         if (chunk.length == 0) {
@@ -76,7 +98,10 @@ Byte[] readRequestBytes(Conn conn, Int maxBytes) {
         }
         acc = bytesConcat(acc, chunk)
     }
-    return acc
+    if (acc.length > maxBytes) {
+        return HttpRead(acc, true)
+    }
+    return HttpRead(acc, false)
 }
 
 List<String> splitLines(String text) {

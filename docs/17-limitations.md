@@ -121,11 +121,15 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   X-*) são inspecionados, até o mesmo teto de 64 KiB.
   O timeout usa polling (`limitIdleSweepMs`) e o prazo é medido
   desde o último DATA — a granularidade é a do passo de varredura, não exata.
-  O teto usa o
-  `Content-Length` **declarado**, e o corpo inteiro já foi lido antes da
-  decisão: é proteção de política e de carga no serviço do usuário, não uma
-  garantia de memória no Edge. Quem declara `Content-Length` falso continua
-  limitado pelo `maxBytes` global do `serve`.
+  Há **dois** tetos distintos. O de **política** (`httpBodyBytes`, 1 MiB,
+  413 KCF110) usa o `Content-Length` **declarado** e vale para carga no
+  serviço do usuário. O de **leitura** (`maxBytes` do `serve`, 16 MiB por
+  padrão) é o teto absoluto do pedido inteiro (cabeçalho + corpo): a leitura
+  recusa sem drenar o corpo quando o declarado já estoura e também quando os
+  bytes **reais** passam do teto — um `Content-Length` subdeclarado não
+  escapa. A memória do Edge fica limitada a cerca de `maxBytes` por conexão
+  (mais o bloco de `receive`), não ao declarado; o que continua fora da
+  garantia é o custo de CPU do `bytesConcat` O(n²) nesse caminho.
 * **Logs em dois arquivos, por desenho (débito quitado).** `kof cloud logs`
   lê `~/.kofcloud/agent.log` (marcos de sessão gravados pela CLI: `connect`,
   `disconnect`). `kof cloud logs --runtime` lê

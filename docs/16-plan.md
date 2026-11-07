@@ -615,10 +615,17 @@ sem mudar formato público):
      maxBytes)` prometia limitar o pedido, mas sem `\r\n\r\n` o bloco
      inteiro virava "cabeçalho" e seguia adiante. Agora é **431 KCF116**
      antes de rotear.
+  4. **Teto de leitura que não cobria o corpo.** O laço do corpo só olhava
+     o `Content-Length` declarado — um cliente mandava um valor gigante e o
+     Edge acumulava tudo antes do 413 de política. Agora `maxBytes` vale
+     para o pedido inteiro e a recusa (**413 KCF110**) sai sem drenar o
+     corpo; tanto declarado acima do teto quanto bytes reais acima dele
+     (declarado mentiroso) param na leitura.
 
-  Prova: `tests/relay_limit_test.kf` (3: código/Hint, 502 KCF115 fim a fim
-  com vaga liberada e métrica, 431 KCF116). **Pendente:** o ganho O(n) de
-  verdade (base64/slice sobre bytes no stdlib) e o handshake comprimido.
+  Prova: `tests/relay_limit_test.kf` (4: código/Hint, 502 KCF115 fim a fim
+  com vaga liberada e métrica, 431 KCF116, 413 de leitura com `Content-Length`
+  acima e abaixo do real). **Pendente:** o ganho O(n) de verdade
+  (base64/slice sobre bytes no stdlib) e o handshake comprimido.
 
 **Regra:** nenhuma otimização sem número antes/depois no `STATUS.md`;
 latência de cauda (p99) vale mais que média.
