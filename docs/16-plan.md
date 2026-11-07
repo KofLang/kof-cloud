@@ -476,6 +476,14 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   Corpo chunked decodificado cai na mesma regra (não ganha TE nem CL falso).
   Prova: `tests/framing_test.kf` (`framing-resp-cl-unit` + e2e: PUT responde
   CL 100 com 2 bytes e o cliente recebe `Content-Length: 2`).
+* **Slice 2j — resposta não-HTTP recusada ✅.** O Edge repassava ao cliente
+  qualquer byte que o serviço local devolvesse: medido, uma resposta sem linha
+  de status (`GARBAGE RESPONSE`) chegava ao cliente como corpo, sem erro
+  nenhum. Agora `responseIsParseable` (pura) exige `HTTP/<versão>
+  <código 100–599>`; senão o cliente recebe `502 KCF131` (+ métrica
+  `_invalid_response`) e os bytes/headers do upstream **não** são ecoados.
+  Prova: `tests/framing_test.kf` (`framing-badresp-unit` + e2e: DELETE
+  responde lixo → 502, corpo sem vazamento, métrica contada).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task

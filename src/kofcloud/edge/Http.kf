@@ -502,6 +502,27 @@ ChunkedBody decodeChunked(Byte[] data) {
     return ChunkedBody(out, false)
 }
 
+// A resposta do servico local e HTTP enquadravel? Exige linha de status no
+// formato `HTTP/<versao> <codigo>` (3 digitos). Sem isso o Edge repassava ao
+// cliente bytes que ele nao consegue interpretar como resposta (medido: linha
+// "GARBAGE RESPONSE" chegava ao cliente como corpo). Pura.
+Bool responseIsParseable(Byte[] response) {
+    var end = bytesIndexOf(response, "\r\n\r\n", 0)
+    if (end < 0) {
+        return false
+    }
+    var lines = splitLines(bytesToString(bytesSlice(response, 0, end)))
+    if (lines.size == 0) {
+        return false
+    }
+    var statusLine = lines.get(0)
+    if (statusLine.startsWith("HTTP/") == false) {
+        return false
+    }
+    var code = statusCodeOf(statusLine)
+    return code >= 100 && code <= 599
+}
+
 // Codigo numerico da linha de status (`HTTP/1.1 204 No Content` -> 204);
 // -1 se ausente ou nao numerico. Puro.
 Int statusCodeOf(String statusLine) {

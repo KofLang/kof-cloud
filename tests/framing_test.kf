@@ -241,6 +241,22 @@ test "framing: Content-Length da resposta e reconciliado com o corpo real", "fra
     assert(bodyOf(badCl) == "ok", "CL invalido nao corta")
 }
 
+
+test "framing: resposta nao-HTTP do upstream vira 502 KCF131", "framing-badresp-unit" {
+    // Sem linha de status enquadravel o Edge entregava bytes crus ao cliente.
+    assert(responseIsParseable(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")), "200 valido")
+    assert(responseIsParseable(bytesFromString("HTTP/1.0 404 Not Found\r\n\r\n")), "404 sem corpo valido")
+    assert(responseIsParseable(bytesFromString("GARBAGE RESPONSE\r\nX: y\r\n\r\npayload")) == false, "sem HTTP/")
+    assert(responseIsParseable(bytesFromString("HTTP/1.1 XX OK\r\n\r\n")) == false, "codigo nao numerico")
+    assert(responseIsParseable(bytesFromString("HTTP/1.1 999 Nope\r\n\r\n")) == false, "codigo fora de 100-599")
+    assert(responseIsParseable(bytesFromString("HTTP/1.1 20 OK\r\n\r\n")) == false, "codigo de 2 digitos")
+    assert(responseIsParseable(bytesFromString("nao e http")) == false, "sem terminador")
+    assert(responseIsParseable(bytesFromString("")) == false, "vazio")
+    // Codigo e Hint (R6).
+    assert(errInvalidUpstreamResponse().indexOf("KCF131") >= 0, "codigo KCF131")
+    assert(errHint(errInvalidUpstreamResponse()).indexOf("HTTP") >= 0, "Hint explica")
+}
+
 // Troca crua: manda os bytes e le ate o Edge fechar (Connection: close).
 String rawExchange(Int port, String raw) {
     var conn = net.connect("127.0.0.1", port)
@@ -399,6 +415,11 @@ void captureLocal(Conn peer, String[] body, String[] headOut) {
     if (head.indexOf("PUT ") == 0) {
         resp = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 100\r\n\r\nok"
     }
+    // DELETE responde LIXO (sem linha de status): o Edge tem que recusar com
+    // 502 em vez de repassar bytes que o cliente nao consegue interpretar.
+    if (head.indexOf("DELETE ") == 0) {
+        resp = "GARBAGE RESPONSE\r\nX-Debug: nao-vaza\r\n\r\npayload-secreto"
+    }
     peer.send(bytesFromString(resp))
     peer.close()
 }
@@ -529,6 +550,24 @@ test "framing: corpo relayado tem exatamente o tamanho declarado", "framing-rela
     assert(statusOf(lied) == 200, "put atendido")
     assert(bodyOf(lied) == "ok", "corpo real entregue; recebeu '" + bodyOf(lied) + "'")
     assert(responseHeader(lied, "content-length") == "2", "CL reconciliado com o corpo real; recebeu " + responseHeader(lied, "content-length"))
+
+    // Resposta nao-HTTP: 502 KCF131, sem ecoar os bytes do upstream.
+    var garbage = rawExchange(httpPort, "DELETE / HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
+    assert(statusOf(garbage) == 502, "lixo do upstream -> 502; recebeu " + intToString(statusOf(garbage)))
+    assert(bodyOf(garbage).indexOf("KCF131") >= 0, "KCF131 no corpo")
+    assert(garbage.indexOf("payload-secreto") < 0, "bytes do upstream nao vazam")
+    assert(garbage.indexOf("nao-vaza") < 0, "headers do upstream nao vazam")
+    var badCounted = false
+    var badWaits = 100
+    while (badWaits > 0 && badCounted == false) {
+        if (metricValue(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_invalid_response") >= 1) {
+            badCounted = true
+        } else {
+            time.sleep(50)
+            badWaits = badWaits - 1
+        }
+    }
+    assert(badCounted, "resposta invalida contada")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)

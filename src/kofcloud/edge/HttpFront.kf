@@ -344,6 +344,16 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         noteHttpFinished("upstream_error", "", raw.length, empty.length, time.now() - started)
         return
     }
+    // Resposta que nao e HTTP (linha de status ausente/malformada): o Edge
+    // entregava os bytes crus ao cliente, que recebia lixo em vez de um erro.
+    // 502 diz que o problema e do upstream, sem ecoar o que veio.
+    if (responseIsParseable(responseBytes) == false) {
+        var badUpstream = errorResponse(502, errInvalidUpstreamResponse())
+        conn.send(badUpstream)
+        conn.close()
+        noteHttpFinished("upstream_error", "KCF131", raw.length, badUpstream.length, time.now() - started)
+        return
+    }
     // Hop-by-hop do upstream nao vale para a conexao publica: o Edge fecha
     // sempre. Sem isso um `Connection: keep-alive` do servico local pedia ao
     // cliente para reusar uma conexao que o Edge ja fecha.

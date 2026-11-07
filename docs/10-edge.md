@@ -123,6 +123,7 @@ O corpo das respostas de erro do Edge também viaja como `KCFnnn`:
 | `504` | `KCF112` upstream did not respond in time | servico local mudo alem de `kofcloud.limits.tunnelIdleMs`; watchdog entrega RESET no stream |
 | `400` | `KCF118` invalid or ambiguous request framing | `Content-Length` duplicado divergente, nao numerico ou com sinal, nome fora da forma canonica, ou `Transfer-Encoding`; recusado antes de rotear. O Edge usa o declarado como fronteira do corpo que repassa — bytes alem dele ficam fora, para o servico local nunca receber um corpo de tamanho diferente do anunciado |
 | `400` | `KCF119` missing or ambiguous Host header | `Host` ausente, duplicado (mesmo igual) ou com caractere de controle/espaco; recusado antes de rotear. Sem isso o Edge roteava pelo primeiro `Host` e repassava os dois ao servico local (o ultimo era o que a aplicacao via) — host-header injection |
+| `502` | `KCF131` upstream sent an invalid HTTP response | o serviço local respondeu bytes sem linha de status enquadrável (`HTTP/<versão> <código 100–599>`); o Edge recusa em vez de repassar lixo ao cliente, sem ecoar os bytes recebidos; métrica `_invalid_response` (`framing_test.kf`) |
 
 ## Observabilidade mínima
 

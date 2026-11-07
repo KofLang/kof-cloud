@@ -13,7 +13,9 @@ package kofcloud.model
 //   KCF060-KCF079  credenciais de servico (kfs_)
 //   KCF080-KCF099  limites
 //   KCF100-KCF119  Edge / roteamento / tunel
-//   KCF120-KCF139  dominio proprio (Fase 6; KCF123 reservado, nunca emitido)
+//   KCF120-KCF139  dominio proprio (Fase 6), incidentes/contencao/webhook
+//                  (Fase 17) e resposta invalida do upstream — KCF123
+//                  reservado, nunca emitido
 
 // ---- conta / autenticacao ----
 
@@ -245,6 +247,14 @@ String errInvalidHost() {
     return "KCF119: missing or ambiguous Host header"
 }
 
+// O servico local respondeu bytes que nao sao HTTP (linha de status
+// ausente/malformada). O Edge repassava isso ao cliente como se fosse a
+// resposta, e o cliente recebia lixo em vez de um erro; 502 com corpo
+// explicito diz que o problema e do upstream, sem ecoar os bytes recebidos.
+String errInvalidUpstreamResponse() {
+    return "KCF131: upstream sent an invalid HTTP response"
+}
+
 // ---- dominio proprio (Fase 6) ----
 
 String errInvalidCustomHostname() {
@@ -397,6 +407,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF119") >= 0) {
         return "O `Host` do pedido esta ausente, duplicado ou tem caractere invalido — mande exatamente um hostname valido (ex: `Host: site.mel.kofcloud.io`); o Edge roteia por ele e nao adivinha qual vale."
+    }
+    if (raw.indexOf("KCF131") >= 0) {
+        return "O servico local respondeu algo que nao e HTTP (linha de status invalida) — confira a aplicacao e o `kof cloud logs --runtime`; o Edge nao repassa bytes que nao consegue enquadrar."
     }
     if (raw.indexOf("KCF116") >= 0) {
         return "Os cabecalhos da requisicao nao terminaram dentro do teto do Edge — reduza-os ou aumente `kofcloud.maxBodyBytes` no `serve`."
