@@ -129,8 +129,9 @@ String incidentSummaryFor(String kind) {
 }
 
 // Limite do anel de incidentes (os mais antigos ja resolvidos saem primeiro).
+// Delega na fonte unica (`util/Limits.kf`) — mesma regra dos detectores.
 Int limitIncidents() {
-    return 100
+    return limitIncidentRing()
 }
 
 // Janela e limiar do detector de revogacao em lote (por conta).

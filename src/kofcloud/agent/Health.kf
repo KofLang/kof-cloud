@@ -143,8 +143,10 @@ String readResponseHead(Conn conn) {
     return bytesToString(acc)
 }
 
+// Delega na fonte unica (`util/Limits.kf`) — mesma familia do prazo da
+// sonda; afinar sem editar a sonda.
 Int limitHealthHeadBytes() {
-    return 16384
+    return limitHealthResponseHeadBytes()
 }
 
 // Codigo numerico da status line ("HTTP/1.1 200 OK" -> 200). Puro: 0 quando

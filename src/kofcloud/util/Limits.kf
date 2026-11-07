@@ -9,7 +9,9 @@ package kofcloud.util
 // O que e aplicado hoje: dispositivos ativos por conta, servicos por
 // dispositivo, streams simultaneos por tunel, requisicoes por hostname no
 // Edge, bytes por frame DATA no tunel, conexoes simultaneas por servico
-// (429 KCF108 antes do OPEN) e idle timeout de tunel/stream (IDLE_TIMEOUT).
+// (429 KCF108 antes do OPEN), idle timeout de tunel/stream (IDLE_TIMEOUT),
+// tamanho do anel de auditoria e de incidentes, e o teto do cabecalho da
+// sonda de health.
 
 Int limitDevices() {
     return config.int("kofcloud.limits.devices", 5)
@@ -256,6 +258,33 @@ Int limitBackoffMaxMs() {
 // trilha de abuso sem avisar; o default 100 cabe em disco e em memoria).
 Int limitAuditEvents() {
     return config.int("kofcloud.limits.auditEvents", 100)
+}
+
+// Tamanho do anel de incidentes (os mais antigos ja resolvidos saem
+// primeiro). Fonte unica do `Registry.openIncident` — mesma regra do anel de
+// auditoria: afinar sem editar o produto. Recuo seguro explicito: zerado ou
+// negativo recai no default (anel desligado esconderia um incidente aberto).
+Int limitIncidentRing() {
+    var cap = config.int("kofcloud.limits.incidents", 100)
+    if (cap <= 0) {
+        return 100
+    }
+    return cap
+}
+
+// Teto do cabecalho lido na sonda de health local (Agent). O servico do
+// usuario pode responder cabecalho gigante; a sonda so precisa da status
+// line, entao le ate achar `\r\n\r\n` ou bater neste teto. Fonte unica da
+// sonda (`readResponseHead`) — o teto do Edge para conexao publica e outro
+// (`maxBytes`), de proposito: sao caminhos diferentes. Recuo seguro: nao
+// positivo recai no default (teto zero cortaria toda sonda e todo servico
+// viraria DEGRADED).
+Int limitHealthResponseHeadBytes() {
+    var cap = config.int("kofcloud.limits.healthHeadBytes", 16384)
+    if (cap <= 0) {
+        return 16384
+    }
+    return cap
 }
 
 // Tamanho de cada leitura crua de socket do TUNEL e do HTTP publico

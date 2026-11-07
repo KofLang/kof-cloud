@@ -68,6 +68,11 @@ test "health: status line e caminho da sonda sao puros", "health-unit" {
 
     // Fonte unica do prazo: positivo, com recuo seguro.
     assert(limitHealthTimeoutMs() > 0, "prazo positivo")
+    // Teto do cabecalho da sonda tambem na fonte unica: valor travado +
+    // delegacao (mudar o default no Limits muda a sonda — mutacao quebra).
+    // O teto e do caminho de health, distinto do `maxBytes` do Edge.
+    assert(limitHealthHeadBytes() == 16384, "teto do cabecalho da sonda travado")
+    assert(limitHealthHeadBytes() == limitHealthResponseHeadBytes(), "sonda delega na fonte")
     var healthCycle = limitHealthMs()
     assert(limitHealthTimeoutMs() < healthCycle, "prazo cabe no ciclo do health")
 }

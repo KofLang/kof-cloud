@@ -627,6 +627,15 @@ sem mudar formato público):
   acima e abaixo do real). **Pendente:** o ganho O(n) de verdade
   (base64/slice sobre bytes no stdlib) e o handshake comprimido.
 
+**Teto da sonda de health na fonte unica.** `limitHealthHeadBytes()` era o
+ultimo literal numerico do caminho de health (16384 em `agent/Health.kf`);
+agora delega em `limitHealthResponseHeadBytes()` (`util/Limits.kf`,
+`kofcloud.limits.healthHeadBytes`, recuo seguro). O teto do Edge para
+conexao publica continua outro (`maxBytes`) — sao caminhos distintos. O anel
+de incidentes seguiu a mesma regra (`limitIncidents` → `limitIncidentRing`,
+`kofcloud.limits.incidents`). Prova: `health-unit` e `incident-unit` (valor
++ delegacao, mutacao quebra).
+
 **Regra:** nenhuma otimização sem número antes/depois no `STATUS.md`;
 latência de cauda (p99) vale mais que média.
 

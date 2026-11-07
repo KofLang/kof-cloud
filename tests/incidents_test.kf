@@ -27,7 +27,10 @@ test "incidentes: severidade e resumo por sinal", "incident-unit" {
     assert(incidentSummaryFor(incidentBulkDeviceRevokes()).length > 0, "resumo presente")
     assert(severityIsKnown("CRIT"), "CRIT conhecido")
     assert(severityIsKnown("nada") == false, "desconhecida recusada")
-    assert(limitIncidents() > 0, "anel positivo")
+    // Anel de incidentes na fonte unica (`util/Limits.kf`): valor travado +
+    // delegacao (mudar o default no Limits muda o anel — mutacao quebra).
+    assert(limitIncidents() == 100, "anel de incidentes travado em 100")
+    assert(limitIncidents() == limitIncidentRing(), "anel delega na fonte")
     // Detectores em fonte unica (`util/Limits.kf`, mesma familia de
     // `limitHeartbeatMs`/`limitIdleSweepMs`): valor travado + delegacao
     // (mudar o default no Limits muda o detector — mutacao quebra).
