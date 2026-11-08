@@ -319,6 +319,46 @@ HttpRequest parseRequest(Byte[] raw) {
     return HttpRequest(method, path, version, headers, body)
 }
 
+// Cabecalho bem formado? `nome ":" OWS valor` com nome `token` (RFC 9110
+// §5.6.2/§5.1) e sem CR/LF/NUL no valor. Medido: `X-A\rb: v` atravessava ate
+// o servico local, onde a linha se partia (header injection), e a linha sem
+// dois pontos era aceita na lista (so descartada no repasse).
+Bool headerLineIsValid(String line) {
+    var colon = line.indexOf(":")
+    if (colon <= 0) {
+        return false
+    }
+    var i = 0
+    while (i < colon) {
+        var c = line.charAt(i) as Int
+        if (c <= 32 || c >= 127) {
+            return false
+        }
+        i = i + 1
+    }
+    var v = colon + 1
+    while (v < line.length) {
+        var vc = line.charAt(v) as Int
+        if (vc == 13 || vc == 10 || vc == 0 || vc == 127) {
+            return false
+        }
+        v = v + 1
+    }
+    return true
+}
+
+// Algum cabecalho da lista e malformado? O chamador recusa o pedido inteiro
+// com 400: repassar uma lista em que o Edge e o servico local discordam do
+// enquadramento e a mesma classe do Host duplicado.
+Bool headersAreValid(List<String> headers) {
+    for (var line in headers) {
+        if (headerLineIsValid(line) == false) {
+            return false
+        }
+    }
+    return true
+}
+
 // Nome do cabecalho (minusculo, sem espaco em volta) ou "" se a linha nao
 // tem dois pontos. Fonte unica para as decisoes de repasse abaixo.
 String headerNameOf(String line) {

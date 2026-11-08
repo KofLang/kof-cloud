@@ -291,6 +291,28 @@ test "framing: linha de requisicao fora do formato vira 400 KCF132", "framing-re
     assert(errHint(errInvalidRequestLine()).indexOf("METODO") >= 0, "Hint explica")
 }
 
+
+test "framing: cabecalho malformado vira 400 KCF133", "framing-hdrline-unit" {
+    assert(headerLineIsValid("Host: x.kofcloud.io"), "header normal")
+    assert(headerLineIsValid("X-Vazio:"), "valor vazio e valido")
+    assert(headerLineIsValid("X-Espaco:  a b  "), "espacos no valor")
+    assert(headerLineIsValid("Cookie: a=1; b=2"), "cookie")
+    assert(headerLineIsValid("semdoispontos") == false, "sem dois pontos")
+    assert(headerLineIsValid(": v") == false, "nome vazio")
+    assert(headerLineIsValid("X-A b: v") == false, "espaco no nome")
+    assert(headerLineIsValid("X-A\rb: v") == false, "CR no nome (quebra a linha)")
+    assert(headerLineIsValid("X-A\tb: v") == false, "tab no nome")
+    assert(headerLineIsValid("X-A: v\rw") == false, "CR no valor")
+    assert(headerLineIsValid("X-A: v\nw") == false, "LF no valor")
+    // Lista: basta uma linha ruim para recusar o pedido inteiro.
+    assert(headersAreValid(listOf<String>("Host: x", "X-Ok: 1")), "lista boa")
+    assert(headersAreValid(listOf<String>()) , "lista vazia")
+    assert(headersAreValid(listOf<String>("Host: x", "lixo")) == false, "lista com linha sem dois pontos")
+    // Codigo e Hint (R6).
+    assert(errInvalidHeaderLine().indexOf("KCF133") >= 0, "codigo KCF133")
+    assert(errHint(errInvalidHeaderLine()).indexOf("Nome") >= 0, "Hint explica")
+}
+
 // Troca crua: manda os bytes e le ate o Edge fechar (Connection: close).
 String rawExchange(Int port, String raw) {
     var conn = net.connect("127.0.0.1", port)
@@ -406,6 +428,26 @@ test "framing: enquadramento ambiguo vira 400 KCF118 e gigante vira 413", "frami
     var crPath = rawExchange(httpPort, "GET /a\rb HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
     assert(statusOf(crPath) == 400, "CR no path -> 400; recebeu " + intToString(statusOf(crPath)))
     assert(bodyOf(crPath).indexOf("KCF132") >= 0, "KCF132 no CR do path")
+    // Cabecalho com CR no nome: 400 KCF133 antes de rotear (sem isso a linha
+    // se partia no servico local).
+    var crHeader = rawExchange(httpPort, "GET / HTTP/1.1\r\nHost: " + host + "\r\nX-A\rb: v\r\nConnection: close\r\n\r\n")
+    assert(statusOf(crHeader) == 400, "CR no nome do header -> 400; recebeu " + intToString(statusOf(crHeader)))
+    assert(bodyOf(crHeader).indexOf("KCF133") >= 0, "KCF133 no corpo")
+    var lineNoColon = rawExchange(httpPort, "GET / HTTP/1.1\r\nHost: " + host + "\r\nsemdoispontos\r\nConnection: close\r\n\r\n")
+    assert(statusOf(lineNoColon) == 400, "linha sem dois pontos -> 400")
+    assert(bodyOf(lineNoColon).indexOf("KCF133") >= 0, "KCF133 sem dois pontos")
+
+    var hdrCounted = false
+    var hdrWaits = 100
+    while (hdrWaits > 0 && hdrCounted == false) {
+        if (metricValue(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_header_line") >= 1) {
+            hdrCounted = true
+        } else {
+            time.sleep(50)
+            hdrWaits = hdrWaits - 1
+        }
+    }
+    assert(hdrCounted, "recusa por cabecalho contada")
 
     var lineCounted = false
     var lineWaits = 100

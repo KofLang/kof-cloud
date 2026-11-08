@@ -263,6 +263,13 @@ String errInvalidRequestLine() {
     return "KCF132: invalid or ambiguous request line"
 }
 
+// Cabecalho fora de `nome: valor`: nome com espaco/controle (quebraria a
+// linha ao repassar) ou valor com CR/LF/NUL. Recusar a lista inteira evita
+// que Edge e servico local discordem sobre onde o pedido continua.
+String errInvalidHeaderLine() {
+    return "KCF133: invalid header line"
+}
+
 // ---- dominio proprio (Fase 6) ----
 
 String errInvalidCustomHostname() {
@@ -415,6 +422,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF119") >= 0) {
         return "O `Host` do pedido esta ausente, duplicado ou tem caractere invalido — mande exatamente um hostname valido (ex: `Host: site.mel.kofcloud.io`); o Edge roteia por ele e nao adivinha qual vale."
+    }
+    if (raw.indexOf("KCF133") >= 0) {
+        return "Um cabecalho nao esta no formato `Nome: valor` — nome sem espaco/controle e valor sem quebra de linha."
     }
     if (raw.indexOf("KCF132") >= 0) {
         return "A linha de requisicao nao esta no formato `METODO SP PATH SP HTTP/1.1` — mande exatamente tres partes, metodo sem espaco e path comecando por `/`."

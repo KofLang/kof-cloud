@@ -145,6 +145,15 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         noteHttpFinished("denied", "KCF132", raw.length, badLine.length, time.now() - started)
         return
     }
+    // Cabecalho malformado (nome com espaco/controle, valor com CR/LF/NUL):
+    // o Edge repassava a linha crua e o servico local via outra fronteira.
+    if (headersAreValid(request.headers) == false) {
+        var badHeader = errorResponse(400, errInvalidHeaderLine())
+        conn.send(badHeader)
+        conn.close()
+        noteHttpFinished("denied", "KCF133", raw.length, badHeader.length, time.now() - started)
+        return
+    }
     // Host ambiguo (ausente, duplicado ou com caractere invalido): recusa
     // antes de rotear. O Edge repassa o pedido reconstruido ao servico local;
     // se roteia por um Host e entrega outro, o roteamento vira sugestao — um

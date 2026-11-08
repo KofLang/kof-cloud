@@ -501,6 +501,14 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   absoluta (`http://…`) segue recusada por não começar com `/`. Prova:
   `tests/framing_test.kf` (`framing-reqline-unit` estendido + e2e: CR no
   path → 400 KCF132).
+* **Slice 2m — cabeçalhos validados ✅.** Fechada a lista: medido, `X-A\rb: v`
+  e a linha sem dois pontos atravessavam até o serviço local, onde a linha se
+  partia (header injection). `headerLineIsValid` (pura) exige `Nome: valor`
+  com nome `token` (sem espaço/controle) e valor sem CR/LF/NUL;
+  `headersAreValid` recusa o pedido inteiro no `HttpFront` com `400 KCF133`
+  (+ métrica `_invalid_header_line`) antes de rotear. Prova:
+  `tests/framing_test.kf` (`framing-hdrline-unit` + e2e: CR no nome e linha
+  sem dois pontos → 400).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task
