@@ -90,7 +90,8 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     // scanner legitimo nao deve ser contido nem contar como ataque. O path
     // e canonico (ver securityTxtBody); query nao muda nada (parseRequest
     // separa path de query — ver Http.kf).
-    if (request.method == "GET" && request.path == "/.well-known/security.txt") {
+    var routePath = pathWithoutQuery(request.path)
+    if (request.method == "GET" && routePath == "/.well-known/security.txt") {
         var txt = securityTxtResponse()
         conn.send(txt)
         conn.close()
@@ -246,6 +247,10 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     // com o relay (nenhum legitimo quebra por construcao). Enforce: casa ->
     // `403 KCF109` antes do relay (sem stream, sem Agent). So o nome do
     // padrao chega a metrica (nunca corpo, path ou hostname).
+    // O WAF ve o path COM query de proposito: e ali que moram traversal,
+    // `union select` e XSS de query string. Cortar a query aqui cegaria o
+    // detector para os ataques que ele existe para pegar (regressao medida no
+    // teste wafenforce).
     var signature = wafDetectSignature(request.method, request.path)
     if (signature.length == 0) {
         // Corpo pequeno tambem e inspecionado (o desenho do slice 1 prometia
@@ -272,7 +277,7 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     // WAF slice 3: allowlist do servico (fail-closed quando declarada). Listas
     // vazias = servico sem politica, passa tudo (servico legado). Metodo/path
     // nunca chegam ao servico nem ao Agent.
-    if (wafAllowCheck(request.method, request.path, splitList(service.allowMethods), splitList(service.allowPaths)) == false) {
+    if (wafAllowCheck(request.method, routePath, splitList(service.allowMethods), splitList(service.allowPaths)) == false) {
         var notAllowed = wafDeniedResponse(errWafAllowDenied())
         conn.send(notAllowed)
         conn.close()

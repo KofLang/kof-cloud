@@ -337,6 +337,20 @@ test "framing: 1xx intermediario e pulado ate a resposta final", "framing-interi
     assert(bytesToString(sanitizeResponse(bytesFromString(broken), "POST")) == broken, "sem terminador nao inventa")
 }
 
+
+test "framing: query nao interfere nas decisoes da plataforma", "framing-query-unit" {
+    // Medido: /security.txt?x=1 caia no roteamento (404) porque o parser
+    // mantem a query no path. A plataforma decide pelo caminho.
+    assert(pathWithoutQuery("/.well-known/security.txt?x=1") == "/.well-known/security.txt", "query removida")
+    assert(pathWithoutQuery("/a/b") == "/a/b", "sem query intacto")
+    assert(pathWithoutQuery("/?") == "/", "query vazia")
+    assert(pathWithoutQuery("/a?b?c") == "/a", "primeiro ? corta")
+    // O path do PEDIDO continua inteiro (a query vai ao servico local).
+    var req = parseRequest(bytesFromString("GET /api/x?page=2 HTTP/1.1\r\nHost: a\r\n\r\n"))
+    assert(req.path == "/api/x?page=2", "query preservada no pedido")
+    assert(pathWithoutQuery(req.path) == "/api/x", "rota sem query")
+}
+
 // Troca crua: manda os bytes e le ate o Edge fechar (Connection: close).
 String rawExchange(Int port, String raw) {
     var conn = net.connect("127.0.0.1", port)

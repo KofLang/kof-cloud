@@ -517,6 +517,17 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   1xx sem terminador volta como veio (incompleto não é inventado). Prova:
   `tests/framing_test.kf` (`framing-interim-unit` + e2e: PATCH responde
   100 + 200 e o cliente vê 200/`ok`).
+* **Slice 2o — query fora das decisões da plataforma ✅.** O comentário do
+  front prometia que a query "não muda nada", mas o parser mantém o path
+  inteiro: medido, `/.well-known/security.txt?x=1` caía no roteamento e
+  devolvia 404. Agora `pathWithoutQuery` (pura) é a fonte única do caminho
+  para `security.txt` e allowlist, enquanto o pedido repassado mantém a query
+  byte a byte (o serviço local continua vendo o que o cliente mandou). O WAF
+  segue com o path **completo**: cortar a query ali cegava o detector para
+  traversal/`union select` de query string (regressão pega pelo `wafenforce`
+  na suíte completa).
+  Prova: `tests/framing_test.kf` (`framing-query-unit`) + `security_test.kf`
+  (mesmo path com query → 200).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task

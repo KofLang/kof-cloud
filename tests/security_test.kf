@@ -72,6 +72,12 @@ test "security: Edge serve sem conta, sem tunel e sem rate limit", "security" {
     assert(bodyOf(first).indexOf("Contact:") >= 0, "corpo com contato")
     assert(responseHeader(first, "content-type") == "text/plain; charset=utf-8", "content-type texto")
 
+    // Query nao muda a rota da plataforma: mesmo caminho + "?x=1" tambem
+    // serve o security.txt (antes caia no roteamento e devolvia 404).
+    var withQuery = httpGetRaw(httpPort, "/.well-known/security.txt?x=1", "inexistente.example.com")
+    assert(statusOf(withQuery) == 200, "query no security.txt: " + statusOf(withQuery))
+    assert(bodyOf(withQuery).indexOf("Contact:") >= 0, "corpo com contato")
+
     // Nao e rota roteavel: host desconhecido em outro path segue 404 opaco.
     var missing = httpGetRaw(httpPort, "/nao-existe", "inexistente.example.com")
     assert(statusOf(missing) == 404, "outro path segue opaco: " + statusOf(missing))

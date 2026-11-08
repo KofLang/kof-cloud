@@ -243,6 +243,19 @@ List<String> splitLines(String text) {
     return out
 }
 
+// Caminho sem a query string (`/a/b?x=1` -> `/a/b`). `parseRequest` mantem o
+// path inteiro (o servico local recebe a query intacta, como o cliente
+// mandou), mas as decisoes da PLATAFORMA — security.txt, allowlist, WAF —
+// olham so o caminho: medido, `/.well-known/security.txt?x=1` caia no
+// roteamento e devolvia 404, contra o que o comentario do front promete.
+String pathWithoutQuery(String path) {
+    var q = path.indexOf("?")
+    if (q < 0) {
+        return path
+    }
+    return path.substring(0, q)
+}
+
 // Linha de requisicao valida? `METODO SP PATH SP HTTP/<versao>` com exatamente
 // tres partes nao vazias (RFC 9112 §3). Medido: `GE T / HTTP/1.1` virava
 // metodo `GE` e path `T` (split(" ") aproveitando as partes), e uma linha de
