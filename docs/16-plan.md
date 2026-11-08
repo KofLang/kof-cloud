@@ -339,6 +339,15 @@ entre cliente e Edge. Cloud robusta de verdade exige HTTPS ponta a ponta
   openssl ausente é aviso (nunca recusa inventada). Só caminho e nomes
   aparecem, nunca o conteúdo do PEM. Provas: `tests/domains_test.kf`
   (`domains-cert`: puro + `openssl` real, pula sem ele).
+  **`doctor --tls-cert` confere cobertura do host ✅.** A camada TLS só
+  olhava formato e validade: um PEM válido de **outro domínio** passava e o
+  HTTPS quebrava no handshake, em produção. Agora `doctorTlsLineFor` recebe
+  SAN/subject (`openssl x509`) e os hostnames do manifesto
+  (`tlsRequiredHosts` = `<servico>.<handle>.kofcloud.io`) e aplica a mesma
+  regra de cobertura do `domain verify --tls-cert` (`certHostVerdict`, uma
+  regra só): PEM que não cobre vira `FALHA tls`, curinga da conta cobre, e
+  sem SAN consultado (openssl ausente) não se inventa falha. Prova:
+  `tests/doctor_test.kf` (`doctor-tls`, 3 testes a mais, com PEM real).
   Pendente: SNI por hostname (mapa em memória, recarregado sem derrubar o
   Edge — depende do runtime), renovação automática, e expiração visível
   também no `service status`.

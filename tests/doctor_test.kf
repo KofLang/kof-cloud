@@ -203,3 +203,77 @@ String deployManifest(String name, String body) {
     File(path).writeText(body)
     return path
 }
+
+test "doctor: PEM valido mas de outro dominio nao cobre os servicos do manifesto", "doctor-tls" {
+    // Antes a camada TLS olhava so formato e validade: um PEM valido de
+    // OUTRO dominio passava e o HTTPS quebrava no handshake, em producao.
+    // A regra de cobertura e a mesma do `domain verify --tls-cert`
+    // (`certHostVerdict`), agora aplicada aos hostnames do manifesto.
+    var sanWrong = "X509v3 Subject Alternative Name:\n    DNS:other.example\n"
+    var subjectWrong = "subject=CN = other.example\n"
+    var hosts = listOf("site.mel.kofcloud.io", "api.mel.kofcloud.io")
+
+    var blocked = doctorTlsLineFor("/tmp/x.pem", true, 0, 0, sanWrong, subjectWrong, hosts)
+    assert(blocked.startsWith("FALHA tls"), "cert de outro dominio e FALHA")
+    assert(blocked.indexOf("site.mel.kofcloud.io") >= 0, "nomeia o host que nao cobre")
+
+    // Curinga da conta cobre todos os servicos.
+    var sanOk = "X509v3 Subject Alternative Name:\n    DNS:*.mel.kofcloud.io\n"
+    var okLine = doctorTlsLineFor("/tmp/x.pem", true, 0, 0, sanOk, "", hosts)
+    assert(okLine.startsWith("ok"), "curinga da conta passa")
+    assert(okLine.indexOf("2 servico(s)") >= 0, "diz quantos cobriu")
+
+    // Um host coberto e outro nao: falha, porque HTTPS cai no que falta.
+    var partial = "X509v3 Subject Alternative Name:\n    DNS:site.mel.kofcloud.io\n"
+    var partialLine = doctorTlsLineFor("/tmp/x.pem", true, 0, 0, partial, "", hosts)
+    assert(partialLine.startsWith("FALHA tls"), "cobertura parcial e FALHA")
+    assert(partialLine.indexOf("api.mel.kofcloud.io") >= 0, "aponta o que falta")
+
+    // Sem SAN consultado (openssl ausente / chamador antigo) nao inventa
+    // falha de cobertura: so valida formato, como antes.
+    var noSan = doctorTlsLineFor("/tmp/x.pem", true, 0, 0, "", "", hosts)
+    assert(noSan.startsWith("ok"), "sem SAN consultado nao acusa cobertura")
+
+    // Sem manifesto nao ha host a cobrir.
+    assert(tlsRequiredHosts(listOf<ManifestService>(), "mel").size == 0, "sem servico = sem host")
+    assert(tlsRequiredHosts(listOf<ManifestService>(), "").size == 0, "sem handle = sem host")
+}
+
+test "doctor: manifesto vira a lista de hostnames exigidos do PEM", "doctor-tls" {
+    var dir = "/tmp/kofcloud-doc-host-" + crypto.randomHex(4)
+    writeTextTo(dir + "/kofcloud.json", "{\"services\": [{\"name\": \"site\", \"port\": 8080}, {\"name\": \"api\", \"port\": 3000}]}")
+    var loaded = loadManifestFile(dir + "/kofcloud.json")
+    assert(loaded.ok, "manifesto lido")
+    var hosts = tlsRequiredHosts(loaded.services, "mel")
+    assert(hosts.size == 2, "dois hosts")
+    assert(hosts.contains("site.mel.kofcloud.io"), "site")
+    assert(hosts.contains("api.mel.kofcloud.io"), "api")
+
+    // Manifesto ausente: nada a exigir (a camada do manifesto acusa isso).
+    assert(loadManifestFile(dir + "/nao-existe.json").ok == false, "ausente nao ok")
+}
+
+test "doctor: PEM real de outro dominio e FALHA; curinga do dominio e ok", "doctor-tls" {
+    // Caminho completo (openssl real -> SAN/subject -> veredito) para os
+    // hostnames do manifesto. Pula quando o openssl nao existe, mesmo
+    // criterio dos outros testes de TLS.
+    var dir = "/tmp/kofcloud-doc-real-" + crypto.randomHex(4)
+    var wrong = dir + "/wrong.pem"
+    var wild = dir + "/wild.pem"
+    var gen = process.run("sh", "-c", "mkdir -p " + dir + " && openssl req -x509 -newkey rsa:2048 -keyout " + dir + "/k1.pem -out " + wrong + " -days 365 -nodes -subj /CN=other.example -addext subjectAltName=DNS:other.example 2>/dev/null && openssl req -x509 -newkey rsa:2048 -keyout " + dir + "/k2.pem -out " + wild + " -days 365 -nodes -subj /CN=kofcloud.io -addext subjectAltName=DNS:*.mel.kofcloud.io 2>/dev/null")
+    var probe = process.run("openssl", "version")
+    if (probe.exitCode != 0 || gen.exitCode != 0) {
+        return
+    }
+    var hosts = listOf("site.mel.kofcloud.io")
+
+    var wrongSan = process.run("openssl", "x509", "-in", wrong, "-noout", "-ext", "subjectAltName").stdout
+    var wrongSubj = process.run("openssl", "x509", "-in", wrong, "-noout", "-subject").stdout
+    var wrongLine = doctorTlsLineFor(wrong, true, 0, 0, wrongSan, wrongSubj, hosts)
+    assert(wrongLine.startsWith("FALHA tls"), "PEM real de outro dominio e FALHA: " + wrongLine)
+
+    var wildSan = process.run("openssl", "x509", "-in", wild, "-noout", "-ext", "subjectAltName").stdout
+    var wildSubj = process.run("openssl", "x509", "-in", wild, "-noout", "-subject").stdout
+    var wildLine = doctorTlsLineFor(wild, true, 0, 0, wildSan, wildSubj, hosts)
+    assert(wildLine.startsWith("ok"), "PEM real com curinga da conta passa: " + wildLine)
+}

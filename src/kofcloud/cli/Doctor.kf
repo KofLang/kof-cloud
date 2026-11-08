@@ -45,6 +45,20 @@ String doctorTunnelLine(String presenceRaw, String deviceId, String fetchError) 
 // Distingue arquivo ausente, PEM invalido e expiracao em 30 dias — o
 // caminho aparece na mensagem, o conteudo do PEM nunca.
 String doctorTlsLine(String certPath, Bool exists, Int parseExit, Int checkendExit) {
+    return doctorTlsLineFor(certPath, exists, parseExit, checkendExit, "", "", listOf<String>())
+}
+
+// Versao com cobertura de host: recebe as saidas de `openssl x509` (SAN e
+// subject) e os hostnames que o PEM PRECISA cobrir (os servicos do
+// manifesto). Antes a camada TLS so olhava formato e validade — um PEM
+// valido de OUTRO dominio passava no `doctor` e o HTTPS so quebrava em
+// producao, no handshake. `domainCertLine` ja julgava isso no
+// `domain verify --tls-cert`; aqui a mesma decisao vale para os hostnames
+// do manifesto (a regra de cobertura em `certHostVerdict`, uma so).
+//
+// `sanOut` vazio + `parseExit == 0` significa que o openssl nao foi
+// consultado (chamador antigo sem cobertura): nesse caso so valida formato.
+String doctorTlsLineFor(String certPath, Bool exists, Int parseExit, Int checkendExit, String sanOut, String subjectOut, List<String> requiredHosts) {
     if (certPath.length == 0) {
         return ""
     }
@@ -57,7 +71,33 @@ String doctorTlsLine(String certPath, Bool exists, Int parseExit, Int checkendEx
     if (tlsCertExpiringSoon(checkendExit)) {
         return doctorFailLine("tls", certPath + " expira em menos de 30 dias — renove o PEM")
     }
+    if (requiredHosts.size > 0 && sanOut.length > 0) {
+        for (var host in requiredHosts) {
+            var verdict = certHostVerdict(host, exists, parseExit, sanOut, subjectOut)
+            if (verdict.length > 0) {
+                return doctorFailLine("tls", certPath + " nao cobre " + host + " — " + verdict)
+            }
+        }
+        return doctorOkLine("tls (" + certPath + ", cobre " + intToString(requiredHosts.size) + " servico(s) e vale por mais de 30 dias)")
+    }
     return doctorOkLine("tls (" + certPath + ", valido por mais de 30 dias)")
+}
+
+// Hostnames publicos que o PEM precisa cobrir, a partir do manifesto e do
+// handle da conta. Puro: sem rede nem HOME. Sem manifesto, lista vazia
+// (nada a conferir).
+List<String> tlsRequiredHosts(List<ManifestService> services, String handle) {
+    var out = listOf<String>()
+    if (handle.trim().length == 0) {
+        return out
+    }
+    for (var service in services) {
+        var host = serviceHostname(service.name, handle.trim())
+        if (out.contains(host) == false) {
+            out.add(host)
+        }
+    }
+    return out
 }
 
 DoctorReport doctorCheck(String manifestPath) {
@@ -138,17 +178,31 @@ DoctorReport doctorCheckWith(String manifestPath, String tlsCertPath) {
         var exists = fileExists(tlsCertPath)
         var parseExit = 1
         var checkendExit = 1
+        var sanOut = ""
+        var subjectOut = ""
         if (exists) {
             try {
                 parseExit = process.run("openssl", "x509", "-in", tlsCertPath, "-noout").exitCode
                 checkendExit = process.run("openssl", "x509", "-in", tlsCertPath, "-noout", "-checkend", tlsCheckendWindowSec()).exitCode
+                if (parseExit == 0) {
+                    sanOut = process.run("openssl", "x509", "-in", tlsCertPath, "-noout", "-ext", "subjectAltName").stdout
+                    subjectOut = process.run("openssl", "x509", "-in", tlsCertPath, "-noout", "-subject").stdout
+                }
             } catch (String e) {
                 // openssl ausente: sem como julgar — nao inventa FALHA.
                 parseExit = 0
                 checkendExit = 0
             }
         }
-        var tlsLine = doctorTlsLine(tlsCertPath, exists, parseExit, checkendExit)
+        // Hostnames do manifesto: o PEM precisa cobri-los, nao so estar
+        // valido. Manifesto ausente/invalido nao falha aqui — a checagem
+        // dele tem camada propria mais abaixo; aqui e so "o que cobrir".
+        var requiredHosts = listOf<String>()
+        var peek = loadManifestFile(manifestPath)
+        if (peek.ok) {
+            requiredHosts = tlsRequiredHosts(peek.services, session.handle)
+        }
+        var tlsLine = doctorTlsLineFor(tlsCertPath, exists, parseExit, checkendExit, sanOut, subjectOut, requiredHosts)
         lines.add(tlsLine)
         if (tlsLine.startsWith("FALHA")) {
             failed = true
