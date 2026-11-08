@@ -509,6 +509,14 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   (+ métrica `_invalid_header_line`) antes de rotear. Prova:
   `tests/framing_test.kf` (`framing-hdrline-unit` + e2e: CR no nome e linha
   sem dois pontos → 400).
+* **Slice 2n — 1xx intermediário descartado ✅.** Medido: quando o serviço
+  local manda `100 Continue` antes da resposta final, o Edge tratava o bloco
+  como a resposta — o cliente recebia `100` com corpo vazio e nunca via o
+  `200`/`201`. `sanitizeResponse` agora pula cada bloco `1xx` completo
+  (headers + terminador, com teto de 8 iterações) e entrega só a final; bloco
+  1xx sem terminador volta como veio (incompleto não é inventado). Prova:
+  `tests/framing_test.kf` (`framing-interim-unit` + e2e: PATCH responde
+  100 + 200 e o cliente vê 200/`ok`).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task

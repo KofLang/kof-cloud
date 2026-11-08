@@ -672,6 +672,31 @@ Byte[] sanitizeResponse(Byte[] response) {
 }
 
 Byte[] sanitizeResponse(Byte[] response, String method) {
+    // Respostas intermediarias (1xx, ex. `100 Continue`) vem ANTES da final na
+    // mesma conexao. Sem pular, o Edge entregava o bloco 1xx como resposta e o
+    // cliente nunca via o status final — medido: 100 Continue + 200 OK virava
+    // um 100 com corpo vazio. Pula-se cada bloco 1xx inteiro (headers + o
+    // terminador); sem `\r\n\r\n` nao ha como pular, devolve como veio.
+    var skipped = response
+    var guard = 0
+    while (guard < 8) {
+        guard = guard + 1
+        var e = bytesIndexOf(skipped, "\r\n\r\n", 0)
+        if (e < 0 || skipped.length < e + 4) {
+            break
+        }
+        var interimLines = splitLines(bytesToString(bytesSlice(skipped, 0, e)))
+        var firstLine = ""
+        if (interimLines.size > 0) {
+            firstLine = interimLines[0]
+        }
+        var interim = statusCodeOf(firstLine)
+        if (interim < 100 || interim >= 200) {
+            break
+        }
+        skipped = bytesSlice(skipped, e + 4, skipped.length)
+    }
+    response = skipped
     var end = bytesIndexOf(response, "\r\n\r\n", 0)
     if (end < 0) {
         return response
