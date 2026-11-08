@@ -78,6 +78,16 @@ test "erros: control plane devolve codigos estaveis", "errors" {
     assert(statusOf(bigPort) == 400, "porta gigante -> 400")
     assert(codeIs(errorCodeOf(bigPort), "KCF043"), "KCF043 com teto")
 
+    // Porta que estoura Int fazia WRAP na API: 4294968080 virava 784 e era
+    // publicada em silencio; 4294967296 virava 0. Agora e 400 como qualquer
+    // porta fora da faixa.
+    var wrappedPort = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"4294968080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", accountToken)
+    assert(statusOf(wrappedPort) == 400, "porta com wrap -> 400")
+    assert(codeIs(errorCodeOf(wrappedPort), "KCF043"), "KCF043 no wrap")
+    var zeroWrapPort = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"4294967296\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", accountToken)
+    assert(statusOf(zeroWrapPort) == 400, "porta 2^32 -> 400")
+    assert(codeIs(errorCodeOf(zeroWrapPort), "KCF043"), "KCF043 no 2^32")
+
     var badName = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"SITE!\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", accountToken)
     assert(statusOf(badName) == 400, "nome invalido -> 400")
     assert(codeIs(errorCodeOf(badName), "KCF040"), "KCF040 invalid service name")

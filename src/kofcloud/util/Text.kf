@@ -2,7 +2,34 @@ package kofcloud.util
 
 import kofcloud.util.Limits
 
-// Helpers de texto e de mapa que o protocolo e a CLI compartilham.
+// Porta TCP (1-65535) lida SEM estouro de Int. `parseIntSafe` faz aritmetica
+// de 32 bits: medido, `--port 4294968080` virava 784 e era aceito em
+// silencio (o usuario publicava na porta errada), e `4294967296` virava 0.
+// Aqui o acumulador e Long e qualquer digito que passe de 65535 ja falha —
+// nao ha valor intermediario que "caiba por acaso". Pura.
+Int parsePortSafe(String text, Int fallback) {
+    var trimmed = text.trim()
+    if (trimmed.length == 0) {
+        return fallback
+    }
+    var acc = 0L
+    var i = 0
+    while (i < trimmed.length) {
+        var c = trimmed.charAt(i) as Int
+        if (c < 48 || c > 57) {
+            return fallback
+        }
+        acc = acc * 10L + (c - 48)
+        if (acc > 65535L) {
+            return fallback
+        }
+        i = i + 1
+    }
+    if (acc <= 0L) {
+        return fallback
+    }
+    return acc as Int
+}
 
 Int parseIntSafe(String text, Int fallback) {
     if (text.length == 0) {

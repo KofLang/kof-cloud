@@ -528,6 +528,16 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   na suíte completa).
   Prova: `tests/framing_test.kf` (`framing-query-unit`) + `security_test.kf`
   (mesmo path com query → 200).
+* **Slice 2p — porta sem estouro de `Int` ✅.** `parseIntSafe` acumula em 32
+  bits: medido, `--port 4294968080` virava **784** e era aceito (o serviço
+  era publicado na porta errada) e `4294967296` virava 0. Agora
+  `parsePortSafe` (pura, `util/Text.kf`) acumula em `Long` e falha assim que
+  passa de 65535 — não há valor intermediário que "caiba por acaso" — e é a
+  fonte única de publish (CLI, manifesto, API) e das três portas do `serve`
+  (`portFlagValue`: ausente usa o default, presente e inválida vira -1 e a
+  validação recusa, nunca cai no default em silêncio). Prova:
+  `tests/hosts_test.kf` (`serve-ports` estendido) + `tests/errors_test.kf`
+  (API: `4294968080`/`4294967296` → 400 KCF043).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task

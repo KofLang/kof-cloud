@@ -236,6 +236,22 @@ test "text: validateServePorts barra porta fora da faixa", "serve-ports" {
     assert(validateServePorts(defaultControlPort(), 70000, defaultHttpPort()).indexOf("tunnel-port") >= 0, "teto barra no tunel")
     assert(validateServePorts(defaultControlPort(), defaultTunnelPort(), -1).indexOf("http-port") >= 0, "negativa barra no http")
     assert(defaultControlUrl() == "http://127.0.0.1:" + intToString(defaultControlPort()), "controlUrl usa o default")
+    // Porta lida sem estouro de Int: 4294968080 fazia wrap para 784 e era
+    // aceita em silencio; 4294967296 virava 0.
+    assert(parsePortSafe("8080", 0) == 8080, "porta normal")
+    assert(parsePortSafe(" 8080 ", 0) == 8080, "espacos")
+    assert(parsePortSafe("1", 0) == 1 && parsePortSafe("65535", 0) == 65535, "faixa")
+    assert(parsePortSafe("4294968080", -1) == -1, "acima de 2^32 nao faz wrap")
+    assert(parsePortSafe("4294967296", -1) == -1, "2^32 exato nao vira 0")
+    assert(parsePortSafe("65536", -1) == -1, "acima do teto")
+    assert(parsePortSafe("0", -1) == -1 && parsePortSafe("-1", -1) == -1, "zero e negativo")
+    assert(parsePortSafe("8080x", -1) == -1 && parsePortSafe("", -1) == -1, "lixo e vazio")
+    // Flag do serve: ausente usa o default; presente e invalida vira -1 e a
+    // validacao recusa (nunca cai no default em silencio).
+    assert(portFlagValue("", defaultControlPort()) == defaultControlPort(), "ausente = default")
+    assert(portFlagValue("   ", defaultControlPort()) == defaultControlPort(), "so espacos = default")
+    assert(portFlagValue("4294968080", defaultControlPort()) == -1, "flag estourada = -1")
+    assert(validateServePorts(portFlagValue("4294968080", defaultControlPort()), defaultTunnelPort(), defaultHttpPort()).indexOf("control-port") >= 0, "flag estourada barra")
 }
 
 test "text: flag sem valor nao vira default silencioso", "flag-missing" {

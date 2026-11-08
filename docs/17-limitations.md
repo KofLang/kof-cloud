@@ -67,6 +67,11 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   Edge, a lista fica vazia/parcial (ausência, não mentira). Não há pub/sub
   entre nós — é o slice 2 da Fase 16.
 * **Rate limiting é por processo.** Não é global entre nós.
+* **Portas passam por `parsePortSafe`.** `parseIntSafe` fazia aritmética de
+  `Int` (32 bits): `--port 4294968080` virava 784 e era aceito em silêncio
+  (publicava na porta errada) e `4294967296` virava 0. Agora publish (CLI,
+  manifesto e API) e as três portas do `serve` lêem em `Long` com teto de
+  65535; flag inválida falha em vez de cair no default.
 * **Certificados são externos.** O operador fornece o PEM. O
   `domain verify --tls-cert` confere localmente só o que dá para julgar sem
   confiar na cadeia: SAN/CN cobrindo o hostname (curinga de um rótulo) e

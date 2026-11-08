@@ -681,7 +681,7 @@ Int cmdPublish(List<String> args) {
         println("argumento a mais — uso: kof cloud publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]")
         return 1
     }
-    var port = parseIntSafe(flagValue(args, "--port").trim(), 0)
+    var port = parsePortSafe(flagValue(args, "--port"), 0)
     // Trim como o parseManifest (ausente/vazio/so-espacos = default, igual
     // ao "ausente defaulta" do manifesto): espacos sobrando nao devem virar
     // nome com espaco nem exposure invalida.
@@ -2154,6 +2154,17 @@ String logPath() {
 // Portas do `serve` validas? Pura, sem IO — o cmdServe chama antes de
 // abrir qualquer listener (fail-fast: sem bind parcial). Mesma faixa da
 // API/manifesto (KCF043): 1-65535. Devolve "" quando ok.
+// Porta de flag do `serve`: ausente/vazia usa o default; presente e invalida
+// vira -1 para `validateServePorts` recusar com mensagem. Sem isso, um valor
+// que estoura Int fazia wrap (4294968080 -> 784) ou caia no default em
+// silencio. Pura.
+Int portFlagValue(String raw, Int fallback) {
+    if (raw.trim().length == 0) {
+        return fallback
+    }
+    return parsePortSafe(raw, -1)
+}
+
 String validateServePorts(Int controlPort, Int tunnelPort, Int httpPort) {
     if (controlPort <= 0 || controlPort > 65535) {
         return "control-port invalida: " + intToString(controlPort) + " (use 1-65535)"
@@ -2235,9 +2246,9 @@ Int cmdServe(List<String> args) {
         println("flag repetida — informe uma so vez: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]")
         return 1
     }
-    var controlPort = parseIntSafe(flagValue(args, "--control-port").trim(), defaultControlPort())
-    var tunnelPort = parseIntSafe(flagValue(args, "--tunnel-port").trim(), defaultTunnelPort())
-    var httpPort = parseIntSafe(flagValue(args, "--http-port").trim(), defaultHttpPort())
+    var controlPort = portFlagValue(flagValue(args, "--control-port"), defaultControlPort())
+    var tunnelPort = portFlagValue(flagValue(args, "--tunnel-port"), defaultTunnelPort())
+    var httpPort = portFlagValue(flagValue(args, "--http-port"), defaultHttpPort())
     var statePath = resolveStatePath(flagValue(args, "--state"))
     var wafMode = resolveWafMode(flagValue(args, "--waf"))
     var panel = hasFlag(args, "--panel")

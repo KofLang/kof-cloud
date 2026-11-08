@@ -316,7 +316,7 @@ List<ManifestService> parseManifest(String raw) {
         // (commit do trim): aparado no parse, erro posicional honesto segue
         // mostrando o valor aparado.
         var name = manifestField(entry, "name").trim()
-        var port = parseIntSafe(manifestField(entry, "port").trim(), 0)
+        var port = parsePortSafe(manifestField(entry, "port"), 0)
         var address = manifestField(entry, "address").trim()
         if (address.length == 0) {
             address = defaultLocalAddress()

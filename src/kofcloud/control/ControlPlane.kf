@@ -346,7 +346,7 @@ HttpResult handlePublishService(Registry registry, String? authHeader, String bo
     if (validLocalAddress(localAddress) == false) {
         return HttpResult(400, errorJson(errInvalidAddress()))
     }
-    var localPort = parseIntSafe(mapField(body, "localPort"), 0)
+    var localPort = parsePortSafe(mapField(body, "localPort"), 0)
     var protocol = mapField(body, "protocol")
     if (protocol.length == 0) {
         protocol = defaultProtocol()
