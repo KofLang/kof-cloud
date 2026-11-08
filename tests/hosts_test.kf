@@ -145,6 +145,16 @@ test "text: tailLines devolve as ultimas linhas", "logs-tail" {
     assert(tailLines("", 3) == "", "vazio devolve vazio")
     // Sem trailing newline: a parcial conta como linha.
     assert(tailLines("a\nb", 1) == "b\n", "parcial conta")
+    // `--tail` lia com parseIntSafe (32 bits): 4294967396 virava 100 e era
+    // aceito em silencio — o usuario pedia bilhoes e recebia cem linhas.
+    assert(parseIntBounded("100", -1, 2147483647) == 100, "tail normal")
+    assert(parseIntBounded(" 100 ", -1, 2147483647) == 100, "tail com espacos")
+    assert(parseIntBounded("4294967396", -1, 2147483647) == -1, "acima de 2^32 nao vira 100")
+    assert(parseIntBounded("4294967296", -1, 2147483647) == -1, "2^32 nao vira 0")
+    assert(parseIntBounded("2147483648", -1, 2147483647) == -1, "acima do teto de Int")
+    assert(parseIntBounded("2147483647", -1, 2147483647) == 2147483647, "teto cabe")
+    assert(parseIntBounded("0", -1, 2147483647) == -1 && parseIntBounded("-3", -1, 2147483647) == -1, "zero e negativo")
+    assert(parseIntBounded("12x", -1, 2147483647) == -1 && parseIntBounded("", -1, 2147483647) == -1, "lixo e vazio")
 }
 
 test "text: trimLogHead corta o inicio em linhas inteiras", "logs-cap" {
@@ -220,6 +230,9 @@ test "text: validTtlHours aceita vazio e positivos", "ttl-local" {
     assert(validTtlHours("-5") == false, "negativo recusa")
     assert(validTtlHours("lixo") == false, "texto recusa")
     assert(validTtlHours("  lixo  ") == false, "texto com padding recusa")
+    // 4294967396 virava 100 horas com parseIntSafe (wrap de 32 bits).
+    assert(validTtlHours("4294967396") == false, "ttl acima de 2^32 recusa")
+    assert(validTtlHours("4294967296") == false, "ttl 2^32 nao vira 0")
 }
 
 test "text: validateServePorts barra porta fora da faixa", "serve-ports" {

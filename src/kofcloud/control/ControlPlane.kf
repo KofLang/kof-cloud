@@ -523,7 +523,7 @@ HttpResult handleIssueServiceToken(Registry registry, String? authHeader, String
     var ttlRaw = mapField(body, "ttlHours")
     var ttlHours = 0
     if (ttlRaw.length > 0) {
-        ttlHours = parseIntSafe(ttlRaw, -1)
+        ttlHours = parseIntBounded(ttlRaw, -1, 2147483647)
         if (ttlHours <= 0) {
             return HttpResult(400, errorJson(errInvalidTtl()))
         }
@@ -605,7 +605,9 @@ HttpResult handleRotateServiceTokens(Registry registry, String? authHeader, Stri
     if (service.accountId != account.id) {
         return HttpResult(404, errorJson(errServiceNotFound()))
     }
-    var ttlHours = parseIntSafe(mapField(body, "ttlHours"), 0)
+    // Fallback -1 (nao 0): valor invalido precisa cair no `ttlHours < 0`
+    // abaixo. Com fallback 0 um "-1" virava "sem expiracao" e rotacionava.
+    var ttlHours = parseIntBounded(mapField(body, "ttlHours"), -1, 2147483647)
     if (ttlHours < 0) {
         return HttpResult(400, errorJson(errInvalidTtl()))
     }
@@ -876,7 +878,7 @@ HttpResult handleRotateAccountTokens(Registry registry, String? authHeader, Stri
     var ttlRaw = mapField(body, "ttlHours")
     var ttl = 0
     if (ttlRaw.length > 0) {
-        ttl = parseIntSafe(ttlRaw, 0)
+        ttl = parseIntBounded(ttlRaw, 0, 2147483647)
         if (ttl <= 0) {
             return HttpResult(400, errorJson(errInvalidTtl()))
         }

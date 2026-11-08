@@ -31,6 +31,35 @@ Int parsePortSafe(String text, Int fallback) {
     return acc as Int
 }
 
+// Inteiro positivo ate `max`, lido SEM estouro. `parseIntSafe` acumula em 32
+// bits: medido, `--tail 4294967396` virava **100** (o usuario pedia bilhoes e
+// recebia cem linhas, sem erro) e `--ttl 4294967396` virava 100 horas. O
+// acumulador aqui e Long e o valor acima de `max` falha em vez de dar a
+// volta. Pura.
+Int parseIntBounded(String text, Int fallback, Int max) {
+    var trimmed = text.trim()
+    if (trimmed.length == 0) {
+        return fallback
+    }
+    var acc = 0L
+    var i = 0
+    while (i < trimmed.length) {
+        var c = trimmed.charAt(i) as Int
+        if (c < 48 || c > 57) {
+            return fallback
+        }
+        acc = acc * 10L + (c - 48)
+        if (acc > (max as Long)) {
+            return fallback
+        }
+        i = i + 1
+    }
+    if (acc <= 0L) {
+        return fallback
+    }
+    return acc as Int
+}
+
 Int parseIntSafe(String text, Int fallback) {
     if (text.length == 0) {
         return fallback

@@ -67,6 +67,12 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   Edge, a lista fica vazia/parcial (ausência, não mentira). Não há pub/sub
   entre nós — é o slice 2 da Fase 16.
 * **Rate limiting é por processo.** Não é global entre nós.
+* **Inteiros de contagem/TTL passam por `parseIntBounded`.** `parseIntSafe`
+  acumula em 32 bits: medido, `--tail 4294967396` virava **100** (o usuário
+  pedia bilhões e recebia cem linhas, sem erro) e um `ttlHours` gigante virava
+  100 horas. Agora `--tail`, TTL (CLI e API) e os contadores lidos de JSON
+  (`pending`/`count`) usam o parser em `Long` com teto de `Int`; valor fora da
+  faixa é erro, não wrap.
 * **Portas passam por `parsePortSafe`.** `parseIntSafe` fazia aritmética de
   `Int` (32 bits): `--port 4294968080` virava 784 e era aceito em silêncio
   (publicava na porta errada) e `4294967296` virava 0. Agora publish (CLI,

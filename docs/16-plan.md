@@ -547,6 +547,14 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   validação recusa, nunca cai no default em silêncio). Prova:
   `tests/hosts_test.kf` (`serve-ports` estendido) + `tests/errors_test.kf`
   (API: `4294968080`/`4294967296` → 400 KCF043).
+* **Slice 2q — inteiros de contagem/TTL sem estouro ✅.** `parseIntSafe` faz
+  wrap de 32 bits: medido, `--tail 4294967396` virava **100** e um `ttlHours`
+  gigante virava 100 horas — ambos aceitos em silêncio. `parseIntBounded`
+  (pura) acumula em `Long` e falha acima do teto; cobre `--tail`, TTL da CLI
+  (`validTtlHours`, `service token`, `service rotate`, `token rotate`) e da
+  API (emitir/rotacionar, conta e serviço) e os contadores `pending`/`count`.
+  Prova: `tests/hosts_test.kf` (`logs-tail`, `ttl-local`) +
+  `tests/e2e_authenticated_test.kf` (ttlHours com wrap → 400 KCF062).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task

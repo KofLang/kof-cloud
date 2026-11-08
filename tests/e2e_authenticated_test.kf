@@ -135,6 +135,11 @@ test "e2e: servico AUTHENTICATED exige credencial de servico", "auth" {
     assert(statusOf(badTtl) == 400, "TTL invalido -> 400")
     assert(bodyOf(badTtl).indexOf("KCF062") >= 0, "codigo estavel de TTL")
     assert(statusOf(httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + secretId + "\",\"ttlHours\":\"0\"}", accountToken)) == 400, "TTL zero -> 400")
+    // TTL que estoura Int fazia WRAP para 101 horas em parseIntSafe (32 bits)
+    // e era aceito como expiracao valida.
+    var wrappedTtl = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + secretId + "\",\"ttlHours\":\"4294967396\"}", accountToken)
+    assert(statusOf(wrappedTtl) == 400, "TTL com wrap -> 400; recebeu " + intToString(statusOf(wrappedTtl)))
+    assert(bodyOf(wrappedTtl).indexOf("KCF062") >= 0, "KCF062 no TTL estourado")
 
     // Id curto: o inventario traz "id" (8 hex do hash). Primeiro limpa o
     // cenario para o id ser unico: revoga o serviceToken2 pelo valor
