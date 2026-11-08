@@ -316,6 +316,18 @@ Int cmdLogin(List<String> args) {
     return 0
 }
 
+// Cadastro implicito: tenta entrar; se o login falhar, cria a conta.
+// O caminho de criacao so e honesto quando a conta NAO existe — se ela ja
+// existe, o login falhou porque a senha esta errada, e devolver o KCF002 do
+// cadastro dizia "identificador em uso" para quem so digitou a senha errada.
+// Pura: mapeia a falha do cadastro para o erro certo, sem tocar a rede.
+String createFailureMessage(String createError) {
+    if (createError.indexOf("KCF002") >= 0) {
+        return errInvalidCredentials()
+    }
+    return createError
+}
+
 String loginOrCreate(String control, String handle, String password) {
     var loginBody = mapOf()
     loginBody.put("handle", handle)
@@ -328,7 +340,12 @@ String loginOrCreate(String control, String handle, String password) {
         createBody.put("handle", handle)
         createBody.put("email", handle + "@kofcloud.local")
         createBody.put("password", password)
-        var raw = requireOk(http.post(control + "/v1/accounts", json.encode(createBody), "Content-Type: application/json"))
+        var raw = ""
+        try {
+            raw = requireOk(http.post(control + "/v1/accounts", json.encode(createBody), "Content-Type: application/json"))
+        } catch (String createError) {
+            throw createFailureMessage(createError)
+        }
         return mapField(json.decode<Map<String, String>>(raw), "token")
     }
 }

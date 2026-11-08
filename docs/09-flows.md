@@ -2,6 +2,12 @@
 
 ## 1. Autenticação
 
+`kof cloud login` tenta **entrar** primeiro e só então **criar** a conta
+(cadastro implícito). O caminho de criação só vale quando a conta não existe:
+se ela já existe, a falha do login é a senha errada, e a CLI traduz o `KCF002`
+do cadastro para `KCF003` (credencial inválida) — antes o operador lia
+"identificador em uso" depois de digitar a senha errada.
+
 ```
 Agent                                  Control Plane
   │  POST /v1/accounts {handle,email}         │

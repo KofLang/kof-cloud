@@ -1,0 +1,58 @@
+import kofcloud.cli.Commands
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.model.Errors
+import kofcloud.store.Store
+import testkit.Support
+
+// Erro do login com cadastro implicito.
+//
+// `loginOrCreate` tenta entrar e, se falhar, cria a conta. O caminho de
+// criacao so e honesto quando a conta NAO existe: se ela existe, o login
+// falhou porque a senha esta errada. Antes, o KCF002 do cadastro vazava e o
+// operador lia "identificador em uso" depois de digitar a senha errada —
+// mensagem que manda procurar o problema no lugar errado.
+
+test "login: falha do cadastro vira credencial invalida quando a conta existe", "loginerr-unit" {
+    // Conta ja existe -> o cadastro responde KCF002 -> credencial invalida.
+    assert(createFailureMessage(errHandleTaken()) == errInvalidCredentials(), "KCF002 vira KCF003")
+    // Qualquer outra falha passa intacta (nao inventa causa).
+    var other = "KCF005: password too short"
+    assert(createFailureMessage(other) == other, "outra falha preservada")
+    assert(createFailureMessage("") == "", "vazio preservado")
+    // O KCF003 tem Hint que fala de senha/login, nao de identificador.
+    var hint = errHint(errInvalidCredentials())
+    assert(hint.indexOf("senha") >= 0, "Hint fala de senha: " + hint)
+    assert(hint.indexOf("identificador") < 0, "nao manda procurar o nome")
+}
+
+test "login: senha errada numa conta existente acusa credencial invalida", "loginerr" {
+    var port = 20091
+    var registry = Registry("/tmp/kofcloud-le-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control no ar")
+    var url = "http://127.0.0.1:" + intToString(port)
+
+    // Primeiro login cria a conta.
+    var first = loginOrCreate(url, "mel", "segredo")
+    assert(first.startsWith("kfc_"), "conta criada e token emitido")
+
+    // Senha errada: o erro precisa falar de credencial, nao de handle.
+    var wrong = ""
+    try {
+        loginOrCreate(url, "mel", "SENHA-ERRADA")
+    } catch (String e) {
+        wrong = e
+    }
+    assert(wrong.indexOf("KCF003") >= 0, "credencial invalida (recebido: " + wrong + ")")
+    assert(wrong.indexOf("KCF002") < 0, "nao acusa handle em uso")
+
+    // Senha certa continua entrando (o caminho feliz nao regrediu).
+    var again = loginOrCreate(url, "mel", "segredo")
+    assert(again.startsWith("kfc_"), "login normal segue funcionando")
+
+    // Handle novo: cria conta de verdade (o cadastro implicito segue vivo).
+    var fresh = loginOrCreate(url, "ana", "segredo2")
+    assert(fresh.startsWith("kfc_"), "conta nova criada")
+}
