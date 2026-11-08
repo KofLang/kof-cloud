@@ -1,3 +1,4 @@
+import kofcloud.protocol.Bytes
 import kofcloud.cli.Deploy
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
@@ -419,14 +420,16 @@ test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-che
     assert(down.get(0).indexOf("site") >= 0, "nomeia o servico")
     assert(down.get(0).indexOf("sem resposta") >= 0, "diz que nao responde")
 
-    // Sobe um listener cru na porta: check aprova.
+    // Sobe um servico HTTP de verdade na porta: check aprova. O listener
+    // que apenas aceitava e fechava passava no connect TCP antigo; com a
+    // sonda do Agent (GET com prazo) ele e corretamente DEGRADED.
     var listener = net.listen(19729)
     var slowServer = spawn {
         var serving = true
         while (serving) {
             try {
                 var peer = listener.accept()
-                peer.close()
+                var worker = spawn { serveOkOnce(peer) }
             } catch (String e) {
                 serving = false
             }
@@ -472,7 +475,7 @@ test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-che
         while (open) {
             try {
                 var peer = listener2.accept()
-                peer.close()
+                var worker = spawn { serveOkOnce(peer) }
             } catch (String e) {
                 open = false
             }
@@ -599,4 +602,88 @@ test "deploy: scan acusa segredo no manifesto e aprova o limpo", "deploy-scan" {
     assert(account.size == 1, "password tambem e achado")
     var accountToken = scanManifestSecrets("{\"services\":[{\"name\":\"site\",\"port\":8080,\"artifact\":\"kfc_x\"}]}")
     assert(accountToken.size == 1, "kfc_ tambem e achado")
+}
+
+test "deploy: check local usa GET com prazo (500 e servico mudo nao passam)", "deploy-check-http" {
+    // Antes era so um connect TCP: medido, tanto um servico que responde
+    // 500 quanto um que aceita e NUNCA responde passavam como "respondendo",
+    // e o `deploy --check` declarava saudavel um deploy quebrado.
+    var okPort = 20131
+    var badPort = 20133
+    var mutePort = 20135
+
+    var okListener = net.listen(okPort)
+    var okTask = spawn {
+        var open = true
+        while (open) {
+            try {
+                var c = okListener.accept()
+                var w = spawn {
+                    c.receive(4096)
+                    c.send(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"))
+                    c.close()
+                }
+            } catch (String e) {
+                open = false
+            }
+        }
+    }
+    var badListener = net.listen(badPort)
+    var badTask = spawn {
+        var open = true
+        while (open) {
+            try {
+                var c = badListener.accept()
+                var w = spawn {
+                    c.receive(4096)
+                    c.send(bytesFromString("HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
+                    c.close()
+                }
+            } catch (String e) {
+                open = false
+            }
+        }
+    }
+    var muteListener = net.listen(mutePort)
+    var held = listOf<Conn>()
+    var muteTask = spawn {
+        var open = true
+        while (open) {
+            try {
+                var c = muteListener.accept()
+                held.add(c)
+            } catch (String e) {
+                open = false
+            }
+        }
+    }
+    assert(waitForPort(okPort, 60), "servico ok no ar")
+    assert(waitForPort(badPort, 60), "servico 500 no ar")
+    assert(waitForPort(mutePort, 60), "servico mudo no ar")
+
+    assert(checkLocalService("127.0.0.1", okPort), "200 responde")
+    assert(checkLocalService("127.0.0.1", badPort) == false, "500 nao passa")
+    var started = time.now()
+    assert(checkLocalService("127.0.0.1", mutePort) == false, "mudo nao passa")
+    var elapsed = time.now() - started
+    assert(elapsed < 15000, "prazo aplicado (elapsed=" + intToString(elapsed) + "ms)")
+    assert(checkLocalService("127.0.0.1", 20137) == false, "porta fechada recusa")
+
+    // Protocolo nao-http continua no connect simples (nao ha sonda melhor).
+    assert(checkLocalServiceFor("127.0.0.1", okPort, "tcp"), "tcp = connect ok")
+    assert(checkLocalServiceFor("127.0.0.1", 20137, "tcp") == false, "tcp porta fechada")
+
+    okListener.close()
+    badListener.close()
+    muteListener.close()
+    for (var c in held) {
+        c.close()
+    }
+}
+
+// Responde 200 a uma requisicao e fecha (fixture de servico saudavel).
+void serveOkOnce(Conn peer) {
+    peer.receive(8192)
+    peer.send(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"))
+    peer.close()
 }

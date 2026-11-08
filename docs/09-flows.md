@@ -109,9 +109,12 @@ com erro posicional — nada com default silencioso perigoso.
  5. usuário: kof cloud down → unpublish só dos listados (extra sobrevive)
     com `--prune`: remove também os órfãos DESTE device fora do manifesto
     (nunca toca serviço de outro device)
- 6. com `--check`: publicado E respondendo localmente? (`checkLocalService`,
-    mesma regra do Agent) + artefato declarado existe no disco? (aviso
-    `artefato ausente`, nunca bloqueio) — sem rollback, só diagnóstico
+ 6. com `--check`: publicado E respondendo localmente? (`checkLocalServiceFor`,
+    que agora usa a MESMA sonda do Agent: `GET /` com prazo, status < 500 —
+    antes era só um connect TCP, e um serviço que respondia `500` ou que
+    aceitava e nunca respondia passava como saudável) + artefato declarado
+    existe no disco? (aviso `artefato ausente`, nunca bloqueio) — sem
+    rollback, só diagnóstico
 ```
 
 Sem transferência de artefato neste slice: o build roda na máquina do

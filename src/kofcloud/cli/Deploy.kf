@@ -1,5 +1,6 @@
 package kofcloud.cli
 
+import kofcloud.agent.Health
 import kofcloud.cli.Commands
 import kofcloud.cli.Local
 import kofcloud.model.Errors
@@ -84,17 +85,25 @@ ManifestLoad loadManifestFile(String path) {
 }
 
 // Health check local pos-deploy: o servico responde no endereco publicado?
-// Mesma regra do Agent (agent/Health.kf): TCP bem-sucedido = ok. Nao usa o
-// Agent nem o tunel — e uma verificacao da maquina do usuario contra ela
-// mesma, antes de declarar o deploy saudavel.
+//
+// Usa a MESMA sonda do Agent (`agent/Health.checkService`): GET / HTTP/1.1
+// com prazo, status < 500 = saudavel. Antes era so um connect TCP — medido:
+// um servico que responde 500 e um que aceita e NUNCA responde passavam os
+// dois como "respondendo", e o `deploy --check` declarava saudavel um deploy
+// quebrado (o mesmo defeito que o health do Agent ja tinha corrigido).
+// O protocolo do manifesto decide: `http` faz GET; qualquer outro fica no
+// connect (nao ha como sondar outro protocolo hoje).
 Bool checkLocalService(String address, Int port) {
-    try {
-        var conn = net.connect(address, port)
-        conn.close()
-        return true
-    } catch (String e) {
-        return false
-    }
+    return checkLocalServiceFor(address, port, "http")
+}
+
+Bool checkLocalServiceFor(String address, Int port, String protocol) {
+    var service = Service(
+        "local-check", "", "", "local-check", address, port, protocol,
+        address + ":" + intToString(port), "PRIVATE", "UNKNOWN", 0L, "", ""
+    )
+    var status = checkService(service)
+    return status == statusOnline()
 }
 
 // Diff manifesto x publicado, sem aplicar nada (para `deploy --plan`).
@@ -208,7 +217,7 @@ List<String> verifyDeployment(String controlUrl, String token, List<ManifestServ
             problems.add(service.name + ": nao publicado")
         } else if (drift.length > 0) {
             problems.add(service.name + ": publicado com config diferente (" + drift + ") — rode: kof cloud deploy")
-        } else if (checkLocalService(service.address, service.port) == false) {
+        } else if (checkLocalServiceFor(service.address, service.port, service.protocol) == false) {
             problems.add(service.name + ": publicado mas sem resposta em " + service.address + ":" + intToString(service.port))
         } else {
             var missing = artifactProblem(service.name, service.artifact)

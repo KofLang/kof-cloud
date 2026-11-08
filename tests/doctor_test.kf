@@ -1,3 +1,4 @@
+import kofcloud.protocol.Bytes
 import kofcloud.cli.Daemon
 import kofcloud.cli.Deploy
 import kofcloud.cli.Doctor
@@ -143,7 +144,7 @@ test "doctor: fim a fim acusa servico fora do ar e aprova quando sobe", "doctor-
         while (open) {
             try {
                 var peer = listener.accept()
-                peer.close()
+                var worker = spawn { doctorServeOk(peer) }
             } catch (String e) {
                 open = false
             }
@@ -276,4 +277,13 @@ test "doctor: PEM real de outro dominio e FALHA; curinga do dominio e ok", "doct
     var wildSubj = process.run("openssl", "x509", "-in", wild, "-noout", "-subject").stdout
     var wildLine = doctorTlsLineFor(wild, true, 0, 0, wildSan, wildSubj, hosts)
     assert(wildLine.startsWith("ok"), "PEM real com curinga da conta passa: " + wildLine)
+}
+
+// Responde 200 a uma requisicao e fecha (fixture de servico saudavel):
+// aceitar-e-fechar passava no connect TCP antigo, mas com a sonda do Agent
+// (GET com prazo) e corretamente DEGRADED.
+void doctorServeOk(Conn peer) {
+    peer.receive(8192)
+    peer.send(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"))
+    peer.close()
 }

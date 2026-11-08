@@ -104,6 +104,12 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   mede até o cabeçalho chegar — um serviço que manda cabeçalho rápido e
   trava no corpo conta como `ONLINE`.
 * **O Edge fala HTTP/1.1.** Sem pipelining avançado, sem trailers.
+* **O check local do deploy só sonda `http`.** Para outros protocolos
+  (`checkLocalServiceFor` recebe o do manifesto) a verificação continua sendo
+  um connect TCP, porque não há como fazer uma sonda genérica. E a sonda lê
+  apenas a linha de status: um serviço que responde `200` no `/` e falha nas
+  rotas reais passa — o `--check` confirma que a aplicação está de pé, não que
+  cada rota funciona.
 * **A fila de entrada é limitada, a de saída não.** `queueDepth` (64) vale
   para os itens que chegam a um stream e ainda não foram consumidos; a
   `outbox` compartilhada do túnel continua sem teto — quem enche é o próprio

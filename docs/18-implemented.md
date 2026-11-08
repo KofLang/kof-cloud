@@ -45,6 +45,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | frame DATA fatiado + teto de linha | `Payload.encodeChunks` (blocos de 16 KiB) + `LineCodec` fail-closed + `maxTunnelLineBytes` | `frames_test.kf` |
 | conexoes simultaneas por servico | contador por `serviceId` no Edge + `429 KCF108` antes do OPEN | `conns_test.kf` |
 | deploy declarativo (slice 1) | `kofcloud.json` + `deploy`/`down` sobre publish em lote (idempotente, sem tocar fora do manifesto; `down --prune` poda órfãos do device atual) | `deploy_test.kf` |
+| check local do deploy | `checkLocalServiceFor` usa a sonda do Agent (`GET /` com prazo, < 500); o connect TCP antigo aprovava serviço 500 e serviço mudo | `deploy_test.kf` (`deploy-check-http`) |
 | diagnostico doctor | somente-leitura em camadas (login, control, device, servicos, tunel) + `--file` + `--tls-cert` (PEM ausente/invalido/expirado em 30 dias e, agora, **cobertura dos hostnames do manifesto** — PEM de outro domínio vira FALHA em vez de quebrar o HTTPS em produção; sem vazar conteúdo) | `doctor_test.kf` |
 | daemon user-level (slice 3) | `cli/Daemon.kf`: unit systemd `--user` + install/status/uninstall | `daemon_test.kf` |
 | presenca real do tunel | espelho bind/unbind no Registry + `GET /v1/presence` filtrado por conta + `status` ONLINE/OFFLINE confirmado | `presence_test.kf` |
