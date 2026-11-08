@@ -227,18 +227,33 @@ String firstPositional(List<String> args) {
     return ""
 }
 
+// Flags que CONSOMEM o token seguinte (o valor). Fonte unica: `extraPositional`
+// usa esta lista, e o teste trava que toda flag lida com `flagValue` aparece
+// aqui. Sem isso o valor de uma flag desconhecida contava como posicional —
+// `incidents --resolve <id>` e `webhook set <url> --secret <s>` barrassem
+// SEMPRE com o erro de uso (medido), e a flag nunca funcionava.
+List<String> valueFlags() {
+    return listOf(
+        "--port", "--address", "--exposure", "--device", "--ttl", "--tail",
+        "--control", "--control-port", "--tunnel-port", "--http-port",
+        "--state", "--waf", "--tls-cert", "--tls-key", "--service", "--file",
+        "--password", "--from", "--to", "--resolve", "--secret"
+    )
+}
+
 // Posicionais alem do esperado (`service token-revoke site kfs_x lixo`):
 // first/secondPositional leriam os N primeiros em silencio e o resto
 // sumiria — typo que vira acao errada sem aviso. Devolve true quando ha
 // mais posicionais que `max`. Puro, sem rede nem HOME.
 // NOTA: valores de flag (`--port 8080`) nao sao posicionais — pula o
-// token seguinte a qualquer flag conhecida com valor.
+// token seguinte a qualquer flag com valor (`valueFlags`).
 Bool extraPositional(List<String> args, Int max) {
     var count = 0
+    var known = valueFlags()
     var i = 0
     while (i < args.size) {
         var arg = args.get(i)
-        if (arg == "--port" || arg == "--address" || arg == "--exposure" || arg == "--device" || arg == "--ttl" || arg == "--tail" || arg == "--control" || arg == "--control-port" || arg == "--tunnel-port" || arg == "--http-port" || arg == "--state" || arg == "--waf" || arg == "--tls-cert" || arg == "--tls-key" || arg == "--service" || arg == "--file" || arg == "--password" || arg == "--from" || arg == "--to") {
+        if (known.contains(arg)) {
             i = i + 2
             continue
         }

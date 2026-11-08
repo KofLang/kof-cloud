@@ -1,0 +1,60 @@
+import kofcloud.cli.Commands
+import kofcloud.cli.Local
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.store.Store
+import testkit.Support
+
+// `extraPositional` e o valor das flags.
+//
+// Ele pulava o token seguinte so de uma lista literal de flags. Toda flag
+// fora dela fazia o VALOR contar como posicional: `incidents --resolve <id>`
+// e `webhook set <url> --secret <s>` barrassem sempre com o erro de uso, e a
+// flag nunca funcionava (medido: exit 1 antes de qualquer rede).
+//
+// A lista agora e `valueFlags()` — fonte unica — e o teste trava que toda
+// flag lida com `flagValue` esta nela.
+
+List<String> flagsReadWithFlagValue() {
+    return listOf(
+        "--address", "--control", "--control-port", "--device", "--exposure",
+        "--file", "--from", "--http-port", "--password", "--port", "--resolve",
+        "--secret", "--service", "--state", "--tail", "--tls-cert", "--tls-key",
+        "--to", "--ttl", "--tunnel-port", "--waf"
+    )
+}
+
+test "flags: toda flag com valor esta na lista e o valor nao conta como posicional", "valueflags-unit" {
+    var known = valueFlags()
+    for (var flag in flagsReadWithFlagValue()) {
+        assert(known.contains(flag), "flag com valor ausente da fonte unica: " + flag)
+        // O valor da flag nunca vira posicional (com qualquer flag).
+        assert(extraPositional(listOf(flag, "valor"), 0) == false, "valor de " + flag + " virou posicional")
+        assert(extraPositional(listOf(flag, "valor"), 1) == false, "um posicional permitido")
+    }
+    assert(known.size == 21, "21 flags com valor: " + intToString(known.size))
+
+    // Posicional de verdade continua barrando (a regra nao ficou frouxa).
+    assert(extraPositional(listOf("solto"), 0) == true, "posicional solto barra")
+    assert(extraPositional(listOf("--resolve", "id", "solto"), 0) == true, "posicional depois da flag barra")
+    assert(extraPositional(listOf<String>(), 0) == false, "nada, nada")
+}
+
+test "flags: incidents --resolve chega ao control plane (antes barrava no uso)", "valueflags" {
+    var port = 20103
+    var registry = Registry("/tmp/kofcloud-vf-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control no ar")
+    var url = "http://127.0.0.1:" + intToString(port)
+    var token = loginOrCreate(url, "mel", "segredo")
+    saveSession(LocalSession("", "mel", token, url))
+
+    // Id inexistente: a CLI passa do uso e o control plane responde 404
+    // KCF125 (nao mais "uso: kof cloud incidents ...").
+    var code = cmdIncidents(listOf("--resolve", "incidente-que-nao-existe"))
+    assert(code == 1, "id inexistente falha no control plane, nao no parse (exit " + intToString(code) + ")")
+
+    // --all sozinho tambem nao e posicional.
+    assert(extraPositional(listOf("--all"), 0) == false, "--all nao e posicional")
+}
