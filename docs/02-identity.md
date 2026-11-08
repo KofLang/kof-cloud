@@ -94,6 +94,12 @@ credencial sem expiração nunca é revogada em silêncio (fica contada em
 coisa, senão o operador se trancaria fora. `logout` continua sendo só local:
 para invalidar no servidor, use `token revoke`.
 
+**Acúmulo de logins.** Cada `login` emite uma credencial nova e **não**
+revoga a anterior; sem TTL por padrão, o inventário cresce a cada entrada e
+uma credencial vazada de um login antigo vale para sempre. `kof cloud token
+prune` mantém somente a da sessão atual e revoga o resto (nunca credencial de
+outra conta); `token rotation` aponta para ele quando `pending > 1`.
+
 ### Service Token (`kfs_`)
 
 Credencial de acesso a **um** serviço `AUTHENTICATED`, separada do token da

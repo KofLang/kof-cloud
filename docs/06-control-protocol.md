@@ -33,6 +33,7 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/tokens/revoke` | conta | revoga UMA credencial da conta `{token}` (`kfc_` completo ou id curto único) → `{revoked:true}` (409 `KCF063` se o id casa com 2+; 404 `KCF064` opaco se não existe nesta conta) |
 | `POST` | `/v1/tokens/rotate` | conta | rotação com overlap `{ttlHours?}` → `{token,revoked,pending}` (a nova é devolvida **uma vez**; as antigas só caem depois do TTL; `ttlHours` ≤ 0 → 400 `KCF062`) |
 | `POST` | `/v1/tokens/rotation` | conta | `{pending}` = quantas credenciais da conta ainda valem (a nova incluída) |
+| `POST` | `/v1/tokens/prune` | conta | revoga as credenciais da conta **menos a da sessão atual** → `{revoked,kept}` (cada `login` emite token novo sem revogar o anterior; sem TTL o inventário cresceria a cada entrada) |
 | `POST` | `/v1/services/remove` | conta | `{serviceId}` |
 | `POST` | `/v1/services/suspend` | conta | `{serviceId}` → `{suspended:true}` (sai da rota, nada removido) |
 | `POST` | `/v1/services/unsuspend` | conta | `{serviceId}` → `{suspended:false}` |

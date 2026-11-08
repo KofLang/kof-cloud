@@ -232,6 +232,9 @@ Int runToken(List<String> args) {
     if (sub == "rotation") {
         return cmdTokenRotation(rest)
     }
+    if (sub == "prune") {
+        return cmdTokenPrune(rest)
+    }
     println("subcomando desconhecido: token " + sub)
     return 1
 }

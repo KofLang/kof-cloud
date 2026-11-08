@@ -132,7 +132,7 @@ unfreeze service|device <nome|id> | account
 incidents [--all] [--resolve <id>]
 migrate --from <estado.json> [--to <destino.json>] [--dry-run]
 state-backup [--file <estado.json>]
-token list|revoke <id|kfc_...>|rotate [--ttl <horas>]|rotation
+token list|revoke <id|kfc_...>|rotate [--ttl <horas>]|rotation|prune   (prune: revoga as antigas, mantém a da sessão)
 logs [--tail <linhas>] [--runtime]   (marcos de sessao; --runtime = eventos reais do Agent; teto 256 KiB por arquivo)
 serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]
 ```

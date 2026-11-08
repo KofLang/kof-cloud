@@ -48,6 +48,10 @@ test "flags: incidents --resolve chega ao control plane (antes barrava no uso)",
     assert(waitForPort(port, 60), "control no ar")
     var url = "http://127.0.0.1:" + intToString(port)
     var token = loginOrCreate(url, "mel", "segredo")
+    // A sessao vive no HOME do processo, que e compartilhado entre suites:
+    // guardar o que havia e restaurar no fim evita deixar um "usuario
+    // logado" para os testes seguintes (o doctor_test espera sem sessao).
+    var priorSession = readTextOr(sessionPath(), "")
     saveSession(LocalSession("", "mel", token, url))
 
     // Id inexistente: a CLI passa do uso e o control plane responde 404
@@ -57,4 +61,10 @@ test "flags: incidents --resolve chega ao control plane (antes barrava no uso)",
 
     // --all sozinho tambem nao e posicional.
     assert(extraPositional(listOf("--all"), 0) == false, "--all nao e posicional")
+
+    if (priorSession.length == 0) {
+        File(sessionPath()).delete()
+    } else {
+        writeTextTo(sessionPath(), priorSession)
+    }
 }

@@ -1124,7 +1124,12 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   nascia vencido (401 imediato). O cálculo agora é `Long` e fonte única
   (`tokenExpiryAt`, usada por kfc_ e kfs_); medido com o CLI 0.6.3
   (`720 * 3600000` em Int = `-1702967296`).
-  Pendente: PEMs com 30 dias de antecedência; kill-switch ✅ documentado
+  **Acúmulo de logins ✅.** Cada `login` emite credencial nova e não revoga a
+  anterior — com o TTL opcional, o inventário cresce a cada entrada e uma
+  credencial vazada de um login antigo vale para sempre. `POST
+  /v1/tokens/prune` + `kof cloud token prune` mantêm apenas a da sessão atual
+  e revogam o resto (escopo por conta; sem token → 401; idempotente). Prova:
+  `tests/account_token_test.kf` (7). Pendente: PEMs com 30 dias de antecedência; kill-switch ✅ documentado
   (`docs/SECURITY.md` ## Contenção — procedimento manual reversível com
   o que existe; o `freeze` de um comando da Fase 17 automatiza quando
   existir).

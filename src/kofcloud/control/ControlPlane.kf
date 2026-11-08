@@ -899,6 +899,21 @@ HttpResult handleAccountRotationStatus(Registry registry, String? authHeader) {
     return HttpResult(200, json.encode(out))
 }
 
+// Poda das credenciais antigas: mantem a da sessao atual e revoga o resto.
+// Resposta traz quantas sairam (0 = nada a fazer).
+HttpResult handlePruneAccountTokens(Registry registry, String? authHeader) {
+    var provided = bearerToken(authHeader)
+    var account = registry.accountByToken(provided)
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var removed = registry.pruneAccountTokensExcept(account.id, provided)
+    var out = mapOf()
+    out.put("revoked", intToString(removed))
+    out.put("kept", "1")
+    return HttpResult(200, json.encode(out))
+}
+
 // Erro do revoke de token por outcome: "revoked" nao e erro (o handler
 // responde 200 direto); "ambiguous" -> 409 KCF063 (pede o kfs_ completo);
 // resto ("", nao encontrado/sem dono) -> 404 com corpo reescrito para KCF041
@@ -1380,6 +1395,13 @@ class ControlPlane {
         }
         app.post("/v1/tokens/rotate") {
             var result = handleRotateAccountTokens(reg, header("x-kofcloud-token"), body())
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/tokens/prune") {
+            var result = handlePruneAccountTokens(reg, header("x-kofcloud-token"))
             if (result.code == 200) {
                 return result.body
             }

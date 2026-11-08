@@ -181,3 +181,67 @@ test "credencial de conta: HTTP lista sem valores, revoga e rotaciona", "atok" {
     assert(statusOf(status) == 200, "rotation 200")
     assert(bodyOf(status).indexOf("\"pending\":\"1\"") >= 0, "uma credencial valida")
 }
+
+test "credencial de conta: prune preserva a da sessao e revoga as antigas", "atok-unit" {
+    // Cada `login` emite um token novo e nunca revoga o anterior. Sem TTL
+    // por default, o inventario cresce a cada entrada e um token vazado de
+    // um login antigo vale para sempre. `prune` fecha isso sem trancar o
+    // operador fora: a credencial usada no comando sobrevive.
+    var registry = Registry(accountTokenPath("prune"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var ana = registry.createAccount("ana", "a@e.com", "segredo")
+
+    var t1 = registry.issueToken(mel.id)
+    var t2 = registry.issueToken(mel.id)
+    var t3 = registry.issueToken(mel.id)
+    var anaToken = registry.issueToken(ana.id)
+    assert(registry.accountTokensFor(mel.id).size == 3, "tres credenciais acumuladas")
+
+    var removed = registry.pruneAccountTokensExcept(mel.id, t3)
+    assert(removed == 2, "duas revogadas")
+    assert(registry.accountTokensFor(mel.id).size == 1, "so a da sessao vale")
+    assert(registry.accountByToken(t3) != null, "a atual continua valendo")
+    assert(registry.accountByToken(t1) == null, "antiga 1 caiu")
+    assert(registry.accountByToken(t2) == null, "antiga 2 caiu")
+    // Credencial de outra conta nunca e tocada.
+    assert(registry.accountByToken(anaToken) != null, "ana intacta")
+
+    // Token vazio nao e "prune tudo" silencioso: nao ha sessao a preservar.
+    assert(registry.pruneAccountTokensExcept(mel.id, "") == 0, "sem token nao poda")
+    assert(registry.accountTokensFor(mel.id).size == 1, "nada mudou")
+
+    // Nada a podar: zero, sem efeito.
+    assert(registry.pruneAccountTokensExcept(mel.id, t3) == 0, "idempotente")
+}
+
+test "credencial de conta: HTTP prune revoga as antigas e mantem a sessao", "atok" {
+    var controlPort = 20113
+    var registry = Registry(accountTokenPath("prune-http"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 20114)
+    var controlTask = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var first = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    // Dois logins a mais: cada um emite credencial nova.
+    var second = mapField(json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/login", "{\"handle\":\"mel\",\"password\":\"segredo\"}", ""))), "token")
+    var third = mapField(json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/login", "{\"handle\":\"mel\",\"password\":\"segredo\"}", ""))), "token")
+
+    var listed = bodyOf(httpGetToken(controlPort, "/v1/tokens", third))
+    assert(listed.indexOf("\"id\"") >= 0, "inventario acessivel com a credencial atual")
+
+    // Sem token: 401.
+    assert(statusOf(httpPostJson(controlPort, "/v1/tokens/prune", "{}", "")) == 401, "401 sem token")
+
+    var pruned = httpPostJson(controlPort, "/v1/tokens/prune", "{}", third)
+    assert(statusOf(pruned) == 200, "prune 200")
+    assert(bodyOf(pruned).indexOf("\"revoked\":\"2\"") >= 0, "duas revogadas")
+    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", third)) == 200, "a da sessao segue valida")
+    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", first)) == 401, "a primeira caiu")
+    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", second)) == 401, "a segunda caiu")
+
+    // De novo: nada a fazer.
+    var again = httpPostJson(controlPort, "/v1/tokens/prune", "{}", third)
+    assert(statusOf(again) == 200, "idempotente")
+    assert(bodyOf(again).indexOf("\"revoked\":\"0\"") >= 0, "zero revogadas")
+}

@@ -545,6 +545,31 @@ class Registry {
         return removed
     }
 
+    // Revoga TODAS as credenciais da conta, menos a informada. Cada `login`
+    // emite um token novo e nunca revoga o anterior (nao ha TTL por default),
+    // entao o inventario cresce a cada entrada e um token vazado de um login
+    // antigo continua valendo para sempre. A sessao atual e preservada: sem
+    // isso o operador se trancaria fora no mesmo comando. Devolve quantas
+    // sairam; nunca toca credencial de outra conta.
+    Int pruneAccountTokensExcept(String accountId, String keepToken) {
+        if (keepToken.length == 0) {
+            return 0
+        }
+        var kept = listOf<TokenEntry>()
+        var removed = 0
+        for (var entry in this.tokens) {
+            if (entry.accountId == accountId && tokenMatches(entry.tokenHash, keepToken) == false) {
+                removed = removed + 1
+            } else {
+                kept.add(entry)
+            }
+        }
+        if (removed > 0) {
+            this.finishAccountTokenRevoke(accountId, kept)
+        }
+        return removed
+    }
+
     // Revoga UMA credencial da conta pelo valor completo OU pelo id curto do
     // inventario (8 hex do hash), desde que unico na conta. Devolve
     // "revoked" | "ambiguous" | "" (nao encontrado). Nunca confirma nem nega
