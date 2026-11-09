@@ -43,7 +43,7 @@ Base: `http://<control-host>/v1`
 | `GET` | `/v1/audit` | conta | últimos eventos da conta (anel de 100, só metadados) |
 | `POST` | `/v1/services/status` | dispositivo | `{serviceId,status}` (health reportado pelo Agent) |
 | `POST` | `/v1/heartbeat` | dispositivo | `{deviceId}` → `{ok:true, serverTime}` |
-| `POST` | `/v1/connect` | dispositivo | `{deviceId}` → `{edgeHost,edgePort,tunnelToken}` |
+| `POST` | `/v1/connect` | conta | `{deviceId}` → `{edgeHost,edgePort,heartbeatMs,services,edges}` (todos os inteiros e listas viajam como **string JSON**, porque o Agent decodifica `Map<String,String>`; `edges` é a lista de candidatos `host:porta` para o ranking) |
 | `GET` | `/v1/presence` | conta | devices DA CONTA com túnel vivo neste Edge → `["<deviceId>", ...]` (vazio = offline, não erro; 401 sem token; nada de terceiros vaza) |
 | `GET` | `/v1/domains` | conta | domínios/hostnames da conta (wildcard + serviços + próprios; cada entrada com `status` — vazio exceto no custom PENDING/VERIFIED; o custom carrega `service` com o nome do vinculado, vazio se órfão) |
 | `POST` | `/v1/domains` | conta | registra domínio próprio `{hostname,service}` → `{hostname,status,instruction,verifiedAt}` (PENDING + CNAME; `verifiedAt` vazio até verificar) |
@@ -156,8 +156,14 @@ POST /v1/connect
 X-KofCloud-Token: kfc_...
 {"deviceId":"..."}
 
-200 {"edgeHost":"127.0.0.1","edgePort":7000,"tunnelToken":"kft_...",
-     "heartbeatMs":15000,"services":[ ... ]}
+200 {"edgeHost":"127.0.0.1","edgePort":"7000","heartbeatMs":"15000",
+     "services":"[{\"name\":\"site\", ...}]","edges":"[\"127.0.0.1:7000\"]"}
+
+(`edgePort`, `heartbeatMs`, `services` e `edges` chegam como STRING com JSON
+dentro: o Agent faz `json.decode<Map<String,String>>` e decodifica cada um.
+Não há `tunnelToken`: a autenticação do túnel é o `kfc_` no frame `HELLO`,
+validado pelo Edge por `constantTimeEquals` sobre o hash — um segundo token
+para o mesmo fim nunca foi emitido.)
 ```
 
 Presença real do túnel (o Edge espelha bind/unbind num mapa do Registry, não

@@ -74,6 +74,17 @@ test "edge select: control plane publica a lista com o principal primeiro", "edg
     // Contrato antigo preservado.
     assert(body.indexOf("\"edgeHost\"") >= 0, "edgeHost mantido")
     assert(body.indexOf("\"edgePort\"") >= 0, "edgePort mantido")
+
+    // Contrato EXATO (trava de regressao): as chaves que o Agent decodifica.
+    // As docs prometiam `tunnelToken`, que nunca foi emitido — o teste abaixo
+    // impede que uma chave documentada-e-inexistente volte.
+    var decoded = json.decode<Map<String, String>>(body)
+    assert(mapField(decoded, "edgeHost") == "127.0.0.1", "edgeHost")
+    assert(mapField(decoded, "edgePort") == "7000", "edgePort como string")
+    assert(mapField(decoded, "heartbeatMs").length > 0, "heartbeatMs")
+    assert(mapField(decoded, "services").length > 0, "services como string JSON")
+    assert(mapField(decoded, "edges").length > 0, "edges como string JSON")
+    assert(decoded.get("tunnelToken") == null, "sem tunnelToken (nunca emitido)")
 }
 
 test "edge select: mede de verdade e escolhe o Edge que responde", "edge-select-probe" {

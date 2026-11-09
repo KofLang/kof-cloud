@@ -47,7 +47,7 @@ o run total imprime `54 passed, 0 failed`. Falha = nome do teste + assert
 |---|---|---|
 | framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 11 |
 | hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls/audit-sbom/host-normalize | `tests/hosts_test.kf` | 29 |
-| identidade/cifra/tokens | `tests/identity_test.kf` | 7 |
+| identidade/cifra/tokens | `tests/identity_test.kf` | 6 |
 | backoff | `tests/backoff_test.kf` | 3 |
 | registry | `tests/registry_test.kf` | 7 |
 | limites | `tests/limits_test.kf` | 7 |
@@ -101,7 +101,7 @@ o run total imprime `54 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor na lista única (CLI) | `tests/value_flags_test.kf` | 2 |
 
-Total: 309 testes. Ver `15-tests.md` para a matriz.
+Total: 308 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

@@ -30,7 +30,7 @@ control plane compara o token com `security.constantTimeEquals`.
 
 ```
  1. carrega identity.json  ──► deviceId + chave privada X25519
- 2. POST /v1/connect       ──► {edgeHost, edgePort, tunnelToken, services}
+ 2. POST /v1/connect       ──► {edgeHost, edgePort, heartbeatMs, services, edges}
  3. net.connect(edgeHost, edgePort)                 ◄── conexão OUTBOUND
  4. HELLO {v, deviceId, token, caps, clientPub}
  5. WELCOME {ok:true, sessionId, serverPub, heartbeatMs}

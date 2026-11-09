@@ -56,6 +56,3 @@ test "tokens: comparacao e por hash, nao por igualdade de string" {
     assert(tokenMatches("", token) == false, "hash vazio recusa")
 }
 
-test "tokens: tunnel token tem prefixo proprio" {
-    assert(newTunnelToken().startsWith("kft_"), "prefixo kft_")
-}

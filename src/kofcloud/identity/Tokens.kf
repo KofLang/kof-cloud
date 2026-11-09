@@ -10,10 +10,6 @@ String newAccountToken() {
     return "kfc_" + crypto.randomHex(32)
 }
 
-String newTunnelToken() {
-    return "kft_" + crypto.randomHex(32)
-}
-
 // Credencial de acesso a UM servico AUTHENTICATED. Separada do token da conta
 // de proposito: o token da conta nunca deve ir para o navegador de terceiros.
 String newServiceToken() {
