@@ -117,3 +117,85 @@ test "cadeia: HTTP /v1/audit/verify reporta integra e adulterada", "chain" {
     assert(bodyOf(broken).indexOf("\"ok\":\"false\"") >= 0, "adulterada detectada")
     assert(bodyOf(broken).indexOf("\"brokenAt\":\"0\"") >= 0, "indice do primeiro")
 }
+test "cadeia: eventos de contas intercaladas NAO quebram a verificacao", "chain-unit" {
+    // O anel e global e cada evento encadeia com o anterior do anel; a lista
+    // verificada e POR CONTA. Antes, comparar com a posicao na lista fazia
+    // duas contas ativas reportarem cadeia quebrada sem adulteracao.
+    var registry = Registry(chainPath("multi"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var ana = registry.createAccount("ana", "a@e.com", "segredo")
+    registry.registerDevice(mel, "nb-mel", "pk")
+    registry.registerDevice(ana, "nb-ana", "pk")
+    registry.registerDevice(mel, "nb-mel2", "pk2")
+
+    // A cadeia GLOBAL continua integra.
+    assert(auditChainError(registry.audit) == "", "anel global integro")
+    // E cada conta, isoladamente, tambem — mesmo com eventos intercalados.
+    var melEvents = registry.auditForAccount(mel.id)
+    var anaEvents = registry.auditForAccount(ana.id)
+    assert(melEvents.size >= 3, "mel com eventos: " + intToString(melEvents.size))
+    assert(anaEvents.size >= 2, "ana com eventos: " + intToString(anaEvents.size))
+    assert(auditChainError(melEvents) == "", "cadeia de mel integra")
+    assert(auditChainError(anaEvents) == "", "cadeia de ana integra")
+
+    // auditEventAccount separa `<conta>` e `<conta>/<recurso>`.
+    assert(auditEventAccount(melEvents.get(0)) == mel.id, "conta pura")
+}
+
+test "cadeia: com duas contas, adulterar ainda e detectado", "chain-unit" {
+    // A correcao nao pode enfraquecer a deteccao: adulterar um evento de uma
+    // conta continua quebrando a cadeia DELA, sem afetar a da outra.
+    var registry = Registry(chainPath("multi-tamper"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var ana = registry.createAccount("ana", "a@e.com", "segredo")
+    registry.registerDevice(mel, "nb-mel", "pk")
+    registry.registerDevice(ana, "nb-ana", "pk")
+    registry.registerDevice(mel, "nb-mel2", "pk2")
+
+    // Adultera a acao do primeiro evento de mel (sem recalcular o hash).
+    var tampered = listOf<AuditEvent>()
+    var done = false
+    for (var event in registry.audit) {
+        if (done == false && auditEventAccount(event) == mel.id) {
+            tampered.add(AuditEvent(event.at, event.actor, "account.hacked", event.target, event.prevHash, event.hash))
+            done = true
+        } else {
+            tampered.add(event)
+        }
+    }
+    var melTampered = listOf<AuditEvent>()
+    for (var event in tampered) {
+        if (auditEventAccount(event) == mel.id) {
+            melTampered.add(event)
+        }
+    }
+    assert(auditChainError(melTampered) == "0", "adulteracao de mel detectada no primeiro")
+    // A cadeia da outra conta segue integra.
+    var anaEvents = listOf<AuditEvent>()
+    for (var event in tampered) {
+        if (auditEventAccount(event) == ana.id) {
+            anaEvents.add(event)
+        }
+    }
+    assert(auditChainError(anaEvents) == "", "ana segue integra")
+}
+
+test "cadeia: HTTP verify fica integra com duas contas ativas", "chain" {
+    var controlPort = 19912
+    var registry = Registry(chainPath("http-multi"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var melCreated = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var melToken = mapField(json.decode<Map<String, String>>(bodyOf(melCreated)), "token")
+    var anaCreated = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
+    var anaToken = mapField(json.decode<Map<String, String>>(bodyOf(anaCreated)), "token")
+    httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", melToken)
+    httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", anaToken)
+
+    var melVerify = httpGetToken(controlPort, "/v1/audit/verify", melToken)
+    assert(bodyOf(melVerify).indexOf("\"ok\":\"true\"") >= 0, "mel integra: " + bodyOf(melVerify))
+    var anaVerify = httpGetToken(controlPort, "/v1/audit/verify", anaToken)
+    assert(bodyOf(anaVerify).indexOf("\"ok\":\"true\"") >= 0, "ana integra: " + bodyOf(anaVerify))
+}

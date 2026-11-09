@@ -148,10 +148,23 @@ class Registry {
     // Trilha de auditoria: anel capado (fonte unica `limitAuditEvents()`).
     // So metadados operacionais; nunca senha, token, chave ou conteudo.
     void audit(String actor, String action, String target) {
-        // Encadeia com o ultimo evento (cadeia de integridade, Fase 19 s4).
+        // Encadeia com o ultimo evento DA MESMA CONTA (cadeia de integridade,
+        // Fase 19 s4). A cadeia do anel inteiro misturava as contas: a lista
+        // verificada e por conta (`auditForAccount`), entao duas contas ativas
+        // "quebravam" a cadeia uma da outra sem adulteracao nenhuma. Com a
+        // cadeia por conta, a mesma funcao verifica o anel global e a lista
+        // filtrada — e a remocao/adulteracao de um evento continua detectavel.
+        var accountId = auditTargetAccount(target)
         var prev = ""
-        if (this.audit.size > 0) {
-            prev = this.audit.get(this.audit.size - 1).hash
+        var i = this.audit.size - 1
+        while (i >= 0) {
+            var previous = this.audit.get(i)
+            if (auditTargetAccount(previous.target) == accountId) {
+                prev = previous.hash
+                i = -1
+            } else {
+                i = i - 1
+            }
         }
         var at = longToString(time.now())
         var hash = auditEventHash(prev, at, actor, action, target)

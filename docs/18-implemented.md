@@ -54,7 +54,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | scan de segredos (Fase 19 s2 parcial) | `kof cloud scan [--file]` local (kfs_/kfc_/password no manifesto, nomeia sem vazar, exit 1 com achado); sem login/rede | `deploy_test.kf` (`deploy-scan`) |
 | higiene de credenciais (F19 s2) | `service tokens` / `/v1/services/token-hygiene`: `kfs_` válidos sem expiração por conta | `token_hygiene_test.kf` |
 | scan de ambiente/PEM (F19 s2) | `scan` cobre manifesto + env sensível + PEM expirando (`--tls-cert`), sem vazar valor | `scan_extra_test.kf` |
-| cadeia de auditoria (F19 s4) | `prevHash`/`hash` encadeados; `audit --verify` e `/v1/audit/verify` detectam adulteração/remoção | `audit_chain_test.kf` |
+| cadeia de auditoria (F19 s4) | `prevHash`/`hash` encadeados **por conta** (o anel é global; antes o encadeamento global fazia duas contas ativas reportarem cadeia quebrada sem adulteração); `audit --verify` e `/v1/audit/verify` detectam adulteração/remoção | `audit_chain_test.kf` |
 | webhook de incidentes (F17 s3) | HMAC-SHA256 (`X-KofCloud-Signature`), URL validada, segredo nunca devolvido, `kof cloud webhook set/show/remove/test` | `webhook_test.kf` |
 | status page pública (Fase 17 s3) | `serve --status-page` → `/status` (HTML) e `/status.json`, sem token, só incidentes globais | `status_page_test.kf` |
 | contenção `freeze`/`unfreeze` (Fase 17 s2) | suspende + revoga credenciais do alvo e abre incidente; unfreeze restaura o status anterior (reversível por desenho). Alvos: `service`, `device` e `account` (conta do token, sem id — devices + serviços + todas as `kfs_`); a marca original nunca é sobrescrita por um segundo freeze | `freeze_test.kf` |

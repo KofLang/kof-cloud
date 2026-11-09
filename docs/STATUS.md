@@ -83,7 +83,7 @@ o run total imprime `54 passed, 0 failed`. Falha = nome do teste + assert
 | status page (Fase 17 s3 parcial) | `tests/status_page_test.kf` | 5 |
 | publish com allowlist pela CLI (F10 s3) | `tests/publish_allow_test.kf` | 3 |
 | webhook de incidentes (F17 s3) | `tests/webhook_test.kf` | 5 |
-| cadeia de auditoria (F19 s4) | `tests/audit_chain_test.kf` | 5 |
+| cadeia de auditoria (F19 s4) | `tests/audit_chain_test.kf` | 8 |
 | scan de ambiente e PEM (F19 s2) | `tests/scan_extra_test.kf` | 4 |
 | higiene de credenciais (F19 s2) | `tests/token_hygiene_test.kf` | 4 |
 | painel de gestão completa (F12 s2) | `tests/panel_actions_test.kf` | 5 |
@@ -101,7 +101,7 @@ o run total imprime `54 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor na lista única (CLI) | `tests/value_flags_test.kf` | 2 |
 
-Total: 306 testes. Ver `15-tests.md` para a matriz.
+Total: 309 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

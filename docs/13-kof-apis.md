@@ -208,3 +208,18 @@ de 65535) e contagens/TTL usam `parseIntBounded` (acumula em `Long` com teto).
 de protocolo, duracao ja limitada). O `parseEdgeAddress` do Agent caiu nisso:
 `:4294968080` virava a porta 784 e ele conectava no lugar errado
 (`tests/edge_select_test.kf` trava).
+
+### L19 — a trilha de auditoria e global, a verificacao e por conta
+
+Nao e lacuna do Kof: foi um erro nosso, registrado porque a classe se repete.
+O anel de auditoria tem **um** encadeamento; a listagem e a verificacao
+filtram por conta. Encadear globalmente e verificar por conta fazia duas
+contas ativas "quebrarem" a cadeia uma da outra sem adulteracao nenhuma
+(medido: `brokenAt` 1 para a primeira conta e 0 para a segunda, com o anel
+integro).
+
+**Consequencia:** a cadeia passou a ser **por conta** na gravacao
+(`Registry.audit` anda para tras ate o evento anterior da mesma conta) e na
+verificacao (`auditChainError` guarda o ultimo hash por conta). O anel global
+continua verificavel pela mesma funcao, e adulteracao/remocao de um evento
+continua detectavel — provado por mutacao nos dois lados.

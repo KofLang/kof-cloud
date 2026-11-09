@@ -18,12 +18,26 @@ String auditEventHash(String prevHash, String at, String actor, String action, S
     return crypto.sha256(prevHash + "|" + at + "|" + actor + "|" + action + "|" + target)
 }
 
-// Verifica a cadeia de uma lista de eventos (na ordem em que foram gravados).
+// Verifica a cadeia de uma lista de eventos na ordem em que foram gravados.
 // Devolve "" quando integra, ou o indice do primeiro evento quebrado.
+//
+// A lista e POR CONTA (`auditForAccount`), mas o anel e GLOBAL: cada evento
+// encadeia com o anterior do anel inteiro, que pode ser de outra conta. A
+// verificacao por conta exige, entao, que o `prevHash` de cada evento seja o
+// hash do evento ANTERIOR DA MESMA CONTA (ou vazio, no primeiro dela) —
+// nunca "o evento imediatamente antes na lista". Comparar com a posicao na
+// lista fazia duas contas ativas reportarem cadeia quebrada sem adulteracao
+// nenhuma (medido: primeira conta quebrando no indice 1, a segunda no 0).
 String auditChainError(List<AuditEvent> events) {
-    var prev = ""
+    var lastHashByAccount = mapOf()
     var index = 0
     for (var event in events) {
+        var accountId = auditEventAccount(event)
+        var prev = ""
+        var saved = lastHashByAccount.get(accountId)
+        if (saved != null) {
+            prev = saved
+        }
         if (event.prevHash != prev) {
             return intToString(index)
         }
@@ -31,10 +45,24 @@ String auditChainError(List<AuditEvent> events) {
         if (event.hash != expected) {
             return intToString(index)
         }
-        prev = event.hash
+        lastHashByAccount.put(accountId, event.hash)
         index = index + 1
     }
     return ""
+}
+
+// Conta dona de um evento a partir do `target`: `<accountId>` (eventos da
+// propria conta) ou `<accountId>/<recurso>`. Puro.
+String auditTargetAccount(String target) {
+    var slash = target.indexOf("/")
+    if (slash < 0) {
+        return target
+    }
+    return target.substring(0, slash)
+}
+
+String auditEventAccount(AuditEvent event) {
+    return auditTargetAccount(event.target)
 }
 
 String auditActorAccount(String handle) {
