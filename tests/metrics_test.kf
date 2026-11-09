@@ -56,9 +56,38 @@ test "metricas: nomes e saidas no formato Prometheus", "metrics" {
     assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_waf_allow_denied"), "allowlist")
     noteHttpFinished("denied", "KCF106", 10, 20, 1)
     assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_other"), "streams cai no fallback")
+    // Os vizinhos da mesma familia tinham sufixo e KCF116 caia no _other:
+    // "cabeçalho grande demais" ficava indistinguivel de qualquer negada
+    // sem motivo mapeado. A invariante abaixo trava o conjunto inteiro.
+    noteHttpFinished("denied", "KCF116", 10, 20, 1)
+    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_headers_too_large"), "cabecalho grande")
+    noteHttpFinished("denied", "KCF118", 10, 20, 1)
+    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_framing"), "enquadramento")
+    noteHttpFinished("denied", "KCF119", 10, 20, 1)
+    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_host"), "host ambiguo")
+    noteHttpFinished("denied", "KCF132", 10, 20, 1)
+    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_request_line"), "linha de requisicao")
+    noteHttpFinished("denied", "KCF133", 10, 20, 1)
+    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_header_line"), "linha de header")
+    noteHttpFinished("denied", "KCF110", 10, 20, 1)
+    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_body_too_large"), "corpo grande")
     assert(metricHas(exposition, "kofcloud_edge_http_request_bytes_total"), "bytes de pedido")
     assert(metricHas(exposition, "kofcloud_edge_http_response_bytes_total"), "bytes de resposta")
     assert(metricValue(exposition, "kofcloud_edge_tunnel_sessions_open") == 1, "gauge de sessoes")
+}
+
+test "metricas: falhas de upstream contam por sufixo proprio", "metrics-upstream" {
+    // Cada falha de relay com causa conhecida tem sufixo; antes KCF105 (vazio)
+    // caia no contador generico e nao dava para separar "servico devolveu
+    // nada" de "stream resetado".
+    noteHttpFinished("upstream_error", "KCF112", 10, 0, 1)
+    assert(metricHas(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_timeout"), "timeout")
+    noteHttpFinished("upstream_error", "KCF115", 10, 0, 1)
+    assert(metricHas(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_response_too_large"), "resposta grande")
+    noteHttpFinished("upstream_error", "KCF131", 10, 0, 1)
+    assert(metricHas(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_invalid_response"), "resposta invalida")
+    noteHttpFinished("upstream_error", "KCF105", 10, 0, 1)
+    assert(metricHas(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_empty_response"), "resposta vazia")
 }
 
 test "metricas: recusas de tunel contam por motivo", "metrics-tunnel" {
@@ -312,4 +341,44 @@ test "metricas: tamanho da resposta cai em faixa (KiB) e conta", "metrics-size" 
     }
     noteResponseSize(0)
     assert(metricValue(observability.metrics(), "kofcloud_edge_http_response_bytes_total_size_kb_le_1") == oneKb, "zero nao conta")
+}
+
+test "metricas: todo KCF passado ao noteHttpFinished tem sufixo (invariante de fonte)", "metrics-invariant" {
+    // Le as proprias fontes: cada KCF que o front passa a noteHttpFinished
+    // precisa de um ramo em Metrics.kf — senao cai no _other e o operador
+    // nao distingue a causa. Ideia surgida do KCF116 sem sufixo.
+    var frontRaw = File("src/kofcloud/edge/HttpFront.kf").readText()
+    var metricsRaw = File("src/kofcloud/edge/Metrics.kf").readText()
+    var httpFront = ""
+    var metrics = ""
+    if (frontRaw != null) {
+        httpFront = frontRaw
+    }
+    if (metricsRaw != null) {
+        metrics = metricsRaw
+    }
+    if (httpFront.length == 0 || metrics.length == 0) {
+        return
+    }
+    var body = metrics.substring(metrics.indexOf("void noteHttpFinished"), metrics.indexOf("// Streams abertos no relay"))
+    // Denominadores explicitos: KCF106 e por desenho sem sufixo (fallback
+    // _other documentado); os demais precisam estar mapeados.
+    var exempt = listOf("KCF106")
+    var missing = listOf<String>()
+    for (var code in listOf("KCF100", "KCF101", "KCF102", "KCF103", "KCF105", "KCF107", "KCF108", "KCF109", "KCF110", "KCF111", "KCF112", "KCF115", "KCF116", "KCF118", "KCF119", "KCF131", "KCF132", "KCF133")) {
+        if (httpFront.indexOf("\"" + code + "\"") < 0) {
+            continue
+        }
+        if (body.indexOf("\"" + code + "\"") < 0) {
+            missing.add(code)
+        }
+    }
+    var detail = ""
+    for (var code in missing) {
+        detail = detail + " " + code
+    }
+    assert(missing.size == 0, "emitidos sem sufixo em Metrics.kf:" + detail)
+    for (var code in exempt) {
+        assert(body.indexOf("\"" + code + "\"") < 0, code + " nao deveria ter ramo proprio")
+    }
 }

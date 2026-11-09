@@ -170,8 +170,8 @@ void noteHttpFinished(String outcome, String deniedDetail, Int requestBytes, Int
             observability.counter(metricHttpDenied() + "_body_too_large")
         } else if (deniedDetail == "KCF109") {
             observability.counter(metricHttpDenied() + "_waf_denied")
-        } else if (deniedDetail == "KCF117") {
-            observability.counter(metricHttpDenied() + "_too_many_public_conns")
+        } else if (deniedDetail == "KCF116") {
+            observability.counter(metricHttpDenied() + "_headers_too_large")
         } else if (deniedDetail == "KCF118") {
             observability.counter(metricHttpDenied() + "_invalid_framing")
         } else if (deniedDetail == "KCF119") {
@@ -193,6 +193,8 @@ void noteHttpFinished(String outcome, String deniedDetail, Int requestBytes, Int
             observability.counter(metricHttpUpstreamErrors() + "_response_too_large")
         } else if (deniedDetail == "KCF131") {
             observability.counter(metricHttpUpstreamErrors() + "_invalid_response")
+        } else if (deniedDetail == "KCF105") {
+            observability.counter(metricHttpUpstreamErrors() + "_empty_response")
         }
     }
     observability.increment(metricRequestBytes(), requestBytes)

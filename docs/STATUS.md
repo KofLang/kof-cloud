@@ -54,7 +54,7 @@ o run total imprime `54 passed, 0 failed`. Falha = nome do teste + assert
 | service token | `tests/service_token_test.kf` | 13 |
 | erros R6 | `tests/errors_test.kf` | 10 |
 | dominios (+ certificado x hostname) | `tests/domains_test.kf` | 11 |
-| metricas | `tests/metrics_test.kf` | 8 |
+| metricas | `tests/metrics_test.kf` | 9 |
 | rate limit | `tests/ratelimit_test.kf` | 2 |
 | agent metrics | `tests/agent_metrics_test.kf` | 3 |
 | abuso | `tests/abuse_test.kf` | 3 |
@@ -100,7 +100,7 @@ o run total imprime `54 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor na lista única (CLI) | `tests/value_flags_test.kf` | 2 |
 
-Total: 303 testes. Ver `15-tests.md` para a matriz.
+Total: 305 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

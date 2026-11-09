@@ -144,8 +144,8 @@ export Prometheus em `observability.metrics()`, servido sem auth em
 | `kofcloud_edge_tunnel_refused_total{,_motivo}` | counter | recusas (`_version`, `_unknown_device`, `_revoked_device`, `_auth`) |
 | `kofcloud_edge_tunnel_sessions_open` | gauge | sessões de túnel vivas |
 | `kofcloud_edge_http_requests_total` | counter | requisições públicas terminadas |
-| `kofcloud_edge_http_denied_total{,_motivo}` | counter | negadas (`_no_route`, `_auth_required`, `_device_offline`, `_service_down`, `_rate_limited`, `_service_overloaded`, `_body_too_large`, `_waf_denied`, `_waf_allow_denied`, `_too_many_public_conns`, `_invalid_framing`, `_invalid_host`, `_other`) |
-| `kofcloud_edge_http_upstream_errors_total` | counter | falhas de relay (502) |
+| `kofcloud_edge_http_denied_total{,_motivo}` | counter | negadas (`_no_route`, `_auth_required`, `_device_offline`, `_service_down`, `_rate_limited`, `_service_overloaded`, `_body_too_large`, `_headers_too_large`, `_waf_denied`, `_waf_allow_denied`, `_invalid_framing`, `_invalid_host`, `_invalid_request_line`, `_invalid_header_line`, `_other`) |
+| `kofcloud_edge_http_upstream_errors_total{,_timeout,_response_too_large,_invalid_response,_empty_response}` | counter | falhas de relay (502), por causa quando conhecida |
 | `kofcloud_edge_http_request_bytes_total` | counter | bytes de pedido somados |
 | `kofcloud_edge_http_response_bytes_total` | counter | bytes de resposta somados |
 | `kofcloud_edge_tunnel_streams_total` | counter | streams abertos no relay |
