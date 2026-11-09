@@ -71,6 +71,12 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   health (`agent/Health.kf`) vai pelo mesmo `parseIntBounded` com teto 599;
   fora de 100–599 é 0 (resposta quebrada → DEGRADED), nunca um código
   inventado.
+* **Auditoria de `parseIntSafe` (veredito).** Entrada externa usa
+  `parsePortSafe`/`parseIntBounded`; os `parseIntSafe` restantes leem apenas
+  contadores que o próprio código escreve (`Session.pending`,
+  `EdgeState.serviceConns`, `Registry.expiryProbes`) — parse falho vira 0,
+  que fecha a porta (fila vazia, sem vaga) em vez de abrir. O contador de
+  `token prune` também foi para `parseIntBounded`.
 * **Inteiros do protocolo também.** `frameInt` (campos numéricos de
   `HELLO`/`WELCOME`/`DATA`) usava `parseIntSafe`: medido, um `HELLO` com
   `v: 4294967297` fazia wrap para **1** e passava a checagem de versão, e um

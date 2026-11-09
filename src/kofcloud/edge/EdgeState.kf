@@ -147,6 +147,9 @@ class EdgeState {
         if (current == null) {
             return 0
         }
+        // So escrito aqui (`intToString(opened + 1)`, `current - 1` com piso
+        // em zero via remove), nunca chega do fio/rede: mesmo veredito do
+        // contador da fila (Session.pending, L11/L12).
         return parseIntSafe(current, 0)
     }
 

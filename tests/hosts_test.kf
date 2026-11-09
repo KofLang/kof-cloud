@@ -112,6 +112,16 @@ test "text: parseIntSafe aceita digito e recusa lixo" {
     assert(parseIntSafe("", 7) == 7, "vazio usa default")
     assert(parseIntSafe("80a", 7) == 7, "lixo usa default")
     assert(parseIntSafe("-5", 0) == -5, "negativo")
+    // parsePortSafe/parseIntBounded sao as unicas portas/contagens de entrada
+    // (auditoria de wrap, Fase 14 slice 2q/2r/2s + 2t): parseIntSafe em texto
+    // de usuario/CLI/API/rede e wrap — se voce esta adicionando um, pare:
+    // use o parser com teto. (Contadores internos sao outra familia: ve
+    // Session.pending/EdgeState.serviceConns, escritos pelo proprio codigo.)
+    assert(parsePortSafe("4294968080", 0) == 0, "porta com wrap nao vira 784")
+    assert(parsePortSafe("4294967296", 0) == 0, "porta 2^32 nao vira 0")
+    assert(parseIntBounded("4294967396", -1, 2147483647) == -1, "contagem com wrap falha")
+    assert(parseIntBounded("4294967396", -1, 100) == -1, "teto pequeno falha primeiro")
+    assert(parseIntBounded("100", -1, 2147483647) == 100, "normal passa")
 }
 
 test "text: bodyContainsId casa id exato entre aspas" {

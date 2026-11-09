@@ -1462,7 +1462,11 @@ Int cmdTokenPrune(List<String> args) {
     }
     try {
         var raw = requireOk(http.post(session.controlUrl + "/v1/tokens/prune", "{}", jsonHeader(session.token)))
-        var removed = parseIntSafe(mapField(json.decode<Map<String, String>>(raw), "revoked"), 0)
+        // Contagem escrita pelo servidor (control plane); aqui so decide entre
+        // "nada" e "quantas". parseIntBounded com teto Int: se o JSON vier
+        // adulterado, falha para 0 = "nada a remover" (nunca vira numero
+        // absurdo nem negativo).
+        var removed = parseIntBounded(mapField(json.decode<Map<String, String>>(raw), "revoked"), 0, 2147483647)
         if (removed == 0) {
             println("Nada a remover: so a credencial desta sessao vale.")
             return 0

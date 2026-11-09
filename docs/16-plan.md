@@ -567,6 +567,17 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   `parseIntBounded` (teto 599) e fora de 100–599 vira 0, que o `checkService`
   já trata como resposta quebrada (DEGRADED). Prova:
   `tests/health_test.kf` (`health-unit` estendido).
+* **Slice 2t — auditoria final de `parseIntSafe` ✅.** Fechada a varredura de
+  todos os callers restantes. Entrada externa (CLI/API/rede/fio) já passa por
+  `parsePortSafe`/`parseIntBounded`. Sobram três famílias internas, cada uma
+  agora com veredito escrito no código: `Session.pending` e
+  `EdgeState.serviceConns` (contadores em `Map<String,String>` por L11, só
+  escritos pelo próprio código — parse falho devolve 0, que fecha a porta),
+  `Registry.expiryProbes` (idem, 0 soma só o lote atual) e o contador
+  `revoked` do `token prune` (resposta do control plane), que passou a
+  `parseIntBounded` como defesa em profundidade. Trava em
+  `tests/hosts_test.kf` (`parseIntSafe` aceita/recusa + os dois parsers com
+  teto na mesma teste, para quem for adicionar um caller novo ver o padrão).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task

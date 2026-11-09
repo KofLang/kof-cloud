@@ -353,6 +353,10 @@ class Registry {
         if (saved != null) {
             // Separador `;`: `split` do stdlib trata o argumento como regex e
             // `|` seria alternancia vazia (sempre zero partes). `;` e literal.
+            // So escrito aqui (`intToString(count)`, contador de memoria +
+            // `expiredCount` desta varredura), nunca chega do fio/rede: mesmo
+            // veredito dos contadores internos (semaforo e fila); se o parse
+            // falhar, 0 soma so o lote atual (abre menos, nunca mais).
             var parts = saved.split(";")
             if (parts.length == 2) {
                 count = parseIntSafe(parts[0], 0)

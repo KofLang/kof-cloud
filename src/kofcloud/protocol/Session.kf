@@ -33,7 +33,10 @@ class TunnelSession {
     // sao ilimitados (medido: so `send`/`receive`), entao o teto da fila
     // precisa de contador explicito — sem ele, um consumidor lento acumula
     // memoria sem limite. `Map<String, Int>` como campo quebra o verificador
-    // JVM (L11), por isso String + parseIntSafe.
+    // JVM (L11), por isso String + parseIntSafe. O valor so e escrito aqui
+    // (`intToString(contador + 1)`, L12), nunca chega do fio/rede — entao o
+    // wrap de entrada externa nao se aplica; se o parse falhar, 0 fecha a
+    // porta (fila sai como vazia, nunca como aberta).
     Map<String, String> pending
     Int queueDepth
     Channel<String> outbox
