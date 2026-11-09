@@ -70,8 +70,10 @@ String webhookUrlError(String url) {
     if (colon >= 0) {
         host = authority.substring(0, colon)
         var portText = authority.substring(colon + 1)
-        var port = parseIntSafe(portText, 0)
-        if (port <= 0 || port > 65535) {
+        // `parseIntSafe` faria wrap (`:4294968080` vira 784 e passaria como
+        // porta valida); `parsePortSafe` recusa de verdade.
+        var port = parsePortSafe(portText, -1)
+        if (port <= 0) {
             return "url port invalid"
         }
     }

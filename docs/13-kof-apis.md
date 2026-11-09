@@ -193,3 +193,18 @@ mensagem com um par gerado pela aplicacao hoje.
 (`crypto.hmacSha256`), que e o padrao de fato de webhooks (Stripe, GitHub) e
 existe em todos os alvos. Assinatura assimetrica com chave do proprio
 KofCloud fica pendente ate o stdlib expor par Ed25519 (gap a abrir).
+
+### L18 — `parseIntSafe` acumula em 32 bits (wrap silencioso)
+
+Medido: `parseIntSafe("4294968080")` devolve **784** e `parseIntSafe(
+"4294967296")` devolve **0** — o acumulador estoura e passa a valer o resto
+do módulo 2^32, sem erro. Nao e defeito do Kof (e o comportamento de `Int`),
+mas e uma armadilha do nosso codigo: um valor lido assim "passa" pela faixa
+valida por acaso.
+
+**Consequencia:** portas usam `parsePortSafe` (acumula em `Long`, falha acima
+de 65535) e contagens/TTL usam `parseIntBounded` (acumula em `Long` com teto).
+`parseIntSafe` fica para valores onde o wrap nao tem consequencia (contadores
+de protocolo, duracao ja limitada). O `parseEdgeAddress` do Agent caiu nisso:
+`:4294968080` virava a porta 784 e ele conectava no lugar errado
+(`tests/edge_select_test.kf` trava).

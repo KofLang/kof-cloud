@@ -110,6 +110,12 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   apenas a linha de status: um serviço que responde `200` no `/` e falha nas
   rotas reais passa — o `--check` confirma que a aplicação está de pé, não que
   cada rota funciona.
+* **Nem todo inteiro lido da rede usa o parser seguro.** Portas (publish,
+  manifesto, `serve`, `parseEdgeAddress`, `edgePort` do `/v1/connect`, porta
+  da URL de webhook) e contagens/TTL usam `parsePortSafe`/`parseIntBounded`,
+  que acumulam em `Long` e recusam o excesso. O que usa `parseIntSafe` faz
+  wrap em 2^32 (L18) — hoje só valores onde o wrap não tem consequência
+  (contadores de protocolo, duração já limitada, status HTTP de 3 dígitos).
 * **A fila de entrada é limitada, a de saída não.** `queueDepth` (64) vale
   para os itens que chegam a um stream e ainda não foram consumidos; a
   `outbox` compartilhada do túnel continua sem teto — quem enche é o próprio

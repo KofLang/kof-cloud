@@ -88,6 +88,7 @@ o run total imprime `54 passed, 0 failed`. Falha = nome do teste + assert
 | higiene de credenciais (F19 s2) | `tests/token_hygiene_test.kf` | 4 |
 | painel de gestão completa (F12 s2) | `tests/panel_actions_test.kf` | 5 |
 | ranking de Edges (F14 s2) | `tests/edge_select_test.kf` | 5 |
+| porta do Edge sem wrap (F14 s2) | `tests/edge_select_test.kf` + `tests/webhook_test.kf` | +13 asserts |
 | carga explícita + migrate (F16 s1) | `tests/migrate_test.kf` | 5 |
 | credencial da conta com ciclo de vida (F19 s3) | `tests/account_token_test.kf` | 7 |
 | health HTTP com prazo (F4) | `tests/health_test.kf` | 4 |

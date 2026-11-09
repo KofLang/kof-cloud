@@ -26,6 +26,14 @@ test "webhook: URL e segredo validados (puros)", "webhook-unit" {
     assert(webhookUrlError("https://user:pass@example.com/hook") != "", "credencial na URL recusada")
     assert(webhookUrlError("https://") != "", "sem host recusado")
     assert(webhookUrlError("https://example.com:99999/x") != "", "porta invalida")
+    // Estouro de Int: `parseIntSafe("4294968080")` devolve 784 (passaria como
+    // porta valida); `parseIntSafe("4294967296")` devolve 0 (passaria pelo
+    // guard `<= 0`... e voltaria como "sem porta"). `parsePortSafe` recusa.
+    assert(webhookUrlError("https://example.com:4294968080/x") != "", "acima de 2^32 recusada")
+    assert(webhookUrlError("https://example.com:4294967296/x") != "", "2^32 exato recusada")
+    assert(webhookUrlError("https://example.com:0/x") != "", "porta zero recusada")
+    assert(webhookUrlError("https://example.com:abc/x") != "", "porta nao numerica recusada")
+    assert(webhookUrlError("https://example.com:65535/x") == "", "teto valido ainda passa")
     assert(webhookUrlError("") != "", "vazio recusado")
     assert(webhookSecretError("curto") != "", "segredo curto recusado")
     assert(webhookSecretError("0123456789abcdef") == "", "16 chars ok")

@@ -40,6 +40,18 @@ test "edge select: parse de host:porta", "edge-select-unit" {
     assert(parseEdgeAddress("host:99999").host == "", "porta fora da faixa descarta")
     assert(parseEdgeAddress(":7000").host == "", "host vazio descarta")
     assert(parseEdgeAddress("  host:7000  ").host == "host", "espacos aparados")
+    // Estouro de Int: com parseIntSafe, ":4294968080" virava 784 e o Agent
+    // conectava na porta errada; ":4294967296" virava 0 (passava como falsa
+    // porta valida antes do guard). `parsePortSafe` acumula em Long.
+    assert(parseEdgeAddress("edge:4294968080").host == "", "acima de 2^32 nao faz wrap")
+    assert(parseEdgeAddress("edge:4294967296").host == "", "2^32 exato nao vira 0")
+    assert(parseEdgeAddress("edge:65536").host == "", "65536 fora da faixa")
+    assert(parseEdgeAddress("edge:65535").port == 65535, "teto valido")
+    assert(parseEdgeAddress("edge:1").port == 1, "piso valido")
+    assert(parseEdgeAddress("edge:").host == "", "porta vazia descarta")
+    assert(parseEdgeAddress("edge:abc").host == "", "porta nao numerica descarta")
+    assert(parseEdgeAddress("edge:-1").host == "", "negativa descarta")
+    assert(parseEdgeAddress(" :7000 ").host == "", "host so-espacos descarta")
 }
 
 test "edge select: control plane publica a lista com o principal primeiro", "edge-select" {

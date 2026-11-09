@@ -57,9 +57,15 @@ EdgeProbe parseEdgeAddress(String address) {
     if (colon <= 0) {
         return EdgeProbe("", 0, -1)
     }
-    var host = trimmed.substring(0, colon)
-    var port = parseIntSafe(trimmed.substring(colon + 1), 0)
-    if (port <= 0 || port > 65535) {
+    var host = trimmed.substring(0, colon).trim()
+    if (host.length == 0) {
+        return EdgeProbe("", 0, -1)
+    }
+    // `parsePortSafe`, nao `parseIntSafe`: o acumulador de 32 bits fazia
+    // wrap (medido: ":4294968080" virava porta 784 e o Agent conectava no
+    // lugar errado). Mesma fonte unica do publish e das portas do serve.
+    var port = parsePortSafe(trimmed.substring(colon + 1), -1)
+    if (port <= 0) {
         return EdgeProbe("", 0, -1)
     }
     return EdgeProbe(host, port, -1)
@@ -99,7 +105,11 @@ EdgeEndpoint fetchEdge(AgentConfig config) {
     var map = json.decode<Map<String, String>>(raw)
     var services = json.decode<List<Service>>(mapField(map, "services"))
     var host = mapField(map, "edgeHost")
-    var port = parseIntSafe(mapField(map, "edgePort"), defaultTunnelPort())
+    // Porta do Edge vinda da rede: mesma armadilha do `parseEdgeAddress` —
+    // `parseIntSafe` faz wrap (`4294968080` vira 784) e o Agent conectaria
+    // no lugar errado. Valor invalido recai no default (o Agent nao tem o
+    // que corrigir aqui; quem valida a config e o `serve`).
+    var port = parsePortSafe(mapField(map, "edgePort"), defaultTunnelPort())
     if (config.edgeHost.length > 0) {
         host = config.edgeHost
     }
@@ -122,7 +132,10 @@ EdgeEndpoint fetchEdge(AgentConfig config) {
     return EdgeEndpoint(
         host,
         port,
-        parseIntSafe(mapField(map, "heartbeatMs"), limitHeartbeatMs()),
+        // Heartbeat tambem vem da rede: teto explicito (`parseIntBounded`)
+        // para um valor absurdo nao virar 200 ms ou negativo por wrap; zero
+        // ou lixo recai no default e o loop abaixo ja corrige <= 0.
+        parseIntBounded(mapField(map, "heartbeatMs"), limitHeartbeatMs(), 3600000),
         services
     )
 }
