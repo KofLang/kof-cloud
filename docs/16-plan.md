@@ -663,6 +663,15 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   publica/suspende/emite/remove pelas rotas que o painel usa, e o contrato do
   "Adicionar domínio").
 
+  **Bug corrigido (device do publish).** O painel publicava sempre no
+  **primeiro** dispositivo da lista (`STATE.devs[0]`), sem escolha: com mais
+  de uma máquina na conta, o serviço ia para a máquina errada e o operador só
+  descobria depois. Agora há um `<select id="svcdev">` populado em
+  `preencherDevices` (opções via DOM, porque o nome do device é dado do
+  usuário), a escolha é preservada ao recarregar, e publicar sem escolher
+  responde `escolha o dispositivo`. Prova: `tests/panel_actions_test.kf`
+  (`panel-actions-unit` + `panel-actions`, 2 a mais).
+
   **Bug corrigido (contrato do domínio).** O botão "Adicionar domínio" enviava
   `serviceId`, mas `POST /v1/domains` lê `service` (o **nome** do serviço) —
   todo domínio adicionado pelo painel devolvia `404 KCF122` e o botão nunca

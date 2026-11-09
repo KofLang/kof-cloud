@@ -122,3 +122,41 @@ Bool isHexChar(Char c) {
     var upper = v >= 65 && v <= 70
     return digit || lower || upper
 }
+
+test "painel s2: publicar exige escolher o dispositivo (nunca o primeiro)", "panel-actions-unit" {
+    // Com mais de uma maquina na conta, publicar no STATE.devs[0] expunha o
+    // servico na maquina errada. Agora ha um <select id="svcdev"> e o publish
+    // recusa quando nada foi escolhido.
+    var html = panelHtml()
+    assert(html.indexOf("svcdev") >= 0, "select de dispositivo existe")
+    assert(html.indexOf("STATE.devs[0]") < 0, "nao infere o primeiro device")
+    assert(html.indexOf("escolha o dispositivo") >= 0, "erro claro sem escolha")
+    assert(html.indexOf("preencherDevices") >= 0, "select populado pela pagina")
+    // O valor escolhido e o que vai no corpo.
+    assert(html.indexOf("document.getElementById('svcdev').value") >= 0, "publish usa a escolha")
+}
+
+test "painel s2: publicar no dispositivo escolhido funciona pela rota", "panel-actions" {
+    var controlPort = 19933
+    var registry = Registry("/tmp/kofcloud-pa3-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    control.enablePanel()
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var d1 = mapField(json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pk1\"}", token))), "deviceId")
+    var d2 = mapField(json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/devices", "{\"name\":\"servidor\",\"publicKey\":\"pk2\"}", token))), "deviceId")
+
+    // O painel manda o deviceId escolhido; prova que o segundo (nao o
+    // primeiro) aceita o publish e que o servico fica nele.
+    var body = "{\"deviceId\":\"" + d2 + "\",\"name\":\"api\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"3000\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    var published = httpPostJson(controlPort, "/v1/services", body, token)
+    assert(statusOf(published) == 200, "publica no device escolhido")
+    assert(bodyOf(published).indexOf(d2) >= 0, "servico no segundo dispositivo")
+
+    // Sem device: a API recusa (o painel nem deixa chegar aqui).
+    var semDevice = httpPostJson(controlPort, "/v1/services", "{\"deviceId\":\"\",\"name\":\"x\",\"localPort\":\"1\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", token)
+    assert(statusOf(semDevice) != 200, "sem device nao publica")
+}

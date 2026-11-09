@@ -86,7 +86,7 @@ o run total imprime `54 passed, 0 failed`. Falha = nome do teste + assert
 | cadeia de auditoria (F19 s4) | `tests/audit_chain_test.kf` | 5 |
 | scan de ambiente e PEM (F19 s2) | `tests/scan_extra_test.kf` | 4 |
 | higiene de credenciais (F19 s2) | `tests/token_hygiene_test.kf` | 4 |
-| painel de gestão completa (F12 s2) | `tests/panel_actions_test.kf` | 3 |
+| painel de gestão completa (F12 s2) | `tests/panel_actions_test.kf` | 5 |
 | ranking de Edges (F14 s2) | `tests/edge_select_test.kf` | 5 |
 | carga explícita + migrate (F16 s1) | `tests/migrate_test.kf` | 5 |
 | credencial da conta com ciclo de vida (F19 s3) | `tests/account_token_test.kf` | 7 |
@@ -100,7 +100,7 @@ o run total imprime `54 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor na lista única (CLI) | `tests/value_flags_test.kf` | 2 |
 
-Total: 301 testes. Ver `15-tests.md` para a matriz.
+Total: 303 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

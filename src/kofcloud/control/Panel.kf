@@ -60,6 +60,7 @@ footer{padding:16px 24px;color:#5b606a;font-size:12px}
   <button class=\"danger\" onclick=\"acao('device-revoke')\">Revogar</button></div></section>
 <section><h2>Servicos</h2><div id=\"svcs\"></div>
   <div class=\"row\"><input id=\"svcname\" placeholder=\"nome\"><input id=\"svcport\" placeholder=\"porta\" size=\"6\">
+  <select id=\"svcdev\"><option value=\"\">dispositivo…</option></select>
   <select id=\"svcexp\"><option>PUBLIC</option><option>AUTHENTICATED</option><option>PRIVATE</option></select>
   <button onclick=\"acao('publish')\">Publicar</button>
   <button class=\"danger\" onclick=\"acao('unpublish')\">Remover</button></div>
@@ -104,6 +105,29 @@ function idPorNome(lista, nome){
 }
 function ok(m){ var el=document.getElementById('msg'); el.className='on'; el.textContent=m; }
 function erro(m){ var el=document.getElementById('msg'); el.className='err'; el.textContent=m; }
+function preencherDevices(devs){
+  var sel = document.getElementById('svcdev');
+  if(!sel) return;
+  // Opcoes via DOM (value/textContent), nunca concatenando HTML: o nome do
+  // dispositivo e dado do usuario e nao deve virar markup.
+  var atual = sel.value;
+  while(sel.firstChild){ sel.removeChild(sel.firstChild); }
+  var vazio = document.createElement('option');
+  vazio.value = '';
+  vazio.textContent = 'dispositivo…';
+  sel.appendChild(vazio);
+  devs.forEach(function(d){
+    var o = document.createElement('option');
+    o.value = d.id || d.deviceId || '';
+    o.textContent = d.name;
+    sel.appendChild(o);
+  });
+  // Mantem a escolha se o device continua existindo; senao volta ao vazio
+  // (nunca seleciona o primeiro por conta propria).
+  var mantem = false;
+  devs.forEach(function(d){ if((d.id || d.deviceId || '') === atual) mantem = true; });
+  if(mantem) sel.value = atual;
+}
 function carregar(){
   TOKEN = document.getElementById('tok').value.trim();
   if(!TOKEN){ erro('informe o token'); return; }
@@ -112,7 +136,9 @@ function carregar(){
   Promise.all([api('/v1/devices'), api('/v1/presence'), api('/v1/services'), api('/v1/domains')])
     .then(function(r){
       var devs = r[0], online = r[1], svcs = r[2], doms = r[3];
-      STATE.devs = devs; STATE.svcs = svcs;
+      STATE.devs = devs;
+    preencherDevices(devs); STATE.svcs = svcs;
+      preencherDevices(devs);
       document.getElementById('devs').innerHTML = tabela(['nome','id','status','tunel'], devs.map(function(d){
         var vivo = online.indexOf(d.id || d.deviceId) >= 0;
         return [esc(d.name), esc(d.id || d.deviceId), esc(d.status),
@@ -136,7 +162,11 @@ function acao(tipo){
     var nome=document.getElementById('svcname').value.trim();
     var porta=document.getElementById('svcport').value.trim();
     if(!nome || !porta){ erro('informe nome e porta'); return; }
-    var dev = STATE.devs.length ? (STATE.devs[0].id || STATE.devs[0].deviceId) : '';
+    // O dispositivo e ESCOLHIDO, nunca inferido do primeiro da lista: com
+    // mais de uma maquina na conta, publicar sempre na primeira expunha o
+    // servico na maquina errada (e o operador so descobria depois).
+    var dev = document.getElementById('svcdev').value;
+    if(!dev){ erro('escolha o dispositivo'); return; }
     p = api('/v1/services','POST',{deviceId: dev, name: nome, localPort: porta, localAddress: '127.0.0.1',
         protocol: 'http', exposure: document.getElementById('svcexp').value});
   } else if(tipo === 'unpublish'){
