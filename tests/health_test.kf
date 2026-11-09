@@ -54,6 +54,14 @@ test "health: status line e caminho da sonda sao puros", "health-unit" {
     assert(parseStatusLine("garbage") == 0, "nao HTTP")
     assert(parseStatusLine("") == 0, "vazio")
     assert(parseStatusLine("HTTP/1.1 abc OK") == 0, "status nao numerico")
+    // Fora de 100-599 nao e status usavel: o parse devolve 0 e o caller
+    // trata como resposta quebrada (DEGRADED), nunca como codigo legitimo.
+    assert(parseStatusLine("HTTP/1.1 099 Weird\r\n") == 0, "abaixo de 100")
+    assert(parseStatusLine("HTTP/1.1 600 Nope\r\n") == 0, "acima de 599")
+    assert(parseStatusLine("HTTP/1.1 99 X\r\n") == 0, "2 digitos")
+    assert(parseStatusLine("HTTP/1.1 1234 X\r\n") == 123, "os 3 primeiros digitos valem")
+    // Mesmo digitos fora da faixa numa linha longa: o resto e motivo, nao codigo.
+    assert(parseStatusLine("HTTP/1.1 200 OK\r\nContent-Length: 4294967396\r\n") == 200, "CL gigante no header nao contamina")
 
     // Sem allowlist: /. Com allowlist: o primeiro caminho literal — `/` pode
     // nao estar nela e um 403 seria lido como falha de health.

@@ -168,7 +168,18 @@ Int parseStatusLine(String head) {
     if (rest.length < 3) {
         return 0
     }
-    return parseIntSafe(rest.substring(0, 3), 0)
+    // Le os 3 digitos do status com parseIntBounded (acumula em Long, teto
+    // 599): a mesma regra de parse de todo inteiro do fio do projeto — sem
+    // wrap, sem sinal, sem lixo. Medido: antes, qualquer codigo fora de 100-599
+    // que sobrevivesse ao slice (ex. "099") virava 99 e o checkService
+    // classificava como DEGRADED por acidente certo pelo motivo errado;
+    // agora o proprio parse devolve 0 e o caller trata como resposta
+    // quebrada.
+    var code = parseIntBounded(rest.substring(0, 3), 0, 599)
+    if (code < 100) {
+        return 0
+    }
+    return code
 }
 
 void closeQuietly(Conn conn) {

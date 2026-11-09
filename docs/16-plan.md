@@ -562,6 +562,11 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   `frameInt` agora usa `parseIntBounded`; fora de `[0, Int.MAX]` devolve 0,
   que os chamadores já tratam como ausente. Prova:
   `tests/protocol_test.kf` (`frame-int`).
+* **Slice 2s — `parseStatusLine` sem wrap ✅.** Fecha a mesma família na
+  sonda de health do Agent: o código da linha de status passa por
+  `parseIntBounded` (teto 599) e fora de 100–599 vira 0, que o `checkService`
+  já trata como resposta quebrada (DEGRADED). Prova:
+  `tests/health_test.kf` (`health-unit` estendido).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task

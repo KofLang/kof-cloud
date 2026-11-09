@@ -67,6 +67,10 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   Edge, a lista fica vazia/parcial (ausência, não mentira). Não há pub/sub
   entre nós — é o slice 2 da Fase 16.
 * **Rate limiting é por processo.** Não é global entre nós.
+* **`parseStatusLine` também.** O código da linha de status da sonda de
+  health (`agent/Health.kf`) vai pelo mesmo `parseIntBounded` com teto 599;
+  fora de 100–599 é 0 (resposta quebrada → DEGRADED), nunca um código
+  inventado.
 * **Inteiros do protocolo também.** `frameInt` (campos numéricos de
   `HELLO`/`WELCOME`/`DATA`) usava `parseIntSafe`: medido, um `HELLO` com
   `v: 4294967297` fazia wrap para **1** e passava a checagem de versão, e um
