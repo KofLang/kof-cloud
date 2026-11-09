@@ -3,6 +3,7 @@ import kofcloud.cli.Commands
 import kofcloud.cli.Local
 import kofcloud.model.Exposure
 import kofcloud.model.Service
+import kofcloud.store.Store
 import kofcloud.util.Hosts
 import kofcloud.util.Text
 
@@ -143,6 +144,30 @@ test "text: bearerValue extrai o token do Authorization" {
     assert(bearerValue("") == "", "vazio vira vazio")
     assert(bearerValue("Bearer   abc123  ") == "abc123", "padding aparado")
     assert(bearerValue("Bearer ") == "", "so esquema vira vazio")
+}
+
+test "text: identificadores U da matriz sao unicos", "u-matrix" {
+    // Trava do docs/15-tests.md: cada numero U identifica exatamente uma
+    // linha da matriz (e o indice que liga cobertura a fase). Precedente:
+    // a linha do framing nasceu U51 igual a do login-error e so um olho
+    // humano pegou — duplicado quebra a invariante em silencio. Precedentes
+    // de trava em doc versionado: security-policy e postmortem-template.
+    // Caminho relativo ao repo: o runner usa a raiz como cwd.
+    var matrix = readTextOr("docs/15-tests.md", "")
+    assert(matrix.length > 0, "matriz existe e nao e vazia")
+    // Cada "| Unn |" conta uma linha; U com 3 digitos nao aparece hoje, e
+    // "| U1 |" nao casa "| U10 |" porque exige os espacos dos dois lados.
+    var i = 1
+    while (i <= 99) {
+        var marker = "| U" + intToString(i) + " |"
+        var first = matrix.indexOf(marker, 0)
+        if (first >= 0) {
+            assert(matrix.indexOf(marker, first + 1) < 0, "U" + intToString(i) + " duplicado na matriz")
+        }
+        i = i + 1
+    }
+    assert(matrix.indexOf("| U54 |") >= 0, "U54 (framing) presente")
+    assert(matrix.indexOf("| U51 |") >= 0, "U51 (login-error) presente")
 }
 
 test "text: tailLines devolve as ultimas linhas", "logs-tail" {

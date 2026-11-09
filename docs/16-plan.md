@@ -578,6 +578,12 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   `parseIntBounded` como defesa em profundidade. Trava em
   `tests/hosts_test.kf` (`parseIntSafe` aceita/recusa + os dois parsers com
   teto na mesma teste, para quem for adicionar um caller novo ver o padrão).
+* **Slice 2u — trava de unicidade dos identificadores U ✅.** A matriz de
+  `docs/15-tests.md` usa `| Unn |` como índice (liga cobertura de teste à
+  fase); um duplicado já aconteceu (framing nasceu U51 igual ao login-error
+  e só um olho humano pegou). `tests/hosts_test.kf` (`u-matrix`) trava: lê o
+  doc versionado e quebra se qualquer `| Unn |` aparecer duas vezes. Prova:
+  o teste passa verde e quebra com o duplicado reintroduzido (mutação).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task
