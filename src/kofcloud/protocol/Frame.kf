@@ -22,8 +22,14 @@ String frameField(Map<String, String> frame, String key) {
     return mapField(frame, key)
 }
 
+// Campo inteiro de um frame. Le com `parseIntBounded` (acumula em Long) em
+// vez de `parseIntSafe`, que faz wrap de 32 bits: medido, um HELLO com
+// `v: 4294967297` virava **1** e passava a checagem de versao, e um
+// `heartbeatMs: 4294968796` virava 1500 ms — valor forjado pelo fio aceito
+// como legitimo. Fora de [0, Int.MAX] = 0, que os chamadores ja tratam como
+// "ausente" (versao recusada, heartbeat no default).
 Int frameInt(Map<String, String> frame, String key) {
-    return parseIntSafe(mapField(frame, key), 0)
+    return parseIntBounded(mapField(frame, key), 0, 2147483647)
 }
 
 Bool frameBool(Map<String, String> frame, String key) {

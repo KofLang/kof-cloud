@@ -555,6 +555,13 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   API (emitir/rotacionar, conta e serviço) e os contadores `pending`/`count`.
   Prova: `tests/hosts_test.kf` (`logs-tail`, `ttl-local`) +
   `tests/e2e_authenticated_test.kf` (ttlHours com wrap → 400 KCF062).
+* **Slice 2r — `frameInt` sem wrap ✅.** O último caminho de `parseIntSafe`
+  no fio: medido, um `HELLO` com `v: 4294967297` virava **1** e passava a
+  checagem de versão (um cliente podia forjar compatibilidade), e um
+  `heartbeatMs: 4294968796` virava 1500 ms, encurtando o laço do Agent.
+  `frameInt` agora usa `parseIntBounded`; fora de `[0, Int.MAX]` devolve 0,
+  que os chamadores já tratam como ausente. Prova:
+  `tests/protocol_test.kf` (`frame-int`).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task

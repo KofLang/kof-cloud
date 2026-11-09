@@ -66,6 +66,34 @@ test "frame: encode tem terminador e decode volta" {
     assert(frameField(back, "d") == "aGk=", "payload")
 }
 
+
+test "frame: inteiro do fio nao sofre wrap de Int", "frame-int" {
+    // `parseIntSafe` acumula em 32 bits: um HELLO com `v: 4294967297` virava 1
+    // e passava a checagem de versao; um heartbeat forjado virava 1500 ms e
+    // encurtava o laco do Agent. Fora de [0, Int.MAX] = 0, que os chamadores
+    // ja tratam como "ausente".
+    var forged = newFrame("HELLO")
+    forged.put("v", "4294967297")
+    assert(frameInt(forged, "v") == 0, "versao forjada nao vira 1")
+    var hb = newFrame("WELCOME")
+    hb.put("heartbeatMs", "4294968796")
+    assert(frameInt(hb, "heartbeatMs") == 0, "heartbeat forjado nao vira 1500")
+    var big = newFrame("X")
+    big.put("n", "2147483648")
+    assert(frameInt(big, "n") == 0, "acima de Int.MAX")
+    var top = newFrame("X")
+    top.put("n", "2147483647")
+    assert(frameInt(top, "n") == 2147483647, "Int.MAX cabe")
+    var neg = newFrame("X")
+    neg.put("n", "-1")
+    assert(frameInt(neg, "n") == 0, "negativo = 0")
+    var missing = newFrame("X")
+    assert(frameInt(missing, "n") == 0, "ausente = 0")
+    var normal = newFrame("DATA")
+    normal.put("s", "7")
+    assert(frameInt(normal, "s") == 7, "stream id normal")
+}
+
 test "tunnel: hello carrega versao e identidade" {
     var frame = helloFrame("dev-1", "tok-1", "pub-1")
     assert(frameKind(frame) == "HELLO", "kind")

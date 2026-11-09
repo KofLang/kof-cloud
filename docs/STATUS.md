@@ -101,7 +101,7 @@ o run total imprime `54 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor na lista única (CLI) | `tests/value_flags_test.kf` | 2 |
 
-Total: 305 testes. Ver `15-tests.md` para a matriz.
+Total: 306 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

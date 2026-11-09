@@ -67,6 +67,12 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   Edge, a lista fica vazia/parcial (ausência, não mentira). Não há pub/sub
   entre nós — é o slice 2 da Fase 16.
 * **Rate limiting é por processo.** Não é global entre nós.
+* **Inteiros do protocolo também.** `frameInt` (campos numéricos de
+  `HELLO`/`WELCOME`/`DATA`) usava `parseIntSafe`: medido, um `HELLO` com
+  `v: 4294967297` fazia wrap para **1** e passava a checagem de versão, e um
+  `heartbeatMs` forjado virava 1500 ms. Agora lê pelo mesmo
+  `parseIntBounded`; fora de `[0, Int.MAX]` vira 0, que os chamadores já
+  tratam como "ausente".
 * **Inteiros de contagem/TTL passam por `parseIntBounded`.** `parseIntSafe`
   acumula em 32 bits: medido, `--tail 4294967396` virava **100** (o usuário
   pedia bilhões e recebia cem linhas, sem erro) e um `ttlHours` gigante virava
