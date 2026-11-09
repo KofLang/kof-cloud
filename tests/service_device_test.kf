@@ -1,0 +1,76 @@
+import kofcloud.cli.Commands
+import kofcloud.cli.Local
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.model.Device
+import kofcloud.model.Service
+import kofcloud.store.Store
+import testkit.Support
+
+// Origem do serviço no `service list` / `service status`.
+//
+// A conta pode ter vários dispositivos (limite default 5) e cada um serve os
+// próprios serviços. A lista mostrava nome/hostname/exposição/status e nada
+// sobre ONDE o serviço roda — responder "este site está no notebook ou no
+// servidor?" exigia cruzar `device list` com o `deviceId` de cada serviço.
+
+Device deviceFixture(String id, String name) {
+    return Device(id, "acc", name, "pk", "ACTIVE", 0L, 0L)
+}
+
+Service serviceFixture(String name, String deviceId) {
+    return Service("s-" + name, "acc", deviceId, name, "127.0.0.1", 8080, "http",
+                   name + ".mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "")
+}
+
+test "service list: rotulo do dispositivo resolve nome, cai no id e nunca some", "svcdevice-unit" {
+    var devices = listOf(deviceFixture("dev-1", "notebook"), deviceFixture("dev-2", "servidor"))
+
+    assert(deviceLabelFor(devices, "dev-1") == "notebook", "resolve nome")
+    assert(deviceLabelFor(devices, "dev-2") == "servidor", "outro device")
+    assert(deviceLabelFor(devices, "dev-apagado") == "dev-apagado", "device removido cai no id")
+    assert(deviceLabelFor(listOf<Device>(), "dev-1") == "dev-1", "sem lista, id")
+    assert(deviceLabelFor(devices, "") == "?", "sem deviceId nao vira vazio")
+
+    var line = serviceListLine(serviceFixture("site", "dev-2"), devices)
+    assert(line.indexOf("site") == 0, "comeca pelo nome")
+    assert(line.indexOf("site.mel.kofcloud.io") >= 0, "hostname")
+    assert(line.indexOf("PUBLIC") >= 0, "exposicao")
+    assert(line.indexOf("device: servidor") >= 0, "diz onde roda")
+}
+
+test "service list: fim a fim mostra o device certo para cada servico", "svcdevice" {
+    var controlPort = 20143
+    var registry = Registry("/tmp/kofcloud-svcd-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    var url = "http://127.0.0.1:" + intToString(controlPort)
+
+    var token = loginOrCreate(url, "mel", "segredo")
+    var first = registerDevice(url, token, "notebook", "pk1")
+    var second = registerDevice(url, token, "servidor", "pk2")
+
+    var siteBody = "{\"deviceId\":\"" + first + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    var apiBody = "{\"deviceId\":\"" + second + "\",\"name\":\"api\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"3000\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    requireOk(http.post(url + "/v1/services", siteBody, jsonHeader(token)))
+    requireOk(http.post(url + "/v1/services", apiBody, jsonHeader(token)))
+
+    var devices = fetchDevices(url, token)
+    assert(devices.size == 2, "dois dispositivos")
+    var services = fetchServices(url, token)
+    var siteLine = ""
+    var apiLine = ""
+    for (var service in services) {
+        var line = serviceListLine(service, devices)
+        if (service.name == "site") {
+            siteLine = line
+        }
+        if (service.name == "api") {
+            apiLine = line
+        }
+    }
+    assert(siteLine.indexOf("device: notebook") >= 0, "site no notebook: " + siteLine)
+    assert(apiLine.indexOf("device: servidor") >= 0, "api no servidor: " + apiLine)
+    assert(siteLine.indexOf("servidor") < 0, "nao troca os devices")
+}

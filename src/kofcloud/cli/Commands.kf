@@ -802,6 +802,28 @@ Int cmdUnpublish(List<String> args) {
     }
 }
 
+// Nome do dispositivo dono do servico, para as linhas do `service list` e
+// do `service status`. Com varios dispositivos por conta (limite default 5),
+// a lista sem o device nao responde "onde isto roda?" — era preciso cruzar
+// `device list` com o `deviceId` do servico. Puro: recebe a lista ja buscada;
+// id sem correspondencia (device removido) cai no proprio id, sem sumir.
+String deviceLabelFor(List<Device> devices, String deviceId) {
+    if (deviceId.length == 0) {
+        return "?"
+    }
+    for (var device in devices) {
+        if (device.id == deviceId) {
+            return device.name
+        }
+    }
+    return deviceId
+}
+
+// Linha do `service list`: nome, hostname, exposicao, status e o device.
+String serviceListLine(Service service, List<Device> devices) {
+    return service.name + "  https://" + service.hostname + "  " + service.exposure + "  " + service.status + "  device: " + deviceLabelFor(devices, service.deviceId)
+}
+
 Int cmdServiceList(List<String> args) {
     if (extraPositional(args, 0)) {
         println("uso: kof cloud service list")
@@ -818,8 +840,15 @@ Int cmdServiceList(List<String> args) {
             println("nenhum servico publicado")
             return 0
         }
+        // Devices so para rotular a origem; falha na consulta nao esconde a
+        // lista (o rotulo cai no id, que a API ja devolve).
+        var devices = listOf<Device>()
+        try {
+            devices = fetchDevices(session.controlUrl, session.token)
+        } catch (String e) {
+        }
         for (var service in services) {
-            println(service.name + "  https://" + service.hostname + "  " + service.exposure + "  " + service.status)
+            println(serviceListLine(service, devices))
         }
         return 0
     } catch (String e) {
@@ -846,6 +875,12 @@ Int cmdServiceStatus(List<String> args) {
             if (service.name == trimmed) {
                 println("Servico: " + service.name)
                 println("Host:    https://" + service.hostname)
+                try {
+                    var devices = fetchDevices(session.controlUrl, session.token)
+                    println("Device:  " + deviceLabelFor(devices, service.deviceId))
+                } catch (String innerDevice) {
+                    println("Device:  " + deviceLabelFor(listOf<Device>(), service.deviceId))
+                }
                 println("Local:   " + service.localAddress + ":" + intToString(service.localPort))
                 println("Exposicao: " + service.exposure)
                 println("Status:  " + service.status)

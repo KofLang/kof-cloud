@@ -29,6 +29,11 @@ kof cloud publish site --port 8080
   → hostname: https://site.mel.kofcloud.io
 ```
 
+`kof cloud service list` e `service status <nome>` mostram em **qual
+dispositivo** o serviço roda (`device: <nome>`, ou o id quando o dispositivo
+não está mais na conta). Com vários dispositivos por conta, a lista sem isso
+não responde "onde isto roda?" sem cruzar `device list`.
+
 `--device <nome|id>` publica em nome de outro dispositivo da conta
 (padrão: o dispositivo do `login`). Nome resolve pelo `device list`;
 id passa direto; nome inexistente falha local ("dispositivo nao
