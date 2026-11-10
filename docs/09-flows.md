@@ -104,8 +104,10 @@ alternativa): só o código obrigava o operador a reproduzir o comando à mão.
 
  1. usuário: kof cloud deploy [--file kofcloud.json] [--check] [--plan]
     com `--plan`: só mostra o diff (`+ novo`, `~ atualiza`, `= igual`,
-    `- fora do manifesto`, com `(build)`/`(artifact)` em `+`/`~`/`=` quando o
-    serviço declara cada um) via `diffDeployment` pura — nada aplicado, nada executado
+    `! conflito` — nome já usado noutro dispositivo, que o deploy recusaria
+    com 409; `- fora do manifesto`, só do dispositivo atual), com
+    `(build)`/`(artifact)` em `+`/`~`/`=`/`!` quando o
+    serviço declara cada um) via `diffDeploymentFor` pura — nada aplicado, nada executado
  2. carrega identity + token + manifesto (parse com erro posicional)
  3. para cada serviço: roda `build` (se declarado; falhou = não publica
     esse serviço), confere `artifact` (se declarado e ausente = não publica

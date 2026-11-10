@@ -176,7 +176,14 @@ medido. `verifyDeploymentFor` recebe o `deviceId` esperado e acusa
 "publicado no dispositivo X, não neste"; `cmdDeploy` e `doctor` passam o
 device da sessão; a sobrecarga antiga (sem escopo) fica para chamadores sem
 sessão. Prova: `tests/deploy_test.kf` (`deploy-check` estendido: sem escopo
-aprova, com escopo acusa). **Fatia: artefato tem de ser arquivo
+aprova, com escopo acusa). **Fatia: `--plan` também tem escopo.** Medido:
+serviço do manifesto publicado noutro device aparecia como "= igual" (o
+deploy falharia com 409) e serviço de outro device aparecia como "fora do
+manifesto; use down --prune" (o prune nunca o alcança). Agora
+`diffDeploymentFor` marca `! conflito` para o nome tomado noutro device e
+omite extras de outro device; `deploy --plan` passa o device da sessão.
+Prova: `tests/deploy_test.kf` (`deploy-plan` estendido).
+**Fatia: artefato tem de ser arquivo
 legível** (`artifactProblem`): `File().exists()` aceita diretório, então
 `"artifact": "dist"` passava a checagem e o deploy publicava um serviço cujo
 "artefato" era a pasta. Agora exige conteúdo legível (`readText() != null` —

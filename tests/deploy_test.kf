@@ -269,6 +269,33 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     livePolicy.add(Service("id-site", "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "GET", "/api/*"))
     var plan7 = diffDeployment(livePolicy, wanted6)
     assert(plan7.get(0) == "= site (igual)", "politica igual segue igual")
+
+    // Escopo por device (o manifesto descreve a maquina LOCAL): publicado
+    // NOUTRO device nao e "igual" (o publish responderia 409) e nao e
+    // "extra" (o down --prune nunca toca outro device). Medido: sem escopo
+    // os dois casos mentiam.
+    var liveDevices = listOf<Service>()
+    liveDevices.add(Service("id-b", "acc", "devB", "remoto", "127.0.0.1", 7000, "http", "remoto.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", ""))
+    var wantedDevices = parseManifest("{\"services\":[{\"name\":\"remoto\",\"port\":7000}]}")
+    // Sem escopo: igual (comportamento legado, ainda usado por chamadores sem sessao).
+    assert(diffDeployment(liveDevices, wantedDevices).get(0).startsWith("= remoto"), "sem escopo: igual")
+    // Com escopo: conflito explicito, nunca "+":
+    var scopedPlan = diffDeploymentFor(liveDevices, wantedDevices, "devA")
+    assert(scopedPlan.size == 1, "com escopo: uma linha")
+    assert(scopedPlan.get(0).startsWith("! remoto"), "com escopo: conflito, nao igual")
+    assert(scopedPlan.get(0).indexOf("devB") >= 0, "nomeia o device onde existe")
+    // Extra de outro device nao aparece (o prune nao o alcanca).
+    var wantedEmpty = parseManifest("{\"services\":[{\"name\":\"meu\",\"port\":9000}]}")
+    var legacyPlan = diffDeployment(listOf<Service>(liveDevices.get(0)), wantedEmpty)
+    assert(legacyPlan.size == 2, "sem escopo: novo + extra")
+    var scopedEmpty = diffDeploymentFor(listOf<Service>(liveDevices.get(0)), wantedEmpty, "devA")
+    assert(scopedEmpty.size == 1, "com escopo: so o novo")
+    assert(scopedEmpty.get(0).startsWith("+ meu"), "com escopo: nada de extra de outro device")
+    // Servico DESTE device fora do manifesto continua aparecendo como extra.
+    var mine = Service("id-a", "acc", "devA", "orfa", "127.0.0.1", 9100, "http", "orfa.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "")
+    var scopedMixed = diffDeploymentFor(listOf<Service>(mine), wantedEmpty, "devA")
+    assert(scopedMixed.size == 2, "novo + orfao do proprio device")
+    assert(scopedMixed.get(1).startsWith("- orfa"), "orfao do proprio device aparece")
 }
 
 test "deploy: build opcional no manifesto executa antes do publish", "deploy-build" {

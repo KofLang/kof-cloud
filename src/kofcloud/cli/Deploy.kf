@@ -145,25 +145,41 @@ Bool checkLocalServiceFor(String address, Int port, String protocol) {
 
 // Diff manifesto x publicado, sem aplicar nada (para `deploy --plan`).
 // Pura: recebe as duas listas e devolve linhas legiveis ("+ site" novo,
-// "~ site" muda porta/address/exposure, "= site" igual). `live` deve vir
-// filtrado pelo chamador (conta atual; device atual se quiser escopo).
-// Ordem: manifesto primeiro (o que vai acontecer), depois extras.
+// "~ site" muda porta/address/exposure, "= site" igual, "! site" nome
+// tomado noutro device). Ordem: manifesto primeiro (o que vai acontecer),
+// depois extras.
 // TODA linha de servico declarado com build carrega " (build)" e com
 // artifact carrega " (artifact)" — inclusive "=": o deploy executa o build
 // e confere o artifact antes de cada publish (mesmo o idempotente), entao
 // "igual" nao significa "nada vai acontecer". O operador ve ANTES de
 // aplicar que um comando local sera executado e um arquivo sera conferido
 // (o --plan nunca executa nada, so sinaliza).
+//
+// `expectedDeviceId` (opcional, "" = sem escopo): o manifesto descreve a
+// maquina LOCAL. Servico homonimo publicado NOUTRO device nao e "igual"
+// (o publish responderia 409) — vira "! nome (conflito: existe no
+// dispositivo X)" — e um servico de outro device nao e "fora do manifesto"
+// (o `down --prune` nunca toca outro device): nao aparece. Medido nos dois
+// casos.
 List<String> diffDeployment(List<Service> live, List<ManifestService> wanted) {
+    return diffDeploymentFor(live, wanted, "")
+}
+
+List<String> diffDeploymentFor(List<Service> live, List<ManifestService> wanted, String expectedDeviceId) {
     var out = listOf<String>()
     for (var item in wanted) {
         var found = false
         var same = false
+        var conflictedOn = ""
         for (var service in live) {
             if (service.name == item.name) {
-                found = true
-                if (service.localPort == item.port && service.localAddress == item.address && service.exposure == item.exposure && service.protocol == item.protocol && service.allowMethods == item.allowMethods && service.allowPaths == item.allowPaths) {
-                    same = true
+                if (expectedDeviceId.length > 0 && service.deviceId != expectedDeviceId) {
+                    conflictedOn = service.deviceId
+                } else {
+                    found = true
+                    if (service.localPort == item.port && service.localAddress == item.address && service.exposure == item.exposure && service.protocol == item.protocol && service.allowMethods == item.allowMethods && service.allowPaths == item.allowPaths) {
+                        same = true
+                    }
                 }
             }
         }
@@ -174,7 +190,9 @@ List<String> diffDeployment(List<Service> live, List<ManifestService> wanted) {
         if (item.artifact.trim().length > 0) {
             buildMark = buildMark + " (artifact)"
         }
-        if (found == false) {
+        if (found == false && conflictedOn.length > 0) {
+            out.add("! " + item.name + buildMark + " (conflito: nome ja usado no dispositivo " + conflictedOn + ")")
+        } else if (found == false) {
             out.add("+ " + item.name + buildMark + " (novo: " + item.address + ":" + intToString(item.port) + " " + item.exposure + ")")
         } else if (same) {
             out.add("= " + item.name + buildMark + " (igual)")
@@ -183,6 +201,12 @@ List<String> diffDeployment(List<Service> live, List<ManifestService> wanted) {
         }
     }
     for (var service in live) {
+        // Extra so faz sentido DESTE device: o `down --prune` nunca toca
+        // servico de outro device, entao listar como "fora do manifesto"
+        // prometia uma remocao que nao acontece.
+        if (expectedDeviceId.length > 0 && service.deviceId != expectedDeviceId) {
+            continue
+        }
         var declared = false
         for (var item in wanted) {
             if (service.name == item.name) {
@@ -680,7 +704,7 @@ Int cmdDeploy(List<String> args) {
     if (hasFlag(args, "--plan")) {
         try {
             var live = fetchServices(session.controlUrl, session.token)
-            var plan = diffDeployment(live, services)
+            var plan = diffDeploymentFor(live, services, identity.deviceId)
             if (plan.size == 0) {
                 println("plan: nada a fazer (manifesto vazio não chega aqui — parse recusaria)")
             }
