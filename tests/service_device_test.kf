@@ -74,3 +74,20 @@ test "service list: fim a fim mostra o device certo para cada servico", "svcdevi
     assert(apiLine.indexOf("device: servidor") >= 0, "api no servidor: " + apiLine)
     assert(siteLine.indexOf("servidor") < 0, "nao troca os devices")
 }
+
+test "status: lista de servicos usa a mesma linha do service list", "svcdevice-unit" {
+    // `kof cloud status` imprimia nome/hostname/status sem o device — a
+    // inconsistencia com o `service list` fazia o mesmo servico aparecer de
+    // duas formas, uma sem dizer onde roda. Agora os dois usam
+    // `serviceListLine` (mesma fonte da linha).
+    var devices = listOf(deviceFixture("dev-1", "notebook"), deviceFixture("dev-2", "servidor"))
+    var line = serviceListLine(serviceFixture("site", "dev-1"), devices)
+    // A linha do status vem com dois espacos de recuo (prefixo "  "), mas o
+    // conteudo e identico ao do service list.
+    assert(("  " + line).indexOf("site") >= 0, "nome")
+    assert(("  " + line).indexOf("https://site.mel.kofcloud.io") >= 0, "hostname")
+    assert(("  " + line).indexOf("device: notebook") >= 0, "device incluido")
+    // Sem a lista de devices, o rotulo cai no id (nunca some).
+    var fallback = serviceListLine(serviceFixture("site", "dev-9"), listOf<Device>())
+    assert(fallback.indexOf("device: dev-9") >= 0, "id no rotulo")
+}

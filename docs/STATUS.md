@@ -99,11 +99,11 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | teto de conexões públicas (F4) | `tests/conn_limit_test.kf` | 2 |
 | enquadramento HTTP nos dois sentidos (F10/F14) | `tests/framing_test.kf` | 14 |
 | presença no `device list` (F4) | `tests/device_presence_test.kf` | 2 |
-| origem do serviço na CLI (F4) | `tests/service_device_test.kf` | 2 |
+| origem do serviço na CLI (F4) | `tests/service_device_test.kf` | 3 |
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor na lista única e booleanas sem duplicação (CLI) | `tests/value_flags_test.kf` | 3 |
 
-Total: 320 testes. Ver `15-tests.md` para a matriz.
+Total: 321 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

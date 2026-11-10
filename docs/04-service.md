@@ -29,7 +29,7 @@ kof cloud publish site --port 8080
   → hostname: https://site.mel.kofcloud.io
 ```
 
-`kof cloud service list` e `service status <nome>` mostram em **qual
+`kof cloud status`, `service list` e `service status <nome>` mostram em **qual
 dispositivo** o serviço roda (`device: <nome>`, ou o id quando o dispositivo
 não está mais na conta). Com vários dispositivos por conta, a lista sem isso
 não responde "onde isto roda?" sem cruzar `device list`.

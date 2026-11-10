@@ -484,8 +484,16 @@ Int cmdStatus(List<String> args) {
     try {
         var services = fetchServices(session.controlUrl, session.token)
         println("Servicos:     " + intToString(services.size))
+        // Mesma linha do `service list` (device incluido): operador ve onde
+        // cada servico roda sem cruzar comandos. Falha ao buscar devices nao
+        // esconde a lista (o rotulo cai no id).
+        var devices = listOf<Device>()
+        try {
+            devices = fetchDevices(session.controlUrl, session.token)
+        } catch (String e) {
+        }
         for (var service in services) {
-            println("  " + service.name + "  ->  https://" + service.hostname + "  [" + service.status + "]")
+            println("  " + serviceListLine(service, devices))
         }
     } catch (String e) {
         println("Servicos:     indisponivel (" + e + ")")
