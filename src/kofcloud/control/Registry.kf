@@ -1618,7 +1618,13 @@ class Registry {
             return errServiceNotYours()
         }
         // O dono reporta health, mas nao administra suspensao por aqui: so
-        // `unsuspendService` libera (mesma regra do health do Agent).
+        // `unsuspendService` libera (mesma regra do health do Agent). Status
+        // fora do vocabulario e recusado na entrada (o handler devolve 400);
+        // aqui a checagem repete como defesa em profundidade para chamadores
+        // diretos (nao ha caminho que grave lixo).
+        if (statusIsKnown(status) == false || statusIsSuspended(status)) {
+            return errInvalidStatus()
+        }
         if (statusIsSuspended(service.status)) {
             return ""
         }

@@ -1,0 +1,87 @@
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.model.Errors
+import kofcloud.model.Service
+import kofcloud.store.Store
+import testkit.Support
+
+// Vocabulario fechado do health reportado (Fase 5).
+//
+// `POST /v1/services/status` gravava QUALQUER string: medido, `status:
+// "BANANA"` virava 200 e o valor ficava no estado — um status inventado
+// quebrava a leitura do operador (`statusIsRoutable` falso, mas nao era
+// OFFLINE nem SUSPENDED, entao nenhuma regra cobria o caso). Agora o
+// vocabulario e fechado (`statusIsKnown`) e SUSPENDED nunca e reportavel
+// por health (suspender e acao do operador).
+
+String statusProbePath(String name) {
+    return "/tmp/kofcloud-strep-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+Service statusProbeService(String id) {
+    return Service(id, "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "")
+}
+
+test "status report: vocabulario fechado e fonte unica", "statusreport-unit" {
+    // Os validos (SUSPENDED incluido no vocabulario, mas nao reportavel).
+    assert(statusIsKnown("ONLINE") && statusIsKnown("OFFLINE"), "basicos")
+    assert(statusIsKnown("DEGRADED") && statusIsKnown("UNKNOWN"), "degradado/desconhecido")
+    assert(statusIsKnown("SUSPENDED"), "suspenso existe no vocabulario")
+    // Inventados recusam.
+    assert(statusIsKnown("BANANA") == false, "inventado recusa")
+    assert(statusIsKnown("online") == false, "caixa importa (a API compara exato)")
+    assert(statusIsKnown("") == false, "vazio recusa")
+
+    var code = errInvalidStatus()
+    assert(code.indexOf("KCF048") >= 0, "KCF048")
+    assert(errHint(code).indexOf("SUSPENDED") >= 0, "Hint explica a regra do SUSPENDED")
+
+    // O registry tambem recusa (defesa em profundidade para chamador direto).
+    var registry = Registry(statusProbePath("unit"))
+    registry.services.add(statusProbeService("svc"))
+    assert(registry.reportServiceStatus("acc", "svc", "BANANA").indexOf("KCF048") >= 0, "registry recusa inventado")
+    assert(registry.reportServiceStatus("acc", "svc", "SUSPENDED").indexOf("KCF048") >= 0, "SUSPENDED nao e reportavel")
+    // O servico ficou como estava.
+    var kept = registry.serviceById("svc")
+    assert(kept != null, "servico existe")
+    if (kept != null) {
+        assert(kept.status == "UNKNOWN", "nada foi gravado")
+    }
+}
+
+test "status report: validos gravam, invalido vira 400 KCF048 sem gravar", "statusreport" {
+    var controlPort = 20191
+    var registry = Registry(statusProbePath("http"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var dev = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(dev)), "deviceId")
+    var pub = httpPostJson(controlPort, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", token)
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(pub)), "id")
+
+    // Validos: 200 e gravados.
+    for (var valid in listOf("ONLINE", "OFFLINE", "DEGRADED", "UNKNOWN")) {
+        var r = httpPostJson(controlPort, "/v1/services/status", "{\"serviceId\":\"" + serviceId + "\",\"status\":\"" + valid + "\"}", token)
+        assert(statusOf(r) == 200, valid + " -> 200")
+    }
+    var listed = bodyOf(httpGetToken(controlPort, "/v1/services", token))
+    assert(listed.indexOf("\"status\":\"UNKNOWN\"") >= 0, "ultimo valido gravado")
+
+    // Invalidos: 400 KCF048 e nada gravado.
+    for (var invalid in listOf("BANANA", "online", "", "SUSPENDED")) {
+        var r = httpPostJson(controlPort, "/v1/services/status", "{\"serviceId\":\"" + serviceId + "\",\"status\":\"" + invalid + "\"}", token)
+        assert(statusOf(r) == 400, "'" + invalid + "' -> 400")
+        assert(bodyOf(r).indexOf("KCF048") >= 0, "KCF048 no corpo")
+    }
+    var after = bodyOf(httpGetToken(controlPort, "/v1/services", token))
+    assert(after.indexOf("BANANA") < 0, "lixo nao entrou no estado")
+    assert(after.indexOf("\"status\":\"UNKNOWN\"") >= 0, "status preservado")
+
+    // Sem token segue 401 (a validacao nao substitui a autenticacao).
+    var noAuth = httpPostJson(controlPort, "/v1/services/status", "{\"serviceId\":\"" + serviceId + "\",\"status\":\"ONLINE\"}", "")
+    assert(statusOf(noAuth) == 401, "401 sem token")
+}

@@ -41,7 +41,7 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/unfreeze` | conta | `{target,id}` → `{frozen:0,restored}` (alheio/inexistente → 404 `KCF128` opaco; restaura exatamente o status anterior) |
 | `POST` | `/v1/incidents` | conta | lista incidentes da conta + globais (resolve com `{resolveId}`; alheio → 404 `KCF125` opaco; `all:true` = só globais) |
 | `GET` | `/v1/audit` | conta | últimos eventos da conta (anel de 100, só metadados) |
-| `POST` | `/v1/services/status` | dispositivo | `{serviceId,status}` (health reportado pelo Agent) |
+| `POST` | `/v1/services/status` | conta | `{serviceId,status}` (health reportado pelo Agent); status fora de `ONLINE`/`OFFLINE`/`DEGRADED`/`UNKNOWN` → `400 KCF048` (e `SUSPENDED` nunca é reportável: suspender é ação do operador) |
 | `POST` | `/v1/heartbeat` | dispositivo | `{deviceId}` → `{ok:true, serverTime}` |
 | `POST` | `/v1/connect` | conta | `{deviceId}` → `{edgeHost,edgePort,heartbeatMs,services,edges}` (todos os inteiros e listas viajam como **string JSON**, porque o Agent decodifica `Map<String,String>`; `edges` é a lista de candidatos `host:porta` para o ranking) |
 | `GET` | `/v1/presence` | conta | devices DA CONTA com túnel vivo neste Edge → `["<deviceId>", ...]` (vazio = offline, não erro; 401 sem token; nada de terceiros vaza) |

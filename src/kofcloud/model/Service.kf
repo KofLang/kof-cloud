@@ -50,3 +50,12 @@ Bool statusIsSuspended(String status) {
 Bool statusIsRoutable(String status) {
     return status == statusOnline() || status == statusDegraded() || status == statusUnknown()
 }
+
+// Vocabulario fechado de status. Fonte unica dos construtores acima: o health
+// reportado pelo Agent e a API de status aceitam SO estes valores. Antes,
+// `POST /v1/services/status` gravava qualquer string (medido: "BANANA" virava
+// 200 e ficava no estado), e um status inventado quebrava a leitura do
+// operador (`statusIsRoutable` falso, mas nao `OFFLINE` nem `SUSPENDED`).
+Bool statusIsKnown(String status) {
+    return status == statusOnline() || status == statusOffline() || status == statusDegraded() || status == statusUnknown() || status == statusSuspended()
+}

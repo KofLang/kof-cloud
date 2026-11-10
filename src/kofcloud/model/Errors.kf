@@ -104,6 +104,12 @@ String errInvalidAddress() {
     return "KCF047: localAddress must be loopback (127.0.0.1, localhost ou ::1)"
 }
 
+// Status de health fora do vocabulario fechado (ONLINE/OFFLINE/DEGRADED/
+// UNKNOWN/SUSPENDED). SUSPENDED so via suspend/unsuspend, nunca reportado.
+String errInvalidStatus() {
+    return "KCF048: invalid service status"
+}
+
 // ---- credenciais de servico ----
 
 String errServiceTokenForbidden() {
@@ -355,6 +361,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF046") >= 0) {
         return "O tunel do MVP so fala HTTP — revise o manifesto/API (protocol tem que ser http)."
+    }
+    if (raw.indexOf("KCF048") >= 0) {
+        return "Status invalido — use ONLINE, OFFLINE, DEGRADED ou UNKNOWN (SUSPENDED so via suspend/unsuspend)."
     }
     if (raw.indexOf("KCF047") >= 0) {
         return "Endereco local invalido — o Agent so conecta em loopback (127.0.0.1, localhost ou ::1)."

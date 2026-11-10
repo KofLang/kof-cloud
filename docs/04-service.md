@@ -105,6 +105,11 @@ de saúde). Resultado:
 | `DEGRADED` | conecta mas responde ≥ 500 (ou status inválido), ou não responde dentro do prazo |
 | `UNKNOWN` | ainda não verificado |
 
+O vocabulário é **fechado** (`statusIsKnown`): a API de health recusa
+qualquer outro valor com `400 KCF048` em vez de gravá-lo (antes `BANANA`
+virava `200` e ficava no estado). `SUSPENDED` existe no vocabulário mas
+**não é reportável** — suspender é ação do operador (`suspend`/`unsuspend`).
+
 Antes o check era só um connect TCP: um serviço que aceitava a conexão e
 devolvia `500` — ou nunca respondia — ficava `ONLINE` para sempre, e
 `DEGRADED` nunca era emitido. O prazo usa o único mecanismo disponível no

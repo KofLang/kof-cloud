@@ -979,6 +979,12 @@ HttpResult handleReportStatus(Registry registry, String? authHeader, String body
     var body = decodeBody(bodyText)
     var serviceId = mapField(body, "serviceId")
     var status = mapField(body, "status")
+    // Vocabulario fechado ANTES do owner-gate: um status inventado era
+    // gravado como veio (medido: "BANANA" -> 200). SUSPENDED nao e reportavel
+    // por health — suspender e acao do operador (`suspend`/`unsuspend`).
+    if (statusIsKnown(status) == false || statusIsSuspended(status)) {
+        return HttpResult(400, errorJson(errInvalidStatus()))
+    }
     // Owner-gate: so a conta dona altera o status. Inexistente e alheio
     // respondem o mesmo 404 opaco.
     var failure = registry.reportServiceStatus(account.id, serviceId, status)
