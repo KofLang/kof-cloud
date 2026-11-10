@@ -1986,7 +1986,7 @@ Int cmdIncidents(List<String> args) {
         println(notLoggedInLine())
         return 1
     }
-    if (extraPositional(args, 0)) {
+    if (extraPositional(args, 0) || flagDuplicated(args, "--all")) {
         println("uso: kof cloud incidents [--all] [--resolve <id>]")
         return 1
     }
@@ -2028,7 +2028,7 @@ Int cmdIncidents(List<String> args) {
 // o arquivo validado para o destino (mesmo backend de arquivo; outros
 // backends virão com a interface de store da Fase 16).
 Int cmdMigrate(List<String> args) {
-    if (extraPositional(args, 0) || flagMissingValue(args, "--from") || flagDuplicated(args, "--from") || flagMissingValue(args, "--to") || flagDuplicated(args, "--to")) {
+    if (extraPositional(args, 0) || flagMissingValue(args, "--from") || flagDuplicated(args, "--from") || flagMissingValue(args, "--to") || flagDuplicated(args, "--to") || flagDuplicated(args, "--dry-run")) {
         println("uso: kof cloud migrate --from <estado.json> [--to <destino.json>] [--dry-run]")
         return 1
     }
@@ -2127,6 +2127,12 @@ Int cmdStateBackup(List<String> args) {
 }
 
 Int cmdLogs(List<String> args) {
+    // --runtime repetido seguia normal: `hasFlag` leria o primeiro e o
+    // comando rodaria como se fosse um so (mesma regra do --tail abaixo).
+    if (flagDuplicated(args, "--runtime")) {
+        println(usoLogsLine())
+        return 1
+    }
     var runtime = hasFlag(args, "--runtime")
     var path = logPath()
     if (runtime) {
@@ -2375,8 +2381,8 @@ Int cmdServe(List<String> args) {
         println(usoServeLine())
         return 1
     }
-    if (flagDuplicated(args, "--control-port") || flagDuplicated(args, "--tunnel-port") || flagDuplicated(args, "--http-port") || flagDuplicated(args, "--state") || flagDuplicated(args, "--waf") || flagDuplicated(args, "--tls-cert") || flagDuplicated(args, "--tls-key")) {
-        println("flag repetida — informe uma so vez: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]")
+    if (flagDuplicated(args, "--control-port") || flagDuplicated(args, "--tunnel-port") || flagDuplicated(args, "--http-port") || flagDuplicated(args, "--state") || flagDuplicated(args, "--waf") || flagDuplicated(args, "--tls-cert") || flagDuplicated(args, "--tls-key") || flagDuplicated(args, "--panel") || flagDuplicated(args, "--status-page")) {
+        println("flag repetida — informe uma so vez: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]")
         return 1
     }
     var controlPort = portFlagValue(flagValue(args, "--control-port"), defaultControlPort())

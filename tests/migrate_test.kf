@@ -54,6 +54,7 @@ test "migrate: dry-run compara sem escrever; copia de verdade escreve", "migrate
     // dry-run sem destino: so valida.
     var onlyRead = cmdMigrate(listOf("--from", source, "--dry-run"))
     assert(onlyRead == 0, "dry-run sem --to ok")
+    assert(cmdMigrate(listOf("--from", source, "--dry-run", "--dry-run")) == 1, "dry-run repetido barra")
     // dry-run com destino inexistente: compara e NAO cria o destino.
     var dry = cmdMigrate(listOf("--from", source, "--to", target, "--dry-run"))
     assert(dry == 0, "dry-run ok")

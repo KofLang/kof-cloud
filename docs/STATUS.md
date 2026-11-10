@@ -101,9 +101,9 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | presença no `device list` (F4) | `tests/device_presence_test.kf` | 2 |
 | origem do serviço na CLI (F4) | `tests/service_device_test.kf` | 2 |
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
-| flags com valor na lista única (CLI) | `tests/value_flags_test.kf` | 2 |
+| flags com valor na lista única e booleanas sem duplicação (CLI) | `tests/value_flags_test.kf` | 3 |
 
-Total: 317 testes. Ver `15-tests.md` para a matriz.
+Total: 318 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

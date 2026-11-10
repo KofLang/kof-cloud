@@ -407,6 +407,19 @@ test "text: flagDuplicated barra repeticao silenciosa", "flag-dup" {
     assert(flagDuplicated(listOf("--ttl", "24", "--ttl", "48"), "--ttl") == true, "ttl duplicado barra")
     assert(flagDuplicated(listOf("--tail", "10", "--tail", "20"), "--tail") == true, "tail duplicado barra")
     assert(flagDuplicated(listOf("--service", "a", "--service", "b"), "--service") == true, "service duplicado barra")
+    // Booleanas repetidas tambem barram: `hasFlag` leria a primeira em
+    // silencio (medido: `down --prune --prune` rodava normal). Cobrem as
+    // guardas de deploy/down/incidents/migrate/logs/serve (precedente:
+    // --all/--prune do rotate e --sbom/--verify do audit).
+    assert(flagDuplicated(listOf("--check", "--check"), "--check") == true, "check duplicado barra")
+    assert(flagDuplicated(listOf("--plan", "--plan"), "--plan") == true, "plan duplicado barra")
+    assert(flagDuplicated(listOf("--prune"), "--prune") == false, "prune unico ok")
+    assert(flagDuplicated(listOf("--prune", "--prune"), "--prune") == true, "prune duplicado barra")
+    assert(flagDuplicated(listOf("--all", "--all"), "--all") == true, "all duplicado barra")
+    assert(flagDuplicated(listOf("--dry-run", "--dry-run"), "--dry-run") == true, "dry-run duplicado barra")
+    assert(flagDuplicated(listOf("--runtime", "--runtime"), "--runtime") == true, "runtime duplicado barra")
+    assert(flagDuplicated(listOf("--panel", "--panel"), "--panel") == true, "panel duplicado barra")
+    assert(flagDuplicated(listOf("--status-page", "--status-page"), "--status-page") == true, "status-page duplicado barra")
 }
 
 test "text: extraPositional barra posicional sobrando", "extra-positional" {

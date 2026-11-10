@@ -1,7 +1,9 @@
 import kofcloud.cli.Commands
+import kofcloud.cli.Deploy
 import kofcloud.cli.Local
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
+import kofcloud.protocol.Bytes
 import kofcloud.store.Store
 import testkit.Support
 
@@ -94,4 +96,144 @@ test "flags: incidents --resolve chega ao control plane (antes barrava no uso)",
     } else {
         writeTextTo(sessionPath(), priorSession)
     }
+}
+
+// Percorre os fontes de comando (`Int cmd*`) e devolve `<cmd>:<flag>` para
+// cada `hasFlag(args, ...)` sem `flagDuplicated(args, ...)` na mesma funcao.
+// Garante que nenhuma booleana passe despercebida agora nem no futuro.
+List<String> booleanFlagsWithoutDupGuard() {
+    var missing = listOf<String>()
+    var files = listOf("src/kofcloud/cli/Commands.kf", "src/kofcloud/cli/Deploy.kf", "src/kofcloud/cli/Doctor.kf", "src/kofcloud/cli/Daemon.kf")
+    for (var file in files) {
+        var raw = File(file).readText()
+        var text = ""
+        if (raw != null) {
+            text = raw
+        }
+        var cursor = text.indexOf("\nInt cmd")
+        while (cursor >= 0) {
+            var next = text.indexOf("\nInt cmd", cursor + 8)
+            var block = ""
+            if (next >= 0) {
+                block = text.substring(cursor + 1, next)
+            } else {
+                block = text.substring(cursor + 1)
+            }
+            var paren = block.indexOf("(")
+            var cmdName = "cmd"
+            if (paren > 4) {
+                cmdName = block.substring(4, paren)
+            }
+            var scan = block.indexOf("hasFlag(args, \"")
+            while (scan >= 0) {
+                var start = scan + 15
+                var end = block.indexOf("\"", start)
+                if (end > start) {
+                    var flag = block.substring(start, end)
+                    var needle = "flagDuplicated(args, \"" + flag + "\")"
+                    if (block.indexOf(needle) < 0) {
+                        missing.add(cmdName + ":" + flag)
+                    }
+                }
+                scan = block.indexOf("hasFlag(args, \"", end)
+            }
+            cursor = next
+        }
+    }
+    return missing
+}
+
+Int countHasFlagInCli() {
+    var total = 0
+    var files = listOf("src/kofcloud/cli/Commands.kf", "src/kofcloud/cli/Deploy.kf", "src/kofcloud/cli/Doctor.kf", "src/kofcloud/cli/Daemon.kf")
+    for (var file in files) {
+        var raw = File(file).readText()
+        var text = ""
+        if (raw != null) {
+            text = raw
+        }
+        var cursor = text.indexOf("hasFlag(args, \"")
+        while (cursor >= 0) {
+            total = total + 1
+            cursor = text.indexOf("hasFlag(args, \"", cursor + 15)
+        }
+    }
+    return total
+}
+
+test "flags: booleana repetida barra antes de qualquer efeito", "boolean-dup" {
+    // 1) Trava derivada dos fontes: toda `hasFlag(args, ...)` tem
+    // `flagDuplicated(args, ...)` no mesmo comando.
+    var missing = booleanFlagsWithoutDupGuard()
+    assert(missing.size == 0, "booleana sem flagDuplicated: " + intToString(missing.size))
+    var total = countHasFlagInCli()
+    assert(total >= 12, "pelo menos 12 leituras de hasFlag nos comandos: " + intToString(total))
+
+    // 2) Comandos locais sem sessao nem rede: unico passa, repetida barra.
+    assert(cmdLogs(listOf("--runtime")) == 0, "--runtime unico passa")
+    assert(cmdLogs(listOf("--runtime", "--runtime")) == 1, "--runtime repetido barra")
+    assert(cmdServe(listOf("--panel", "--panel")) == 1, "--panel repetido barra")
+    assert(cmdServe(listOf("--status-page", "--status-page")) == 1, "--status-page repetido barra")
+
+    // 3) Comandos com control plane (incidents --all, deploy --plan/--check,
+    // down --prune): sem a guarda, cada repeticao devolveria 0 normalmente.
+    var port = 20104
+    var localPort = 20105
+    var dbPath = "/tmp/kofcloud-bf-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(dbPath)
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control no ar")
+
+    var listener = net.listen(localPort)
+    var svc = spawn {
+        var open = true
+        while (open) {
+            try {
+                var peer = listener.accept()
+                var worker = spawn {
+                    peer.receive(4096)
+                    peer.send(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"))
+                    peer.close()
+                }
+            } catch (String e) {
+                open = false
+            }
+        }
+    }
+    assert(waitForPort(localPort, 60), "servico local no ar")
+
+    var url = "http://127.0.0.1:" + intToString(port)
+    var token = loginOrCreate(url, "mel", "segredo")
+    var devResp = httpPostJson(port, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(devResp)), "deviceId")
+    var mf = "/tmp/kofcloud-bf-mf-" + crypto.randomHex(4) + ".json"
+    writeTextTo(mf, "{\"services\":[{\"name\":\"site\",\"port\":" + intToString(localPort) + "}]}")
+
+    var priorSession = readTextOr(sessionPath(), "")
+    var priorIdentity = readTextOr(identityPath(), "")
+    saveSession(LocalSession("", "mel", token, url))
+    saveIdentity(LocalIdentity(deviceId, "", "mel", "nb", "", "pk"))
+
+    assert(cmdIncidents(listOf("--all")) == 0, "--all unico passa")
+    assert(cmdIncidents(listOf("--all", "--all")) == 1, "--all duplicado barra")
+    assert(cmdDeploy(listOf("--file", mf, "--plan")) == 0, "--plan unico passa")
+    assert(cmdDeploy(listOf("--file", mf, "--plan", "--plan")) == 1, "--plan duplicado barra")
+    assert(cmdDeploy(listOf("--file", mf, "--check")) == 0, "--check unico passa")
+    assert(cmdDeploy(listOf("--file", mf, "--check", "--check")) == 1, "--check duplicado barra")
+    assert(cmdDown(listOf("--file", mf, "--prune")) == 0, "--prune unico passa")
+    assert(cmdDown(listOf("--file", mf, "--prune", "--prune")) == 1, "--prune duplicado barra")
+
+    if (priorSession.length == 0) {
+        File(sessionPath()).delete()
+    } else {
+        writeTextTo(sessionPath(), priorSession)
+    }
+    if (priorIdentity.length == 0) {
+        File(identityPath()).delete()
+    } else {
+        writeTextTo(identityPath(), priorIdentity)
+    }
+    listener.close()
+    File(mf).delete()
 }

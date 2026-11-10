@@ -674,7 +674,9 @@ String manifestField(String entry, String key) {
 }
 
 Int cmdDeploy(List<String> args) {
-    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file")) {
+    // Booleanas repetidas tambem barram: `hasFlag` leria a primeira e o
+    // operador repetiria a flag sem saber (mesma regra do --file).
+    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file") || flagDuplicated(args, "--check") || flagDuplicated(args, "--plan")) {
         println("uso: kof cloud deploy [--file <caminho>] [--check] [--plan]")
         return 1
     }
@@ -831,7 +833,10 @@ String downSummary(Int wanted, Int removed, Int elsewhere, Int failures) {
 }
 
 Int cmdDown(List<String> args) {
-    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file")) {
+    // --prune repetido seguia normal: `hasFlag` leria a primeira e o down
+    // rodaria como se o operador tivesse dito uma so vez (mesma regra do
+    // --file acima e do --check do deploy).
+    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file") || flagDuplicated(args, "--prune")) {
         println("uso: kof cloud down [--file <caminho>] [--prune]")
         return 1
     }
