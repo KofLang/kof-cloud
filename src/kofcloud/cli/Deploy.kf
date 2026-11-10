@@ -782,6 +782,38 @@ Int cmdDeploy(List<String> args) {
     return 1
 }
 
+// Id do servico `name` publicado NESTE device ("" = nao ha). Pura: o
+// `down` resolve o alvo dentro do device da sessao, nunca na conta toda —
+// o manifesto descreve esta maquina. Medido: sem o filtro, um down no
+// notebookA removia o "site" do notebookB.
+String serviceIdOnDevice(List<Service> live, String name, String deviceId) {
+    for (var service in live) {
+        if (service.name == name && service.deviceId == deviceId) {
+            return service.id
+        }
+    }
+    return ""
+}
+
+// Device onde `name` esta publicado FORA do device do chamador ("" = nao
+// esta em outro). Separado de `serviceIdOnDevice` para o `down` distinguir
+// "nao existe" de "existe la" — as duas coisas imprimiam "ausente (ok)".
+String serviceDeviceElsewhere(List<Service> live, String name, String deviceId) {
+    for (var service in live) {
+        if (service.name == name && service.deviceId != deviceId) {
+            return service.deviceId
+        }
+    }
+    return ""
+}
+
+// Mensagem do `down` quando o servico do manifesto vive noutro device
+// (fonte unica, como serviceNotFoundLine): nomeia o servico e o device, e
+// diz que a remocao tem de ser feita la.
+String downElsewhereLine(String name, String deviceId) {
+    return "noutro dispositivo (nao removido): " + name + " (device " + deviceId + ") — rode o down la"
+}
+
 Int cmdDown(List<String> args) {
     if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file")) {
         println("uso: kof cloud down [--file <caminho>] [--prune]")
@@ -809,18 +841,17 @@ Int cmdDown(List<String> args) {
     try {
         var live = fetchServices(session.controlUrl, session.token)
         for (var wanted in services) {
-            var target = ""
-            for (var service in live) {
-                // Escopo: o manifesto descreve os servicos DESTE device
-                // (o `deploy` publica com o deviceId da sessao local, e o
-                // `--prune` tambem so toca o device atual). Sem o filtro, um
-                // `down` rodado no notebookA removia "site" se ele vivesse no
-                // notebookB — a mesma conta, outro device. Medido.
-                if (service.deviceId == identity.deviceId && service.name == wanted.name) {
-                    target = service.id
-                }
-            }
-            if (target.length == 0) {
+            // Decisao pura (testavel sem rede): alvo DESTE device, ou o
+            // device alheio onde o nome vive, ou nenhum dos dois.
+            var target = serviceIdOnDevice(live, wanted.name, identity.deviceId)
+            var elsewhere = serviceDeviceElsewhere(live, wanted.name, identity.deviceId)
+            if (target.length == 0 && elsewhere.length > 0) {
+                // Existe, mas noutro dispositivo: nao e "ausente" e o down
+                // nao o toca (o manifesto descreve esta maquina). Dizer
+                // "ausente (ok)" escondia que o servico continua publicado
+                // em outro lugar com o mesmo hostname.
+                println(downElsewhereLine(wanted.name, elsewhere))
+            } else if (target.length == 0) {
                 println("ausente (ok): " + wanted.name)
             } else {
                 var body = mapOf()

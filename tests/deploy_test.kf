@@ -298,6 +298,32 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     assert(scopedMixed.get(1).startsWith("- orfa"), "orfao do proprio device aparece")
 }
 
+test "deploy: down distingue ausente de publicado noutro dispositivo", "deploy-down-scope" {
+    // Puro (precedente: diffDeployment): o `down` resolve o alvo dentro do
+    // device da sessao. Antes, um servico homonimo publicado noutro device
+    // imprimia "ausente (ok)" — o operador achava que nao havia nada e o
+    // servico seguia no ar com o mesmo hostname.
+    var live = listOf<Service>()
+    live.add(Service("id-a", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", ""))
+    live.add(Service("id-b", "acc", "devB", "outro", "127.0.0.1", 9000, "http", "outro.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", ""))
+    assert(serviceIdOnDevice(live, "site", "devA") == "id-a", "alvo do proprio device")
+    assert(serviceIdOnDevice(live, "site", "devB") == "", "nao pega id de outro device")
+    assert(serviceIdOnDevice(live, "outro", "devA") == "", "homonimo alheio nao vira alvo")
+    assert(serviceIdOnDevice(live, "nao-existe", "devA") == "", "inexistente vazio")
+    assert(serviceDeviceElsewhere(live, "outro", "devA") == "devB", "diz onde o alheio vive")
+    assert(serviceDeviceElsewhere(live, "site", "devA") == "", "o proprio nao e 'elsewhere'")
+    assert(serviceDeviceElsewhere(live, "nao-existe", "devA") == "", "inexistente nao e elsewhere")
+    var line = downElsewhereLine("outro", "devB")
+    assert(line.indexOf("outro") >= 0, "mensagem nomeia o servico")
+    assert(line.indexOf("devB") >= 0, "mensagem nomeia o device")
+    assert(line.indexOf("nao removido") >= 0, "diz que nada foi removido")
+    assert(line.indexOf("down") >= 0, "orienta rodar la")
+    // Nome igual em DOIS devices: o proprio vence (remove o dele).
+    live.add(Service("id-a2", "acc", "devA", "dup", "127.0.0.1", 7000, "http", "dup.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", ""))
+    live.add(Service("id-b2", "acc", "devB", "dup", "127.0.0.1", 7001, "http", "dup.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", ""))
+    assert(serviceIdOnDevice(live, "dup", "devA") == "id-a2", "homonimo: mira o proprio")
+}
+
 test "deploy: build opcional no manifesto executa antes do publish", "deploy-build" {
     // Puro no parse + execucao real de comandos triviais (/bin/true e
     // /bin/false existem em Linux; o deploy roda no Linux). Ausente = sem

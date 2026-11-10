@@ -116,6 +116,9 @@ alternativa): só o código obrigava o operador a reproduzir o comando à mão.
  5. usuário: kof cloud down → unpublish só dos listados (extra sobrevive)
     com `--prune`: remove também os órfãos DESTE device fora do manifesto
     (nunca toca serviço de outro device)
+    serviço homônimo noutro device: `noutro dispositivo (nao removido): nome
+    (device X) — rode o down la` — o `down` nunca remove fora do próprio
+    dispositivo, e a mensagem não disfarça isso de "ausente"
  6. com `--check`: publicado **neste dispositivo** E respondendo localmente?
     (`checkLocalServiceFor`,
     que agora usa a MESMA sonda do Agent: `GET /` com prazo, status < 500 —

@@ -63,7 +63,7 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | frames | `tests/frames_test.kf` | 4 |
 | idle | `tests/idle_test.kf` | 4 |
 | conexoes | `tests/conns_test.kf` | 2 |
-| deploy + scan | `tests/deploy_test.kf` | 10 |
+| deploy + scan | `tests/deploy_test.kf` | 11 |
 | daemon | `tests/daemon_test.kf` | 13 |
 | doctor | `tests/doctor_test.kf` | 10 |
 | hot-reload | `tests/reload_test.kf` | 1 |
@@ -103,7 +103,7 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor na lista única (CLI) | `tests/value_flags_test.kf` | 2 |
 
-Total: 315 testes. Ver `15-tests.md` para a matriz.
+Total: 316 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 
