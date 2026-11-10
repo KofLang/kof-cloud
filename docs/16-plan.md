@@ -158,7 +158,14 @@ legível** (`artifactProblem`): `File().exists()` aceita diretório, então
 `"artifact": "dist"` passava a checagem e o deploy publicava um serviço cujo
 "artefato" era a pasta. Agora exige conteúdo legível (`readText() != null` —
 em diretório volta null); arquivo vazio ainda é artefato. Prova:
-`tests/deploy_test.kf` (`deploy-build` estendido). `deploy --check` verifica publicado +
+`tests/deploy_test.kf` (`deploy-build` estendido).
+**Fatia: `build` roda no shell.** A documentação prometia "comando de shell"
+(`"build": "npm run build"`), mas `process.run(buildCmd)` recebe o texto
+inteiro como NOME de executável — medido, `"echo hi"` falhava com exit -1
+(mesma lição do `daemonSystemctl`). Agora `process.run("sh", "-c", buildCmd)`:
+argumentos, pipes e `exit` do shell funcionam, e o código de saída do shell é
+o resultado. Prova: `tests/deploy_test.kf` (`deploy-build` estendido:
+"echo hi", `exit 3`, pipe, comando inexistente). `deploy --check` verifica publicado +
 respondendo + artefato (aviso `artefato ausente`, nunca bloqueio; sem
 rollback); `deploy --plan` mostra o diff sem aplicar (com `(build)`/
 `(artifact)` inclusive no igual).

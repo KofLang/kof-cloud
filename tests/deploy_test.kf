@@ -271,6 +271,20 @@ test "deploy: build opcional no manifesto executa antes do publish", "deploy-bui
     assert(bad.detail.indexOf("exit 1") >= 0, "exit no motivo")
     var missing = runServiceBuild("/nao/existe/kofcloud-build-" + crypto.randomHex(4))
     assert(missing.ok == false, "inexistente: falha honesta")
+    // Medido: `process.run("echo hi")` procura um executavel com o nome
+    // inteiro e falha com exit -1 — o exemplo documentado
+    // ("npm run build") nunca funcionou. O build roda pelo shell.
+    var withArgs = runServiceBuild("echo hi")
+    assert(withArgs.ok == true, "comando com argumentos: ok")
+    var shellExit = runServiceBuild("exit 3")
+    assert(shellExit.ok == false, "exit do shell propaga")
+    assert(shellExit.detail.indexOf("exit 3") >= 0, "motivo com o codigo")
+    var pipeline = runServiceBuild("echo um | tr a-z A-Z")
+    assert(pipeline.ok == true, "pipe funciona (shell de verdade)")
+    var badCmd = runServiceBuild("no-such-cmd-kofcloud-" + crypto.randomHex(4))
+    assert(badCmd.ok == false, "comando inexistente pelo shell falha")
+    var blankArg = runServiceBuild("   ")
+    assert(blankArg.ok == true, "so-espacos nao chega ao shell")
     // Artefato opcional: ausente vira "" (sem checagem, como sem build);
     // presente e repassado como esta; vazio equivale a ausente.
     assert(plain.get(0).artifact == "", "sem artifact: vazio")

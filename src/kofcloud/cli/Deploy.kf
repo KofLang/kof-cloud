@@ -35,12 +35,19 @@ record ManifestService(String name, String address, Int port, String exposure, S
 // quem chamar direto com espacos recebe o mesmo skip, sem tocar o shell.
 record BuildResult(Bool ok, String detail)
 
+// Roda o `build` do manifesto pelo SHELL (`sh -c`), como a documentacao
+// promete ("comando de shell rodado antes do publish, ex. `npm run build`").
+// Medido: `process.run("echo hi")` procura um executavel com esse nome
+// inteiro e falha com exit -1 (mesma licao do daemonSystemctl, que tambem
+// passou a usar argv). Sem o shell, todo `build` com argumentos — o caso
+// normal — falhava e o servico nao era publicado, com uma mensagem que
+// parecia culpa do projeto do usuario.
 BuildResult runServiceBuild(String buildCmd) {
     if (buildCmd.trim().length == 0) {
         return BuildResult(true, "sem build")
     }
     try {
-        var result = process.run(buildCmd)
+        var result = process.run("sh", "-c", buildCmd)
         if (result.exitCode == 0) {
             return BuildResult(true, "ok")
         }
