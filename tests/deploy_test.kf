@@ -302,6 +302,19 @@ test "deploy: build opcional no manifesto executa antes do publish", "deploy-bui
     assert(flagged.indexOf("artefato ausente") >= 0, "nomeia o problema")
     assert(flagged.indexOf(ghost) >= 0, "mostra o caminho")
     assert(flagged.indexOf("deploy") >= 0, "orienta o re-deploy")
+    // Medido: `File(dir).exists()` e true para DIRETORIO, entao o deploy
+    // publicava um servico cujo "artefato" era uma pasta. Exige-se conteudo
+    // legivel (readText != null), nao so existencia.
+    var dir = "/tmp/kofcloud-deploy-diretorio-" + crypto.randomHex(4)
+    Directory(dir).createDirectories()
+    assert(artifactProblem("site", dir) != "", "diretorio nao e artefato")
+    var plainFile = dir + "/index.html"
+    File(plainFile).writeText("<h1>oi</h1>")
+    assert(artifactProblem("site", plainFile) == "", "arquivo dentro do dir: ok")
+    var emptyFile = dir + "/vazio"
+    File(emptyFile).writeText("")
+    assert(artifactProblem("site", emptyFile) == "", "arquivo vazio ainda e artefato")
+    File(emptyFile).delete()
 }
 
 test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {

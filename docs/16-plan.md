@@ -153,7 +153,12 @@ os do manifesto (`--prune` poda órfãos do device). Sem artefato transferível
 — o build roda local, só o publish atravessa a rede. Parser manual com erro posicional
 (Map<String, String> nao aceita numero — ClassCast medido; exposure/protocol/
 address validados, sem default silencioso). Prova:
-`tests/deploy_test.kf` (9 testes). `deploy --check` verifica publicado +
+`tests/deploy_test.kf` (9 testes). **Fatia: artefato tem de ser arquivo
+legível** (`artifactProblem`): `File().exists()` aceita diretório, então
+`"artifact": "dist"` passava a checagem e o deploy publicava um serviço cujo
+"artefato" era a pasta. Agora exige conteúdo legível (`readText() != null` —
+em diretório volta null); arquivo vazio ainda é artefato. Prova:
+`tests/deploy_test.kf` (`deploy-build` estendido). `deploy --check` verifica publicado +
 respondendo + artefato (aviso `artefato ausente`, nunca bloqueio; sem
 rollback); `deploy --plan` mostra o diff sem aplicar (com `(build)`/
 `(artifact)` inclusive no igual).

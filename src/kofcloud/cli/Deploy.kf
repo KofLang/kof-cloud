@@ -160,16 +160,19 @@ List<String> diffDeployment(List<Service> live, List<ManifestService> wanted) {
 }
 
 // Devolve "" quando nao ha nada a apontar (sem artifact declarado, vazio
-// ou so-espacos, ou arquivo presente); senao devolve o problema ja
-// formatado `nome: artefato ausente (caminho) — rode: kof cloud deploy`.
-// Pura na decisao (so IO: File().exists()); usada pelo deploy pos-build
+// ou so-espacos, ou arquivo com conteudo legivel); senao devolve o problema
+// ja formatado `nome: artefato ausente (caminho) — rode: kof cloud deploy`.
+// Pura na decisao (so IO: leitura do arquivo); usada pelo deploy pos-build
 // (fail-fast) e pelo verifyDeployment (--check/doctor). Precedente:
 // runServiceBuild (BuildResult) e diffDeployment (pura + testavel).
 // O trim espelha o parseManifest: caminho so-espacos nunca existiria no
 // disco e barraria o publish a toa — trata como ausente, sem checar.
+// Medido: `File(dir).exists()` e true para DIRETORIO, entao o deploy
+// publicava um servico cujo "artefato" era uma pasta; por isso exige-se
+// conteudo legivel (`readText()` em dir devolve null), nao so existencia.
 String artifactProblem(String serviceName, String artifact) {
     var trimmed = artifact.trim()
-    if (trimmed.length == 0 || File(trimmed).exists()) {
+    if (trimmed.length == 0 || File(trimmed).readText() != null) {
         return ""
     }
     return serviceName + ": artefato ausente (" + trimmed + ") — rode: kof cloud deploy"
