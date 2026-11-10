@@ -152,8 +152,11 @@ aquele, fail-fast antes do publish) e publica em lote
 os do manifesto (`--prune` poda órfãos do device). Sem artefato transferível
 — o build roda local, só o publish atravessa a rede. Parser manual com erro posicional
 (Map<String, String> nao aceita numero — ClassCast medido; exposure/protocol/
-address validados, sem default silencioso). Prova:
-`tests/deploy_test.kf` (9 testes). **Fatia: artefato tem de ser arquivo
+address validados, sem default silencioso). **Fatia: nome único no manifesto.**
+`parseManifest` recusava tudo menos a repetição: dois itens com o mesmo
+`name` passavam e o publish — idempotente por nome — reescrevia o primeiro
+em silêncio. Agora nome repetido falha posicional antes de build/publish.
+Prova: `tests/deploy_test.kf` (`deploy-err` estendido). **Fatia: artefato tem de ser arquivo
 legível** (`artifactProblem`): `File().exists()` aceita diretório, então
 `"artifact": "dist"` passava a checagem e o deploy publicava um serviço cujo
 "artefato" era a pasta. Agora exige conteúdo legível (`readText() != null` —

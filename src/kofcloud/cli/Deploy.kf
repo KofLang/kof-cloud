@@ -435,6 +435,17 @@ List<ManifestService> parseManifest(String raw) {
         if (port <= 0 || port > 65535) {
             throw "servico \"" + name + "\" sem porta valida (1-65535)"
         }
+        // Nome repetido e ambiguidade, nao "dois servicos": o publish e
+        // idempotente por nome (`serviceByName` devolve o existente), entao o
+        // segundo item reescreveria a config do primeiro em silencio e o
+        // usuario ficaria com uma porta so, sem saber qual. Falha posicional
+        // antes de qualquer build/publish (mesma familia de nome/porta/
+        // exposure/protocol/allowlist).
+        for (var seen in out) {
+            if (seen.name == name) {
+                throw "servico \"" + name + "\" duplicado no manifesto (posicao " + intToString(index) + ") — cada nome publica um servico so"
+            }
+        }
         out.add(ManifestService(name, address, port, exposure, protocol, build, artifact, allowMethods, allowPaths))
         index = index + 1
     }

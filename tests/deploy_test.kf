@@ -99,6 +99,30 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     }
     assert(bad7.indexOf("malformada") >= 0, "truncado")
 
+    // Nome repetido e ambiguidade, nao "dois servicos": o publish e
+    // idempotente por nome, entao o segundo item reescrevia a config do
+    // primeiro em silencio. Recusa posicional, antes de build/publish.
+    var dupName = ""
+    try {
+        parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"site\",\"port\":9090}]}")
+    } catch (String e) {
+        dupName = e
+    }
+    assert(dupName.indexOf("duplicado") >= 0, "nome duplicado recusa")
+    assert(dupName.indexOf("\"site\"") >= 0, "nomeia o servico")
+    assert(dupName.indexOf("posicao 1") >= 0, "aponta a posicao")
+    // Nomes diferentes, mesmo prefixo, passam (nao e comparacao parcial).
+    var similar = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"site2\",\"port\":9090}]}")
+    assert(similar.size == 2, "nomes parecidos sao servicos distintos")
+    // Duplicado com espacos sobrando tambem casa (o trim roda antes).
+    var dupTrim = ""
+    try {
+        parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"  site  \",\"port\":9090}]}")
+    } catch (String e) {
+        dupTrim = e
+    }
+    assert(dupTrim.indexOf("duplicado") >= 0, "duplicado com padding recusa")
+
     // Chave "port" dentro de valor nao confunde ("portaria" tem "port" mas
     // sem as aspas de fechamento na posicao certa).
     var tricky = parseManifest("{\"services\":[{\"name\":\"portaria\",\"port\":9000}]}")
