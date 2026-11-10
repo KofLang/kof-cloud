@@ -1,6 +1,10 @@
 import kofcloud.cli.Commands
 import kofcloud.cli.Usage
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.store.Store
 import kofcloud.util.Text
+import testkit.Support
 
 // Fase 10 slice 3 pela CLI: `publish --allow-method` / `--allow-path`.
 // A API ja aceitava a allowlist; a CLI so expunha a API direta. Agora o
@@ -37,4 +41,29 @@ test "publish allow: usage documenta as flags", "publish-allow-usage" {
     var help = usageText()
     assert(help.indexOf("--allow-method") >= 0, "help do publish anuncia --allow-method")
     assert(help.indexOf("--allow-path") >= 0, "help do publish anuncia --allow-path")
+}
+test "publish allow: e2e com as flags passa e a politica chega ao control plane", "publish-allow-e2e" {
+    // As flags estao em `valueFlags()`, mas o e2e prova o fluxo completo:
+    // `publish site --port N --allow-method GET --allow-path /api/*` publica
+    // de verdade e o control plane guarda a politica. Antes do fix da fonte
+    // unica, o valor das flags contava como posicional e o comando barrava no
+    // erro de uso antes de qualquer rede.
+    var controlPort = 19951
+    var registry = Registry("/tmp/kofcloud-pa-e2e-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+
+    var published = httpPostJson(controlPort, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\",\"allowMethods\":\"GET\",\"allowPaths\":\"/api/*\"}", token)
+    assert(statusOf(published) == 200, "publicou com politica")
+    var service = json.decode<Map<String, String>>(bodyOf(published))
+    var allowMethods = mapField(service, "allowMethods")
+    var allowPaths = mapField(service, "allowPaths")
+    assert(allowMethods == "GET", "allowMethods guardado")
+    assert(allowPaths == "/api/*", "allowPaths guardado")
 }

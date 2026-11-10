@@ -15,13 +15,39 @@ import testkit.Support
 // A lista agora e `valueFlags()` — fonte unica — e o teste trava que toda
 // flag lida com `flagValue` esta nela.
 
+// Flags com valor lidas pela CLI. A lista e DERIVADA das fontes reais
+// (`flagValue`/`flagValues` em src/kofcloud/cli/*.kf), nao escrita a mao:
+// era uma lista literal aqui e por isso `--allow-method`/`--allow-path`
+// passaram despercebidos — o `publish --allow-method GET` barrava sempre
+// ("argumento a mais") porque o valor contava como posicional.
 List<String> flagsReadWithFlagValue() {
-    return listOf(
-        "--address", "--control", "--control-port", "--device", "--exposure",
-        "--file", "--from", "--http-port", "--password", "--port", "--resolve",
-        "--secret", "--service", "--state", "--tail", "--tls-cert", "--tls-key",
-        "--to", "--ttl", "--tunnel-port", "--waf"
-    )
+    var found = listOf<String>()
+    var files = listOf("src/kofcloud/cli/Commands.kf", "src/kofcloud/cli/Deploy.kf", "src/kofcloud/cli/Doctor.kf", "src/kofcloud/cli/Daemon.kf")
+    for (var file in files) {
+        var raw = File(file).readText()
+        var text = ""
+        if (raw != null) {
+            text = raw
+        }
+        if (text.length == 0) {
+            continue
+        }
+        for (var opening in listOf("flagValue(args, \"", "flagValues(args, \"")) {
+            var cursor = text.indexOf(opening)
+            while (cursor >= 0) {
+                var start = cursor + opening.length
+                var end = text.indexOf("\"", start)
+                if (end > start) {
+                    var flag = text.substring(start, end)
+                    if (found.contains(flag) == false) {
+                        found.add(flag)
+                    }
+                }
+                cursor = text.indexOf(opening, end)
+            }
+        }
+    }
+    return found
 }
 
 test "flags: toda flag com valor esta na lista e o valor nao conta como posicional", "valueflags-unit" {
@@ -32,7 +58,8 @@ test "flags: toda flag com valor esta na lista e o valor nao conta como posicion
         assert(extraPositional(listOf(flag, "valor"), 0) == false, "valor de " + flag + " virou posicional")
         assert(extraPositional(listOf(flag, "valor"), 1) == false, "um posicional permitido")
     }
-    assert(known.size == 21, "21 flags com valor: " + intToString(known.size))
+    assert(known.size == 23, "23 flags com valor: " + intToString(known.size))
+    assert(flagsReadWithFlagValue().size >= 20, "lista derivada das fontes: " + intToString(flagsReadWithFlagValue().size))
 
     // Posicional de verdade continua barrando (a regra nao ficou frouxa).
     assert(extraPositional(listOf("solto"), 0) == true, "posicional solto barra")

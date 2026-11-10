@@ -237,7 +237,8 @@ List<String> valueFlags() {
         "--port", "--address", "--exposure", "--device", "--ttl", "--tail",
         "--control", "--control-port", "--tunnel-port", "--http-port",
         "--state", "--waf", "--tls-cert", "--tls-key", "--service", "--file",
-        "--password", "--from", "--to", "--resolve", "--secret"
+        "--password", "--from", "--to", "--resolve", "--secret",
+        "--allow-method", "--allow-path"
     )
 }
 
