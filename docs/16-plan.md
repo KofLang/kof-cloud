@@ -584,6 +584,16 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   e só um olho humano pegou). `tests/hosts_test.kf` (`u-matrix`) trava: lê o
   doc versionado e quebra se qualquer `| Unn |` aparecer duas vezes. Prova:
   o teste passa verde e quebra com o duplicado reintroduzido (mutação).
+* **Slice 2v — totais do STATUS travados por suite ✅.** A tabela "Suite |
+  Arquivo | Testes" do `docs/STATUS.md` é o retrato honesto do que existe, e
+  estava defasada: `protocol_test` dizia 11 (arquivo com 12) e
+  `metrics_test` 9 (com 10) — a soma da tabela dava 307 contra 309 reais.
+  Corrigido e travado por `tests/hosts_test.kf` (`status-counts`): cada linha
+  com UM arquivo tem de bater com a contagem de `test "` do fonte (linhas com
+  dois arquivos ficam fora por desenho; sanidade exige ≥40 linhas
+  conferidas). Cells são parseadas com `indexOf`, nunca `split("|")` — o
+  `split` do stdlib trata o argumento como regex e `|` divide por caractere
+  (medido; mesma lição do separador `;` em `Registry.expiryProbes`).
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task

@@ -45,8 +45,8 @@ o run total imprime `54 passed, 0 failed`. Falha = nome do teste + assert
 
 | Suite | Arquivo | Testes |
 |---|---|---|
-| framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 11 |
-| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls/audit-sbom/host-normalize/u-matrix | `tests/hosts_test.kf` | 30 |
+| framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 12 |
+| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls/audit-sbom/host-normalize/u-matrix | `tests/hosts_test.kf` | 31 |
 | identidade/cifra/tokens | `tests/identity_test.kf` | 6 |
 | backoff | `tests/backoff_test.kf` | 3 |
 | registry | `tests/registry_test.kf` | 7 |
@@ -54,7 +54,7 @@ o run total imprime `54 passed, 0 failed`. Falha = nome do teste + assert
 | service token | `tests/service_token_test.kf` | 13 |
 | erros R6 | `tests/errors_test.kf` | 10 |
 | dominios (+ certificado x hostname) | `tests/domains_test.kf` | 11 |
-| metricas | `tests/metrics_test.kf` | 9 |
+| metricas | `tests/metrics_test.kf` | 10 |
 | rate limit | `tests/ratelimit_test.kf` | 2 |
 | agent metrics | `tests/agent_metrics_test.kf` | 3 |
 | abuso | `tests/abuse_test.kf` | 3 |
@@ -101,7 +101,7 @@ o run total imprime `54 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor na lista única (CLI) | `tests/value_flags_test.kf` | 2 |
 
-Total: 309 testes. Ver `15-tests.md` para a matriz.
+Total: 310 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

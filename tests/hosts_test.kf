@@ -170,6 +170,84 @@ test "text: identificadores U da matriz sao unicos", "u-matrix" {
     assert(matrix.indexOf("| U51 |") >= 0, "U51 (login-error) presente")
 }
 
+// Conta as declaracoes `test "` que COMECAM uma linha (o runner so aceita
+// declaracao no inicio da linha; contar ocorrencias soltas pegaria o texto
+// deste comentario e o do teste que usa o helper). Mesmo precedente de leitura
+// de doc versionado do u-matrix/security-policy.
+Int countTestDeclarations(String path) {
+    var body = readTextOr(path, "")
+    var count = 0
+    for (var line in body.split("\n")) {
+        if (line.startsWith("test \"")) {
+            count = count + 1
+        }
+    }
+    return count
+}
+
+// Celulas de uma linha de tabela markdown. NAO usa `split("|")`: o `split`
+// do stdlib trata o argumento como REGEX e `|` e alternancia vazia (divide
+// por caractere — medido). Indexacao manual, mesma licao do separador `;`
+// em Registry.expiryProbes.
+List<String> tableCells(String line) {
+    var out = listOf<String>()
+    var start = 0
+    var bar = line.indexOf("|")
+    while (bar >= 0) {
+        out.add(line.substring(start, bar).trim())
+        start = bar + 1
+        bar = line.indexOf("|", start)
+    }
+    if (start < line.length) {
+        out.add(line.substring(start).trim())
+    }
+    return out
+}
+
+test "text: contagem por suite no STATUS bate com os arquivos", "status-counts" {
+    // Trava do docs/STATUS.md: a tabela "Suite | Arquivo | Testes" e o retrato
+    // honesto do que existe; numero defasado ali e mentira silenciosa (medido:
+    // protocol estava 11 com 12 no arquivo, metrics 9 com 10 — a soma da
+    // tabela dava 307 contra 309 reais). Cada linha com UM arquivo tem de
+    // bater com a contagem real de `test "` daquele arquivo.
+    var status = readTextOr("docs/STATUS.md", "")
+    assert(status.length > 0, "STATUS existe")
+    var checked = 0
+    for (var line in status.split("\n")) {
+        if (line.startsWith("|") == false || line.startsWith("| `tests/")) {
+            continue
+        }
+        var cells = tableCells(line)
+        if (cells.length < 4) {
+            continue
+        }
+        var fileCell = cells[2]
+        if (fileCell.indexOf("`tests/") != 0) {
+            continue
+        }
+        var closing = fileCell.indexOf("`", 1)
+        if (closing < 0) {
+            continue
+        }
+        var path = fileCell.substring(1, closing)
+        // Linhas com mais de um arquivo (ex.: "+13 asserts" de dois suites)
+        // nao tem contagem unica: ficam fora da trava por desenho.
+        if (fileCell.indexOf("`tests/", closing) >= 0) {
+            continue
+        }
+        var declared = parseIntBounded(cells[cells.length - 1], -1, 100000)
+        if (declared <= 0) {
+            continue
+        }
+        var real = countTestDeclarations(path)
+        assert(real == declared, path + " declara " + intToString(declared) + " no STATUS mas tem " + intToString(real) + " testes")
+        checked = checked + 1
+    }
+    // Sanidade da propria trava: se o formato da tabela mudar e nada casar,
+    // ela nao pode passar em silencio.
+    assert(checked >= 40, "tabela do STATUS reconhecida; linhas conferidas=" + intToString(checked))
+}
+
 test "text: tailLines devolve as ultimas linhas", "logs-tail" {
     var log = "l1\nl2\nl3\n"
     assert(tailLines(log, 2) == "l2\nl3\n", "duas ultimas")
