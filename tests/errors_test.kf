@@ -432,6 +432,7 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     emitted.add(errInvalidRequestLine())
     emitted.add(errInvalidHeaderLine())
     emitted.add(errServiceNameTaken())
+    emitted.add(errLoginRateLimited())
     emitted.add(errInvalidCustomHostname())
     emitted.add(errDomainTaken())
     emitted.add(errDomainNotFound())
@@ -442,7 +443,7 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     emitted.add(errIncidentNotFound())
     emitted.add(errInvalidWebhook())
     emitted.add(errWebhookNotFound())
-    assert(emitted.size == 57, "57 construtores emitem codigo")
+    assert(emitted.size == 58, "58 construtores emitem codigo")
     for (var msg in emitted) {
         assert(errHint(msg).length > 0, msg + " via construtor tem Hint")
     }
@@ -490,6 +491,7 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     codes.add("KCF112")
     codes.add("KCF113")
     codes.add("KCF114")
+    codes.add("KCF115")
     codes.add("KCF116")
     codes.add("KCF117")
     codes.add("KCF118")
@@ -507,9 +509,26 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     codes.add("KCF131")
     codes.add("KCF132")
     codes.add("KCF133")
+    codes.add("KCF134")
     codes.add("KCF139")
     for (var code in codes) {
         assert(errHint(code + ": x").length > 0, code + " tem Hint")
+    }
+    // Camada 3 — completude: a lista canonica cobre TODOS os codigos que os
+    // construtores emitem. Sem isso, um construtor novo entra no `emitted`
+    // (camada 1) mas fica fora da lista (camada 2), e o Hint dele nunca e
+    // verificado por codigo. Medido: KCF115 e KCF134 estavam exatamente
+    // nesse buraco (construtores e Hint existiam, lista canonica nao).
+    var fromConstructors = listOf<String>()
+    for (var msg in emitted) {
+        var head = msg.substring(0, 6)
+        if (fromConstructors.contains(head) == false) {
+            fromConstructors.add(head)
+        }
+    }
+    assert(fromConstructors.size == codes.size, "lista canonica cobre os construtores: " + intToString(fromConstructors.size) + " codigos vs " + intToString(codes.size) + " na lista")
+    for (var code in fromConstructors) {
+        assert(codes.contains(code), code + " emitido por construtor e ausente da lista canonica")
     }
     // E o reservado continua sem dica (nunca emitido — se alguem emitir,
     // o teste acima nao pega, mas a tabela do protocolo acusa).

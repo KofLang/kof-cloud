@@ -163,7 +163,7 @@ com um serviço só e, como o hostname é `<nome>.<handle>`, o roteamento ia
 sempre para o A. A idempotência do publish passou a ser por (conta, device,
 nome): mesmo device devolve o existente; outro device dá `409 KCF139`. Prova:
 `tests/deploy_test.kf` (`deploy-e2e`) e `tests/errors_test.kf`
-(`errors-hint-all`, 57 construtores). **Fatia: artefato tem de ser arquivo
+(`errors-hint-all`, 58 construtores). **Fatia: artefato tem de ser arquivo
 legível** (`artifactProblem`): `File().exists()` aceita diretório, então
 `"artifact": "dist"` passava a checagem e o deploy publicava um serviço cujo
 "artefato" era a pasta. Agora exige conteúdo legível (`readText() != null` —
