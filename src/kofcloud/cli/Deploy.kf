@@ -35,6 +35,36 @@ record ManifestService(String name, String address, Int port, String exposure, S
 // quem chamar direto com espacos recebe o mesmo skip, sem tocar o shell.
 record BuildResult(Bool ok, String detail)
 
+// Ultima linha nao vazia de uma saida de processo ("" quando nao ha). O
+// build do usuario costuma terminar com o erro na ultima linha; mostrar so
+// "exit 1" obriga o operador a reproduzir o comando a mao. Pura.
+String lastLineOf(String text) {
+    var last = ""
+    for (var line in text.split("\n")) {
+        var trimmed = line.trim()
+        if (trimmed.length > 0) {
+            last = trimmed
+        }
+    }
+    return last
+}
+
+// Detalhe da falha do build: `build falhou (exit N) — <ultima linha>`. Usa
+// stderr quando houver (e o canal de erro do shell), senao stdout — builds
+// reais imprimem o diagnostico num dos dois. Nunca inclui o comando nem
+// mais que uma linha: o detalhe vai para o terminal/relatorio do usuario,
+// nao para log de plataforma.
+String buildFailureDetail(Int exitCode, String stdout, String stderr) {
+    var tail = lastLineOf(stderr)
+    if (tail.length == 0) {
+        tail = lastLineOf(stdout)
+    }
+    if (tail.length == 0) {
+        return "build falhou (exit " + intToString(exitCode) + ")"
+    }
+    return "build falhou (exit " + intToString(exitCode) + ") — " + tail
+}
+
 // Roda o `build` do manifesto pelo SHELL (`sh -c`), como a documentacao
 // promete ("comando de shell rodado antes do publish, ex. `npm run build`").
 // Medido: `process.run("echo hi")` procura um executavel com esse nome
@@ -51,7 +81,7 @@ BuildResult runServiceBuild(String buildCmd) {
         if (result.exitCode == 0) {
             return BuildResult(true, "ok")
         }
-        return BuildResult(false, "build falhou (exit " + intToString(result.exitCode) + ")")
+        return BuildResult(false, buildFailureDetail(result.exitCode, result.stdout, result.stderr))
     } catch (String e) {
         return BuildResult(false, "build nao executou: " + e)
     }

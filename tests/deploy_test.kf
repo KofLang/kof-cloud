@@ -285,6 +285,23 @@ test "deploy: build opcional no manifesto executa antes do publish", "deploy-bui
     assert(badCmd.ok == false, "comando inexistente pelo shell falha")
     var blankArg = runServiceBuild("   ")
     assert(blankArg.ok == true, "so-espacos nao chega ao shell")
+    // Diagnostico: so "exit N" obrigava o operador a reproduzir o comando.
+    // O detalhe agora traz a ultima linha de stderr (canal de erro), com
+    // stdout como alternativa — uma linha so, nunca o comando.
+    var explain = runServiceBuild("echo 'erro: modulo ausente' >&2; exit 2")
+    assert(explain.ok == false, "falha com stderr")
+    assert(explain.detail.indexOf("exit 2") >= 0, "codigo no detalhe")
+    assert(explain.detail.indexOf("erro: modulo ausente") >= 0, "ultima linha do stderr")
+    var stdoutOnly = runServiceBuild("echo 'falhou no passo 3'; exit 1")
+    assert(stdoutOnly.detail.indexOf("falhou no passo 3") >= 0, "stdout quando stderr vazio")
+    var silent = runServiceBuild("exit 4")
+    assert(silent.detail == "build falhou (exit 4)", "sem saida: so o codigo")
+    var noisy = runServiceBuild("echo primeira >&2; echo ULTIMA >&2; exit 5")
+    assert(noisy.detail.indexOf("ULTIMA") >= 0, "ultima linha")
+    assert(noisy.detail.indexOf("primeira") < 0, "nao despeja a saida toda")
+    assert(lastLineOf("a\n\nb  \n") == "b", "lastLineOf apara e ignora vazias")
+    assert(lastLineOf("") == "", "lastLineOf vazio")
+    assert(buildFailureDetail(7, "", "") == "build falhou (exit 7)", "detalhe minimo")
     // Artefato opcional: ausente vira "" (sem checagem, como sem build);
     // presente e repassado como esta; vazio equivale a ausente.
     assert(plain.get(0).artifact == "", "sem artifact: vazio")

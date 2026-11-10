@@ -165,7 +165,10 @@ inteiro como NOME de executável — medido, `"echo hi"` falhava com exit -1
 (mesma lição do `daemonSystemctl`). Agora `process.run("sh", "-c", buildCmd)`:
 argumentos, pipes e `exit` do shell funcionam, e o código de saída do shell é
 o resultado. Prova: `tests/deploy_test.kf` (`deploy-build` estendido:
-"echo hi", `exit 3`, pipe, comando inexistente). `deploy --check` verifica publicado +
+"echo hi", `exit 3`, pipe, comando inexistente). Agora o detalhe da falha inclui a última linha de
+stderr (ou stdout): `build falhou (exit N) — <linha>`; só o código obrigava o
+operador a reproduzir o comando à mão. Uma linha só, nunca o comando — o
+detalhe vai ao terminal do usuário. `deploy --check` verifica publicado +
 respondendo + artefato (aviso `artefato ausente`, nunca bloqueio; sem
 rollback); `deploy --plan` mostra o diff sem aplicar (com `(build)`/
 `(artifact)` inclusive no igual).

@@ -98,7 +98,9 @@ aparados; `name` só-espaços falha como sem nome). Todos validados no parse
 com erro posicional — nada com default silencioso perigoso. O `build` roda por
 `sh -c` (shell de verdade): pipes, `&&` e argumentos funcionam, e o exit code
 do shell é o resultado. Sem isso o texto inteiro virava nome de executável —
-medido, `"echo hi"` falhava com exit -1.
+medido, `"echo hi"` falhava com exit -1. Quando falha, o relatório traz
+`build falhou (exit N) — <última linha>` (stderr, com stdout como
+alternativa): só o código obrigava o operador a reproduzir o comando à mão.
 
  1. usuário: kof cloud deploy [--file kofcloud.json] [--check] [--plan]
     com `--plan`: só mostra o diff (`+ novo`, `~ atualiza`, `= igual`,
