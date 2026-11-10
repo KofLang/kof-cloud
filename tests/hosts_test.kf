@@ -491,6 +491,28 @@ test "text: matchServiceName apara antes de comparar", "service-name-match" {
     assert(matchServiceName(services, "   ") == "", "so-espacos nao casa")
     assert(matchServiceName(services, "outro") == "", "inexistente vazio")
     assert(matchServiceName(listOf<Service>(), "site") == "", "lista vazia: vazio")
+    // Homonimo entre devices: antes o matcher devolvia o PRIMEIRO que casava
+    // (a ordem da lista decidia o device) e o comando agia no errado sem
+    // avisar. Agora resolveServiceName marca ambiguo e matchServiceName
+    // devolve "" (nunca escolhe).
+    var devA = Service("idA", "acc", "devA", "dup", "127.0.0.1", 8080, "http", "dup.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 1000, "", "")
+    var devB = Service("idB", "acc", "devB", "dup", "127.0.0.1", 9090, "http", "dup.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 1000, "", "")
+    var amb = resolveServiceName(listOf<Service>(devA, devB), "dup")
+    assert(amb.ambiguous, "homonimo marcado ambiguo")
+    assert(amb.uniqueId == "", "ambiguo nao escolhe id")
+    assert(amb.deviceIds.size == 2, "lista os dois devices")
+    assert(amb.deviceIds.contains("devA") && amb.deviceIds.contains("devB"), "devices certos")
+    assert(matchServiceName(listOf<Service>(devA, devB), "dup") == "", "matcher devolve vazio no ambiguo")
+    // Ordem da lista nao muda o veredito (era o defeito).
+    assert(resolveServiceName(listOf<Service>(devB, devA), "dup").ambiguous, "ordem inversa tambem ambiguo")
+    var single = resolveServiceName(listOf<Service>(devA), "dup")
+    assert(single.uniqueId == "idA" && single.ambiguous == false, "unico resolve")
+    var none = resolveServiceName(listOf<Service>(devA), "outro")
+    assert(none.uniqueId == "" && none.ambiguous == false, "inexistente nao e ambiguo")
+    var line = serviceAmbiguousLine("dup", listOf<String>("devA", "devB"))
+    assert(line.indexOf("dup") >= 0, "mensagem nomeia o servico")
+    assert(line.indexOf("2 dispositivos") >= 0, "mensagem conta os devices")
+    assert(line.indexOf("devA") >= 0 && line.indexOf("devB") >= 0, "mensagem lista os devices")
 }
 
 test "text: resolveLoginInputs apara sem tocar na senha", "login-trim" {

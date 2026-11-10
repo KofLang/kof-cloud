@@ -34,6 +34,14 @@ dispositivo** o serviço roda (`device: <nome>`, ou o id quando o dispositivo
 não está mais na conta). Com vários dispositivos por conta, a lista sem isso
 não responde "onde isto roda?" sem cruzar `device list`.
 
+Nome é único na conta: `publish` com nome já usado por **outro** dispositivo
+responde `409 KCF139` (o hostname `<nome>.<handle>` seria o mesmo e o
+roteamento casaria sempre o primeiro). Serviços homônimos criados antes dessa
+regra continuam no estado; os comandos por nome (`service status|suspend|
+unsuspend|token|token-revoke|rotate|rotation`, `unpublish`, `freeze service`)
+**recusam** com uma mensagem que lista os dispositivos — nunca escolhem um
+deles arbitrariamente.
+
 `--device <nome|id>` publica em nome de outro dispositivo da conta
 (padrão: o dispositivo do `login`). Nome resolve pelo `device list`;
 id passa direto; nome inexistente falha local ("dispositivo nao

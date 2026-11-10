@@ -786,7 +786,12 @@ Int cmdUnpublish(List<String> args) {
     }
     try {
         var services = fetchServices(session.controlUrl, session.token)
-        var target = matchServiceName(services, name)
+        var match = resolveServiceName(services, name)
+        if (match.ambiguous) {
+            println(serviceAmbiguousLine(name.trim(), match.deviceIds))
+            return 1
+        }
+        var target = match.uniqueId
         if (target.length == 0) {
             println(serviceNotFoundLine(name))
             return 1
@@ -941,9 +946,8 @@ Int cmdServiceSuspend(List<String> args) {
         return 1
     }
     try {
-        var target = serviceIdByName(session, name)
+        var target = resolveServiceOrReport(session, name)
         if (target.length == 0) {
-            println(serviceNotFoundLine(name))
             return 1
         }
         var body = mapOf()
@@ -969,9 +973,8 @@ Int cmdServiceUnsuspend(List<String> args) {
         return 1
     }
     try {
-        var target = serviceIdByName(session, name)
+        var target = resolveServiceOrReport(session, name)
         if (target.length == 0) {
-            println(serviceNotFoundLine(name))
             return 1
         }
         var body = mapOf()
@@ -985,27 +988,69 @@ Int cmdServiceUnsuspend(List<String> args) {
     }
 }
 
+// Id do servico pelo nome, com o desfecho explicito quando ha homonimos.
+// Antes `matchServiceName` devolvia o PRIMEIRO que casava: com "site" em
+// dois devices, `service status site`, `unpublish site` e `token-revoke site`
+// agiam num device arbitrario (a ordem da lista decide) sem avisar — medido.
+// `uniqueId` vazio + `ambiguous` true = recuse e liste; o chamador decide a
+// mensagem. Pura, sem rede nem HOME.
+record ServiceMatch(String uniqueId, Bool ambiguous, List<String> deviceIds)
+
+ServiceMatch resolveServiceName(List<Service> services, String name) {
+    var trimmed = name.trim()
+    var found = listOf<Service>()
+    for (var service in services) {
+        if (service.name == trimmed) {
+            found.add(service)
+        }
+    }
+    if (found.size == 0) {
+        return ServiceMatch("", false, listOf<String>())
+    }
+    if (found.size > 1) {
+        var deviceIds = listOf<String>()
+        for (var service in found) {
+            deviceIds.add(service.deviceId)
+        }
+        return ServiceMatch("", true, deviceIds)
+    }
+    return ServiceMatch(found.get(0).id, false, listOf<String>())
+}
+
+// Mensagem unica para o nome ambiguo (fonte unica, como serviceNotFoundLine):
+// nomeia o servico e os devices onde ele vive, e diz como desambiguar.
+String serviceAmbiguousLine(String name, List<String> deviceIds) {
+    return "servico \"" + name + "\" existe em " + intToString(deviceIds.size) + " dispositivos — use `service unpublish|status` do dispositivo certo e remova o duplicado (" + joinCsv(deviceIds) + ")"
+}
+
 // Nome de servico aparado para comparacao (os 4 comandos que leem nome
 // posicional: unpublish/status/token/token-revoke + o --service do domain
 // add verificam via `trimmed == service.name`; sem isso, `" site "` nao
 // resolve o servico `site` — mesma regra do publish/resolvers).
-// Pura, sem rede nem HOME.
+// Pura, sem rede nem HOME. Devolve "" tanto para inexistente quanto para
+// ambiguo — quem precisa distinguir usa `resolveServiceName`.
 String matchServiceName(List<Service> services, String name) {
-    var trimmed = name.trim()
-    for (var service in services) {
-        if (service.name == trimmed) {
-            return service.id
-        }
-    }
-    return ""
+    return resolveServiceName(services, name).uniqueId
 }
 
-// Id do servico pelo nome (para os comandos que operam por serviceId).
-// "" quando nao existe na conta. Delega no matchServiceName (mesma regra
-// do parseManifest: "  site  " na CLI resolve o servico "site").
-String serviceIdByName(LocalSession session, String name) {
+// Resolve o nome para um id e imprime o motivo quando nao da: inexistente
+// usa `serviceNotFoundLine`; ambiguo (mesmo nome em 2+ devices) usa
+// `serviceAmbiguousLine` — nunca escolhe um device arbitrariamente. Os
+// comandos por nome fazem `var target = resolveServiceOrReport(...); if
+// (target.length == 0) { return 1 }`. IO (fetch) fica aqui; a decisao e a
+// pura `resolveServiceName`.
+String resolveServiceOrReport(LocalSession session, String name) {
     var services = fetchServices(session.controlUrl, session.token)
-    return matchServiceName(services, name)
+    var match = resolveServiceName(services, name)
+    if (match.ambiguous) {
+        println(serviceAmbiguousLine(name.trim(), match.deviceIds))
+        return ""
+    }
+    if (match.uniqueId.length == 0) {
+        println(serviceNotFoundLine(name))
+        return ""
+    }
+    return match.uniqueId
 }
 
 // Id do dispositivo por NOME ou id (para `--device`). Nome resolve pela
@@ -1146,9 +1191,8 @@ Int cmdServiceTokenList(List<String> args) {
         return 1
     }
     try {
-        var target = serviceIdByName(session, name)
+        var target = resolveServiceOrReport(session, name)
         if (target.length == 0) {
-            println(serviceNotFoundLine(name))
             return 1
         }
         var body = mapOf()
@@ -1192,7 +1236,12 @@ Int cmdServiceTokenRevoke(List<String> args) {
     }
     try {
         var services = fetchServices(session.controlUrl, session.token)
-        var target = matchServiceName(services, name)
+        var match = resolveServiceName(services, name)
+        if (match.ambiguous) {
+            println(serviceAmbiguousLine(name.trim(), match.deviceIds))
+            return 1
+        }
+        var target = match.uniqueId
         if (target.length == 0) {
             println(serviceNotFoundLine(name))
             return 1
@@ -1291,7 +1340,12 @@ Int cmdServiceRotate(List<String> args) {
         if (all) {
             return rotateAllServices(session, services, ttl, prune)
         }
-        var target = matchServiceName(services, name)
+        var match = resolveServiceName(services, name)
+        if (match.ambiguous) {
+            println(serviceAmbiguousLine(name.trim(), match.deviceIds))
+            return 1
+        }
+        var target = match.uniqueId
         if (target.length == 0) {
             println(serviceNotFoundLine(name))
             return 1
@@ -1553,7 +1607,12 @@ Int cmdServiceRotation(List<String> args) {
     }
     try {
         var services = fetchServices(session.controlUrl, session.token)
-        var target = matchServiceName(services, name)
+        var match = resolveServiceName(services, name)
+        if (match.ambiguous) {
+            println(serviceAmbiguousLine(name.trim(), match.deviceIds))
+            return 1
+        }
+        var target = match.uniqueId
         if (target.length == 0) {
             println(serviceNotFoundLine(name))
             return 1
@@ -1858,7 +1917,12 @@ Int runContainment(List<String> args, Bool freezing) {
         var targetId = name
         if (kind == "service") {
             var services = fetchServices(session.controlUrl, session.token)
-            var matched = matchServiceName(services, name)
+            var match = resolveServiceName(services, name)
+            if (match.ambiguous) {
+                println(serviceAmbiguousLine(name.trim(), match.deviceIds))
+                return 1
+            }
+            var matched = match.uniqueId
             if (matched.length == 0) {
                 println(serviceNotFoundLine(name))
                 return 1
