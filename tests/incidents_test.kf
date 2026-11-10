@@ -6,6 +6,8 @@ import kofcloud.model.Incident
 import kofcloud.edge.EdgeState
 import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
+import kofcloud.cli.Commands
+import kofcloud.cli.Local
 import kofcloud.identity.Tokens
 import kofcloud.store.Store
 import kofcloud.util.Limits
@@ -489,4 +491,58 @@ test "incidentes: template de post-mortem tem as 5 secoes e sem dado de cliente"
     // de cliente (mesma regra de log/metrica/audit).
     assert(doc.indexOf("kfs_") >= 0, "cita o que nao vazar")
     assert(doc.indexOf("sem hostname") >= 0, "proibe hostname")
+}
+test "incidents: --resolve solto ou repetido barra antes de qualquer rede", "incident-usage" {
+    // `--resolve` sem valor saia 0 e LISTAVA os incidentes: o operador achava
+    // que tinha fechado um incidente quando o comando nem tentou. Repetida
+    // tambem e ambigua (flagValue leria a primeira). Fail-fast agora.
+    //
+    // Sem sessao o comando ja sai 1 pelo guard de login — o teste precisaria
+    // de sessao REAL para distinguir o guard de uso. Uma sessao para um
+    // control plane inexistente serve: se o parse passasse, o `http.post`
+    // falharia com exit 1 tambem, entao o sinal tem que vir de outro lugar.
+    // Por isso a sessao aponta para um control plane de verdade (abaixo).
+    var port = 20194
+    var registry = Registry("/tmp/kofcloud-inc-usage2-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control no ar")
+    var url = "http://127.0.0.1:" + intToString(port)
+    var token = loginOrCreate(url, "mel", "segredo")
+    var prior = readTextOr(sessionPath(), "")
+    saveSession(LocalSession("", "mel", token, url))
+
+    assert(cmdIncidents(listOf("--resolve")) == 1, "solto barra")
+    assert(cmdIncidents(listOf("--resolve", "id-um", "--resolve", "id-dois")) == 1, "repetida barra")
+    // Posicional solto continua barrando.
+    assert(cmdIncidents(listOf("lixo")) == 1, "posicional solto barra")
+
+    if (prior.length == 0) {
+        File(sessionPath()).delete()
+    } else {
+        writeTextTo(sessionPath(), prior)
+    }
+}
+
+test "incidents: --resolve com valor segue ate o control plane", "incident-usage" {
+    var port = 20193
+    var registry = Registry("/tmp/kofcloud-inc-usage-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control no ar")
+    var url = "http://127.0.0.1:" + intToString(port)
+    var token = loginOrCreate(url, "mel", "segredo")
+    var prior = readTextOr(sessionPath(), "")
+    saveSession(LocalSession("", "mel", token, url))
+
+    // Id inexistente: o comando chega ao control plane e a API responde
+    // 404 KCF125 (exit 1) — a recusa acontece la, nao no parse local.
+    var code = cmdIncidents(listOf("--resolve", "incidente-que-nao-existe"))
+    assert(code == 1, "id inexistente -> 404 KCF125 da API (exit " + intToString(code) + ")")
+
+    if (prior.length == 0) {
+        File(sessionPath()).delete()
+    } else {
+        writeTextTo(sessionPath(), prior)
+    }
 }

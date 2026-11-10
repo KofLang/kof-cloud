@@ -80,7 +80,7 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | painel somente-leitura | `tests/panel_test.kf` | 3 |
 | rotacao de kfs_ (Fase 19 s3) | `tests/rotate_test.kf` | 5 |
 | `security.txt` + `SECURITY.md` (Fase 19 s1 parcial) | `tests/security_test.kf` | 3 |
-| incidentes (Fase 17 s1 + template pós-mortem s3) | `tests/incidents_test.kf` | 13 |
+| incidentes (Fase 17 s1 + template pós-mortem s3) | `tests/incidents_test.kf` | 15 |
 | contenção (Fase 17 s2) | `tests/freeze_test.kf` | 8 |
 | status page (Fase 17 s3 parcial) | `tests/status_page_test.kf` | 5 |
 | publish com allowlist pela CLI (F10 s3) | `tests/publish_allow_test.kf` | 4 |
@@ -103,7 +103,7 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor na lista única e booleanas sem duplicação (CLI) | `tests/value_flags_test.kf` | 3 |
 
-Total: 318 testes. Ver `15-tests.md` para a matriz.
+Total: 320 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

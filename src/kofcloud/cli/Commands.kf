@@ -1986,7 +1986,7 @@ Int cmdIncidents(List<String> args) {
         println(notLoggedInLine())
         return 1
     }
-    if (extraPositional(args, 0) || flagDuplicated(args, "--all")) {
+    if (extraPositional(args, 0) || flagDuplicated(args, "--all") || flagMissingValue(args, "--resolve") || flagDuplicated(args, "--resolve")) {
         println("uso: kof cloud incidents [--all] [--resolve <id>]")
         return 1
     }
