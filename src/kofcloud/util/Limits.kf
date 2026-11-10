@@ -186,6 +186,29 @@ Int httpWindowSeconds(Int windowMs) {
     return seconds
 }
 
+// Tentativas de /v1/login por handle numa janela, antes de recusar com 429.
+// O Edge tem rate limit por hostname, mas o LOGIN acontece no control plane,
+// que nao tinha nenhum: uma senha podia ser testada sem limite por uma
+// conexao local (ou por quem alcanca o control). A chave e o handle (o
+// control plane nao expoe o IP de origem em `web.app()`); isso protege a
+// conta de forca bruta dirigida, que e o ataque que importa aqui.
+// Recuo seguro: zerado/invalido cai no default.
+Int limitLoginAttempts() {
+    var n = config.int("kofcloud.limits.loginAttempts", 10)
+    if (n <= 0) {
+        return 10
+    }
+    return n
+}
+
+Int limitLoginWindowMs() {
+    var ms = config.int("kofcloud.limits.loginWindowMs", 60000)
+    if (ms <= 0) {
+        return 60000
+    }
+    return ms
+}
+
 // Conexoes publicas SIMULTANEAS aceitas pelo Edge (uma task por conexao).
 // docs/10-edge.md prometia 1024 com 503; nao existia teto nenhum — cada
 // accept criava uma task sem limite, entao uma rajada de conexoes abertas e

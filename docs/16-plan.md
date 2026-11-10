@@ -677,6 +677,18 @@ Ver `13-kof-apis.md` (tabela de cripto).
 domínios/tokens pelo terminal afasta quem não é técnico — e gestão visual
 é o que transforma "túnel" em "nuvem" na cabeça do usuário.
 
+**Rate limit no login ✅.** O Edge limitava requisições por hostname, mas o
+  LOGIN acontece no control plane, que não tinha teto nenhum: uma senha podia
+  ser testada sem limite por quem alcança o control. Agora `handleLogin`
+  conta tentativas **por handle** (`kofcloud.limits.loginAttempts`, default
+  10 / `loginWindowMs` 60 s; sonda em memória, efêmera como `edgeOnline`) e,
+  acima do teto, responde `429 KCF134` + `retryAfterSec` **antes** de
+  verificar a senha (não gasta CPU de hash para o atacante). Um acerto reseta
+  a janela, então usuário legítimo que errou a senha não fica travado pelo
+  próprio sucesso. A chave é o handle porque o control plane não vê o IP de
+  origem em `web.app()` — e força bruta dirigida a uma conta é o ataque que
+  importa aqui. Prova: `tests/login_limit_test.kf` (2).
+
 **Estado: slices 1 e 2 ✅; slice 3 pendente.** Desenho fatiado (cada slice é
 um incremento testável; o painel consome só a API pública `/v1` — nenhum
 endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).

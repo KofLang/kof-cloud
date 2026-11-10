@@ -63,6 +63,11 @@ class Registry {
     // escreve aqui (via bind/unbind); o control plane so le, filtrado por
     // conta. Em deploy multi-processo cada Edge tem o seu mapa.
     Map<String, Bool> edgeOnline
+    // Sonda de tentativas de login por handle (Fase 5): "<count>;<startMs>"
+    // em String porque `Map<String, Int>` como campo quebra o verificador
+    // JVM (L11). Nao persistida: e sinal de ataque em curso, efemero como
+    // `edgeOnline`. A chave e o handle (o control plane nao ve o IP).
+    Map<String, String> loginProbes
     // Sondas de expiracao em massa (por conta, Fase 17 slice 1): janela
     // deslizante em memoria, nao persistida (o padrao e efemero, como
     // `edgeOnline`). Valor `"<count>;<windowStartMs>"` porque
@@ -83,6 +88,7 @@ class Registry {
         this.freezeMarks = mapOf()
         this.edgeOnline = mapOf()
         this.expiryProbes = mapOf()
+        this.loginProbes = mapOf()
         this.maxDevices = limitDevices()
         this.maxServices = limitServices()
         this.edgeHosts = parseEdgeHosts(config.str("kofcloud.edgeHosts", ""))
@@ -489,6 +495,40 @@ class Registry {
             return null
         }
         return this.accountById(matched)
+    }
+
+    // Conta uma tentativa de login para o handle. Devolve false quando a
+    // conta ATINGIU o teto na janela (o chamador responde 429 antes de
+    // verificar senha). Um ACERTO reseta a janela daquele handle: um
+    // usuario legitimo que errou a senha nao fica travado pelo proprio
+    // sucesso depois.
+    Bool loginAttemptBlocked(String handle) {
+        var trimmed = handle.trim().toLowerCase()
+        if (trimmed.length == 0) {
+            return false
+        }
+        var now = time.now()
+        var saved = this.loginProbes.get(trimmed)
+        var count = 0
+        var start = now
+        if (saved != null) {
+            var parts = saved.split(";")
+            if (parts.length == 2) {
+                count = parseIntSafe(parts[0], 0)
+                start = parseLongSafe(parts[1], now)
+            }
+        }
+        if (now - start > limitLoginWindowMs()) {
+            count = 0
+            start = now
+        }
+        count = count + 1
+        this.loginProbes.put(trimmed, intToString(count) + ";" + longToString(start))
+        return count > limitLoginAttempts()
+    }
+
+    void loginAttemptReset(String handle) {
+        this.loginProbes.remove(handle.trim().toLowerCase())
     }
 
     // ---- credenciais da conta (kfc_) ----

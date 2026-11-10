@@ -66,6 +66,12 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   vivas *neste* Edge; com control plane e Edge separados, ou com mais de um
   Edge, a lista fica vazia/parcial (ausência, não mentira). Não há pub/sub
   entre nós — é o slice 2 da Fase 16.
+* **O rate limit do login é por handle, não por IP.** O control plane não vê
+  o IP de origem em `web.app()`, então a chave é o handle da conta: protege a
+  conta de força bruta dirigida, mas um atacante que distribua tentativas
+  entre vários handles (password spray) enche o inventário mais devagar e
+  não é contido por este teto — é o mesmo trade-off do rate limit do Edge
+  (chave hostname, por falta de IP visível).
 * **Rate limiting é por processo.** Não é global entre nós.
 * **`parseStatusLine` também.** O código da linha de status da sonda de
   health (`agent/Health.kf`) vai pelo mesmo `parseIntBounded` com teto 599;

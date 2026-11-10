@@ -11,9 +11,9 @@ import kofcloud.model.Device
 import kofcloud.model.Errors
 import kofcloud.model.Exposure
 import kofcloud.model.Service
-import kofcloud.util.Text
 import kofcloud.util.Hosts
 import kofcloud.util.Limits
+import kofcloud.util.Text
 import kofcloud.protocol.Version
 
 // Control Plane: HTTP/JSON sobre web.app(). O handler-scoped `status()` so
@@ -213,6 +213,18 @@ HttpResult handleLogin(Registry registry, String bodyText) {
     var body = decodeBody(bodyText)
     var handle = mapField(body, "handle")
     var password = mapField(body, "password")
+    // Forca bruta dirigida: teto de tentativas POR HANDLE na janela. O Edge
+    // ja limita por hostname, mas o login acontece aqui (control plane) e
+    // estava sem teto. Acima do teto -> 429 KCF134 + Retry-After, ANTES de
+    // verificar a senha (nao consuma CPU de hash para um atacante). Um
+    // ACERTO reseta a janela (usuario legitimo nao fica travado pelo
+    // proprio sucesso).
+    if (registry.loginAttemptBlocked(handle)) {
+        var limited = mapOf()
+        limited.put("error", errLoginRateLimited())
+        limited.put("retryAfterSec", intToString(limitLoginWindowMs() / 1000 + 1))
+        return HttpResult(429, json.encode(limited))
+    }
     var account = registry.accountByHandle(handle)
     if (account == null) {
         return HttpResult(401, errorJson(errInvalidCredentials()))
@@ -220,6 +232,7 @@ HttpResult handleLogin(Registry registry, String bodyText) {
     if (passwords.verify(password, account.passwordHash) == false) {
         return HttpResult(401, errorJson(errInvalidCredentials()))
     }
+    registry.loginAttemptReset(handle)
     var token = registry.issueToken(account.id)
     noteLogin()
     registry.audit(auditActorAccount(account.handle), auditLogin(), account.id)

@@ -39,6 +39,12 @@ String errPasswordTooShort() {
     return "KCF005: password too short"
 }
 
+// Tentativas de login acima do teto na janela. Mesma familia de KCF107
+// (rate limit do Edge) mas no control plane, onde o login acontece.
+String errLoginRateLimited() {
+    return "KCF134: too many login attempts"
+}
+
 // ---- dispositivo ----
 
 String errDeviceFields() {
@@ -368,6 +374,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF106") >= 0) {
         return "Muitas conexoes simultaneas — tente de novo em instantes."
+    }
+    if (raw.indexOf("KCF134") >= 0) {
+        return "Tentativas de login demais para esta conta — aguarde a janela (kofcloud.limits.loginWindowMs) e tente de novo."
     }
     if (raw.indexOf("KCF107") >= 0) {
         return "Muitas requisicoes em pouco tempo — aguarde um instante e tente de novo."

@@ -1,0 +1,92 @@
+import kofcloud.cli.Commands
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.model.Errors
+import kofcloud.store.Store
+import kofcloud.util.Limits
+import testkit.Support
+
+// Forca bruta de senha no login (Fase 5).
+//
+// O Edge limite requisições por hostname, mas o LOGIN acontece no control
+// plane, que nao tinha teto nenhum: uma senha podia ser testada sem limite por
+// quem alcanca o control. Agora o teto e por HANDLE na janela — a chave que
+// protege a conta (o control plane nao ve o IP de origem em `web.app()`), e o
+// atacante que dirige o ataque a uma conta e contido.
+
+String loginLimitPath(String name) {
+    return "/tmp/kofcloud-loginlim-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "login limit: fonte unica, codigo e Hint", "loginlimit-unit" {
+    assert(limitLoginAttempts() > 0, "teto positivo")
+    assert(limitLoginWindowMs() > 0, "janela positiva")
+    assert(errLoginRateLimited().indexOf("KCF134") >= 0, "KCF134")
+    assert(errHint(errLoginRateLimited()).indexOf("loginWindowMs") >= 0, "Hint aponta a janela")
+
+    var registry = Registry(loginLimitPath("unit"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+
+    // Dentro do teto: libera.
+    var blocked = false
+    var i = 0
+    while (i < limitLoginAttempts()) {
+        blocked = registry.loginAttemptBlocked("mel")
+        i = i + 1
+    }
+    assert(blocked == false, "ate o teto, libera")
+
+    // Uma a mais: bloqueia.
+    assert(registry.loginAttemptBlocked("mel") == true, "acima do teto, bloqueia")
+    // Handles sao independentes.
+    assert(registry.loginAttemptBlocked("ana") == false, "outra conta nao e afetada")
+    // Handle e normalizado (caixa e padding nao abrem uma janela nova).
+    assert(registry.loginAttemptBlocked("  MEL  ") == true, "caixa/padding nao escapa")
+    // Handle vazio nunca bloqueia (nao ha conta a proteger).
+    assert(registry.loginAttemptBlocked("") == false, "vazio libera")
+
+    // Um ACERTO reseta a janela.
+    registry.loginAttemptReset("mel")
+    assert(registry.loginAttemptBlocked("mel") == false, "reset libera de novo")
+    assert(blocked == false, "sem efeito colateral no account")
+}
+
+test "login limit: senha errada repetida vira 429 KCF134; acerto limpa", "loginlimit" {
+    // Teto baixo para o teste (config do processo nao muda aqui).
+    var controlPort = 20171
+    var registry = Registry(loginLimitPath("http"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    assert(statusOf(created) == 200, "conta criada")
+
+    // O default e 10 tentativas: as 10 primeiras com senha errada dao 401.
+    var i = 0
+    var lastCode = 0
+    while (i < limitLoginAttempts()) {
+        var r = httpPostJson(controlPort, "/v1/login", "{\"handle\":\"mel\",\"password\":\"errada\"}", "")
+        lastCode = statusOf(r)
+        i = i + 1
+    }
+    assert(lastCode == 401, "dentro do teto ainda e 401 (recebido " + intToString(lastCode) + ")")
+
+    // A proxima e 429 antes de conferir a senha — e ATE a senha certa leva
+    // 429 enquanto a janela nao zera (o ataque fica contido, nao muda com a
+    // senha certa chegando no meio).
+    var limited = httpPostJson(controlPort, "/v1/login", "{\"handle\":\"mel\",\"password\":\"segredo\"}", "")
+    assert(statusOf(limited) == 429, "acima do teto -> 429")
+    assert(bodyOf(limited).indexOf("KCF134") >= 0, "KCF134 no corpo")
+    assert(bodyOf(limited).indexOf("retryAfterSec") >= 0, "anuncia o recuo")
+
+    // Outra conta nao foi afetada.
+    httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
+    var ana = httpPostJson(controlPort, "/v1/login", "{\"handle\":\"ana\",\"password\":\"segredo\"}", "")
+    assert(statusOf(ana) == 200, "outra conta entra normalmente")
+
+    // Reset manual (equivalente ao acerto): a conta volta a entrar.
+    registry.loginAttemptReset("mel")
+    var back = httpPostJson(controlPort, "/v1/login", "{\"handle\":\"mel\",\"password\":\"segredo\"}", "")
+    assert(statusOf(back) == 200, "acerto depois do reset")
+}

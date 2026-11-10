@@ -18,7 +18,7 @@ Base: `http://<control-host>/v1`
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
 | `POST` | `/v1/accounts` | — | cria conta `{handle,email}` → `{accountId,handle,token}` |
-| `POST` | `/v1/login` | — | `{handle}` → `{accountId,token}` |
+| `POST` | `/v1/login` | — | `{handle,password}` → `{accountId,handle,token}`; teto de tentativas **por handle** (`kofcloud.limits.loginAttempts`, default 10 / `loginWindowMs` 60 s) → `429 KCF134` + `retryAfterSec` antes de verificar a senha; acerto reseta a janela |
 | `POST` | `/v1/devices` | conta | registra dispositivo `{name,publicKey}` → `{deviceId}` |
 | `GET` | `/v1/devices` | conta | lista dispositivos |
 | `POST` | `/v1/devices/revoke` | conta | `{deviceId}` → `{revoked:true}` |
