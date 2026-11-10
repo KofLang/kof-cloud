@@ -435,6 +435,23 @@ test "text: extraPositional barra posicional sobrando", "extra-positional" {
     assert(extraPositional(listOf("site", "kfs_x", "lixo"), 2) == true, "terceiro posicional barra")
     assert(extraPositional(listOf("site", "kfs_x"), 2) == false, "dois exatos ok")
     assert(extraPositional(listOf("site", "--ttl", "24"), 1) == false, "ttl com valor nao conta")
+    // Extratores firstPositional/secondPositional agora compartilham a mesma
+    // fonte unica (positionalArgs): a flag pode vir antes do argumento sem que
+    // o VALOR da flag seja confundido com o argumento (defeito real medido).
+    assert(firstPositional(listOf("--port", "8080", "site")) == "site", "flag antes do primeiro posicional")
+    assert(firstPositional(listOf("site", "--port", "8080")) == "site", "flag depois do primeiro posicional")
+    assert(firstPositional(listOf("--password", "segredo", "mel")) == "mel", "senha antes do handle nao vira handle")
+    assert(firstPositional(listOf("--ttl", "24", "--all")) == "", "so flags = sem posicional")
+    assert(firstPositional(listOf<String>()) == "", "vazio = sem posicional")
+    // secondPositional pula o valor de flags intermediarias e preserva a ordem.
+    assert(secondPositional(listOf("set", "--secret", "s", "https://hook.com")) == "https://hook.com", "segredo antes da url nao vira url")
+    assert(secondPositional(listOf("set", "https://hook.com", "--secret", "s")) == "https://hook.com", "segredo depois da url")
+    assert(secondPositional(listOf("site", "kfs_x")) == "kfs_x", "segundo posicional direto")
+    assert(secondPositional(listOf("so-um")) == "", "um posicional so = sem segundo")
+    assert(secondPositional(listOf("--service", "s")) == "", "so flag = sem segundo")
+    // positionalArgs expoe a lista pura.
+    var pos = positionalArgs(listOf("--control", "http://c", "mel", "--device", "nb"))
+    assert(pos.size == 1 && pos.get(0) == "mel", "so o handle e posicional")
 }
 
 test "text: comandos sem posicional rejeitam sobra", "extra-zero" {

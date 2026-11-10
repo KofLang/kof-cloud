@@ -218,16 +218,7 @@ Bool flagDuplicated(List<String> args, String flag) {
     return false
 }
 
-String firstPositional(List<String> args) {
-    for (var arg in args) {
-        if (arg.startsWith("--") == false) {
-            return arg
-        }
-    }
-    return ""
-}
-
-// Flags que CONSOMEM o token seguinte (o valor). Fonte unica: `extraPositional`
+// Flags que CONSOMEM o token seguinte (o valor). Fonte unica: `positionalArgs`
 // usa esta lista, e o teste trava que toda flag lida com `flagValue` aparece
 // aqui. Sem isso o valor de uma flag desconhecida contava como posicional —
 // `incidents --resolve <id>` e `webhook set <url> --secret <s>` barrassem
@@ -242,14 +233,17 @@ List<String> valueFlags() {
     )
 }
 
-// Posicionais alem do esperado (`service token-revoke site kfs_x lixo`):
-// first/secondPositional leriam os N primeiros em silencio e o resto
-// sumiria — typo que vira acao errada sem aviso. Devolve true quando ha
-// mais posicionais que `max`. Puro, sem rede nem HOME.
-// NOTA: valores de flag (`--port 8080`) nao sao posicionais — pula o
-// token seguinte a qualquer flag com valor (`valueFlags`).
-Bool extraPositional(List<String> args, Int max) {
-    var count = 0
+// Argumentos posicionais (o que sobra fora de flags e do valor que cada uma
+// consome). Fonte unica dos tres leitores: `firstPositional`, `secondPositional`
+// e `extraPositional` delegam aqui. Antes, os extratores pegavam o primeiro/
+// segundo token sem `--` SEM pular o valor da flag — com a flag antes do
+// argumento, o VALOR virava o posicional (medido): `publish --port 8080 site`
+// publicava um servico chamado "8080"; `login --password segredo mel` criava
+// conta com handle "segredo" (a senha virava hostname publico!);
+// `webhook set --secret s https://hook` configurava URL "s";
+// `service rotate --ttl 24 --all` barrava com posicional fantasma "24".
+List<String> positionalArgs(List<String> args) {
+    var out = listOf<String>()
     var known = valueFlags()
     var i = 0
     while (i < args.size) {
@@ -259,14 +253,37 @@ Bool extraPositional(List<String> args, Int max) {
             continue
         }
         if (arg.startsWith("--") == false) {
-            count = count + 1
-            if (count > max) {
-                return true
-            }
+            out.add(arg)
         }
         i = i + 1
     }
-    return false
+    return out
+}
+
+String firstPositional(List<String> args) {
+    var pos = positionalArgs(args)
+    if (pos.size == 0) {
+        return ""
+    }
+    return pos.get(0)
+}
+
+// Segundo argumento posicional (o primeiro e capturado por firstPositional).
+String secondPositional(List<String> args) {
+    var pos = positionalArgs(args)
+    if (pos.size < 2) {
+        return ""
+    }
+    return pos.get(1)
+}
+
+// Posicionais alem do esperado (`service token-revoke site kfs_x lixo`):
+// ler os N primeiros em silencio e descartar o resto e typo que vira acao
+// errada sem aviso. Devolve true quando ha mais posicionais que `max`.
+// Puro, sem rede nem HOME. Mesma fonte (`positionalArgs`) que os extratores:
+// o que eles leem e exatamente o que aqui conta.
+Bool extraPositional(List<String> args, Int max) {
+    return positionalArgs(args).size > max
 }
 
 // ---- login / logout ----
@@ -1634,20 +1651,6 @@ Int cmdServiceRotation(List<String> args) {
         printFail("falha", e)
         return 1
     }
-}
-
-// Segundo argumento posicional (o primeiro e capturado por firstPositional).
-String secondPositional(List<String> args) {
-    var seen = false
-    for (var arg in args) {
-        if (arg.startsWith("--") == false) {
-            if (seen) {
-                return arg
-            }
-            seen = true
-        }
-    }
-    return ""
 }
 
 Int cmdDomainList(List<String> args) {

@@ -59,6 +59,10 @@ test "flags: toda flag com valor esta na lista e o valor nao conta como posicion
         // O valor da flag nunca vira posicional (com qualquer flag).
         assert(extraPositional(listOf(flag, "valor"), 0) == false, "valor de " + flag + " virou posicional")
         assert(extraPositional(listOf(flag, "valor"), 1) == false, "um posicional permitido")
+        // O valor da flag tambem nao e capturado por first/secondPositional:
+        // a flag antes do argumento nao corrompe o argumento (defeito real medido).
+        assert(firstPositional(listOf(flag, "valor", "alvo")) == "alvo", "primeiro posicional apos " + flag)
+        assert(secondPositional(listOf("um", flag, "valor", "dois")) == "dois", "segundo posicional apos " + flag)
     }
     assert(known.size == 23, "23 flags com valor: " + intToString(known.size))
     assert(flagsReadWithFlagValue().size >= 20, "lista derivada das fontes: " + intToString(flagsReadWithFlagValue().size))
