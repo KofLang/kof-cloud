@@ -901,6 +901,15 @@ Int cmdServiceStatus(List<String> args) {
     }
     try {
         var services = fetchServices(session.controlUrl, session.token)
+        // Mesmo resolvedor dos comandos que ja recusam ambiguidade: com o
+        // mesmo nome em 2 devices (estado legado — a API ja barra novos), o
+        // status imprimia o PRIMEIRO em silencio. Nunca escolhe um device
+        // arbitrario: nomeia os dois e diz como desambiguar.
+        var match = resolveServiceName(services, name)
+        if (match.ambiguous) {
+            println(serviceAmbiguousLine(name.trim(), match.deviceIds))
+            return 1
+        }
         var trimmed = name.trim()
         for (var service in services) {
             if (service.name == trimmed) {
@@ -1137,6 +1146,14 @@ Int cmdServiceToken(List<String> args) {
     }
     try {
         var services = fetchServices(session.controlUrl, session.token)
+        // Emitir credencial para o device errado e pior que recusar: o kfs_
+        // daria acesso ao servico de OUTRO dispositivo da conta. Mesmo
+        // resolvedor dos comandos de rotate/revoke/rotation.
+        var match = resolveServiceName(services, name)
+        if (match.ambiguous) {
+            println(serviceAmbiguousLine(name.trim(), match.deviceIds))
+            return 1
+        }
         var trimmed = name.trim()
         var target = ""
         var exposure = ""

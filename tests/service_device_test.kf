@@ -91,3 +91,48 @@ test "status: lista de servicos usa a mesma linha do service list", "svcdevice-u
     var fallback = serviceListLine(serviceFixture("site", "dev-9"), listOf<Device>())
     assert(fallback.indexOf("device: dev-9") >= 0, "id no rotulo")
 }
+
+test "status/token: nome homonimo em estado legado recusa em vez de escolher", "svcdevice" {
+    // A API barra homonimos novos (KCF139), mas um estado legado pode ter o
+    // mesmo nome em 2 devices. `cmdServiceStatus` e `cmdServiceToken` faziam
+    // busca propria e imprimiam/emiliam para o PRIMEIRO em silencio — o token
+    // emitido daria acesso ao servico do OUTRO dispositivo. Agora usam o
+    // mesmo `resolveServiceName` dos comandos de rotate/revoke: recusam
+    // nomeando os devices.
+    var controlPort = 20193
+    var registry = Registry("/tmp/kofcloud-svcd-legacy-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    var url = "http://127.0.0.1:" + intToString(controlPort)
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var first = registerDevice(url, token, "notebook", "pk1")
+    var second = registerDevice(url, token, "servidor", "pk2")
+    requireOk(http.post(url + "/v1/services", "{\"deviceId\":\"" + first + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", jsonHeader(token)))
+    // Homonimo injetado direto (simula estado anterior ao KCF139).
+    var mel = registry.accountByHandle("mel")
+    var accountId = ""
+    if (mel != null) {
+        accountId = mel.id
+    }
+    registry.services.add(Service("legacy-1", accountId, second, "site", "127.0.0.1", 8081, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", ""))
+
+    var services = fetchServices(url, token)
+    var match = resolveServiceName(services, "site")
+    assert(match.ambiguous, "homonimo detectado")
+    assert(match.deviceIds.size == 2, "dois devices na lista")
+
+    var prior = readTextOr(sessionPath(), "")
+    saveSession(LocalSession("", "mel", token, url))
+    var statusCode = cmdServiceStatus(listOf("site"))
+    var tokenCode = cmdServiceToken(listOf("site"))
+    if (prior.length == 0) {
+        File(sessionPath()).delete()
+    } else {
+        writeTextTo(sessionPath(), prior)
+    }
+    assert(statusCode == 1, "status recusa homonimo")
+    assert(tokenCode == 1, "token recusa homonimo")
+}
