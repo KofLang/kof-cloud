@@ -156,7 +156,14 @@ address validados, sem default silencioso). **Fatia: nome único no manifesto.**
 `parseManifest` recusava tudo menos a repetição: dois itens com o mesmo
 `name` passavam e o publish — idempotente por nome — reescrevia o primeiro
 em silêncio. Agora nome repetido falha posicional antes de build/publish.
-Prova: `tests/deploy_test.kf` (`deploy-err` estendido). **Fatia: artefato tem de ser arquivo
+Prova: `tests/deploy_test.kf` (`deploy-err` estendido). **Fatia: nome é único
+na CONTA, não só no manifesto.** Medido: publicar `site` no device B devolvia
+`200` com o `site` do device A (porta do A) e nada era criado — a conta ficava
+com um serviço só e, como o hostname é `<nome>.<handle>`, o roteamento ia
+sempre para o A. A idempotência do publish passou a ser por (conta, device,
+nome): mesmo device devolve o existente; outro device dá `409 KCF139`. Prova:
+`tests/deploy_test.kf` (`deploy-e2e`) e `tests/errors_test.kf`
+(`errors-hint-all`, 57 construtores). **Fatia: artefato tem de ser arquivo
 legível** (`artifactProblem`): `File().exists()` aceita diretório, então
 `"artifact": "dist"` passava a checagem e o deploy publicava um serviço cujo
 "artefato" era a pasta. Agora exige conteúdo legível (`readText() != null` —

@@ -409,6 +409,11 @@ Int publishHttpStatus(String e) {
     if (e.indexOf("KCF080") >= 0 || e.indexOf("KCF081") >= 0) {
         return 429
     }
+    // Nome ja usado noutro device da conta: conflito de recurso (409) — o
+    // nome existe e o pedido e valido, so nao pode coexistir.
+    if (e.indexOf("KCF139") >= 0) {
+        return 409
+    }
     if (e.indexOf("KCF040") >= 0 || e.indexOf("KCF043") >= 0) {
         return 400
     }

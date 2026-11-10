@@ -69,6 +69,17 @@ String errServiceNotFound() {
     return "KCF041: service not found"
 }
 
+// Nome de servico ja usado por OUTRO device da mesma conta. Dois servicos
+// homonimos gerariam o mesmo hostname (`<nome>.<handle>`) e o roteamento
+// casaria o primeiro da lista — o segundo ficaria inalcancavel. Antes o
+// publish devolvia (200) o servico do outro device como se fosse o novo,
+// sem publicar nada: o usuario achava que publicou e o trafego ia para a
+// maquina errada. 409 porque o nome existe e o pedido e valido — o conflito
+// e de recurso, nao de formato.
+String errServiceNameTaken() {
+    return "KCF139: service name already used by another device"
+}
+
 String errServiceNotYours() {
     return "KCF042: not the owner of service"
 }
@@ -374,6 +385,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF106") >= 0) {
         return "Muitas conexoes simultaneas — tente de novo em instantes."
+    }
+    if (raw.indexOf("KCF139") >= 0) {
+        return "O nome do servico ja esta em uso noutro dispositivo da conta — o hostname seria o mesmo e o trafego iria para a maquina errada; use outro nome ou remova o servico antigo."
     }
     if (raw.indexOf("KCF134") >= 0) {
         return "Tentativas de login demais para esta conta — aguarde a janela (kofcloud.limits.loginWindowMs) e tente de novo."

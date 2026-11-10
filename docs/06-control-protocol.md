@@ -197,6 +197,7 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `400` | `KCF045` exposure inválida | publish com exposure fora de PUBLIC/AUTHENTICATED/PRIVATE |
 | `400` | `KCF046` protocol inválido | publish com protocol fora de `http` (MVP: só HTTP/1.1 pelo túnel) |
 | `400` | `KCF047` address fora de loopback | publish com localAddress fora de 127.0.0.1/localhost/::1 (anti-SSRF) |
+| `409` | `KCF139` service name already used by another device | publish com nome já usado por **outro** device da conta: o hostname `<nome>.<handle>` seria o mesmo e o roteamento casaria o primeiro. Antes o publish devolvia `200` com o serviço do outro device e nada era publicado |
 | `401` | `KCF003` invalid credentials | conta/senha não conferem (opaco: conta inexistente responde igual) |
 | `401` | `KCF004` unauthorized | token da conta ausente/inválido |
 | `404` | `KCF021` device not found | device inexistente **ou de outra conta** (opaco por desenho) |

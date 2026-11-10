@@ -1428,8 +1428,17 @@ class Registry {
         if (device.accountId != account.id) {
             throw errDeviceNotYours()
         }
+        // Idempotencia por (conta, DEVICE, nome): republicar no mesmo device
+        // devolve o existente; o mesmo nome noutro device e conflito, nao
+        // "ja existe". Antes a busca ignorava o device: publicar "site" no
+        // notebookB devolvia o "site" do notebookA (200, porta do A), nada
+        // era publicado e o hostname — que e `<nome>.<handle>`, igual para
+        // os dois — roteava sempre para o A. Medido.
         var existing = this.serviceByName(account.id, name)
         if (existing != null) {
+            if (existing.deviceId != deviceId) {
+                throw errServiceNameTaken()
+            }
             return existing
         }
         if (this.servicesForDevice(deviceId).size >= this.maxServices) {

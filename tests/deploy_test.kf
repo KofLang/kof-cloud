@@ -376,6 +376,10 @@ test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {
     var controlPort = 19711
     var path = "/tmp/kofcloud-depe2e-" + crypto.randomHex(4) + ".json"
     var registry = Registry(path)
+    // Teto de servicos por device elevado: este cenario publica varios
+    // (manifesto + orfaos + homonimos) e o default (10) faria o publish
+    // falhar no meio, escondendo o que o teste mede.
+    registry.setLimits(5, 40)
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
     assert(waitForPort(controlPort, 60), "control plane no ar")
@@ -425,8 +429,17 @@ test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {
 
     // --prune fecha o drift: orfao do MESMO device some; de outro device,
     // nunca (escopo do prune e o device atual).
+    // Homonimo noutro device: o hostname e `<nome>.<handle>` — igual para
+    // os dois — entao dois servicos homonimos na mesma conta seriam
+    // inalcancaveis (o roteamento casa o primeiro). Medido: antes o publish
+    // devolvia 200 com o servico do OUTRO device e nada era publicado.
+    // Agora e 409 KCF139.
     var otherDevice = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"cel\",\"publicKey\":\"pk2\"}", accountToken)
     var otherId = mapField(json.decode<Map<String, String>>(bodyOf(otherDevice)), "deviceId")
+    var homonymBody = "{\"deviceId\":\"" + otherId + "\",\"name\":\"extra\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"9998\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    var homonymResp = httpPostJson(controlPort, "/v1/services", homonymBody, accountToken)
+    assert(statusOf(homonymResp) == 409, "nome do outro device -> 409; recebeu " + intToString(statusOf(homonymResp)))
+    assert(bodyOf(homonymResp).indexOf("KCF139") >= 0, "KCF139 no corpo")
     var otherBody = "{\"deviceId\":\"" + otherId + "\",\"name\":\"alheio\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"9998\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
     assert(statusOf(httpPostJson(controlPort, "/v1/services", otherBody, accountToken)) == 200, "servico de outro device")
     // Simula o prune: diff dos publicados DESTE device contra o manifesto.

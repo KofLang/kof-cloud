@@ -766,7 +766,12 @@ Int cmdDown(List<String> args) {
         for (var wanted in services) {
             var target = ""
             for (var service in live) {
-                if (service.name == wanted.name) {
+                // Escopo: o manifesto descreve os servicos DESTE device
+                // (o `deploy` publica com o deviceId da sessao local, e o
+                // `--prune` tambem so toca o device atual). Sem o filtro, um
+                // `down` rodado no notebookA removia "site" se ele vivesse no
+                // notebookB — a mesma conta, outro device. Medido.
+                if (service.deviceId == identity.deviceId && service.name == wanted.name) {
                     target = service.id
                 }
             }
