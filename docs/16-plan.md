@@ -168,7 +168,15 @@ resolvedor devolvia o primeiro serviço que casava, então `service status site`
 com "site" em dois devices agia no dispositivo que a ordem da lista decidisse.
 Agora `resolveServiceName` (pura) distingue inexistente de ambíguo e os
 comandos por nome recusam listando os devices. Prova:
-`tests/hosts_test.kf` (`service-name-match` estendido). **Fatia: artefato tem de ser arquivo
+`tests/hosts_test.kf` (`service-name-match` estendido). **Fatia: `--check`/`doctor` conferem o
+dispositivo.** O manifesto descreve a máquina local, mas `verifyDeployment`
+casava só o nome: um serviço homônimo publicado noutro device contava como
+"publicado" e o check dava verde para um deploy que nunca chegou ali —
+medido. `verifyDeploymentFor` recebe o `deviceId` esperado e acusa
+"publicado no dispositivo X, não neste"; `cmdDeploy` e `doctor` passam o
+device da sessão; a sobrecarga antiga (sem escopo) fica para chamadores sem
+sessão. Prova: `tests/deploy_test.kf` (`deploy-check` estendido: sem escopo
+aprova, com escopo acusa). **Fatia: artefato tem de ser arquivo
 legível** (`artifactProblem`): `File().exists()` aceita diretório, então
 `"artifact": "dist"` passava a checagem e o deploy publicava um serviço cujo
 "artefato" era a pasta. Agora exige conteúdo legível (`readText() != null` —

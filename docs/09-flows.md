@@ -114,10 +114,12 @@ alternativa): só o código obrigava o operador a reproduzir o comando à mão.
  5. usuário: kof cloud down → unpublish só dos listados (extra sobrevive)
     com `--prune`: remove também os órfãos DESTE device fora do manifesto
     (nunca toca serviço de outro device)
- 6. com `--check`: publicado E respondendo localmente? (`checkLocalServiceFor`,
+ 6. com `--check`: publicado **neste dispositivo** E respondendo localmente?
+    (`checkLocalServiceFor`,
     que agora usa a MESMA sonda do Agent: `GET /` com prazo, status < 500 —
     antes era só um connect TCP, e um serviço que respondia `500` ou que
-    aceitava e nunca respondia passava como saudável) + artefato declarado
+    aceitava e nunca respondia passava como saudável; e um homônimo publicado
+    noutro device não conta como publicado aqui) + artefato declarado
     existe no disco? (aviso `artefato ausente`, nunca bloqueio) — sem
     rollback, só diagnóstico
 ```

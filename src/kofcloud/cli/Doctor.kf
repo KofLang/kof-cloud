@@ -230,7 +230,7 @@ DoctorReport doctorCheckWith(String manifestPath, String tlsCertPath) {
     // doctor replicava so publicado/resposta e deixava o drift passar em
     // silencio — agora os dois caminhos acusam igual. Sem fetch proprio:
     // o verify lista sozinho e devolve os problemas ja ordenados.
-    var problems = verifyDeployment(session.controlUrl, session.token, wanted)
+    var problems = verifyDeploymentFor(session.controlUrl, session.token, wanted, identity.deviceId)
     if (problems.size == 0) {
         for (var service in wanted) {
             lines.add(doctorOkLine(service.name + " publicado e respondendo em " + service.address + ":" + intToString(service.port)))

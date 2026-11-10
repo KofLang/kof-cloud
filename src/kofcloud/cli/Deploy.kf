@@ -215,15 +215,27 @@ String artifactProblem(String serviceName, String artifact) {
     return serviceName + ": artefato ausente (" + trimmed + ") — rode: kof cloud deploy"
 }
 
-// Confere que cada servico do manifesto esta publicado (existe no control
-// plane para esta conta), COM A MESMA CONFIG (porta/address/exposure/
-// protocol/allowMethods/allowPaths) e responde localmente. Devolve a lista de problemas
-// `nome: motivo`; vazia = tudo saudavel. Drift de config e acusado antes
-// do check de resposta (nao adianta o local responder se e outro servico
-// que esta publicado). Por ultimo, o artefato declarado (quando ha):
-// arquivo local ausente vira aviso de staleness — nunca bloqueio, e nunca
-// antes do publicado/resposta (publicado continua sendo o primario).
+// Confere que cada servico do manifesto esta publicado **neste device**
+// (existe no control plane para esta conta), COM A MESMA CONFIG (porta/
+// address/exposure/protocol/allowMethods/allowPaths) e responde localmente.
+// Devolve a lista de problemas `nome: motivo`; vazia = tudo saudavel.
+// Drift de config e acusado antes do check de resposta (nao adianta o local
+// responder se e outro servico que esta publicado). Por ultimo, o artefato
+// declarado (quando ha): arquivo local ausente vira aviso de staleness —
+// nunca bloqueio, e nunca antes do publicado/resposta (publicado continua
+// sendo o primario).
+//
+// `expectedDeviceId`: o manifesto descreve a maquina LOCAL (o deploy publica
+// com o deviceId da sessao), entao um servico homonimo publicado NOUTRO
+// device nao serve como "publicado" — sem essa checagem o `--check`/`doctor`
+// davam verde para um deploy que nunca chegou nesta maquina (medido). Vazio
+// = sem escopo (comportamento antigo; usado por chamadores que nao tem a
+// sessao).
 List<String> verifyDeployment(String controlUrl, String token, List<ManifestService> wanted) {
+    return verifyDeploymentFor(controlUrl, token, wanted, "")
+}
+
+List<String> verifyDeploymentFor(String controlUrl, String token, List<ManifestService> wanted, String expectedDeviceId) {
     var problems = listOf<String>()
     var live = listOf<Service>()
     try {
@@ -235,25 +247,34 @@ List<String> verifyDeployment(String controlUrl, String token, List<ManifestServ
     for (var service in wanted) {
         var found = false
         var drift = ""
+        var otherDevice = ""
         for (var remote in live) {
             if (remote.name == service.name) {
-                found = true
-                if (remote.localPort != service.port) {
-                    drift = "porta " + intToString(remote.localPort) + " != " + intToString(service.port)
-                } else if (remote.localAddress != service.address) {
-                    drift = "address " + remote.localAddress + " != " + service.address
-                } else if (remote.exposure != service.exposure) {
-                    drift = "exposure " + remote.exposure + " != " + service.exposure
-                } else if (remote.protocol != service.protocol) {
-                    drift = "protocol " + remote.protocol + " != " + service.protocol
-                } else if (remote.allowMethods != service.allowMethods) {
-                    drift = "allowMethods " + remote.allowMethods + " != " + service.allowMethods
-                } else if (remote.allowPaths != service.allowPaths) {
-                    drift = "allowPaths " + remote.allowPaths + " != " + service.allowPaths
+                if (expectedDeviceId.length > 0 && remote.deviceId != expectedDeviceId) {
+                    // Homonimo/legado noutro device: nao conta como publicado
+                    // AQUI (o manifesto descreve esta maquina).
+                    otherDevice = remote.deviceId
+                } else {
+                    found = true
+                    if (remote.localPort != service.port) {
+                        drift = "porta " + intToString(remote.localPort) + " != " + intToString(service.port)
+                    } else if (remote.localAddress != service.address) {
+                        drift = "address " + remote.localAddress + " != " + service.address
+                    } else if (remote.exposure != service.exposure) {
+                        drift = "exposure " + remote.exposure + " != " + service.exposure
+                    } else if (remote.protocol != service.protocol) {
+                        drift = "protocol " + remote.protocol + " != " + service.protocol
+                    } else if (remote.allowMethods != service.allowMethods) {
+                        drift = "allowMethods " + remote.allowMethods + " != " + service.allowMethods
+                    } else if (remote.allowPaths != service.allowPaths) {
+                        drift = "allowPaths " + remote.allowPaths + " != " + service.allowPaths
+                    }
                 }
             }
         }
-        if (found == false) {
+        if (found == false && otherDevice.length > 0) {
+            problems.add(service.name + ": publicado no dispositivo " + otherDevice + ", nao neste — rode: kof cloud deploy")
+        } else if (found == false) {
             problems.add(service.name + ": nao publicado")
         } else if (drift.length > 0) {
             problems.add(service.name + ": publicado com config diferente (" + drift + ") — rode: kof cloud deploy")
@@ -725,7 +746,7 @@ Int cmdDeploy(List<String> args) {
     if (hasFlag(args, "--check") == false) {
         return 0
     }
-    var problems = verifyDeployment(session.controlUrl, session.token, services)
+    var problems = verifyDeploymentFor(session.controlUrl, session.token, services, identity.deviceId)
     if (problems.size == 0) {
         println("check ok: " + intToString(services.size) + " servico(s) publicados e respondendo")
         return 0

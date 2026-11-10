@@ -521,6 +521,22 @@ test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-che
     assert(up.size == 0, "tudo saudavel")
     assert(checkLocalService("127.0.0.1", 19729), "check unitario ok")
     assert(checkLocalService("127.0.0.1", 19728) == false, "porta fechada recusa")
+
+    // Escopo por device: o manifesto descreve a maquina LOCAL. Publicado
+    // noutro device nao e "publicado aqui" — antes o --check/doctor davam
+    // verde para um deploy que nunca chegou nesta maquina (medido).
+    var otherDev = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"outro\",\"publicKey\":\"pk2\"}", accountToken)
+    var otherDevId = mapField(json.decode<Map<String, String>>(bodyOf(otherDev)), "deviceId")
+    var elsewhere = "{\"deviceId\":\"" + otherDevId + "\",\"name\":\"noutro\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19729\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", elsewhere, accountToken)) == 200, "publicado noutro device")
+    var wantedElsewhere = parseManifest("{\"services\":[{\"name\":\"noutro\",\"port\":19729}]}")
+    // Sem escopo (compatibilidade): o chamador antigo aprova.
+    assert(verifyDeployment(controlUrl, accountToken, wantedElsewhere).size == 0, "sem escopo: aprovava")
+    var scoped = verifyDeploymentFor(controlUrl, accountToken, wantedElsewhere, deviceId)
+    assert(scoped.size == 1, "com escopo: um problema")
+    assert(scoped.get(0).indexOf("noutro") >= 0, "nomeia o servico")
+    assert(scoped.get(0).indexOf("dispositivo") >= 0, "diz que e noutro device")
+    assert(scoped.get(0).indexOf("kof cloud deploy") >= 0, "orienta o re-deploy")
     listener.close()
 
     // Drift de config: remove e republica o mesmo nome com porta/exposicao
