@@ -117,7 +117,9 @@ alternativa): só o código obrigava o operador a reproduzir o comando à mão.
     com `--prune`: remove também os órfãos DESTE device fora do manifesto
     (nunca toca serviço de outro device)
     serviço homônimo noutro device: `noutro dispositivo (nao removido): nome
-    (device X) — rode o down la` — o `down` nunca remove fora do próprio
+    (device X) — rode o down la`
+    (o resumo conta o que saiu: "nada a remover" quando nenhum era deste
+    dispositivo, nunca "N removidos" por N estar no manifesto) — o `down` nunca remove fora do próprio
     dispositivo, e a mensagem não disfarça isso de "ausente"
  6. com `--check`: publicado **neste dispositivo** E respondendo localmente?
     (`checkLocalServiceFor`,

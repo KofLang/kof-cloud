@@ -182,7 +182,12 @@ deploy falharia com 409) e serviço de outro device aparecia como "fora do
 manifesto; use down --prune" (o prune nunca o alcança). Agora
 `diffDeploymentFor` marca `! conflito` para o nome tomado noutro device e
 omite extras de outro device; `deploy --plan` passa o device da sessão.
-Prova: `tests/deploy_test.kf` (`deploy-plan` estendido). **Fatia: `down` diz quando o serviço vive noutro device.** Antes, um serviço homônimo publicado noutro device imprimia "ausente (ok)" — o operador achava que não havia nada e ele seguia no ar com o mesmo hostname. `serviceIdOnDevice` e `serviceDeviceElsewhere` (puras) separam os dois casos; a mensagem `downElsewhereLine` nomeia serviço, device e a orientação de rodar o down lá. Prova: `tests/deploy_test.kf` (`deploy-down-scope`).
+Prova: `tests/deploy_test.kf` (`deploy-plan` estendido). **Fatia: `down` diz quando o serviço vive noutro device.** Antes, um serviço homônimo publicado noutro device imprimia "ausente (ok)" — o operador achava que não havia nada e ele seguia no ar com o mesmo hostname. `serviceIdOnDevice` e `serviceDeviceElsewhere` (puras) separam os dois casos; a mensagem `downElsewhereLine` nomeia serviço, device e a orientação de rodar o down lá. Prova: `tests/deploy_test.kf` (`deploy-down-scope`). **Fatia: sumário honesto do `down`.** O resumo final contava
+`services.size` (o manifesto) em vez do que foi removido: um manifesto de 3
+serviços nunca publicados dizia "3 removidos" — medido. `downSummary` (pura)
+diz "nada a remover (N no manifesto, M noutro dispositivo)" quando nada saiu,
+mantém a contagem real quando removeu e "down com N falha(s)" quando falhou.
+Prova: `tests/deploy_test.kf` (`deploy-down-summary`).
 **Fatia: artefato tem de ser arquivo
 legível** (`artifactProblem`): `File().exists()` aceita diretório, então
 `"artifact": "dist"` passava a checagem e o deploy publicava um serviço cujo

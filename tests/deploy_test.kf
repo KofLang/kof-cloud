@@ -298,6 +298,21 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     assert(scopedMixed.get(1).startsWith("- orfa"), "orfao do proprio device aparece")
 }
 
+test "deploy: sumario do down nao mente quando nada foi removido", "deploy-down-summary" {
+    // Puro. Medido: com 3 servicos no manifesto e nenhum publicado o down
+    // dizia "3 servico(s) do manifesto removidos" — contava o manifesto, nao
+    // o que saiu. O verbo agora depende do que aconteceu.
+    assert(downSummary(3, 0, 0, 0).indexOf("nada a remover") >= 0, "nada removido nao diz removidos")
+    assert(downSummary(3, 0, 0, 0).indexOf("removidos") < 0, "sem verbo de remocao")
+    assert(downSummary(3, 0, 3, 0).indexOf("3 noutro dispositivo") >= 0, "conta os de outro device")
+    var one = downSummary(3, 1, 0, 0)
+    assert(one == "down ok: 1 servico(s) do manifesto removidos", "um removido: " + one)
+    var two = downSummary(5, 2, 1, 0)
+    assert(two.indexOf("2 servico(s) do manifesto removidos") >= 0, "dois removidos: " + two)
+    // Falha domina o resumo (nao diz "ok" com falha).
+    assert(downSummary(3, 1, 0, 2) == "down com 2 falha(s)", "falhas no resumo")
+}
+
 test "deploy: down distingue ausente de publicado noutro dispositivo", "deploy-down-scope" {
     // Puro (precedente: diffDeployment): o `down` resolve o alvo dentro do
     // device da sessao. Antes, um servico homonimo publicado noutro device

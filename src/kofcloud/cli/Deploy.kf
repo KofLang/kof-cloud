@@ -814,6 +814,22 @@ String downElsewhereLine(String name, String deviceId) {
     return "noutro dispositivo (nao removido): " + name + " (device " + deviceId + ") — rode o down la"
 }
 
+// Sumario do `down` em fonte unica: com falha, "down com N falha(s)";
+// sem falha, o verbo muda conforme o que de fato aconteceu — so "removidos"
+// quando removeu, "nada a remover" quando todos estavam ausentes/noutro
+// device (antes contava `services.size` mesmo sem remover nada: um manifesto
+// de 3 servicos nunca publicados dizia "3 removidos" — medido).
+// Pura, sem IO.
+String downSummary(Int wanted, Int removed, Int elsewhere, Int failures) {
+    if (failures > 0) {
+        return "down com " + intToString(failures) + " falha(s)"
+    }
+    if (removed == 0) {
+        return "down ok: nada a remover (" + intToString(wanted) + " servico(s) no manifesto, " + intToString(elsewhere) + " noutro dispositivo)"
+    }
+    return "down ok: " + intToString(removed) + " servico(s) do manifesto removidos"
+}
+
 Int cmdDown(List<String> args) {
     if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file")) {
         println("uso: kof cloud down [--file <caminho>] [--prune]")
@@ -838,6 +854,8 @@ Int cmdDown(List<String> args) {
     var services = loaded.services
     var prune = hasFlag(args, "--prune")
     var failures = 0
+    var removedCount = 0
+    var elsewhereCount = 0
     try {
         var live = fetchServices(session.controlUrl, session.token)
         for (var wanted in services) {
@@ -846,6 +864,7 @@ Int cmdDown(List<String> args) {
             var target = serviceIdOnDevice(live, wanted.name, identity.deviceId)
             var elsewhere = serviceDeviceElsewhere(live, wanted.name, identity.deviceId)
             if (target.length == 0 && elsewhere.length > 0) {
+                elsewhereCount = elsewhereCount + 1
                 // Existe, mas noutro dispositivo: nao e "ausente" e o down
                 // nao o toca (o manifesto descreve esta maquina). Dizer
                 // "ausente (ok)" escondia que o servico continua publicado
@@ -854,6 +873,7 @@ Int cmdDown(List<String> args) {
             } else if (target.length == 0) {
                 println("ausente (ok): " + wanted.name)
             } else {
+                removedCount = removedCount + 1
                 var body = mapOf()
                 body.put("serviceId", target)
                 try {
@@ -903,7 +923,7 @@ Int cmdDown(List<String> args) {
     if (failures > 0) {
         return 1
     }
-    println("down ok: " + intToString(services.size) + " servico(s) do manifesto removidos")
+    println(downSummary(services.size, removedCount, elsewhereCount, failures))
     return 0
 }
 
