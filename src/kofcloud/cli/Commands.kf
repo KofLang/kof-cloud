@@ -583,7 +583,10 @@ Int cmdDeviceRevoke(List<String> args) {
         return 1
     }
     var deviceArg = firstPositional(args)
-    if (deviceArg.trim().length == 0) {
+    // Posicional sobrando barra ANTES de qualquer efeito: `device revoke
+    // notebook lixo` revogava/suspendia `notebook` em silencio (revoke ainda
+    // remove servicos e credenciais do device) — typo virava acao destrutiva.
+    if (deviceArg.trim().length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud device revoke <nome|deviceId>")
         return 1
     }
@@ -617,7 +620,10 @@ Int cmdDeviceSuspend(List<String> args) {
         return 1
     }
     var deviceArg = firstPositional(args)
-    if (deviceArg.trim().length == 0) {
+    // Posicional sobrando barra ANTES de qualquer efeito: `device suspend
+    // notebook lixo` revogava/suspendia `notebook` em silencio (revoke ainda
+    // remove servicos e credenciais do device) — typo virava acao destrutiva.
+    if (deviceArg.trim().length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud device suspend <nome|deviceId>")
         return 1
     }
@@ -651,7 +657,10 @@ Int cmdDeviceUnsuspend(List<String> args) {
         return 1
     }
     var deviceArg = firstPositional(args)
-    if (deviceArg.trim().length == 0) {
+    // Posicional sobrando barra ANTES de qualquer efeito: `device unsuspend
+    // notebook lixo` revogava/suspendia `notebook` em silencio (revoke ainda
+    // remove servicos e credenciais do device) — typo virava acao destrutiva.
+    if (deviceArg.trim().length == 0 || extraPositional(args, 1)) {
         println("uso: kof cloud device unsuspend <nome|deviceId>")
         return 1
     }
@@ -1917,6 +1926,18 @@ Int cmdWebhook(List<String> args) {
         println("uso: kof cloud webhook set <url> --secret <segredo> | show | remove | test")
         return 1
     }
+    // Aridade por subcomando: `show`/`remove`/`test` nao tem posicional e
+    // `set` tem exatamente um (a URL). Antes, `webhook show lixo` executava
+    // o show e ignorava o token; `webhook set a b --secret s` configurava
+    // "a" e descartava "b" em silencio.
+    var maxPositional = 1
+    if (sub == "set") {
+        maxPositional = 2
+    }
+    if (extraPositional(args, maxPositional)) {
+        println("uso: kof cloud webhook set <url> --secret <segredo> | show | remove | test")
+        return 1
+    }
     try {
         var body = mapOf()
         var endpoint = "/v1/webhook"
@@ -2228,7 +2249,9 @@ Int cmdStateBackup(List<String> args) {
 Int cmdLogs(List<String> args) {
     // --runtime repetido seguia normal: `hasFlag` leria o primeiro e o
     // comando rodaria como se fosse um so (mesma regra do --tail abaixo).
-    if (flagDuplicated(args, "--runtime")) {
+    // `logs` nao tem posicional: `logs lixo` lia o log e ignorava o token
+    // (typo silencioso). Barra antes de ler o arquivo.
+    if (flagDuplicated(args, "--runtime") || extraPositional(args, 0)) {
         println(usoLogsLine())
         return 1
     }
@@ -2477,6 +2500,12 @@ Int cmdServe(List<String> args) {
     // --state segue a mesma regra (precedente: --file/--control/--device):
     // solto caia no default em silencio, duplicado lia a primeira.
     if (flagMissingValue(args, "--control-port") || flagMissingValue(args, "--tunnel-port") || flagMissingValue(args, "--http-port") || flagMissingValue(args, "--state") || flagMissingValue(args, "--waf") || flagMissingValue(args, "--tls-cert") || flagMissingValue(args, "--tls-key")) {
+        println(usoServeLine())
+        return 1
+    }
+    // `serve` nao tem posicional: `serve lixo` subia a plataforma e ignorava
+    // o token (typo silencioso). Barra antes de qualquer bind.
+    if (extraPositional(args, 0)) {
         println(usoServeLine())
         return 1
     }

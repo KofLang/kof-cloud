@@ -241,3 +241,53 @@ test "flags: booleana repetida barra antes de qualquer efeito", "boolean-dup" {
     listener.close()
     File(mf).delete()
 }
+
+// Comandos que delegam a guarda de posicional a um helper (o `cmd*` e so um
+// alias). `cmdFreeze`/`cmdUnfreeze` chamam `runContainment`, que tem a guarda.
+List<String> commandsDelegatingArityGuard() {
+    return listOf("cmdFreeze", "cmdUnfreeze")
+}
+
+test "flags: todo comando da CLI barra posicional sobrando (trava de fonte)", "valueflags-unit" {
+    // Medido: `device revoke notebook lixo` revogava `notebook` em silencio
+    // (e revoke remove servicos e credenciais do device); `logs lixo` lia o
+    // log e ignorava o token; `serve lixo` subia a plataforma; `webhook show
+    // lixo` executava o show. Typo virava acao — as vezes destrutiva.
+    //
+    // Sem captura de stdout, a trava e na fonte: cada `Int cmdXxx(` precisa
+    // chamar `extraPositional(` no proprio corpo (ou delegar a um helper que
+    // chama). Um comando novo sem guarda quebra aqui.
+    var raw = File("src/kofcloud/cli/Commands.kf").readText()
+    var text = ""
+    if (raw != null) {
+        text = raw
+    }
+    if (text.length == 0) {
+        return
+    }
+    var delegating = commandsDelegatingArityGuard()
+    var checked = 0
+    var cursor = text.indexOf("Int cmd")
+    while (cursor >= 0) {
+        var nameEnd = text.indexOf("(", cursor)
+        var name = text.substring(cursor + 4, nameEnd)
+        // Corpo do comando: ate o proximo `Int cmd` (ou fim).
+        var next = text.indexOf("Int cmd", nameEnd)
+        var bodyEnd = text.length
+        if (next >= 0) {
+            bodyEnd = next
+        }
+        var body = text.substring(nameEnd, bodyEnd)
+        if (delegating.contains(name) == false) {
+            assert(body.indexOf("extraPositional(") >= 0, "comando sem guarda de posicional: " + name)
+            checked = checked + 1
+        }
+        cursor = next
+    }
+    assert(checked >= 30, "comandos conferidos: " + intToString(checked))
+    // O helper dos freeze tem a guarda (senao a delegacao seria mentira).
+    var helperStart = text.indexOf("Int runContainment(")
+    assert(helperStart >= 0, "runContainment existe")
+    var helperBody = text.substring(helperStart, text.indexOf("Int cmdIncidents(", helperStart))
+    assert(helperBody.indexOf("extraPositional(") >= 0, "runContainment tem a guarda")
+}
