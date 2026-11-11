@@ -67,7 +67,7 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | daemon | `tests/daemon_test.kf` | 13 |
 | doctor | `tests/doctor_test.kf` | 10 |
 | hot-reload | `tests/reload_test.kf` | 1 |
-| control plane | `tests/control_test.kf` | 4 |
+| control plane | `tests/control_test.kf` | 5 |
 | presenca | `tests/presence_test.kf` | 1 |
 | e2e | `tests/e2e_test.kf` | 1 |
 | e2e multiservico | `tests/e2e_multiservice_test.kf` | 1 |
@@ -103,7 +103,7 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor na lista única e booleanas sem duplicação (CLI) | `tests/value_flags_test.kf` | 3 |
 
-Total: 322 testes. Ver `15-tests.md` para a matriz.
+Total: 323 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

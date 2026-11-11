@@ -49,6 +49,11 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/domains` | conta | registra domínio próprio `{hostname,service}` → `{hostname,status,instruction,verifiedAt}` (PENDING + CNAME; `verifiedAt` vazio até verificar) |
 | `POST` | `/v1/domains/verify` | conta | `{hostname}` → `{hostname,status,instruction,verifiedAt}` (verifica o DNS e ativa a rota; os 4 campos casam com o `DomainStatus` da CLI — decode tipado exige todos presentes, JSN004) |
 | `POST` | `/v1/domains/remove` | conta | `{hostname}` → `{removed:true}` |
+| `GET` | `/v1/audit/verify` | conta | verifica a cadeia de hash da trilha da conta → `{ok,brokenAt,events}` (cadeia **por conta**: o anel é global, mas cada evento encadeia com o anterior da mesma conta) |
+| `POST` | `/v1/services/rotate` | conta | rotação com overlap `{serviceId,ttlHours?,prune?}` → `{token,revoked,pending}` (a nova é devolvida **uma vez**; as antigas só caem depois do TTL; `ttlHours` inválido → 400 `KCF062`) |
+| `POST` | `/v1/services/rotation` | conta | `{serviceId}` → `{serviceId,pending}` = quantas credenciais do serviço ainda valem (1 = só a atual) |
+| `POST` | `/v1/services/token-hygiene` | conta | serviços da conta com `kfs_` válidos **sem expiração** → `{services,count}` (só leitura; a ação recomendada é `service rotate --ttl`) |
+| `POST` | `/v1/webhook` | conta | webhook de incidentes `{action:set\|show\|remove\|test, url?, secret?}` → config sem o segredo (`secretHint`); `set` valida URL/segredo (400 `KCF129`), `remove`/`test` sem config → 404 `KCF130` |
 | `GET` | `/v1/health` | — | liveness do control plane |
 | `GET` | `/v1/metrics` | — | export Prometheus (`observability.metrics()`): contadores do control plane + Edge (mesmo processo no `serve`); sem auth, só agregados |
 

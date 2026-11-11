@@ -133,3 +133,52 @@ test "control plane: fluxo real da CLI (login + device) sobre HTTPS", "control-t
     // O token e a credencial: nunca aparecem na URL nem em header de log.
     assert(controlUrl.indexOf(token) < 0, "token fora da URL")
 }
+
+test "control: toda rota /v1 registrada esta documentada em docs/06", "control-docs" {
+    // A tabela do 06-control-protocol e o contrato publico. Cinco rotas
+    // existiam no codigo e nao estavam nela (audit/verify, services/rotate,
+    // services/rotation, token-hygiene, webhook) — um integrador lendo a doc
+    // nao as descobria. Este teste le AS DUAS FONTES e exige que toda rota
+    // registrada apareca na tabela (e vice-versa).
+    var codeRaw = File("src/kofcloud/control/ControlPlane.kf").readText()
+    var docRaw = File("docs/06-control-protocol.md").readText()
+    var code = ""
+    var doc = ""
+    if (codeRaw != null) {
+        code = codeRaw
+    }
+    if (docRaw != null) {
+        doc = docRaw
+    }
+    if (code.length == 0 || doc.length == 0) {
+        return
+    }
+    var routes = listOf<String>()
+    for (var verb in listOf("get", "post")) {
+        var needle = "app." + verb + "(\"/v1/"
+        var cursor = code.indexOf(needle)
+        while (cursor >= 0) {
+            var start = cursor + needle.length - 4
+            var end = code.indexOf("\"", start)
+            if (end > start) {
+                var route = code.substring(start, end)
+                if (routes.contains(route) == false) {
+                    routes.add(route)
+                }
+            }
+            cursor = code.indexOf(needle, end)
+        }
+    }
+    assert(routes.size >= 30, "rotas encontradas: " + intToString(routes.size))
+    var missing = listOf<String>()
+    for (var route in routes) {
+        if (doc.indexOf("`" + route + "`") < 0) {
+            missing.add(route)
+        }
+    }
+    var detail = ""
+    for (var route in missing) {
+        detail = detail + " " + route
+    }
+    assert(missing.size == 0, "rotas registradas e nao documentadas:" + detail)
+}
