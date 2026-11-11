@@ -440,6 +440,24 @@ Int cmdDisconnect(List<String> args) {
 
 // ---- status ----
 
+// Estado do agente para o `status`, derivado da presenca real no Edge.
+// Puro (precedente: doctorTunnelLine): o chamador passa o que ja buscou.
+// ATIVO so com tunel vivo; sem presenca consultavel = desconhecido (nunca
+// inventa ATIVO nem PARADO); sem tunel = PARADO, distinguindo "parada
+// pedida" (stopFile) de "nunca subiu/caiu".
+String agentStatusLine(Bool tunnelOnline, Bool tunnelKnown, Bool stopped) {
+    if (tunnelOnline) {
+        return "ATIVO (tunel vivo)"
+    }
+    if (tunnelKnown == false) {
+        return "desconhecido (presenca indisponivel)"
+    }
+    if (stopped) {
+        return "PARADO (parada pedida; rode: kof cloud connect)"
+    }
+    return "PARADO (sem tunel; rode: kof cloud connect)"
+}
+
 Int cmdStatus(List<String> args) {
     var identity = loadIdentity()
     var session = loadSession()
@@ -458,22 +476,25 @@ Int cmdStatus(List<String> args) {
     println("Conta:        " + identity.handle)
     println("Dispositivo:  " + identity.deviceName + " (" + identity.deviceId + ")")
     println("Control:      " + session.controlUrl)
-    if (fileExists(stopPath())) {
-        println("Agente:       PARADO")
-    } else {
-        println("Agente:       ATIVO")
-    }
     // Tunel real, confirmado pelo Edge (nao pela maquina local): o control
     // plane responde com os devices que tem sessao viva NESTE Edge. So conta
     // o device atual; OFFLINE aqui significa "sem rota" mesmo com o agente
     // rodando (tunel caiu, Edge reiniciou, conta suspensa...).
+    //
+    // O estado do AGENTE vem daqui, nao do arquivo de parada: antes o
+    // `status` dizia "Agente: ATIVO" so porque o stopFile nao existia —
+    // medido, uma maquina que nunca rodou `connect` aparecia ATIVO. O
+    // stopFile so distingue "parada pedida" de "nunca subiu/caiu".
+    var tunnelOnline = false
+    var tunnelKnown = false
     try {
         var raw = requireOk(http.get(session.controlUrl + "/v1/presence", authHeader(session.token)))
         // Lista JSON de ids (strings). Comparacao por substring com aspas:
         // IDs sao UUIDs sem aspas internas, entao nao ha falso positivo.
         // (json.decode nao suporta List<Map<...>> — JSN004.)
-        var online = bodyContainsId(raw, identity.deviceId)
-        if (online) {
+        tunnelOnline = bodyContainsId(raw, identity.deviceId)
+        tunnelKnown = true
+        if (tunnelOnline) {
             println("Tunel:        ONLINE (sessao viva no Edge)")
         } else {
             println("Tunel:        OFFLINE (sem sessao no Edge — rode: kof cloud connect)")
@@ -481,6 +502,7 @@ Int cmdStatus(List<String> args) {
     } catch (String e) {
         println("Tunel:        desconhecido (" + e + ")")
     }
+    println("Agente:       " + agentStatusLine(tunnelOnline, tunnelKnown, fileExists(stopPath())))
     try {
         var services = fetchServices(session.controlUrl, session.token)
         println("Servicos:     " + intToString(services.size))

@@ -108,3 +108,81 @@ test "device list: fim a fim mostra ONLINE com tunel vivo e OFFLINE sem", "devpr
     File(agentStop).delete()
     File(edgeStop).delete()
 }
+
+test "status: presenca do device reflete o tunel (base do estado do agente)", "devpresence" {
+    // O `cmdStatus` nao tem stdout capturavel no runner; aqui provamos a
+    // BASE da decisao (a presenca real no Edge muda), e o teste abaixo trava
+    // que o cmdStatus delega em `agentStatusLine` em vez de olhar o stopFile.
+    var controlPort = 20235
+    var registry = Registry("/tmp/kofcloud-dp2-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    var url = "http://127.0.0.1:" + intToString(controlPort)
+
+    var token = loginOrCreate(url, "mel", "segredo")
+    var deviceId = registerDevice(url, token, "notebook", "pk")
+    var priorSession = readTextOr(sessionPath(), "")
+    var priorIdentity = readTextOr(identityPath(), "")
+    saveSession(LocalSession("", "mel", token, url))
+    saveIdentity(LocalIdentity(deviceId, "", "mel", "notebook", "priv", "pub"))
+    File(stopPath()).delete()
+
+    // Sem sessao no Edge: PARADO (mesmo sem stopFile).
+    var presenceBefore = bodyOf(httpGetToken(controlPort, "/v1/presence", token))
+    assert(bodyContainsId(presenceBefore, deviceId) == false, "sem sessao no Edge")
+    assert(fileExists(stopPath()) == false, "stopFile ausente (o caso que enganava)")
+
+    // Com sessao viva: ATIVO.
+    registry.noteEdgeOnline(deviceId, true)
+    var presenceAfter = bodyOf(httpGetToken(controlPort, "/v1/presence", token))
+    assert(bodyContainsId(presenceAfter, deviceId), "sessao viva no Edge")
+
+    if (priorSession.length == 0) {
+        File(sessionPath()).delete()
+    } else {
+        writeTextTo(sessionPath(), priorSession)
+    }
+    if (priorIdentity.length == 0) {
+        File(identityPath()).delete()
+    } else {
+        writeTextTo(identityPath(), priorIdentity)
+    }
+}
+
+test "status: agentStatusLine decide pelos tres sinais", "devpresence-unit" {
+    // Tunel vivo manda em tudo.
+    assert(agentStatusLine(true, true, false).startsWith("ATIVO"), "tunel vivo = ATIVO")
+    assert(agentStatusLine(true, true, true).startsWith("ATIVO"), "stopFile velho nao vence o tunel")
+    // Sem presenca consultavel: desconhecido (nunca inventa).
+    assert(agentStatusLine(false, false, false).startsWith("desconhecido"), "sem presenca = desconhecido")
+    assert(agentStatusLine(false, false, true).startsWith("desconhecido"), "sem presenca nem com stopFile")
+    // Sem tunel e com presenca conhecida: PARADO, distinguindo a causa.
+    assert(agentStatusLine(false, true, true).indexOf("parada pedida") >= 0, "stopFile explica")
+    var never = agentStatusLine(false, true, false)
+    assert(never.startsWith("PARADO"), "nunca subiu = PARADO")
+    assert(never.indexOf("kof cloud connect") >= 0, "diz o proximo passo")
+}
+
+test "status: cmdStatus deriva o agente de agentStatusLine (trava de fonte)", "devpresence-unit" {
+    // Sem captura de stdout, a unica forma de impedir a regressao antiga
+    // (decidir pelo stopFile) e ler a fonte: o bloco de status precisa
+    // chamar `agentStatusLine`, e nao mais imprimir ATIVO por ausencia de
+    // stopFile.
+    var raw = File("src/kofcloud/cli/Commands.kf").readText()
+    var text = ""
+    if (raw != null) {
+        text = raw
+    }
+    if (text.length == 0) {
+        return
+    }
+    var start = text.indexOf("Int cmdStatus(")
+    var end = text.indexOf("// ---- dispositivos ----", start)
+    if (end < 0) {
+        end = text.length
+    }
+    var body = text.substring(start, end)
+    assert(body.indexOf("agentStatusLine(") >= 0, "status usa a funcao pura")
+    assert(body.indexOf("Agente:       ATIVO") < 0, "nao imprime ATIVO direto")
+}

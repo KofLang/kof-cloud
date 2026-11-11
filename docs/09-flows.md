@@ -65,12 +65,19 @@ Sem Nginx, sem Caddy, sem certificado manual.
 
 ```
 kof cloud status    → Tunel: ONLINE (sessao viva no Edge)
+                      → Agente: ATIVO (tunel vivo) | PARADO (sem tunel) | desconhecido
 kof cloud doctor    → ok tunel ativo no Edge (sessao viva)
 
 GET /v1/presence (X-KofCloud-Token: kfc_...)
   → ["<deviceId>", ...]   # so devices DA CONTA com sessao viva
                             # neste Edge; vazio = offline (nao erro)
 ```
+
+O estado do **agente** no `status` vem daqui, nao do arquivo de parada:
+antes ele dizia `ATIVO` so porque o stopFile nao existia (medido: maquina que
+nunca rodou `connect` aparecia ATIVO). O stopFile agora so distingue "parada
+pedida" de "nunca subiu/caiu"; sem presenca consultavel o estado e
+`desconhecido`, nunca inventado.
 
 O Edge espelha bind/unbind das sessoes num mapa do Registry (nao
 persistido — restart limpa, reconexao recria). Filtrado por conta:

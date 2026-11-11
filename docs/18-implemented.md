@@ -74,6 +74,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | escopo de device no `--check`/`doctor` | `verifyDeploymentFor` casa nome **e** device da sessão; serviço publicado noutro device vira problema explícito | `deploy_test.kf` (`deploy-check`) |
 | nome ambíguo na CLI (F4) | `resolveServiceName`/`serviceAmbiguousLine`: homônimo entre devices não é escolhido — os comandos por nome recusam listando os devices | `hosts_test.kf` (`service-name-match`) |
 | origem do serviço na CLI (F4) | `status`/`service list`/`service status` mostram `device: <nome>` (mesma `serviceListLine`); `status`/`token` recusam nome homônimo (estado legado) em vez de escolher o primeiro (id quando o device saiu da conta); antes a lista não dizia onde o serviço roda | `service_device_test.kf` |
+| estado do agente no `status` (F4) | `agentStatusLine` deriva de presença real (ATIVO só com túnel vivo; sem presença = desconhecido; PARADO distingue parada pedida de nunca subiu) — antes dizia ATIVO só por ausência do stopFile | `device_presence_test.kf` |
 | presença no `device list` (F4) | linha mostra `tunel: ONLINE/OFFLINE/desconhecido` via `/v1/presence`; falha não vira OFFLINE inventado | `device_presence_test.kf` |
 | teto de conexões públicas (F4) | 1024 simultâneas; excedeu → `503 KCF117` no `accept`, sem ler o pedido; vaga liberada em `finally` | `conn_limit_test.kf` |
 | profundidade de fila por stream (F4) | teto de 64 itens por stream; fila cheia → `RESET LIMIT_EXCEEDED` no stream, túnel segue (política única em `routeData`) | `queue_depth_test.kf` |
