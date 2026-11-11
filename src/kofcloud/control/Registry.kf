@@ -1429,17 +1429,38 @@ class Registry {
             throw errDeviceNotYours()
         }
         // Idempotencia por (conta, DEVICE, nome): republicar no mesmo device
-        // devolve o existente; o mesmo nome noutro device e conflito, nao
-        // "ja existe". Antes a busca ignorava o device: publicar "site" no
-        // notebookB devolvia o "site" do notebookA (200, porta do A), nada
-        // era publicado e o hostname — que e `<nome>.<handle>`, igual para
-        // os dois — roteava sempre para o A. Medido.
+        // ATUALIZA a configuracao mutavel; o mesmo nome noutro device e
+        // conflito, nao "ja existe". Antes a busca ignorava o device: publicar
+        // "site" no notebookB devolvia o "site" do notebookA (200, porta do
+        // A), nada era publicado e o hostname — que e `<nome>.<handle>`,
+        // igual para os dois — roteava sempre para o A. Medido.
+        //
+        // Antes tambem devolvia o existente SEM aplicar nada: `deploy` com
+        // porta/exposure/allowlist mudada imprimia "publicado" e o servico
+        // seguia com a config velha, enquanto `--plan` prometia "~ vai
+        // atualizar" (medido; o proprio teste do plan registrava a mentira).
+        // Agora a configuracao mutavel e reescrita; identidade (id, hostname,
+        // createdAt) e estado operacional (status, suspensao) sao preservados
+        // — republicar nao pode ressuscitar um servico suspenso nem zerar o
+        // health que o Agent acabou de reportar.
         var existing = this.serviceByName(account.id, name)
         if (existing != null) {
             if (existing.deviceId != deviceId) {
                 throw errServiceNameTaken()
             }
-            return existing
+            var updated = Service(
+                existing.id, existing.accountId, existing.deviceId, existing.name,
+                localAddress, localPort, protocol, existing.hostname,
+                exposureName(exposureFrom(exposure)), existing.status,
+                existing.createdAt, allowMethods, allowPaths
+            )
+            if (serviceConfigEquals(existing, updated) == false) {
+                this.replaceService(updated)
+                this.audit(auditActorAccount(account.handle), auditServiceUpdated(), account.id + "/" + existing.id)
+                this.save()
+                noteServiceUpdated()
+            }
+            return updated
         }
         if (this.servicesForDevice(deviceId).size >= this.maxServices) {
             throw errLimitServices()
@@ -1463,6 +1484,20 @@ class Registry {
             }
         }
         return null
+    }
+
+    // Troca o servico de mesmo id pela versao nova (republicacao). Preserva a
+    // posicao na lista (a ordem e a de publicacao, que o operador ve).
+    void replaceService(Service updated) {
+        var out = listOf<Service>()
+        for (var service in this.services) {
+            if (service.id == updated.id) {
+                out.add(updated)
+            } else {
+                out.add(service)
+            }
+        }
+        this.services = out
     }
 
     Service? serviceByName(String accountId, String name) {

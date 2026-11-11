@@ -31,6 +31,10 @@ String metricServicesPublished() {
     return "kofcloud_control_services_published_total"
 }
 
+String metricServicesUpdated() {
+    return "kofcloud_control_services_updated_total"
+}
+
 String metricServicesRemoved() {
     return "kofcloud_control_services_removed_total"
 }
@@ -93,6 +97,10 @@ void noteDeviceUnsuspended() {
 
 void noteServicePublished() {
     observability.counter(metricServicesPublished())
+}
+
+void noteServiceUpdated() {
+    observability.counter(metricServicesUpdated())
 }
 
 void noteServiceRemoved() {

@@ -258,9 +258,9 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     assert(plan5.get(2).startsWith("+ mudou"), "novo sem nada nao marca")
     // Allowlist: servico sem politica contra live sem politica segue "=";
     // so-mudanca-de-politica vira "~" (vai atualizar); live sem politica
-    // contra manifesto com politica tambem vira "~" (publicar por cima e
-    // idempotente — publishService retorna o existente — entao o plan
-    // promete atualizar mas o deploy mantem o existente; ver deploy-check).
+    // contra manifesto com politica tambem vira "~". O plan agora diz a
+    // verdade: publishService reescreve a config mutavel do existente
+    // (antes devolvia o existente sem aplicar nada — ver registry_test).
     var wanted6 = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"allowMethods\":\"GET\",\"allowPaths\":\"/api/*\"}]}")
     var plan6 = diffDeployment(live, wanted6)
     assert(plan6.get(0).startsWith("~ site"), "politica nova vira update")

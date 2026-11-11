@@ -59,3 +59,12 @@ Bool statusIsRoutable(String status) {
 Bool statusIsKnown(String status) {
     return status == statusOnline() || status == statusOffline() || status == statusDegraded() || status == statusUnknown() || status == statusSuspended()
 }
+
+// Mesma configuracao MUTAVEL? Republicar o mesmo nome no mesmo device com
+// porta/address/protocol/exposure/allowlist iguais nao deve gerar escrita,
+// auditoria nem metrica de atualizacao. Identidade (id, hostname, createdAt)
+// e estado operacional (status) ficam de fora de proposito: nao sao
+// configuracao do operador e nao mudam por republicacao.
+Bool serviceConfigEquals(Service a, Service b) {
+    return a.localAddress == b.localAddress && a.localPort == b.localPort && a.protocol == b.protocol && a.exposure == b.exposure && a.allowMethods == b.allowMethods && a.allowPaths == b.allowPaths
+}

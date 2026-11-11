@@ -98,6 +98,13 @@ String auditServicePublished() {
     return "service.published"
 }
 
+// Republicar o mesmo nome no mesmo device com configuracao diferente
+// (porta/address/protocol/exposure/allowlist). Identidade e status sao
+// preservados; so a configuracao mutavel muda.
+String auditServiceUpdated() {
+    return "service.updated"
+}
+
 String auditServiceRemoved() {
     return "service.removed"
 }

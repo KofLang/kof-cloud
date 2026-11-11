@@ -120,7 +120,9 @@ alternativa): só o código obrigava o operador a reproduzir o comando à mão.
  2. carrega identity + token + manifesto (parse com erro posicional)
  3. para cada serviço: roda `build` (se declarado; falhou = não publica
     esse serviço), confere `artifact` (se declarado e ausente = não publica
-    esse serviço) e depois POST /v1/services (igual ao publish, idempotente)
+    esse serviço) e depois POST /v1/services (igual ao publish: republicar no
+    mesmo device ATUALIZA a config mutável — porta/exposure/allowlist —
+    preservando id/hostname/status; config idêntica não escreve)
  4. reporta publicados/mantidos/falhas (exit 1 se alguma falhar)
  5. usuário: kof cloud down → unpublish só dos listados (extra sobrevive)
     com `--prune`: remove também os órfãos DESTE device fora do manifesto

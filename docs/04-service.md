@@ -52,6 +52,15 @@ unsuspend|token|token-revoke|rotate|rotation`, `unpublish`, `freeze service`)
 **recusam** com uma mensagem que lista os dispositivos — nunca escolhem um
 deles arbitrariamente.
 
+Republicar o mesmo nome **no mesmo dispositivo** atualiza a configuração
+mutável (porta, address, protocol, exposure, allowlist) e preserva a
+identidade (id, hostname, `createdAt`) e o estado operacional (status,
+suspensão) — um deploy não ressuscita serviço suspenso nem zera o health
+reportado. Configuração idêntica não escreve nada (idempotente). Antes o
+publish devolvia o serviço existente **sem aplicar nada**: `deploy` com a
+porta mudada imprimia "publicado" e o serviço seguia na porta velha, embora
+`--plan` prometesse `~ vai atualizar`.
+
 `--device <nome|id>` publica em nome de outro dispositivo da conta
 (padrão: o dispositivo do `login`). Nome resolve pelo `device list`;
 id passa direto; nome inexistente falha local ("dispositivo nao

@@ -93,3 +93,72 @@ test "registry: estado persiste em disco e recarrega" {
     assert(reloaded.accountByHandle("mel") != null, "conta recarregada")
     assert(reloaded.devicesForAccount(account.id).size == 1, "dispositivo recarregado")
 }
+
+test "registry: republicar no mesmo device atualiza a configuracao mutavel", "republish" {
+    // Medido: `publishService` devolvia o existente SEM aplicar nada. O
+    // `deploy` com porta/exposure/allowlist mudada imprimia "publicado" e o
+    // servico seguia com a config velha, enquanto `--plan` prometia
+    // "~ vai atualizar". Agora a configuracao mutavel e reescrita.
+    var registry = Registry(tempStatePath("republish"))
+    var account = registry.createAccount("mel", "mel@example.com", "segredo")
+    var device = registry.registerDevice(account, "notebook", "pubkey")
+    var first = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+
+    var updated = registry.publishService(account, device.id, "site", "127.0.0.1", 9090, "http", "AUTHENTICATED", "GET", "/api/*")
+    assert(updated.id == first.id, "mesma identidade (id preservado)")
+    assert(updated.hostname == first.hostname, "hostname preservado")
+    assert(updated.createdAt == first.createdAt, "createdAt preservado")
+    assert(updated.localPort == 9090, "porta atualizada")
+    assert(updated.exposure == "AUTHENTICATED", "exposure atualizada")
+    assert(updated.allowMethods == "GET", "allowlist atualizada")
+    assert(updated.allowPaths == "/api/*", "allowPaths atualizado")
+
+    // O estado em memoria reflete a atualizacao (nao so o retorno).
+    var live = registry.serviceById(first.id)
+    assert(live != null, "servico existe")
+    if (live != null) {
+        assert(live.localPort == 9090, "estado atualizado")
+    }
+    // E persiste: recarregar do disco ve a config nova.
+    var reloaded = Registry(registry.path)
+    var persisted = reloaded.serviceById(first.id)
+    assert(persisted != null, "persistido")
+    if (persisted != null) {
+        assert(persisted.localPort == 9090, "porta persistida")
+        assert(persisted.exposure == "AUTHENTICATED", "exposure persistida")
+    }
+}
+
+test "registry: republicar preserva status e nao ressuscita suspenso", "republish-status" {
+    // Republicar nao e acao de saude: o status que o Agent reportou (ou a
+    // suspensao que o operador aplicou) nao pode ser zerado por um deploy.
+    var registry = Registry(tempStatePath("republish-status"))
+    var account = registry.createAccount("mel", "mel@example.com", "segredo")
+    var device = registry.registerDevice(account, "notebook", "pubkey")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    registry.setServiceStatus(service.id, "ONLINE")
+
+    var updated = registry.publishService(account, device.id, "site", "127.0.0.1", 9090, "http", "PUBLIC", "", "")
+    assert(updated.status == "ONLINE", "status preservado na republicacao")
+
+    // Suspenso continua suspenso (o deploy nao dessuspende).
+    registry.suspendService(account.id, service.id)
+    var afterSuspend = registry.publishService(account, device.id, "site", "127.0.0.1", 7070, "http", "PUBLIC", "", "")
+    assert(afterSuspend.status == "SUSPENDED", "suspensao preservada")
+    assert(afterSuspend.localPort == 7070, "config ainda atualiza")
+}
+
+test "registry: republicar sem mudanca nao reescreve (idempotente)", "republish-same" {
+    // Mesma config: nada muda, nada e auditado como atualizacao. A
+    // idempotencia do deploy depende disso (republicar o manifesto inteiro
+    // nao pode inflar a trilha nem a metrica a cada rodada).
+    var registry = Registry(tempStatePath("republish-same"))
+    var account = registry.createAccount("mel", "mel@example.com", "segredo")
+    var device = registry.registerDevice(account, "notebook", "pubkey")
+    var first = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    var before = registry.auditCountSince(account.id, "service.updated", 0)
+    var again = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    assert(again.id == first.id, "mesmo servico")
+    assert(registry.auditCountSince(account.id, "service.updated", 0) == before, "sem auditoria de update")
+    assert(serviceConfigEquals(first, again), "config identica")
+}
