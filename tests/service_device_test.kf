@@ -136,3 +136,60 @@ test "status/token: nome homonimo em estado legado recusa em vez de escolher", "
     assert(statusCode == 1, "status recusa homonimo")
     assert(tokenCode == 1, "token recusa homonimo")
 }
+
+test "service status: tunel do device e aviso de contradicao (puros)", "svcdevice-unit" {
+    // O `Status:` do servico e o ultimo health reportado pelo Agent — uma
+    // foto que pode estar velha. Sem a presenca real, um servico aparecia
+    // ONLINE com o tunel caido: o site fora do ar e o operador lendo ONLINE.
+    var presence = "[\"dev-1\"]"
+
+    var online = serviceTunnelLine("dev-1", presence, "")
+    assert(online.indexOf("ONLINE") >= 0, "device na presenca = ONLINE")
+    assert(online.indexOf("device no ar") >= 0, "diz o que significa")
+
+    var offline = serviceTunnelLine("dev-2", presence, "")
+    assert(offline.indexOf("OFFLINE") >= 0, "device ausente = OFFLINE")
+    assert(offline.indexOf("kof cloud connect") >= 0, "diz o proximo passo")
+
+    // Falha na consulta nunca vira OFFLINE inventado.
+    var unknown = serviceTunnelLine("dev-1", "", "falha de rede")
+    assert(unknown.indexOf("desconhecido") >= 0, "erro = desconhecido")
+    assert(unknown.indexOf("OFFLINE") < 0, "nao afirma offline")
+    assert(unknown.indexOf("ONLINE") < 0, "nao afirma online")
+
+    // Id vazio nunca casa por engano (bodyContainsId("") = false).
+    assert(serviceTunnelLine("", "[\"\"]", "").indexOf("OFFLINE") >= 0, "id vazio nao casa")
+
+    // Contradicao: health ONLINE + tunel OFFLINE = aviso explicito.
+    var note = serviceReachabilityNote("ONLINE", false, true)
+    assert(note.indexOf("Aviso") >= 0, "avisa a contradicao")
+    assert(note.indexOf("fora do ar") >= 0, "diz o impacto")
+    // Sem contradicao nao ha aviso.
+    assert(serviceReachabilityNote("ONLINE", true, true) == "", "tunel vivo: sem aviso")
+    assert(serviceReachabilityNote("ONLINE", false, false) == "", "presenca desconhecida: sem aviso")
+    assert(serviceReachabilityNote("OFFLINE", false, true) == "", "ja diz OFFLINE: sem aviso")
+    assert(serviceReachabilityNote("DEGRADED", false, true) == "", "degradado nao promete rota")
+}
+
+test "service status: cmdServiceStatus deriva o tunel da presenca (trava de fonte)", "svcdevice-unit" {
+    // Sem captura de stdout, a unica forma de impedir a regressao (mostrar
+    // so o health do Agent) e ler a fonte: o bloco precisa consultar
+    // /v1/presence e delegar em `serviceTunnelLine`.
+    var raw = File("src/kofcloud/cli/Commands.kf").readText()
+    var text = ""
+    if (raw != null) {
+        text = raw
+    }
+    if (text.length == 0) {
+        return
+    }
+    var start = text.indexOf("Int cmdServiceStatus(")
+    var end = text.indexOf("Int cmdServiceSuspend(", start)
+    if (end < 0) {
+        end = text.length
+    }
+    var body = text.substring(start, end)
+    assert(body.indexOf("/v1/presence") >= 0, "consulta a presenca real")
+    assert(body.indexOf("serviceTunnelLine(") >= 0, "delega na funcao pura")
+    assert(body.indexOf("serviceReachabilityNote(") >= 0, "avisa a contradicao")
+}

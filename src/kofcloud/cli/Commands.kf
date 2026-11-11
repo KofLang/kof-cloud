@@ -910,6 +910,38 @@ Int cmdServiceList(List<String> args) {
     }
 }
 
+// Linha do tunel do dispositivo que serve o servico, a partir do corpo de
+// /v1/presence ja buscado (ou do erro da busca). Pura, sem rede nem HOME —
+// mesma regra do `status`/`device list` (`bodyContainsId`).
+//
+// O `Status:` do servico e o ultimo health reportado pelo Agent: uma foto
+// que pode estar velha. Sem esta linha, um servico aparecia `ONLINE` com o
+// tunel caido — o site fora do ar e o operador lendo "ONLINE". Presenca
+// indisponivel nunca vira OFFLINE inventado.
+String serviceTunnelLine(String deviceId, String presenceRaw, String presenceError) {
+    if (presenceError.length > 0) {
+        return "Tunel:   desconhecido (presenca indisponivel: " + presenceError + ")"
+    }
+    if (bodyContainsId(presenceRaw, deviceId)) {
+        return "Tunel:   ONLINE (device no ar)"
+    }
+    return "Tunel:   OFFLINE (device sem sessao no Edge — rode: kof cloud connect)"
+}
+
+// Contradicao entre o health reportado e o tunel real: `ONLINE` e a ultima
+// foto do Agent, nao uma prova de que o site responde agora. Devolve "" quando
+// nao ha o que avisar (tunel vivo, presenca desconhecida, ou status que ja
+// nao promete rota). Pura: o chamador passa o que ja buscou.
+String serviceReachabilityNote(String status, Bool tunnelOnline, Bool tunnelKnown) {
+    if (tunnelKnown == false || tunnelOnline) {
+        return ""
+    }
+    if (status == "ONLINE") {
+        return "Aviso:   health diz ONLINE mas o tunel esta OFFLINE — o site esta fora do ar (health e a ultima foto do Agent)."
+    }
+    return ""
+}
+
 Int cmdServiceStatus(List<String> args) {
     var session = loadSession()
     if (session == null) {
@@ -946,6 +978,23 @@ Int cmdServiceStatus(List<String> args) {
                 println("Local:   " + service.localAddress + ":" + intToString(service.localPort))
                 println("Exposicao: " + service.exposure)
                 println("Status:  " + service.status)
+                // O `Status:` e o health reportado pelo Agent (foto que pode
+                // estar velha). A presenca real do device vem do Edge: sem
+                // ela, um servico `ONLINE` com o tunel caido lia como "no ar".
+                var presenceRaw = ""
+                var presenceError = ""
+                try {
+                    presenceRaw = requireOk(http.get(session.controlUrl + "/v1/presence", authHeader(session.token)))
+                } catch (String innerPresence) {
+                    presenceError = innerPresence
+                }
+                var tunnelOnline = presenceError.length == 0 && bodyContainsId(presenceRaw, service.deviceId)
+                var tunnelKnown = presenceError.length == 0
+                println(serviceTunnelLine(service.deviceId, presenceRaw, presenceError))
+                var note = serviceReachabilityNote(service.status, tunnelOnline, tunnelKnown)
+                if (note.length > 0) {
+                    println(note)
+                }
                 if (service.allowMethods.length > 0) {
                     println("Metodos: " + service.allowMethods)
                 }

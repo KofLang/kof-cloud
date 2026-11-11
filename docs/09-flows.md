@@ -66,6 +66,8 @@ Sem Nginx, sem Caddy, sem certificado manual.
 ```
 kof cloud status    → Tunel: ONLINE (sessao viva no Edge)
                       → Agente: ATIVO (tunel vivo) | PARADO (sem tunel) | desconhecido
+kof cloud service status <n> → Tunel: ONLINE/OFFLINE/desconhecido (device que serve o servico)
+                      → Aviso quando health=ONLINE mas tunel OFFLINE (foto velha do Agent)
 kof cloud doctor    → ok tunel ativo no Edge (sessao viva)
 
 GET /v1/presence (X-KofCloud-Token: kfc_...)

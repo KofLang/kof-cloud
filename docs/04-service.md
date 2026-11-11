@@ -31,7 +31,17 @@ kof cloud publish site --port 8080
 
 `kof cloud status`, `service list` e `service status <nome>` mostram em **qual
 dispositivo** o serviço roda (`device: <nome>`, ou o id quando o dispositivo
-não está mais na conta). Com vários dispositivos por conta, a lista sem isso
+não está mais na conta).
+
+`service status <nome>` também mostra a **presença real do dispositivo**
+(`Tunel: ONLINE (device no ar)` / `OFFLINE` / `desconhecido` via
+`/v1/presence`, mesma regra do `status` e do `device list`). O `Status:` é o
+último health **reportado pelo Agent** — uma foto que pode estar velha: com o
+túnel caído, um serviço `ONLINE` lia como "no ar" enquanto o site estava fora.
+Quando health diz `ONLINE` e o túnel está `OFFLINE`, a linha
+`Aviso: health diz ONLINE mas o tunel esta OFFLINE — o site esta fora do ar`
+nomeia a contradição em vez de esconder (presença indisponível nunca vira um
+OFFLINE inventado, e um status que já não promete rota não ganha aviso). Com vários dispositivos por conta, a lista sem isso
 não responde "onde isto roda?" sem cruzar `device list`.
 
 Nome é único na conta: `publish` com nome já usado por **outro** dispositivo
