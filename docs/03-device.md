@@ -85,6 +85,11 @@ nunca um `OFFLINE` inventado.
 
 A conta e os demais dispositivos permanecem válidos.
 
+Publicar num dispositivo **revogado** é recusado (`409 KCF023`): ele nunca
+mais abre túnel (`DEVICE_REVOKED` é fatal) e o revoke já removeu os serviços
+dele — a rota nasceria morta. Publicar num dispositivo **suspenso** continua
+permitido: a suspensão é reversível e o serviço volta no `unsuspend`.
+
 ## Suspensão
 
 `kof cloud device suspend <nome|id>` (reversível com `unsuspend`, que aceita nome também): marca

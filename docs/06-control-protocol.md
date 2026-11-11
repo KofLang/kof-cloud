@@ -24,7 +24,7 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/devices/revoke` | conta | `{deviceId}` → `{revoked:true}` |
 | `POST` | `/v1/devices/suspend` | conta | `{deviceId}` → `{suspended:true}` (túnel recusado, nada removido) |
 | `POST` | `/v1/devices/unsuspend` | conta | `{deviceId}` → `{suspended:false}` |
-| `POST` | `/v1/services` | conta | publica `{deviceId,name,localAddress,localPort,protocol,exposure}` → `{service}` |
+| `POST` | `/v1/services` | conta | publica `{deviceId,name,localAddress,localPort,protocol,exposure}` → `{service}`; republicar no mesmo device atualiza a config mutável; device revogado → `409 KCF023` (suspenso é aceito) |
 | `GET` | `/v1/services` | conta | lista serviços |
 | `POST` | `/v1/services/token` | conta | emite credencial `kfs_` do serviço `{serviceId}` (+ `ttlHours` opcional, horas) → `{token,serviceId,ttlHours?}` (TTL inválido = 400 `KCF062`) |
 | `POST` | `/v1/services/tokens` | conta | inventário do serviço `{serviceId}` → `[{serviceId,id,createdAt}]` (id = 8 hex do hash; nunca o valor `kfs_`; 404 opaco se alheio/inexistente) |

@@ -263,6 +263,7 @@ test "erros: publishHttpStatus mapeia familia -> HTTP (trava pura)", "errors-pub
     assert(publishHttpStatus(errInvalidServiceName()) == 400, "KCF040 -> 400")
     assert(publishHttpStatus(errLocalPort()) == 400, "KCF043 -> 400")
     assert(publishHttpStatus(errDeviceNotYours()) == 404, "KCF022 -> 404 opaco")
+    assert(publishHttpStatus(errDeviceRevoked()) == 409, "KCF023 -> 409 (estado impede, acionavel)")
     assert(publishHttpStatus(errDeviceNotFound()) == 404, "KCF021 -> 404 opaco")
     assert(publishHttpStatus("KCF999: algo estranho") == 404, "desconhecido -> 404 opaco")
 }
@@ -382,7 +383,7 @@ test "erros: Hint orienta sem vazar segredo ou recurso alheio", "errors-hint" {
 test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" {
     // Camada 1 — os construtores reais emitem o codigo e tem Hint (amarra o
     // corpo de cada err*(): trocar o codigo dentro do construtor quebra).
-    // Os 59 construtores de Errors.kf; os 2 parametrizados recebem valor
+    // Os 60 construtores de Errors.kf; os 2 parametrizados recebem valor
     // ficticio (nunca viaja — so prova que a saida casa com a dica).
     var emitted = listOf<String>()
     emitted.add(errInvalidHandle())
@@ -393,6 +394,7 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     emitted.add(errDeviceFields())
     emitted.add(errDeviceNotFound())
     emitted.add(errDeviceNotYours())
+    emitted.add(errDeviceRevoked())
     emitted.add(errInvalidServiceName())
     emitted.add(errServiceNotFound())
     emitted.add(errServiceNotYours())
@@ -444,7 +446,7 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     emitted.add(errIncidentNotFound())
     emitted.add(errInvalidWebhook())
     emitted.add(errWebhookNotFound())
-    assert(emitted.size == 59, "59 construtores emitem codigo")
+    assert(emitted.size == 60, "60 construtores emitem codigo")
     for (var msg in emitted) {
         assert(errHint(msg).length > 0, msg + " via construtor tem Hint")
     }
@@ -462,6 +464,7 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     codes.add("KCF020")
     codes.add("KCF021")
     codes.add("KCF022")
+    codes.add("KCF023")
     codes.add("KCF040")
     codes.add("KCF041")
     codes.add("KCF042")

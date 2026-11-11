@@ -61,6 +61,10 @@ publish devolvia o serviço existente **sem aplicar nada**: `deploy` com a
 porta mudada imprimia "publicado" e o serviço seguia na porta velha, embora
 `--plan` prometesse `~ vai atualizar`.
 
+Publicar num dispositivo **revogado** responde `409 KCF023` (nada é criado):
+ele nunca mais abre túnel e o revoke já removeu os serviços dele. Num
+dispositivo **suspenso** o publish é aceito — a suspensão é reversível.
+
 `--device <nome|id>` publica em nome de outro dispositivo da conta
 (padrão: o dispositivo do `login`). Nome resolve pelo `device list`;
 id passa direto; nome inexistente falha local ("dispositivo nao

@@ -59,6 +59,15 @@ String errDeviceNotYours() {
     return "KCF022: not the owner of device"
 }
 
+// Publicar num dispositivo REVOGADO: ele nunca mais abre tunel (o HELLO e
+// recusado com DEVICE_REVOKED, fatal), entao o servico nasceria morto — e
+// `device revoke` ja removeu os servicos dele. Recusar e mais honesto que
+// criar uma rota que nunca serve. SUSPENSO continua publicavel: a suspensao
+// e reversivel e o servico volta com o `unsuspend`.
+String errDeviceRevoked() {
+    return "KCF023: device is revoked"
+}
+
 // ---- servico / publicacao ----
 
 String errInvalidServiceName() {
@@ -337,6 +346,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF022") >= 0 || raw.indexOf("KCF042") >= 0 || raw.indexOf("KCF060") >= 0) {
         return "Esse recurso pertence a outra conta — confira `kof cloud status` e use a conta dona."
+    }
+    if (raw.indexOf("KCF023") >= 0) {
+        return "Esse dispositivo esta revogado e nao abre mais tunel — publique noutro dispositivo (`--device`) ou registre um novo (`kof cloud login --device <nome>`). Suspender, ao contrario, e reversivel: `kof cloud device unsuspend`."
     }
     if (raw.indexOf("KCF061") >= 0) {
         return "Informe o servico e o token: `kof cloud service token revoke <nome> <kfs_...>`."

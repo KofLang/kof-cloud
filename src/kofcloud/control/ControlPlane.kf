@@ -417,6 +417,11 @@ Int publishHttpStatus(String e) {
     if (e.indexOf("KCF040") >= 0 || e.indexOf("KCF043") >= 0) {
         return 400
     }
+    // Device revogado: 409 (o pedido e do dono e o recurso existe, mas o
+    // estado impede) — nao e 404 opaco, que esconderia a causa acionavel.
+    if (e.indexOf("KCF023") >= 0) {
+        return 409
+    }
     return 404
 }
 

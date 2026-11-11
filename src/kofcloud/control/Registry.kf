@@ -1428,6 +1428,15 @@ class Registry {
         if (device.accountId != account.id) {
             throw errDeviceNotYours()
         }
+        // Dispositivo revogado nunca mais abre tunel (HELLO recusado com
+        // DEVICE_REVOKED, fatal) e `device revoke` ja removeu os servicos
+        // dele: publicar ali criaria uma rota que nunca serve, com o CLI
+        // dizendo "publicado". Medido — antes aceitava. SUSPENSO continua
+        // publicavel: a suspensao e reversivel e o servico volta no
+        // `unsuspend`.
+        if (deviceIsActive(device) == false && deviceIsSuspended(device) == false) {
+            throw errDeviceRevoked()
+        }
         // Idempotencia por (conta, DEVICE, nome): republicar no mesmo device
         // ATUALIZA a configuracao mutavel; o mesmo nome noutro device e
         // conflito, nao "ja existe". Antes a busca ignorava o device: publicar

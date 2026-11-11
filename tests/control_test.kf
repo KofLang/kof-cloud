@@ -182,3 +182,34 @@ test "control: toda rota /v1 registrada esta documentada em docs/06", "control-d
     }
     assert(missing.size == 0, "rotas registradas e nao documentadas:" + detail)
 }
+
+test "control plane: publish em device revogado devolve 409 KCF023", "control-publish-revoked" {
+    // Medido: a rota aceitava publicar num device revogado (200) e criava um
+    // servico que nunca serviria. Agora o registry recusa (KCF023) e a borda
+    // mapeia para 409 — o pedido e do dono e o recurso existe, mas o estado
+    // impede; 404 opaco esconderia a causa acionavel.
+    var port = 18095
+    var registry = Registry("/tmp/kofcloud-cp-rev-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control no ar")
+
+    var created = httpPostJson(port, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var device = httpPostJson(port, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pk\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(device)), "deviceId")
+
+    var revoked = httpPostJson(port, "/v1/devices/revoke", "{\"deviceId\":\"" + deviceId + "\"}", token)
+    assert(statusOf(revoked) == 200, "device revogado")
+
+    var publishBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    var published = httpPostJson(port, "/v1/services", publishBody, token)
+    assert(statusOf(published) == 409, "409 no device revogado: " + intToString(statusOf(published)))
+    assert(bodyOf(published).indexOf("KCF023") >= 0, "corpo KCF023: " + bodyOf(published))
+    // accountByHandle e nulavel: estreita antes de ler .id (SEM049).
+    var mel = registry.accountByHandle("mel")
+    assert(mel != null, "conta existe")
+    if (mel != null) {
+        assert(registry.servicesForAccount(mel.id).size == 0, "nada criado")
+    }
+}

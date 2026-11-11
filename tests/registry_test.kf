@@ -162,3 +162,36 @@ test "registry: republicar sem mudanca nao reescreve (idempotente)", "republish-
     assert(registry.auditCountSince(account.id, "service.updated", 0) == before, "sem auditoria de update")
     assert(serviceConfigEquals(first, again), "config identica")
 }
+
+test "registry: publicar em device revogado recusa; suspenso aceita", "publish-device-state" {
+    // Medido: publicar num device REVOGADO criava o servico (200) — mas o
+    // device nunca mais abre tunel (HELLO recusado com DEVICE_REVOKED,
+    // fatal) e `device revoke` ja removeu os servicos dele. A rota nasceria
+    // morta com o CLI dizendo "publicado". SUSPENSO e diferente: reversivel,
+    // o servico volta no `unsuspend` — publicar ali e legitimo.
+    var registry = Registry(tempStatePath("publish-device-state"))
+    var account = registry.createAccount("mel", "mel@example.com", "segredo")
+    var device = registry.registerDevice(account, "notebook", "pubkey")
+    registry.revokeDevice(account.id, device.id)
+
+    var refused = false
+    var code = ""
+    try {
+        registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    } catch (String e) {
+        refused = true
+        code = e
+    }
+    assert(refused, "device revogado recusa o publish")
+    assert(code.indexOf("KCF023") >= 0, "codigo KCF023: " + code)
+    assert(registry.servicesForAccount(account.id).size == 0, "nada foi criado")
+
+    // Suspenso: aceita (reversivel).
+    var registry2 = Registry(tempStatePath("publish-suspended"))
+    var account2 = registry2.createAccount("ana", "ana@example.com", "segredo")
+    var device2 = registry2.registerDevice(account2, "pc", "pubkey")
+    registry2.suspendDevice(account2.id, device2.id)
+    var service = registry2.publishService(account2, device2.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    assert(service.name == "site", "suspenso aceita o publish")
+    assert(registry2.servicesForAccount(account2.id).size == 1, "servico criado")
+}
