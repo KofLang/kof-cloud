@@ -40,6 +40,25 @@ String doctorTunnelLine(String presenceRaw, String deviceId, String fetchError) 
     return doctorFailLine("tunel", "sem sessao no Edge — rode: kof cloud connect")
 }
 
+// Linha da camada do ciclo de vida do dispositivo, a partir do status ja
+// lido da lista (`fetchDevices`). Pura, sem rede nem HOME — testavel sem
+// control plane (mesmo padrao de doctorTunnelLine/doctorTlsLine).
+//
+// O doctor so conferia "registrado": um device REVOGADO recebia
+// `ok dispositivo registrado` e, na camada seguinte, a dica
+// "rode: kof cloud connect" — que e recusada com DEVICE_REVOKED (fatal).
+// Agora REVOKED e FALHA com a orientacao certa (re-registrar; nao ha volta
+// por status) e SUSPENDED e FALHA apontando o unsuspend (reversivel).
+String doctorDeviceLine(String deviceStatus) {
+    if (deviceStatus == "REVOKED") {
+        return doctorFailLine("dispositivo", "revogado — o tunel e recusado para sempre (DEVICE_REVOKED); registre de novo: kof cloud login --device <nome>")
+    }
+    if (deviceStatus == "SUSPENDED") {
+        return doctorFailLine("dispositivo", "suspenso — o tunel e recusado; libere com: kof cloud device unsuspend <nome|id>")
+    }
+    return doctorOkLine("dispositivo registrado (" + deviceStatus + ")")
+}
+
 // Linha da camada TLS a partir do resultado de `openssl x509` ja executado
 // (pura, sem rede nem HOME): "" quando nao ha `--tls-cert` (nada a checar).
 // Distingue arquivo ausente, PEM invalido e expiracao em 30 dias — o
@@ -153,7 +172,21 @@ DoctorReport doctorCheckWith(String manifestPath, String tlsCertPath) {
         lines.add(doctorFailLine("dispositivo", "este device nao esta registrado — rode: kof cloud login novamente"))
         return DoctorReport(false, lines)
     }
-    lines.add(doctorOkLine("dispositivo registrado (" + identity.deviceId + ")"))
+    // Ciclo de vida, nao so registro: REVOKED/SUSPENDED viram FALHA com a
+    // dica certa (unsuspend para suspenso; re-registro para revogado) em vez
+    // de `ok` seguido de "rode: connect" — que o Edge recusa nos dois casos
+    // (DEVICE_SUSPENDED/DEVICE_REVOKED, fatais no Agent).
+    var deviceStatus = ""
+    for (var device in devices) {
+        if (device.id == identity.deviceId) {
+            deviceStatus = device.status
+        }
+    }
+    var deviceLine = doctorDeviceLine(deviceStatus)
+    lines.add(deviceLine)
+    if (deviceLine.startsWith("FALHA")) {
+        failed = true
+    }
 
     // 4. Tunel real no Edge (presenca confirmada, nao inferida do processo
     // local): sem sessao viva nao ha rota, mesmo com manifesto ok. Antes

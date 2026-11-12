@@ -104,7 +104,10 @@ status permanece `REVOKED`. Revogar é a contenção de uma máquina
 comprometida — desfazê-la por um comando de rotina, sem registro novo nem
 nova chave, anularia a contenção. Voltar ao ar exige registrar o
 dispositivo de novo (`kof cloud login --device <nome>`), com novo id e nova
-chave.
+chave. O `kof cloud doctor` reflete isso: um dispositivo revogado vira
+`FALHA dispositivo` apontando o re-registro (nunca sugere `connect`, que o
+Edge recusa), e um suspenso vira `FALHA dispositivo` apontando o
+`unsuspend`.
 
 ## Limites
 

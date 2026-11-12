@@ -287,3 +287,43 @@ void doctorServeOk(Conn peer) {
     peer.send(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"))
     peer.close()
 }
+
+test "doctor: camada do device distingue REVOKED de SUSPENDED de ACTIVE", "doctor-device" {
+    // Medido: o doctor so conferia "registrado". Um device REVOGADO recebia
+    // `ok dispositivo registrado` e, na camada do tunel, a dica
+    // "rode: kof cloud connect" — que o Edge recusa com DEVICE_REVOKED
+    // (fatal no Agent). A dica certa para revogado e re-registrar (REVOKED e
+    // terminal); para suspenso, o unsuspend (reversivel).
+    var revoked = doctorDeviceLine("REVOKED")
+    assert(revoked.startsWith("FALHA dispositivo"), "revogado e FALHA")
+    assert(revoked.indexOf("revogado") >= 0, "nomeia a causa")
+    assert(revoked.indexOf("login --device") >= 0, "aponta o re-registro")
+    assert(revoked.indexOf("connect") < 0, "nunca sugere connect (seria recusado)")
+
+    var suspended = doctorDeviceLine("SUSPENDED")
+    assert(suspended.startsWith("FALHA dispositivo"), "suspenso e FALHA")
+    assert(suspended.indexOf("unsuspend") >= 0, "aponta o unsuspend")
+
+    var active = doctorDeviceLine("ACTIVE")
+    assert(active.startsWith("ok"), "ativo segue ok")
+
+    // Trava de fonte: o doctorCheck consulta o status do device e delega na
+    // linha pura (sem captura de stdout no runner).
+    var raw = File("src/kofcloud/cli/Doctor.kf").readText()
+    var text = ""
+    if (raw != null) {
+        text = raw
+    }
+    if (text.length == 0) {
+        return
+    }
+    var start = text.indexOf("DoctorReport doctorCheckWith(")
+    var end = text.indexOf("Int cmdDoctor(", start)
+    if (end < 0) {
+        end = text.length
+    }
+    var body = text.substring(start, end)
+    assert(body.indexOf("doctorDeviceLine(") >= 0, "doctorCheck usa a linha pura")
+    assert(body.indexOf("deviceStatus = device.status") >= 0, "le o ciclo de vida da lista")
+    assert(body.indexOf("dispositivo registrado (\" + identity.deviceId + \")") < 0, "nao imprime ok direto")
+}
