@@ -46,7 +46,7 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/connect` | conta | `{deviceId}` → `{edgeHost,edgePort,heartbeatMs,services,edges}` (todos os inteiros e listas viajam como **string JSON**, porque o Agent decodifica `Map<String,String>`; `edges` é a lista de candidatos `host:porta` para o ranking) |
 | `GET` | `/v1/presence` | conta | devices DA CONTA com túnel vivo neste Edge → `["<deviceId>", ...]` (vazio = offline, não erro; 401 sem token; nada de terceiros vaza) |
 | `GET` | `/v1/domains` | conta | domínios/hostnames da conta (wildcard + serviços + próprios; cada entrada com `status` — vazio exceto no custom PENDING/VERIFIED; o custom carrega `service` com o nome do vinculado, vazio se órfão) |
-| `POST` | `/v1/domains` | conta | registra domínio próprio `{hostname,service}` → `{hostname,status,instruction,verifiedAt}` (PENDING + CNAME; `verifiedAt` vazio até verificar) |
+| `POST` | `/v1/domains` | conta | registra domínio próprio `{hostname,service}` → `{hostname,status,instruction,verifiedAt}` (PENDING + CNAME; `verifiedAt` vazio até verificar); nome de serviço ambíguo no estado legado (mesmo nome em 2 devices) → `409 KCF140`, nada é registrado |
 | `POST` | `/v1/domains/verify` | conta | `{hostname}` → `{hostname,status,instruction,verifiedAt}` (verifica o DNS e ativa a rota; os 4 campos casam com o `DomainStatus` da CLI — decode tipado exige todos presentes, JSN004) |
 | `POST` | `/v1/domains/remove` | conta | `{hostname}` → `{removed:true}` |
 | `GET` | `/v1/audit/verify` | conta | verifica a cadeia de hash da trilha da conta → `{ok,brokenAt,events}` (cadeia **por conta**: o anel é global, mas cada evento encadeia com o anterior da mesma conta) |
@@ -203,6 +203,7 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `400` | `KCF046` protocol inválido | publish com protocol fora de `http` (MVP: só HTTP/1.1 pelo túnel) |
 | `400` | `KCF047` address fora de loopback | publish com localAddress fora de 127.0.0.1/localhost/::1 (anti-SSRF) |
 | `409` | `KCF139` service name already used by another device | publish com nome já usado por **outro** device da conta: o hostname `<nome>.<handle>` seria o mesmo e o roteamento casaria o primeiro. Antes o publish devolvia `200` com o serviço do outro device e nada era publicado |
+| `409` | `KCF140` service name is ambiguous | comando por nome (`domain add --service`) num estado legado com o mesmo nome em 2 devices: recusa em vez de escolher o primeiro (o domínio apontaria para a máquina errada) |
 | `401` | `KCF003` invalid credentials | conta/senha não conferem (opaco: conta inexistente responde igual) |
 | `401` | `KCF004` unauthorized | token da conta ausente/inválido |
 | `404` | `KCF021` device not found | device inexistente **ou de outra conta** (opaco por desenho) |
@@ -258,6 +259,6 @@ quebra ao mudar um ramo ou vazar o detalhe): `publishHttpStatus`/
 `indexOf`). Auditoria: `grep 'indexOf("KCF'
 src/kofcloud/control/ControlPlane.kf` só acusa 5 linhas — todas nos corpos
 de `publishHttpStatus` (2), `domainHttpStatus` (2) e `verifyDomainError` (1).
-`KCF123` é reservado (faixa KCF120–KCF139, domínio próprio): nunca emitido,
+`KCF123` é reservado (faixa KCF120–KCF140, domínio próprio/ambiguidade): nunca emitido,
 sem `Hint:` por desenho — a trava `errors-hint-all` quebra se alguém emitir
 sem dica e se o reservado ganhar dica.

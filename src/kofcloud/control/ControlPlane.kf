@@ -1147,10 +1147,18 @@ HttpResult handleRegisterDomain(Registry registry, String? authHeader, String bo
     if (hostname.length == 0) {
         return HttpResult(400, errorJson(errInvalidCustomHostname()))
     }
-    var service = registry.serviceByName(account.id, serviceName)
-    if (service == null) {
+    // Nome ambiguo (estado legado: mesmo nome em 2 devices) NAO pode escolher
+    // o primeiro: o dominio apontaria para a maquina errada em silencio.
+    // `serviceByName` devolvia o primeiro match — medido. Recusa com 409
+    // KCF140 e o operador desambigua removendo o duplicado.
+    var matches = registry.servicesByName(account.id, serviceName)
+    if (matches.size > 1) {
+        return HttpResult(409, errorJson(errServiceNameAmbiguous()))
+    }
+    if (matches.size == 0) {
         return HttpResult(404, errorJson(errDomainNotFound()))
     }
+    var service = matches.get(0)
     try {
         var domain = registry.registerCustomDomain(account.id, hostname, service.id)
         var out = mapOf()

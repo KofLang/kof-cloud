@@ -1518,6 +1518,20 @@ class Registry {
         return null
     }
 
+    // Todos os servicos da conta com o nome dado. Estado legado (anterior ao
+    // KCF139) pode ter homonimos em devices diferentes; quem age POR NOME
+    // (ex.: `domain add --service`) precisa ver todos pra recusar ambiguidade
+    // em vez de escolher o primeiro em silencio. A ordem e a de publicacao.
+    List<Service> servicesByName(String accountId, String name) {
+        var out = listOf<Service>()
+        for (var service in this.services) {
+            if (service.accountId == accountId && service.name == name) {
+                out.add(service)
+            }
+        }
+        return out
+    }
+
     List<Service> servicesForAccount(String accountId) {
         var out = listOf<Service>()
         for (var service in this.services) {

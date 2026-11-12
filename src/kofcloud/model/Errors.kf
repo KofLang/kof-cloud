@@ -89,6 +89,15 @@ String errServiceNameTaken() {
     return "KCF139: service name already used by another device"
 }
 
+// Nome de servico ambiguo: o estado legado (anterior ao KCF139) pode ter o
+// mesmo nome em dois devices. Comandos que agem POR NOME (domain add
+// --service, e os da CLI) nao podem escolher um deles — o dominio/rota
+// apontaria para a maquina errada em silencio. 409: o nome existe e o pedido
+// e valido; o conflito e de recurso.
+String errServiceNameAmbiguous() {
+    return "KCF140: service name is ambiguous (exists on more than one device)"
+}
+
 String errServiceNotYours() {
     return "KCF042: not the owner of service"
 }
@@ -409,6 +418,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF139") >= 0) {
         return "O nome do servico ja esta em uso noutro dispositivo da conta — o hostname seria o mesmo e o trafego iria para a maquina errada; use outro nome ou remova o servico antigo."
+    }
+    if (raw.indexOf("KCF140") >= 0) {
+        return "Ha mais de um servico com esse nome na conta (estado antigo) — remova o duplicado (`kof cloud unpublish <nome>` no dispositivo certo) antes de vincular o dominio."
     }
     if (raw.indexOf("KCF134") >= 0) {
         return "Tentativas de login demais para esta conta — aguarde a janela (kofcloud.limits.loginWindowMs) e tente de novo."

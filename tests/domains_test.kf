@@ -8,6 +8,7 @@ import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
 import kofcloud.model.CustomDomain
 import kofcloud.model.Errors
+import kofcloud.model.Service
 import kofcloud.util.Hosts
 import kofcloud.store.Store
 import kofcloud.util.Text
@@ -529,4 +530,41 @@ test "dominio: domain verify --tls-cert com PEM real (openssl)", "domains-cert" 
     var parseBad = process.run("openssl", "x509", "-in", bad, "-noout").exitCode
     assert(parseBad != 0, "garbage nao parseia")
     assert(certHostVerdict("example.com", true, parseBad, "", "").indexOf("PEM valido") >= 0, "garbage reprova com motivo")
+}
+
+test "dominio: nome de servico ambiguo recusa em vez de escolher o primeiro", "domains-ambiguous" {
+    // Medido: `handleRegisterDomain` usava `serviceByName`, que devolve o
+    // PRIMEIRO match. Num estado legado (anterior ao KCF139) com o mesmo nome
+    // em dois devices, `domain add --service site` vinculava o dominio ao
+    // servico que a ordem da lista decidisse — o CNAME/rota apontaria para a
+    // maquina errada em silencio. Agora recusa com 409 KCF140.
+    var controlPort = 19555
+    var path = "/tmp/kofcloud-domamb-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var d1 = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pk1\"}", token)
+    var d2 = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"servidor\",\"publicKey\":\"pk2\"}", token)
+    var dev1 = mapField(json.decode<Map<String, String>>(bodyOf(d1)), "deviceId")
+    var dev2 = mapField(json.decode<Map<String, String>>(bodyOf(d2)), "deviceId")
+    var pub1 = "{\"deviceId\":\"" + dev1 + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pub1, token)) == 200, "site no notebook")
+
+    // Homonimo injetado direto (estado anterior ao KCF139).
+    var mel = registry.accountByHandle("mel")
+    assert(mel != null, "conta existe")
+    if (mel != null) {
+        registry.services.add(Service("legacy-1", mel.id, dev2, "site", "127.0.0.1", 8081, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", ""))
+        assert(registry.servicesByName(mel.id, "site").size == 2, "dois homonimos no estado")
+    }
+
+    var ambiguous = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"api.example.com\",\"service\":\"site\"}", token)
+    assert(statusOf(ambiguous) == 409, "ambiguo -> 409: " + intToString(statusOf(ambiguous)))
+    assert(domainCodeIs(domainErrOf(ambiguous), "KCF140"), "KCF140 no corpo")
+    // Nada foi registrado.
+    assert(registry.customByHostname("api.example.com") == null, "dominio nao criado")
 }
