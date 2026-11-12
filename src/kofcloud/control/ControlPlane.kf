@@ -312,6 +312,20 @@ HttpResult handleRevokeDevice(Registry registry, String? authHeader, String body
     return HttpResult(200, json.encode(out))
 }
 
+// Status do device desta conta ("" quando nao existe ou e de outra conta).
+// Usado para distinguir "revogado" (409 acionavel) de "nao existe" (404
+// opaco) nos handlers de suspend/unsuspend, sem expor o status de terceiros.
+String statusOfDevice(Registry registry, String accountId, String deviceId) {
+    var device = registry.deviceById(deviceId)
+    if (device == null) {
+        return ""
+    }
+    if (device.accountId != accountId) {
+        return ""
+    }
+    return device.status
+}
+
 // Suspensao operacional (abuse prevention): reversivel, sem remover nada.
 // Idempotente; inexistente/alheio = mesmo 404 opaco da revogacao.
 HttpResult handleSuspendDevice(Registry registry, String? authHeader, String bodyText) {
@@ -321,6 +335,12 @@ HttpResult handleSuspendDevice(Registry registry, String? authHeader, String bod
     }
     var body = decodeBody(bodyText)
     var deviceId = mapField(body, "deviceId")
+    // REVOKED e terminal: recusa antes com 409 KCF023 (causa acionavel) em
+    // vez do 404 generico que `false` produziria — o dono precisa saber que
+    // o dispositivo foi revogado, nao que "nao existe".
+    if (deviceIsRevoked(statusOfDevice(registry, account.id, deviceId))) {
+        return HttpResult(409, errorJson(errDeviceRevoked()))
+    }
     if (registry.suspendDevice(account.id, deviceId) == false) {
         return HttpResult(404, errorJson(errDeviceNotFound()))
     }
@@ -336,6 +356,13 @@ HttpResult handleUnsuspendDevice(Registry registry, String? authHeader, String b
     }
     var body = decodeBody(bodyText)
     var deviceId = mapField(body, "deviceId")
+    // Antes `unsuspend` gravava ACTIVE em cima de REVOKED: a contencao de uma
+    // maquina comprometida era desfeita por um comando de rotina. Revogar e
+    // terminal; reverter exige registrar o dispositivo de novo (novo id,
+    // nova chave) — nao ha caminho de volta por status.
+    if (deviceIsRevoked(statusOfDevice(registry, account.id, deviceId))) {
+        return HttpResult(409, errorJson(errDeviceRevoked()))
+    }
     if (registry.unsuspendDevice(account.id, deviceId) == false) {
         return HttpResult(404, errorJson(errDeviceNotFound()))
     }

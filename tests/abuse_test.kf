@@ -231,3 +231,76 @@ Int metricValue(String exposition, String name) {
     }
     return -1
 }
+
+test "suspensao: REVOKED e terminal — unsuspend/suspend nao ressuscitam", "abuse-revoked-terminal" {
+    // Medido: `unsuspendDevice` gravava ACTIVE incondicionalmente. Revogar e
+    // a acao de contencao de uma maquina comprometida (remove servicos e
+    // credenciais; o Agent trata DEVICE_REVOKED como fatal), e um `device
+    // unsuspend` de rotina desfazia tudo sem re-registro nem nova chave.
+    var registry = Registry("/tmp/kofcloud-abterm-" + crypto.randomHex(4) + ".json")
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    assert(registry.revokeDevice(mel.id, device.id) == true, "revoga")
+
+    var revokedBefore = registry.deviceById(device.id)
+    assert(revokedBefore != null, "device existe")
+    if (revokedBefore != null) {
+        assert(deviceIsRevoked(revokedBefore.status), "status REVOKED")
+    }
+
+    // Nenhuma transicao tira de REVOKED.
+    assert(registry.unsuspendDevice(mel.id, device.id) == false, "unsuspend recusa")
+    assert(registry.suspendDevice(mel.id, device.id) == false, "suspend recusa")
+    var after = registry.deviceById(device.id)
+    assert(after != null, "ainda existe")
+    if (after != null) {
+        assert(after.status == "REVOKED", "continua REVOKED: " + after.status)
+    }
+    // Sem auditoria falsa de unsuspend/suspend (nada aconteceu).
+    var events = registry.auditForAccount(mel.id)
+    var unsuspends = 0
+    for (var event in events) {
+        if (event.action == "device.unsuspended") {
+            unsuspends = unsuspends + 1
+        }
+    }
+    assert(unsuspends == 0, "nenhum unsuspend auditado")
+
+    // A fonte unica do predicado: so o proprio literal REVOKED responde true.
+    assert(deviceIsRevoked("REVOKED"), "REVOKED e terminal")
+    assert(deviceIsRevoked("ACTIVE") == false, "ACTIVE nao")
+    assert(deviceIsRevoked("SUSPENDED") == false, "SUSPENDED nao (reversivel)")
+}
+
+test "suspensao: HTTP recusa suspend/unsuspend de device revogado com 409", "abuse-revoked-http" {
+    var controlPort = 19760
+    var registry = Registry("/tmp/kofcloud-abterm-http-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var device = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(device)), "deviceId")
+    var revoked = httpPostJson(controlPort, "/v1/devices/revoke", "{\"deviceId\":\"" + deviceId + "\"}", token)
+    assert(statusOf(revoked) == 200, "revoga")
+
+    var target = "{\"deviceId\":\"" + deviceId + "\"}"
+    var unsuspend = httpPostJson(controlPort, "/v1/devices/unsuspend", target, token)
+    assert(statusOf(unsuspend) == 409, "unsuspend 409: " + intToString(statusOf(unsuspend)))
+    assert(bodyOf(unsuspend).indexOf("KCF023") >= 0, "KCF023 no corpo")
+    var suspend = httpPostJson(controlPort, "/v1/devices/suspend", target, token)
+    assert(statusOf(suspend) == 409, "suspend 409: " + intToString(statusOf(suspend)))
+    assert(bodyOf(suspend).indexOf("KCF023") >= 0, "KCF023 no corpo")
+
+    // Inexistente continua 404 opaco (sem regressao).
+    var ghost = httpPostJson(controlPort, "/v1/devices/unsuspend", "{\"deviceId\":\"fantasma\"}", token)
+    assert(statusOf(ghost) == 404, "inexistente 404")
+
+    var after = registry.deviceById(deviceId)
+    assert(after != null, "device existe")
+    if (after != null) {
+        assert(after.status == "REVOKED", "continua revogado")
+    }
+}

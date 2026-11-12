@@ -47,6 +47,8 @@ momento do `device register`.
   **não** invalida a conta nem os demais dispositivos.
 * Suspender (`device suspend <nome|id>`) marca `SUSPENDED`: mesmo efeito de
   bloqueio, mas reversível com `unsuspend` e sem remover nada.
+* Revogar é **terminal**: `unsuspend`/`suspend` num `REVOKED` respondem
+  `409 KCF023` e o status não muda. Reverter exige registrar de novo.
 * Um dispositivo revogado/suspenso é recusado no handshake do túnel
   (`WELCOME` de erro `DEVICE_REVOKED` / `DEVICE_SUSPENDED`).
 

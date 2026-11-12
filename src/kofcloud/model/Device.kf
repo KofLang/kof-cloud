@@ -27,3 +27,11 @@ Bool deviceIsActive(Device device) {
 Bool deviceIsSuspended(Device device) {
     return device.status == deviceSuspended()
 }
+
+// Revogado e TERMINAL: o dispositivo nao volta a ACTIVE/SUSPENDED por
+// mudanca de status. Reverter exige registrar de novo (novo id, nova chave).
+// Fonte unica do literal para a trava de estado (`setDeviceStatus`) e para
+// os handlers que distinguem "revogado" (409) de "inexistente" (404).
+Bool deviceIsRevoked(String status) {
+    return status == deviceRevoked()
+}

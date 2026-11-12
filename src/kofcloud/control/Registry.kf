@@ -828,6 +828,16 @@ class Registry {
         var updated = listOf<Device>()
         for (var device in this.devices) {
             if (device.id == deviceId && device.accountId == accountId) {
+                // REVOKED e terminal: revogar e a acao de contencao de uma
+                // maquina comprometida (remove servicos e credenciais) e o
+                // Agent trata DEVICE_REVOKED como fatal. Antes `unsuspend`
+                // gravava ACTIVE em cima de um device revogado — a contencao
+                // era desfeita por um comando de rotina, sem re-registro nem
+                // nova chave. So a propria revogacao (no-op) pode reescrever
+                // um REVOKED; qualquer outra transicao e recusada.
+                if (device.status == deviceRevoked() && status != deviceRevoked()) {
+                    return false
+                }
                 updated.add(Device(device.id, device.accountId, device.name, device.publicKey, status, device.lastSeenAt, device.createdAt))
                 found = true
             } else {

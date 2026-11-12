@@ -98,6 +98,14 @@ permitido: a suspensão é reversível e o serviço volta no `unsuspend`.
 frame útil ou request (enforcement em request + PING). Diferente de revogar,
 suspender preserva serviços, tokens e domínios — `unsuspend` libera tudo.
 
+**Revogar é terminal.** Um dispositivo `REVOKED` não volta a `ACTIVE` por
+`unsuspend` (nem muda por `suspend`): os dois respondem `409 KCF023` e o
+status permanece `REVOKED`. Revogar é a contenção de uma máquina
+comprometida — desfazê-la por um comando de rotina, sem registro novo nem
+nova chave, anularia a contenção. Voltar ao ar exige registrar o
+dispositivo de novo (`kof cloud login --device <nome>`), com novo id e nova
+chave.
+
 ## Limites
 
 | Limite | Default | Config | Aplicado? |

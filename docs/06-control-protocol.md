@@ -22,8 +22,8 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/devices` | conta | registra dispositivo `{name,publicKey}` → `{deviceId}` |
 | `GET` | `/v1/devices` | conta | lista dispositivos |
 | `POST` | `/v1/devices/revoke` | conta | `{deviceId}` → `{revoked:true}` |
-| `POST` | `/v1/devices/suspend` | conta | `{deviceId}` → `{suspended:true}` (túnel recusado, nada removido) |
-| `POST` | `/v1/devices/unsuspend` | conta | `{deviceId}` → `{suspended:false}` |
+| `POST` | `/v1/devices/suspend` | conta | `{deviceId}` → `{suspended:true}` (túnel recusado, nada removido); device `REVOKED` → `409 KCF023` (revogar é terminal) |
+| `POST` | `/v1/devices/unsuspend` | conta | `{deviceId}` → `{suspended:false}`; device `REVOKED` → `409 KCF023` (não ressuscita; re-registre para voltar) |
 | `POST` | `/v1/services` | conta | publica `{deviceId,name,localAddress,localPort,protocol,exposure}` → `{service}`; republicar no mesmo device atualiza a config mutável; device revogado → `409 KCF023` (suspenso é aceito) |
 | `GET` | `/v1/services` | conta | lista serviços |
 | `POST` | `/v1/services/token` | conta | emite credencial `kfs_` do serviço `{serviceId}` (+ `ttlHours` opcional, horas) → `{token,serviceId,ttlHours?}` (TTL inválido = 400 `KCF062`) |
@@ -203,6 +203,7 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `400` | `KCF046` protocol inválido | publish com protocol fora de `http` (MVP: só HTTP/1.1 pelo túnel) |
 | `400` | `KCF047` address fora de loopback | publish com localAddress fora de 127.0.0.1/localhost/::1 (anti-SSRF) |
 | `409` | `KCF139` service name already used by another device | publish com nome já usado por **outro** device da conta: o hostname `<nome>.<handle>` seria o mesmo e o roteamento casaria o primeiro. Antes o publish devolvia `200` com o serviço do outro device e nada era publicado |
+| `409` | `KCF023` device is revoked | suspend/unsuspend (e publish) sobre dispositivo revogado: revogar é terminal, e a rota/serviço não pode voltar sem registro novo |
 | `409` | `KCF140` service name is ambiguous | comando por nome (`domain add --service`) num estado legado com o mesmo nome em 2 devices: recusa em vez de escolher o primeiro (o domínio apontaria para a máquina errada) |
 | `401` | `KCF003` invalid credentials | conta/senha não conferem (opaco: conta inexistente responde igual) |
 | `401` | `KCF004` unauthorized | token da conta ausente/inválido |
