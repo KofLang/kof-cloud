@@ -852,3 +852,74 @@ void serveOkOnce(Conn peer) {
     peer.send(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"))
     peer.close()
 }
+
+test "deploy: check acusa servico SUSPENSO com a dica do unsuspend", "deploy-check-suspended" {
+    // Medido lendo o caminho: `verifyDeploymentFor` so olhava config + sonda
+    // local. Um servico SUSPENSO respondia localmente (o processo esta de
+    // pe) e o config casava, entao o --check/doctor davam verde — mas a
+    // rota esta fora (404 opaco na borda) e republicar NAO dessuspende
+    // (republicar preserva o status de proposito). A dica certa e o
+    // unsuspend.
+    var live = listOf<Service>()
+    live.add(Service("id-site", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "SUSPENDED", 0, "", ""))
+
+    // Puro (`suspendedByName`, o ponto da decisao): sem rede. Sem escopo.
+    assert(statusIsSuspended(suspendedByName(live, "site", "")), "sem escopo: suspenso acusado")
+    // Com escopo no mesmo device: acusado.
+    assert(statusIsSuspended(suspendedByName(live, "site", "devA")), "escopo certo: suspenso")
+    // Homonimo NOUTRO device: nao conta (o caso dele e "publicado noutro
+    // dispositivo", que ja tem problema proprio).
+    assert(suspendedByName(live, "site", "devB") == "", "homonimo alheio: vazio")
+    // Sem match: vazio (o "nao publicado" e tratado antes).
+    assert(suspendedByName(live, "outro", "devA") == "", "inexistente: vazio")
+
+    // ONLINE/UNKNOWN/OFFLINE nao caem na dica do unsuspend.
+    var online = listOf<Service>()
+    online.add(Service("id-site", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "ONLINE", 0, "", ""))
+    assert(statusIsSuspended(suspendedByName(online, "site", "devA")) == false, "online nao e suspenso")
+
+    // Fim a fim: control plane de verdade, servico suspenso pela API. O
+    // check acusa o SUSPENSO (e nao "sem resposta") mesmo com o processo
+    // local respondendo.
+    var controlPort = 19821
+    var registry = Registry("/tmp/kofcloud-depsusp-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var dev = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(dev)), "deviceId")
+    var listener = net.listen(19822)
+    var loop = spawn {
+        var serving = true
+        while (serving) {
+            try {
+                var peer = listener.accept()
+                var worker = spawn { serveOkOnce(peer) }
+            } catch (String e) {
+                serving = false
+            }
+        }
+    }
+    assert(waitForPort(19822, 60), "servico local no ar")
+    var pub = httpPostJson(controlPort, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19822\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", token)
+    assert(statusOf(pub) == 200, "publicado")
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(pub)), "id")
+    var susp = httpPostJson(controlPort, "/v1/services/suspend", "{\"serviceId\":\"" + serviceId + "\"}", token)
+    assert(statusOf(susp) == 200, "suspenso")
+
+    var wanted = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":19822}]}")
+    var controlUrl = "http://127.0.0.1:" + intToString(controlPort)
+    var problems = verifyDeploymentFor(controlUrl, token, wanted, deviceId)
+    assert(problems.size == 1, "um problema: " + intToString(problems.size))
+    assert(problems.get(0).indexOf("SUSPENSO") >= 0, "nomeia o estado: " + problems.get(0))
+    assert(problems.get(0).indexOf("unsuspend") >= 0, "dica do unsuspend")
+    assert(problems.get(0).indexOf("kof cloud deploy") < 0, "deploy nao resolve (nao dessuspende)")
+    assert(checkLocalService("127.0.0.1", 19822), "o processo local esta de pe (o problema e o status)")
+
+    // Unsuspend volta ao verde.
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/unsuspend", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "liberado")
+    assert(verifyDeploymentFor(controlUrl, token, wanted, deviceId).size == 0, "liberado: tudo saudavel")
+    listener.close()
+}

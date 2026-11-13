@@ -259,6 +259,24 @@ List<String> verifyDeployment(String controlUrl, String token, List<ManifestServ
     return verifyDeploymentFor(controlUrl, token, wanted, "")
 }
 
+// Status do servico com este nome (e, com escopo, NESTE device) na lista ja
+// buscada. Puro, sem rede — testavel sem control plane. Vazio quando nao
+// ha match (o caso "nao publicado" e tratado antes). O homonimo noutro
+// device NAO conta: ele ja vira problema proprio acima.
+String suspendedByName(List<Service> live, String name, String expectedDeviceId) {
+    var trimmed = name.trim()
+    for (var service in live) {
+        if (service.name != trimmed) {
+            continue
+        }
+        if (expectedDeviceId.length > 0 && service.deviceId != expectedDeviceId) {
+            continue
+        }
+        return service.status
+    }
+    return ""
+}
+
 List<String> verifyDeploymentFor(String controlUrl, String token, List<ManifestService> wanted, String expectedDeviceId) {
     var problems = listOf<String>()
     var live = listOf<Service>()
@@ -302,6 +320,14 @@ List<String> verifyDeploymentFor(String controlUrl, String token, List<ManifestS
             problems.add(service.name + ": nao publicado")
         } else if (drift.length > 0) {
             problems.add(service.name + ": publicado com config diferente (" + drift + ") — rode: kof cloud deploy")
+        } else if (statusIsSuspended(suspendedByName(live, service.name, expectedDeviceId))) {
+            // SUSPENDED: a rota esta fora (404 opaco na borda) e o deploy NAO
+            // dessuspende — republicar preserva o status de proposito (nao
+            // ressuscita decisao administrativa). Sem isso, o --check/doctor
+            // aprovavam um servico fora do ar: respondia localmente, o config
+            // casava, mas o site dava 404 para o mundo. A dica certa e o
+            // unsuspend, nao o deploy.
+            problems.add(service.name + ": SUSPENSO (fora da rota) — libere com: kof cloud service unsuspend " + service.name)
         } else if (checkLocalServiceFor(service.address, service.port, service.protocol) == false) {
             problems.add(service.name + ": publicado mas sem resposta em " + service.address + ":" + intToString(service.port))
         } else {

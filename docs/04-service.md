@@ -29,6 +29,12 @@ kof cloud publish site --port 8080
   → hostname: https://site.mel.kofcloud.io
 ```
 
+O `deploy --check` (e o `doctor`) acusam serviço **suspenso** como problema
+próprio — `SUSPENSO (fora da rota) — libere com: kof cloud service unsuspend
+<nome>` — em vez de dar verde: o serviço suspenso responde localmente (o
+processo está de pé) e republicar **não** dessuspende (republicar preserva o
+status de propósito), então o único caminho de volta é o unsuspend.
+
 `kof cloud status`, `service list` e `service status <nome>` mostram em **qual
 dispositivo** o serviço roda (`device: <nome>`, ou o id quando o dispositivo
 não está mais na conta).
