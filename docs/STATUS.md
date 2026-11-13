@@ -76,7 +76,7 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | teto de corpo (WAF) | `tests/waf_body_test.kf` | 2 |
 | detectar WAF + corpo + headers + encoded + allowlist (matcher) | `tests/waf_detect_test.kf` | 8 |
 | timeout de upstream (WAF) | `tests/waf_timeout_test.kf` | 2 |
-| allowlist WAF (Fase 10 slice 3) | `tests/waf_allow_test.kf` | 4 |
+| allowlist WAF (Fase 10 slice 3) | `tests/waf_allow_test.kf` | 5 |
 | painel somente-leitura | `tests/panel_test.kf` | 3 |
 | rotacao de kfs_ (Fase 19 s3) | `tests/rotate_test.kf` | 5 |
 | `security.txt` + `SECURITY.md` (Fase 19 s1 parcial) | `tests/security_test.kf` | 3 |
@@ -103,7 +103,7 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor, booleanas sem duplicação e posicional sobrando (CLI) | `tests/value_flags_test.kf` | 4 |
 
-Total: 341 testes. Ver `15-tests.md` para a matriz.
+Total: 342 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

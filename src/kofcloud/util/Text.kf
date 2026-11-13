@@ -434,6 +434,33 @@ String wafDetectHeadersSignature(List<String> headers) {
 // Metodo casa exato em maiusculas (o parser HTTP entrega o verbo cru);
 // path ignora query (`/api/x?y=2` casa `/api/x`) e aceita prefixo `/*`
 // (`/api/*` casa `/api/users` mas nao `/api2`).
+// O path tem um segmento que muda de significado depois da normalizacao?
+// A allowlist de paths e um controle FAIL-CLOSED, entao ela nao pode ser
+// decidida sobre um caminho cujo destino real depende do servidor local:
+// `/api/../admin` casa o prefixo `/api/` mas entrega `/admin`. Aqui rejeita
+// `..` e `.` como segmento (cru), barra invertida, `%2e`/`%2f`/`%5c`
+// (encoded), e segmento vazio (`//`). Puro, sem IO.
+Bool pathHasAmbiguousSegment(String path) {
+    var lower = path.toLowerCase()
+    if (lower.indexOf("\\") >= 0) {
+        return true
+    }
+    if (lower.indexOf("%2e") >= 0 || lower.indexOf("%2f") >= 0 || lower.indexOf("%5c") >= 0) {
+        return true
+    }
+    if (lower.indexOf("//") >= 0) {
+        return true
+    }
+    // Segmentos separados por "/": "." e ".." mudam o caminho resolvido.
+    var segments = lower.split("/")
+    for (var segment in segments) {
+        if (segment == ".." || segment == ".") {
+            return true
+        }
+    }
+    return false
+}
+
 Bool wafAllowCheck(String method, String path, List<String> allowMethods, List<String> allowPaths) {
     if (allowMethods.size > 0) {
         var ok = false
@@ -451,6 +478,12 @@ Bool wafAllowCheck(String method, String path, List<String> allowMethods, List<S
         var cut = path.indexOf("?")
         if (cut >= 0) {
             bare = path.substring(0, cut)
+        }
+        // Caminho ambiguo nunca casa: o prefixo autorizado pode nao ser o
+        // destino depois da normalizacao do servico local (`/api/../admin`
+        // casava `/api/*` e entregava `/admin`). Negar aqui e fail-closed.
+        if (pathHasAmbiguousSegment(bare)) {
+            return false
         }
         var ok = false
         for (var pattern in allowPaths) {

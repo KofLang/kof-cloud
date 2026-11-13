@@ -106,6 +106,14 @@ test "allowlist: servico declarado barra metodo/path fora da lista (403 KCF111)"
     assert(bodyOf(ok) == "users", "chegou no servico")
     assert(statusOf(httpGetRaw(httpPort, "/health", host)) == 200, "path exato permitido")
 
+    // Traversal NAO fura a allowlist: `/api/../admin` casava o prefixo
+    // `/api/*` mas o servico local normaliza para `/admin`. Agora 403.
+    var traversal = httpGetRaw(httpPort, "/api/../admin", host)
+    assert(statusOf(traversal) == 403, "traversal na allowlist -> 403")
+    assert(bodyOf(traversal).indexOf("KCF111") >= 0, "KCF111 no traversal")
+    var traversalEnc = httpGetRaw(httpPort, "/api/..%2fadmin", host)
+    assert(statusOf(traversalEnc) == 403, "traversal encoded -> 403")
+
     var wrongPath = httpGetRaw(httpPort, "/admin", host)
     assert(statusOf(wrongPath) == 403, "path fora da lista -> 403")
     assert(bodyOf(wrongPath).indexOf("KCF111") >= 0, "KCF111 no corpo")
@@ -127,4 +135,39 @@ test "allowlist: servico declarado barra metodo/path fora da lista (403 KCF111)"
     time.sleep(1000)
     File(agentStop).delete()
     File(edgeStop).delete()
+}
+
+test "allowlist: path ambiguo nao casa o prefixo (traversal nao fura)", "wafallow-unit" {
+    // Medido: a allowlist casava por PREFIXO cru, entao `/api/../admin`
+    // casava `/api/*` — e o servico local normaliza para `/admin`, fora da
+    // lista. A allowlist e fail-closed, entao nao pode decidir sobre um
+    // caminho cujo destino depende de normalizacao.
+    var paths = listOf("/api/*")
+    var noMethods = listOf<String>()
+
+    assert(wafAllowCheck("GET", "/api/users", noMethods, paths) == true, "prefixo legitimo passa")
+    assert(wafAllowCheck("GET", "/api/", noMethods, paths) == true, "prefixo com barra passa")
+    assert(wafAllowCheck("GET", "/api/users/123", noMethods, paths) == true, "subpath passa")
+    assert(wafAllowCheck("GET", "/api2/x", noMethods, paths) == false, "prefixo nao vaza para /api2")
+
+    // Traversal cru e encoded, nos dois formatos de barra.
+    assert(wafAllowCheck("GET", "/api/../admin", noMethods, paths) == false, ".. cru barrado")
+    assert(wafAllowCheck("GET", "/api/..%2fadmin", noMethods, paths) == false, "%2f barrado")
+    assert(wafAllowCheck("GET", "/api/%2e%2e/admin", noMethods, paths) == false, "%2e%2e barrado")
+    assert(wafAllowCheck("GET", "/api/..%5cadmin", noMethods, paths) == false, "%5c barrado")
+    assert(wafAllowCheck("GET", "/api/..\\admin", noMethods, paths) == false, "barra invertida barrada")
+    assert(wafAllowCheck("GET", "/api/./users", noMethods, paths) == false, ". como segmento barrado")
+    assert(wafAllowCheck("GET", "//api/users", noMethods, paths) == false, "segmento vazio barrado")
+
+    // Servico SEM allowlist continua livre (o guarda so vale para quem
+    // declarou — fail-closed nao pode virar bloqueio universal).
+    assert(wafAllowCheck("GET", "/api/../admin", noMethods, listOf<String>()) == true, "sem allowlist: passa")
+    // Metodo sozinho (sem allowPaths) nao ganha a regra de path.
+    assert(wafAllowCheck("GET", "/qualquer/../x", listOf("GET"), listOf<String>()) == true, "sem allowPaths: sem regra de path")
+
+    // O predicado e a fonte unica: segmentos normais nao sao ambiguos.
+    assert(pathHasAmbiguousSegment("/api/users") == false, "segmento normal")
+    assert(pathHasAmbiguousSegment("/api/v1.2/x") == false, "ponto no meio do nome nao conta")
+    assert(pathHasAmbiguousSegment("/api/..") == true, ".. final")
+    assert(pathHasAmbiguousSegment("/.well-known/security.txt") == false, "ponto inicial do nome nao conta")
 }
