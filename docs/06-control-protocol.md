@@ -38,7 +38,7 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/services/suspend` | conta | `{serviceId}` → `{suspended:true}` (sai da rota, nada removido) |
 | `POST` | `/v1/services/unsuspend` | conta | `{serviceId}` → `{suspended:false}` |
 | `POST` | `/v1/freeze` | conta | contenção reversível `{target:service\|device,id}` → `{frozen,revoked,incidentId}` (sem id → 400 `KCF126`; alvo fora de service/device → 400 `KCF127`; alheio/inexistente → 404 `KCF128` opaco) |
-| `POST` | `/v1/unfreeze` | conta | `{target,id}` → `{frozen:0,restored}` (alheio/inexistente → 404 `KCF128` opaco; restaura exatamente o status anterior) |
+| `POST` | `/v1/unfreeze` | conta | `{target,id}` → `{frozen:0,restored}` — restaura o status anterior de um alvo **congelado** (alheio/inexistente → 404 `KCF128` opaco; alvo que não estava congelado → 409 `KCF141` e o status fica intocado, inclusive uma suspensão deliberada) |
 | `POST` | `/v1/incidents` | conta | lista incidentes da conta + globais (resolve com `{resolveId}`; alheio → 404 `KCF125` opaco; `all:true` = só globais) |
 | `GET` | `/v1/audit` | conta | últimos eventos da conta (anel de 100, só metadados) |
 | `POST` | `/v1/services/status` | conta | `{serviceId,status}` (health reportado pelo Agent); status fora de `ONLINE`/`OFFLINE`/`DEGRADED`/`UNKNOWN` → `400 KCF048` (e `SUSPENDED` nunca é reportável: suspender é ação do operador) |
@@ -204,6 +204,7 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `400` | `KCF047` address fora de loopback | publish com localAddress fora de 127.0.0.1/localhost/::1 (anti-SSRF) |
 | `409` | `KCF139` service name already used by another device | publish com nome já usado por **outro** device da conta: o hostname `<nome>.<handle>` seria o mesmo e o roteamento casaria o primeiro. Antes o publish devolvia `200` com o serviço do outro device e nada era publicado |
 | `409` | `KCF023` device is revoked | suspend/unsuspend (e publish) sobre dispositivo revogado: revogar é terminal, e a rota/serviço não pode voltar sem registro novo |
+| `409` | `KCF141` target is not frozen | unfreeze de alvo que não passou por freeze: não há status anterior para restaurar. Antes gravava `UNKNOWN`/`ACTIVE` e apagava uma suspensão deliberada do operador |
 | `409` | `KCF140` service name is ambiguous | comando por nome (`domain add --service`) num estado legado com o mesmo nome em 2 devices: recusa em vez de escolher o primeiro (o domínio apontaria para a máquina errada) |
 | `401` | `KCF003` invalid credentials | conta/senha não conferem (opaco: conta inexistente responde igual) |
 | `401` | `KCF004` unauthorized | token da conta ausente/inválido |
@@ -260,6 +261,6 @@ quebra ao mudar um ramo ou vazar o detalhe): `publishHttpStatus`/
 `indexOf`). Auditoria: `grep 'indexOf("KCF'
 src/kofcloud/control/ControlPlane.kf` só acusa 5 linhas — todas nos corpos
 de `publishHttpStatus` (2), `domainHttpStatus` (2) e `verifyDomainError` (1).
-`KCF123` é reservado (faixa KCF120–KCF140, domínio próprio/ambiguidade): nunca emitido,
+`KCF123` é reservado (faixa KCF120–KCF141, domínio próprio/ambiguidade/contenção): nunca emitido,
 sem `Hint:` por desenho — a trava `errors-hint-all` quebra se alguém emitir
 sem dica e se o reservado ganhar dica.

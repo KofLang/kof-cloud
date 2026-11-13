@@ -214,6 +214,11 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   acima de 596 h (~24,8 dias) e um `--ttl 720` (30 dias) nascia vencido — 401
   imediato. `ttlHours` continua `Int` (até ~2,1 bilhões de horas); a
   multiplicação é a única aritmética larga.
+* **As marcas de `freeze` vivem só na memória do control plane.** Reiniciar
+  o processo perde o status anterior de cada alvo congelado: o `unfreeze`
+  passa a responder `409 KCF141` (nada a reverter) em vez de inventar um
+  estado — fail-closed, mas a reversão automática exige regravar o alvo à
+  mão (`unsuspend`). Persistir as marcas é trabalho em aberto.
 * **A expiração de `kfs_` é preguiçosa — e o incidente também.** Credencial
   vencida só é podada quando alguma validação de token passa por
   `serviceByServiceToken` (o que acontece a cada request AUTHENTICATED no

@@ -786,16 +786,22 @@ HttpResult handleFreeze(Registry registry, String? authHeader, String bodyText, 
         out.put("incidentId", result.incidentId)
         return HttpResult(200, json.encode(out))
     }
-    var restored = false
+    var outcome = UnfreezeResult(false, false)
     if (targetKind == "service") {
-        restored = registry.unfreezeService(account.id, targetId)
+        outcome = registry.unfreezeService(account.id, targetId)
     } else if (targetKind == "device") {
-        restored = registry.unfreezeDevice(account.id, targetId)
+        outcome = registry.unfreezeDevice(account.id, targetId)
     } else {
-        restored = registry.unfreezeAccount(account.id)
+        outcome = registry.unfreezeAccount(account.id)
     }
-    if (restored == false) {
+    // Duas falhas distintas: alvo inexistente/alheio e 404 opaco; alvo que
+    // existe mas NAO estava congelado e 409 KCF141 (nada a reverter — e o
+    // status dele, possivelmente uma suspensao deliberada, fica intocado).
+    if (outcome.ok == false) {
         return HttpResult(404, errorJson(errTargetNotFound()))
+    }
+    if (outcome.restored == false) {
+        return HttpResult(409, errorJson(errTargetNotFrozen()))
     }
     out.put("frozen", intToString(0))
     out.put("restored", intToString(1))

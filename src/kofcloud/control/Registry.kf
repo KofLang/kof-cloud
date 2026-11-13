@@ -32,6 +32,13 @@ record ServiceToken(String serviceId, String accountId, String tokenHash, Long c
 // Resultado de congelar um alvo (Fase 17 slice 2).
 record FreezeResult(Bool ok, String incidentId, Int revoked, String priorStatus)
 
+// Resultado de descongelar: `ok` = alvo existe e e do dono (404 quando
+// falso); `restored` = havia marca de congelamento e o status anterior
+// voltou (409 quando falso). Sem essa distincao, um unfreeze de alvo nunca
+// congelado gravava UNKNOWN/ACTIVE e apagava uma suspensao deliberada do
+// operador — o CLI ainda dizia "status anterior restaurado".
+record UnfreezeResult(Bool ok, Bool restored)
+
 // Resultado da rotacao assistida (Fase 19 slice 3).
 record RotateResult(String token, Int revoked, Int pending)
 
@@ -1306,27 +1313,31 @@ class Registry {
         return FreezeResult(true, incidentId, revoked, prior)
     }
 
-    Bool unfreezeService(String accountId, String serviceId) {
+    // Abrir um alvo SEM marca nao e "restaurar": nada foi congelado, entao
+    // nao ha status anterior. Antes essa chamada gravava UNKNOWN (servico) e
+    // ACTIVE (device) — apagando uma SUSPENSAO deliberada do operador e
+    // dizendo "status anterior restaurado". Agora `restored` diz a verdade e
+    // o alvo fica intocado.
+    UnfreezeResult unfreezeService(String accountId, String serviceId) {
         var service = this.serviceById(serviceId)
         if (service == null) {
-            return false
+            return UnfreezeResult(false, false)
         }
         if (service.accountId != accountId) {
-            return false
+            return UnfreezeResult(false, false)
         }
         var mark = this.freezeMarks.get("service/" + serviceId)
-        var restore = statusUnknown()
-        if (mark != null) {
-            restore = mark
+        if (mark == null) {
+            return UnfreezeResult(true, false)
         }
-        this.setServiceStatus(serviceId, restore)
+        this.setServiceStatus(serviceId, mark)
         this.freezeMarks.remove("service/" + serviceId)
         var account = this.accountById(accountId)
         if (account != null) {
             this.audit(auditActorAccount(account.handle), auditServiceUnfrozen(), accountId + "/" + serviceId)
         }
         this.save()
-        return true
+        return UnfreezeResult(true, true)
     }
 
     // Congelar a CONTA inteira: todo device e todo servico da conta, mais
@@ -1376,16 +1387,20 @@ class Registry {
         return FreezeResult(true, incidentId, revoked, "")
     }
 
-    Bool unfreezeAccount(String accountId) {
+    // Conta: restaura o que ESTAVA congelado. `restored` e false quando nao
+    // havia nenhuma marca (conta sem freeze em curso) — nada foi tocado.
+    UnfreezeResult unfreezeAccount(String accountId) {
         var account = this.accountById(accountId)
         if (account == null) {
-            return false
+            return UnfreezeResult(false, false)
         }
+        var restoredAny = false
         for (var device in this.devicesForAccount(accountId)) {
             var mark = this.freezeMarks.get("device/" + device.id)
             if (mark != null) {
                 this.setDeviceStatus(accountId, device.id, mark, "")
                 this.freezeMarks.remove("device/" + device.id)
+                restoredAny = true
             }
         }
         for (var service in this.servicesForAccount(accountId)) {
@@ -1393,34 +1408,37 @@ class Registry {
             if (mark != null) {
                 this.setServiceStatus(service.id, mark)
                 this.freezeMarks.remove("service/" + service.id)
+                restoredAny = true
             }
+        }
+        if (restoredAny == false) {
+            return UnfreezeResult(true, false)
         }
         this.audit(auditActorAccount(account.handle), auditAccountUnfrozen(), accountId)
         this.save()
-        return true
+        return UnfreezeResult(true, true)
     }
 
-    Bool unfreezeDevice(String accountId, String deviceId) {
+    UnfreezeResult unfreezeDevice(String accountId, String deviceId) {
         var device = this.deviceById(deviceId)
         if (device == null) {
-            return false
+            return UnfreezeResult(false, false)
         }
         if (device.accountId != accountId) {
-            return false
+            return UnfreezeResult(false, false)
         }
         var mark = this.freezeMarks.get("device/" + deviceId)
-        var restore = deviceActive()
-        if (mark != null) {
-            restore = mark
+        if (mark == null) {
+            return UnfreezeResult(true, false)
         }
-        this.setDeviceStatus(accountId, deviceId, restore, "")
+        this.setDeviceStatus(accountId, deviceId, mark, "")
         this.freezeMarks.remove("device/" + deviceId)
         var account = this.accountById(accountId)
         if (account != null) {
             this.audit(auditActorAccount(account.handle), auditDeviceUnfrozen(), accountId + "/" + deviceId)
         }
         this.save()
-        return true
+        return UnfreezeResult(true, true)
     }
 
     // ---- servicos ----

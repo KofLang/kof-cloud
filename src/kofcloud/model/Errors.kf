@@ -242,6 +242,14 @@ String errTargetNotFound() {
     return "KCF128: target not found"
 }
 
+// Unfreeze de alvo que NAO esta congelado: nao ha status anterior para
+// restaurar. Antes o unfreeze sem marca gravava UNKNOWN/ACTIVE e apagava uma
+// SUSPENSAO deliberada do operador, dizendo "status anterior restaurado".
+// 409: o alvo existe e e do dono, mas o estado nao permite reverter.
+String errTargetNotFrozen() {
+    return "KCF141: target is not frozen"
+}
+
 String errIncidentNotFound() {
     return "KCF125: incident not found"
 }
@@ -421,6 +429,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF140") >= 0) {
         return "Ha mais de um servico com esse nome na conta (estado antigo) — remova o duplicado (`kof cloud unpublish <nome>` no dispositivo certo) antes de vincular o dominio."
+    }
+    if (raw.indexOf("KCF141") >= 0) {
+        return "Esse alvo nao esta congelado — nada a reverter. Suspensao comum se libera com `kof cloud service unsuspend`/`device unsuspend`."
     }
     if (raw.indexOf("KCF134") >= 0) {
         return "Tentativas de login demais para esta conta — aguarde a janela (kofcloud.limits.loginWindowMs) e tente de novo."
