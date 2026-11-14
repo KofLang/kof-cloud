@@ -266,6 +266,12 @@ test "erros: publishHttpStatus mapeia familia -> HTTP (trava pura)", "errors-pub
     assert(publishHttpStatus(errDeviceRevoked()) == 409, "KCF023 -> 409 (estado impede, acionavel)")
     assert(publishHttpStatus(errDeviceNotFound()) == 404, "KCF021 -> 404 opaco")
     assert(publishHttpStatus("KCF999: algo estranho") == 404, "desconhecido -> 404 opaco")
+    // O freeze tem mapeamento proprio (freezeHttpStatus): KCF023 -> 409
+    // (revogado terminal, acionavel), resto -> 404 opaco. Mesma recusa do
+    // publish, outra borda: mudar um ramo sem atualizar aqui quebra.
+    assert(freezeHttpStatus(errDeviceRevoked()) == 409, "freeze: KCF023 -> 409")
+    assert(freezeHttpStatus(errTargetNotFound()) == 404, "freeze: KCF128 -> 404 opaco")
+    assert(freezeHttpStatus("KCF999: algo estranho") == 404, "freeze: desconhecido -> 404 opaco")
 }
 
 test "erros: Edge devolve codigos estaveis (rota, auth, offline, conteudo)", "errors-edge" {

@@ -1352,6 +1352,14 @@ class Registry {
         if (device.accountId != accountId) {
             return FreezeResult(false, "", 0, "")
         }
+        // Device REVOKED e terminal (a guarda de `setDeviceStatus` recusaria
+        // o `suspendDevice` silenciosamente): congelar marcaria REVOKED como
+        // "status anterior" e diria ok=true sem congelar nada, com um
+        // unfreeze futuro removendo a marca e dizendo restored=true sem
+        // tocar no status. Mesma recusa do `publishService` (KCF023).
+        if (deviceIsRevoked(device.status)) {
+            throw errDeviceRevoked()
+        }
         var prior = device.status
         // Revoga as credenciais de todos os servicos do dispositivo.
         var owned = this.servicesForDevice(deviceId)
@@ -1443,7 +1451,14 @@ class Registry {
         // So grava a marca quando ainda nao ha uma: um segundo freeze do mesmo
         // alvo nao pode sobrescrever o status original com SUSPENDED, senao o
         // unfreeze nunca devolve o estado de antes (quebra a reversibilidade).
+        // REVOKED nao congela: e terminal (nunca volta) e o `suspendDevice`
+        // seria recusado de qualquer forma — marcar so criaria uma marca
+        // morta que o unfreeze removeria dizendo restored=true sem tocar
+        // em nada. So os vivos entram no ciclo freeze/unfreeze.
         for (var device in this.devicesForAccount(accountId)) {
+            if (deviceIsRevoked(device.status)) {
+                continue
+            }
             if (this.freezeMarks.get("device/" + device.id) == null) {
                 this.freezeMarks.put("device/" + device.id, device.status)
             }

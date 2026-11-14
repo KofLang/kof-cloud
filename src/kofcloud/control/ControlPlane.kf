@@ -771,12 +771,16 @@ HttpResult handleFreeze(Registry registry, String? authHeader, String bodyText, 
     var out = mapOf()
     if (freezing) {
         var result = FreezeResult(false, "", 0, "")
-        if (targetKind == "service") {
-            result = registry.freezeService(account.id, targetId)
-        } else if (targetKind == "device") {
-            result = registry.freezeDevice(account.id, targetId)
-        } else {
-            result = registry.freezeAccount(account.id)
+        try {
+            if (targetKind == "service") {
+                result = registry.freezeService(account.id, targetId)
+            } else if (targetKind == "device") {
+                result = registry.freezeDevice(account.id, targetId)
+            } else {
+                result = registry.freezeAccount(account.id)
+            }
+        } catch (String e) {
+            return freezeError(e)
         }
         if (result.ok == false) {
             return HttpResult(404, errorJson(errTargetNotFound()))
@@ -806,6 +810,30 @@ HttpResult handleFreeze(Registry registry, String? authHeader, String bodyText, 
     out.put("frozen", intToString(0))
     out.put("restored", intToString(1))
     return HttpResult(200, json.encode(out))
+}
+
+// HTTP do erro do freeze por familia: device revogado -> 409 (o pedido e do
+// dono e o alvo existe, mas o estado terminal impede — nao e 404 opaco, que
+// esconderia a causa acionavel), resto (dono/recurso) -> 404 opaco (nao
+// revela alvo alheio). Pura para a trava testar sem rede; o freezeError
+// delega (fonte unica do mapeamento). Espelha `publishHttpStatus` (KCF023).
+Int freezeHttpStatus(String e) {
+    // Device revogado: 409 — mesmo desenho do publish (KCF023).
+    if (e.indexOf("KCF023") >= 0) {
+        return 409
+    }
+    return 404
+}
+
+// Erros do freeze com o HTTP certo por familia (ver freezeHttpStatus).
+// No 404 o corpo e reescrito para KCF128 opaco: o registry pode lancar
+// KCF022/KCF023 como defesa em profundidade, e a borda nunca revela dono.
+HttpResult freezeError(String e) {
+    var status = freezeHttpStatus(e)
+    if (status == 404) {
+        return HttpResult(404, errorJson(errTargetNotFound()))
+    }
+    return HttpResult(status, errorJson(e))
 }
 
 // Incidentes (Fase 17 slice 1). Lista os da conta + os globais; `all=true`

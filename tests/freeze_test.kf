@@ -340,6 +340,82 @@ test "contencao: HTTP freeze/unfreeze e incidente listado", "freeze" {
     assert(statusOf(again) == 409, "segundo unfreeze: 409 (nada a reverter)")
     assert(bodyOf(again).indexOf("KCF141") >= 0, "KCF141 no corpo")
 }
+test "contencao: device revogado nao congela (KCF023)", "freeze-unit" {
+    // Medido: REVOKED e terminal — a guarda de `setDeviceStatus` recusava o
+    // `suspendDevice` silenciosamente, o freeze marcava REVOKED como "status
+    // anterior" e dizia ok=true sem congelar nada. Mesma recusa do publish
+    // (KCF023): revogado nao entra no ciclo freeze/unfreeze.
+    var registry = Registry(freezePath("revoked"))
+    var mel = registry.createAccount("mel", "mel@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    registry.revokeDevice(mel.id, device.id)
+
+    var refused = false
+    var code = ""
+    try {
+        registry.freezeDevice(mel.id, device.id)
+    } catch (String e) {
+        refused = true
+        code = e
+    }
+    assert(refused, "freeze de revogado recusa")
+    assert(code.indexOf("KCF023") >= 0, "codigo KCF023: " + code)
+    assert(registry.frozenMarks().size == 0, "nada marcado")
+    var after = registry.deviceById(device.id)
+    assert(after != null, "device existe")
+    if (after != null) {
+        assert(after.status == "REVOKED", "revogado continua revogado: " + after.status)
+    }
+    // Sem incidente nem auditoria de freeze.
+    var incidents = registry.incidentsForAccount(mel.id, false)
+    var froze = 0
+    for (var incident in incidents) {
+        if (incident.kind == "freeze_device") {
+            froze = froze + 1
+        }
+    }
+    assert(froze == 0, "nenhum incidente de freeze")
+
+    // Conta com device revogado NO MEIO: congela so os vivos, sem marca
+    // morta — o unfreeze seguinte restaura so o que entrou no ciclo.
+    var live = registry.registerDevice(mel, "vivo", "pk2")
+    registry.freezeAccount(mel.id)
+    assert(registry.frozenMarks().get("device/" + device.id) == null, "revogado sem marca")
+    assert(registry.frozenMarks().get("device/" + live.id) != null, "vivo marcado")
+    assert(registry.unfreezeAccount(mel.id).restored, "descongelou")
+    var deadAfter = registry.deviceById(device.id)
+    if (deadAfter != null) {
+        assert(deadAfter.status == "REVOKED", "revogado intocado: " + deadAfter.status)
+    }
+    var liveAfter = registry.deviceById(live.id)
+    if (liveAfter != null) {
+        assert(liveAfter.status == "ACTIVE", "vivo restaurado")
+    }
+    assert(registry.frozenMarks().size == 0, "sem marca sobrando")
+}
+
+test "contencao: HTTP freeze de device revogado e 409 (nao 200)", "freeze" {
+    var controlPort = 19881
+    var registry = Registry(freezePath("http-revoked"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var dev = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(dev)), "deviceId")
+    assert(statusOf(httpPostJson(controlPort, "/v1/devices/revoke", "{\"deviceId\":\"" + deviceId + "\"}", token)) == 200, "revogou")
+
+    // Congelar o revogado: 409 KCF023, nao 200 fingindo que congelou.
+    var frozen = httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"device\",\"id\":\"" + deviceId + "\"}", token)
+    assert(statusOf(frozen) == 409, "409: " + intToString(statusOf(frozen)))
+    assert(bodyOf(frozen).indexOf("KCF023") >= 0, "corpo KCF023")
+
+    // Congelar o inexistente continua 404 opaco (nao vaza dono/recurso).
+    var ghost = httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"device\",\"id\":\"fantasma\"}", token)
+    assert(statusOf(ghost) == 404, "inexistente 404")
+}
+
 test "contencao: unfreeze de alvo nao congelado nao apaga suspensao", "freeze-unit" {
     // Medido: sem marca de freeze, `unfreezeService` gravava UNKNOWN e
     // `unfreezeDevice` gravava ACTIVE — apagando uma SUSPENSAO deliberada do
