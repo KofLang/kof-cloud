@@ -612,3 +612,27 @@ test "erros: revokeTokenError mapeia outcome -> HTTP+corpo (trava pura)", "error
     assert(other.code == 404, "desconhecido -> 404 opaco")
     assert(codeIs(other.body, "KCF041"), "404 desconhecido tambem opaco")
 }
+
+test "device: nome resolve para o device VIVO apos re-registro", "device-name-live" {
+    // Apos revogar + registrar de novo com o mesmo nome, a lista tem dois
+    // devices homonimos. O resolvedor da CLI casava o PRIMEIRO por ordem de
+    // lista — podia escolher o revogado (e `device revoke <nome>` virava
+    // no-op silencioso). Nome tem de levar ao vivo; id continua exato.
+    var port = 19567
+    var registry = Registry("/tmp/kofcloud-devlive-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control no ar")
+    var url = "http://127.0.0.1:" + intToString(port)
+    var created = httpPostJson(port, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+
+    var firstId = registerDevice(url, token, "notebook", "pk1")
+    requireOk(http.post(url + "/v1/devices/revoke", "{\"deviceId\":\"" + firstId + "\"}", jsonHeader(token)))
+    var secondId = registerDevice(url, token, "notebook", "pk2")
+    assert(secondId != firstId, "re-registro apos revoke gera id novo")
+
+    var session = LocalSession("", "mel", token, url)
+    assert(deviceIdByNameOrId(session, "notebook") == secondId, "nome leva ao VIVO")
+    assert(deviceIdByNameOrId(session, firstId) == firstId, "id do revogado continua exato")
+}

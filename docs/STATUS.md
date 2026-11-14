@@ -51,10 +51,10 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | forca bruta no login (F5) | `tests/login_limit_test.kf` | 2 |
 | vocabulario fechado do status (F5) | `tests/status_report_test.kf` | 2 |
 | backoff | `tests/backoff_test.kf` | 3 |
-| registry | `tests/registry_test.kf` | 11 |
+| registry | `tests/registry_test.kf` | 12 |
 | limites | `tests/limits_test.kf` | 7 |
 | service token | `tests/service_token_test.kf` | 13 |
-| erros R6 | `tests/errors_test.kf` | 10 |
+| erros R6 | `tests/errors_test.kf` | 11 |
 | dominios (+ certificado x hostname) | `tests/domains_test.kf` | 12 |
 | metricas | `tests/metrics_test.kf` | 10 |
 | rate limit | `tests/ratelimit_test.kf` | 2 |

@@ -195,3 +195,40 @@ test "registry: publicar em device revogado recusa; suspenso aceita", "publish-d
     assert(service.name == "site", "suspenso aceita o publish")
     assert(registry2.servicesForAccount(account2.id).size == 1, "servico criado")
 }
+
+test "registry: re-registrar nome revogado cria device NOVO (id e chave novos)", "reregister" {
+    // Medido: `deviceByName` casava qualquer status, entao re-registrar o
+    // nome de um device REVOGADO devolvia o PROPRIO device revogado — mesmo
+    // id, ainda REVOKED, sem chave nova. Como revogar e terminal, o
+    // `doctor` manda "registre de novo" e esse caminho nao existia: o
+    // operador nunca recuperava a maquina.
+    var registry = Registry(tempStatePath("reregister"))
+    var account = registry.createAccount("mel", "mel@example.com", "segredo")
+    var first = registry.registerDevice(account, "notebook", "pk-antiga")
+    assert(registry.revokeDevice(account.id, first.id), "revoga o primeiro")
+
+    var second = registry.registerDevice(account, "notebook", "pk-nova")
+    assert(second.id != first.id, "id NOVO (o revogado nao volta)")
+    assert(second.status == "ACTIVE", "nasce ativo")
+    assert(second.publicKey == "pk-nova", "chave nova registrada")
+
+    // O revogado continua revogado e fora do caminho.
+    var firstAfter = registry.deviceById(first.id)
+    assert(firstAfter != null, "revogado ainda existe para auditoria")
+    if (firstAfter != null) {
+        assert(firstAfter.status == "REVOKED", "segue REVOKED")
+    }
+
+    // Re-registrar de novo (sem revogar o novo) dedupa no VIVO, nao no morto:
+    // cada login com o mesmo nome nao cria mais um device.
+    var third = registry.registerDevice(account, "notebook", "pk-outra")
+    assert(third.id == second.id, "dedup no device vivo")
+    assert(registry.devicesForAccount(account.id).size == 2, "so revogado + vivo")
+    // O ativo aparece uma vez; o nome resolve para o vivo.
+    var active = registry.activeDeviceByName(account.id, "notebook")
+    assert(active != null, "existe ativo com o nome")
+    if (active != null) {
+        assert(active.id == second.id, "activeDeviceByName acha o vivo")
+    }
+    assert(registry.activeDeviceCount(account.id) == 1, "revogado nao conta no teto")
+}

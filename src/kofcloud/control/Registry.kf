@@ -736,7 +736,18 @@ class Registry {
     // ---- dispositivos ----
 
     Device registerDevice(Account account, String name, String publicKey) {
-        var existing = this.deviceByName(account.id, name)
+        // Dedup por nome SOMENTE enquanto o device existente nao foi revogado.
+        // Revogar e terminal e o `doctor` orienta "registre de novo" — mas
+        // `deviceByName` casava qualquer status, entao o re-registro devolvia
+        // o PROPRIO device revogado (mesmo id, ainda REVOKED, sem chave nova):
+        // o caminho de recuperacao anunciado nao existia. Revogado nao conta
+        // para o teto de ativos, entao um device novo cabe.
+        //
+        // A busca IGNORA os revogados (nao usa `deviceByName`, que devolve o
+        // primeiro): apos um re-registro convivem o revogado e o novo com o
+        // mesmo nome, e casar o primeiro devolveria o morto de novo — cada
+        // login criaria mais um device.
+        var existing = this.activeDeviceByName(account.id, name)
         if (existing != null) {
             return existing
         }
@@ -764,6 +775,20 @@ class Registry {
         for (var device in this.devices) {
             if (device.accountId == accountId && device.name == name) {
                 return device
+            }
+        }
+        return null
+    }
+
+    // Device com este nome que ainda VALE (nao revogado). Um nome revogado
+    // pode conviver com o registro novo do mesmo nome; quem procura o "dono
+    // do nome" quer o vivo. Mesma regra de status do `deviceIsRevoked`.
+    Device? activeDeviceByName(String accountId, String name) {
+        for (var device in this.devices) {
+            if (device.accountId == accountId && device.name == name) {
+                if (deviceIsRevoked(device.status) == false) {
+                    return device
+                }
             }
         }
         return null

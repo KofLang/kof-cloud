@@ -1175,6 +1175,15 @@ String resolveServiceOrReport(LocalSession session, String name) {
 String deviceIdByNameOrId(LocalSession session, String nameOrId) {
     var trimmed = nameOrId.trim()
     var devices = fetchDevices(session.controlUrl, session.token)
+    // Nome: prefere o device VIVO. Depois de um re-registro (revogar e depois
+    // logar de novo com o mesmo nome) convivem o revogado e o novo; devolver
+    // o primeiro por ordem de lista podia escolher o morto — e `device revoke
+    // <nome>` num revogado era no-op silencioso. Ids sao unicos e passam.
+    for (var device in devices) {
+        if (device.name == trimmed && deviceIsRevoked(device.status) == false) {
+            return device.id
+        }
+    }
     for (var device in devices) {
         if (device.name == trimmed) {
             return device.id

@@ -104,7 +104,13 @@ status permanece `REVOKED`. Revogar é a contenção de uma máquina
 comprometida — desfazê-la por um comando de rotina, sem registro novo nem
 nova chave, anularia a contenção. Voltar ao ar exige registrar o
 dispositivo de novo (`kof cloud login --device <nome>`), com novo id e nova
-chave. O `kof cloud doctor` reflete isso: um dispositivo revogado vira
+chave — e isso funciona: re-registrar o nome de um revogado cria um device
+**novo** (`ACTIVE`, chave nova), e o revogado fica para a auditoria. Antes o
+registro deduplicava por nome ignorando o status e devolvia o próprio
+revogado (`REVOKED`, sem chave nova), então o caminho de recuperação que o
+`doctor` orienta não existia. Com dois devices homônimos (o revogado e o
+vivo), comandos por nome (`device revoke/suspend`, `--device`) resolvem para
+o **vivo**; o id do revogado continua aceito explicitamente. O `kof cloud doctor` reflete isso: um dispositivo revogado vira
 `FALHA dispositivo` apontando o re-registro (nunca sugere `connect`, que o
 Edge recusa), e um suspenso vira `FALHA dispositivo` apontando o
 `unsuspend`.
