@@ -1489,6 +1489,12 @@ class Registry {
         }
         var restoredAny = false
         for (var device in this.devicesForAccount(accountId)) {
+            // Terminal nao entra no ciclo (espelho do freezeAccount): remover
+            // a marca e contar restored sem restaurar nada seria mentira — a
+            // guarda de terminalidade recusa o set e a marca se perderia.
+            if (deviceIsRevoked(device.status)) {
+                continue
+            }
             var mark = this.freezeMarks.get("device/" + device.id)
             if (mark != null) {
                 this.setDeviceStatus(accountId, device.id, mark, "")
@@ -1519,6 +1525,14 @@ class Registry {
         }
         if (device.accountId != accountId) {
             return UnfreezeResult(false, false)
+        }
+        // REVOKED e terminal nos dois sentidos do ciclo: estado legado pode
+        // ter marca de um freeze anterior a recusa (ex.: freeze antes do
+        // revoke), mas "restaurar" num terminal nunca muda nada — e o unfreeze
+        // apagaria a marca dizendo restored=true com o status intocado.
+        // Mesma recusa do freeze (KCF023); a marca legada fica inerte.
+        if (deviceIsRevoked(device.status)) {
+            throw errDeviceRevoked()
         }
         var mark = this.freezeMarks.get("device/" + deviceId)
         if (mark == null) {

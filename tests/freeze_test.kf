@@ -132,11 +132,19 @@ test "contencao: remover alvo congelado poda a marca", "freeze-unit" {
     assert(reloaded.frozenMarks().size == 0, "poda persiste no arquivo")
 
     // Unfreeze de alvo sem marca segue a semantica honesta: servico removido
-    // e 404; device revogado existe, mas nao ha nada a reverter (409).
+    // e 404. Device revogado existe, mas REVOKED e terminal nos dois
+    // sentidos: o unfreeze recusa com KCF023 (antes dizia ok/restored).
     assert(registry.unfreezeService(account.id, a.id).ok == false, "servico removido: ok=false")
-    var outcome = registry.unfreezeDevice(account.id, device.id)
-    assert(outcome.ok, "device existe")
-    assert(outcome.restored == false, "device revogado sem marca: nada a reverter")
+    var refused = false
+    var code = ""
+    try {
+        registry.unfreezeDevice(account.id, device.id)
+    } catch (String e) {
+        refused = true
+        code = e
+    }
+    assert(refused, "unfreeze de device revogado recusa")
+    assert(code.indexOf("KCF023") >= 0, "codigo KCF023: " + code)
 }
 
 test "contencao: freeze de device cobre todos os servicos dele", "freeze-unit" {
@@ -394,6 +402,59 @@ test "contencao: device revogado nao congela (KCF023)", "freeze-unit" {
     assert(registry.frozenMarks().size == 0, "sem marca sobrando")
 }
 
+test "contencao: unfreeze honra a terminalidade de revogado (marca legada)", "freeze-unit" {
+    // Estado sintetico do que o codigo ANTIGO gravava: freeze de device antes
+    // da recusa marcava REVOKED como anterior (e, antes da poda, o freeze
+    // seguido de revoke deixava marca em device que virou REVOKED). Nesse
+    // estado, o unfreeze apagava a marca dizendo restored=true com o status
+    // intocado — a guarda de terminalidade recusava o set em silencio.
+    var legacyPath = freezePath("legacy-revoked")
+    var state = "{\"accounts\":[{\"id\":\"acc-x\",\"handle\":\"mel\",\"email\":\"m@e.com\",\"passwordHash\":\"h\",\"createdAt\":0}],"
+    state = state + "\"devices\":["
+    state = state + "{\"id\":\"d1\",\"accountId\":\"acc-x\",\"name\":\"morto\",\"publicKey\":\"pk\",\"status\":\"REVOKED\",\"lastSeenAt\":0,\"createdAt\":0},"
+    state = state + "{\"id\":\"d2\",\"accountId\":\"acc-x\",\"name\":\"vivo\",\"publicKey\":\"pk2\",\"status\":\"ACTIVE\",\"lastSeenAt\":0,\"createdAt\":0}],"
+    state = state + "\"services\":[],\"tokens\":[],\"serviceTokens\":[],\"customDomains\":[],\"audit\":[],\"incidents\":[],\"webhooks\":[],"
+    state = state + "\"freezeMarks\":[{\"target\":\"device/d1\",\"status\":\"ACTIVE\"},{\"target\":\"device/d2\",\"status\":\"SUSPENDED\"}]}"
+    writeTextTo(legacyPath, state)
+    var registry = Registry(legacyPath)
+    assert(registry.loadStatus == "ok", "estado legado carrega")
+
+    // Unfreeze direto do revogado: recusa com KCF023, nada muda.
+    var refused = false
+    var code = ""
+    try {
+        registry.unfreezeDevice("acc-x", "d1")
+    } catch (String e) {
+        refused = true
+        code = e
+    }
+    assert(refused, "unfreeze de revogado recusa")
+    assert(code.indexOf("KCF023") >= 0, "codigo KCF023: " + code)
+    var dead = registry.deviceById("d1")
+    assert(dead != null, "d1 existe")
+    if (dead != null) {
+        assert(dead.status == "REVOKED", "revogado intocado: " + dead.status)
+    }
+    assert(registry.frozenMarks().get("device/d1") != null, "marca legada fica inerte (nao apaga em recusa)")
+
+    // Na conta: o revogado sai do ciclo sem perder a marca nem contar como
+    // restaurado; o vivo restaura de verdade.
+    var outcome = registry.unfreezeAccount("acc-x")
+    assert(outcome.ok, "conta existe")
+    assert(outcome.restored, "vivo restaurado")
+    var live = registry.deviceById("d2")
+    assert(live != null, "d2 existe")
+    if (live != null) {
+        assert(live.status == "SUSPENDED", "d2 restaurou a marca (SUSPENDED): " + live.status)
+    }
+    assert(registry.frozenMarks().get("device/d1") != null, "marca do revogado nao foi removida no ciclo da conta")
+    assert(registry.frozenMarks().get("device/d2") == null, "marca do vivo saiu")
+    var deadAfter = registry.deviceById("d1")
+    if (deadAfter != null) {
+        assert(deadAfter.status == "REVOKED", "revogado continua REVOKED: " + deadAfter.status)
+    }
+}
+
 test "contencao: HTTP freeze de device revogado e 409 (nao 200)", "freeze" {
     var controlPort = 19881
     var registry = Registry(freezePath("http-revoked"))
@@ -410,6 +471,11 @@ test "contencao: HTTP freeze de device revogado e 409 (nao 200)", "freeze" {
     var frozen = httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"device\",\"id\":\"" + deviceId + "\"}", token)
     assert(statusOf(frozen) == 409, "409: " + intToString(statusOf(frozen)))
     assert(bodyOf(frozen).indexOf("KCF023") >= 0, "corpo KCF023")
+
+    // Descongelar o revogado: mesma recusa (terminal nos dois sentidos).
+    var thawed = httpPostJson(controlPort, "/v1/unfreeze", "{\"target\":\"device\",\"id\":\"" + deviceId + "\"}", token)
+    assert(statusOf(thawed) == 409, "unfreeze 409: " + intToString(statusOf(thawed)))
+    assert(bodyOf(thawed).indexOf("KCF023") >= 0, "corpo KCF023 do unfreeze")
 
     // Congelar o inexistente continua 404 opaco (nao vaza dono/recurso).
     var ghost = httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"device\",\"id\":\"fantasma\"}", token)
