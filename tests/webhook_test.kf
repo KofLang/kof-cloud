@@ -1,3 +1,5 @@
+import kofcloud.cli.Commands
+import kofcloud.cli.Local
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.model.Errors
@@ -155,4 +157,80 @@ test "webhook: incidente da conta dispara entrega assinada de verdade", "webhook
     assert(bodyOf(testResult).indexOf("\"delivered\":\"200\"") >= 0, "entrega de teste")
 
     hook.close()
+}
+
+test "webhook: posicional sobrando e --secret defeituoso barram na CLI", "webhook-guard" {
+    // Puro na decisao (locals no uso, sem tocar a rede quando a guarda
+    // barra): `webhook show lixo` / `remove lixo` / `test lixo` executariam
+    // a acao ignorando o argumento (medido: remove lixo apagava o webhook
+    // da conta). `set` com URL repetida configura errado; `--secret` solto
+    // ou repetido publica com o segredo errado ou vazio em silencio.
+    var controlPort = 19903
+    var registry = Registry("/tmp/kofcloud-whg-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var url = "http://127.0.0.1:" + intToString(controlPort)
+    var token = loginOrCreate(url, "mel", "segredo")
+
+    var priorSession = readTextOr(sessionPath(), "")
+    saveSession(LocalSession("", "mel", token, url))
+
+    // show/remove/test com argumento sobrando barram antes da rede.
+    assert(cmdWebhook(listOf("show", "lixo")) == 1, "show com sobra barra")
+    assert(cmdWebhook(listOf("remove", "lixo")) == 1, "remove com sobra barra")
+    assert(cmdWebhook(listOf("test", "lixo")) == 1, "test com sobra barra")
+    // set exige URL unica e --secret com valor unico.
+    assert(cmdWebhook(listOf("set", "https://example.com/a", "https://example.com/b", "--secret", "0123456789abcdef")) == 1, "set com duas urls barra")
+    assert(cmdWebhook(listOf("set", "https://example.com/a", "--secret")) == 1, "--secret solto barra")
+    assert(cmdWebhook(listOf("set", "https://example.com/a", "--secret", "s1aaaaaaaaaaaaaa", "--secret", "s2aaaaaaaaaaaaaa")) == 1, "--secret repetido barra")
+    // Comandos limpos passam do uso (executam contra o control plane).
+    // Cadastra primeiro para que o show encontre o registro.
+    assert(cmdWebhook(listOf("set", "https://example.com/a", "--secret", "0123456789abcdef")) == 0, "set limpo passa da guarda")
+    assert(cmdWebhook(listOf("show")) == 0, "show limpo passa da guarda")
+
+    if (priorSession.length == 0) {
+        File(sessionPath()).delete()
+    } else {
+        writeTextTo(sessionPath(), priorSession)
+    }
+}
+
+test "device: posicional sobrando barra antes de revogar/suspender", "device-guard" {
+    // Puro na decisao: `device revoke dev1 dev2` revogava dev1 e descartava
+    // dev2 (comando destrutivo ignorando argumento). O mesmo vale para
+    // suspend/unsuspend. Precedente: unpublish/status/token ja barram.
+    var controlPort = 19904
+    var registry = Registry("/tmp/kofcloud-dg-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var url = "http://127.0.0.1:" + intToString(controlPort)
+    var token = loginOrCreate(url, "mel", "segredo")
+    var devId = registerDevice(url, token, "notebook", "pk")
+
+    var priorSession = readTextOr(sessionPath(), "")
+    saveSession(LocalSession("", "mel", token, url))
+
+    // Duplo posicional barra no uso (exit 1) e NAO executa a acao: sem a
+    // guarda o comando ignorava "outro" e revogava/suspendia "notebook" (exit 0).
+    assert(cmdDeviceRevoke(listOf("notebook", "outro")) == 1, "revoke com sobra barra")
+    var devAfter = registry.deviceById(devId)
+    assert(devAfter != null, "device nao foi revogado pelo comando com sobra")
+    assert(cmdDeviceSuspend(listOf("notebook", "outro")) == 1, "suspend com sobra barra")
+    assert(cmdDeviceUnsuspend(listOf("notebook", "outro")) == 1, "unsuspend com sobra barra")
+    // Sem sobra, o comando limpo revoga de verdade (exit 0).
+    assert(cmdDeviceRevoke(listOf("notebook")) == 0, "revoke limpo executa")
+    // Sem posicional continua pedindo uso.
+    assert(cmdDeviceRevoke(listOf<String>()) == 1, "revoke vazio pede uso")
+    assert(cmdDeviceSuspend(listOf<String>()) == 1, "suspend vazio pede uso")
+    assert(cmdDeviceUnsuspend(listOf<String>()) == 1, "unsuspend vazio pede uso")
+
+    if (priorSession.length == 0) {
+        File(sessionPath()).delete()
+    } else {
+        writeTextTo(sessionPath(), priorSession)
+    }
 }

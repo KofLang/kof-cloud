@@ -1944,7 +1944,9 @@ Int cmdWebhook(List<String> args) {
         if (sub == "set") {
             var url = secondPositional(args).trim()
             var secret = flagValue(args, "--secret").trim()
-            if (url.length == 0 || secret.length == 0) {
+            // `--secret` sem valor ou repetido: flagValue devolveria "" ou o
+            // primeiro valor — segredo errado configurado em silencio.
+            if (url.length == 0 || secret.length == 0 || flagMissingValue(args, "--secret") || flagDuplicated(args, "--secret")) {
                 println("uso: kof cloud webhook set <url> --secret <segredo>")
                 return 1
             }
