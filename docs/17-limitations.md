@@ -217,9 +217,11 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 * **As marcas de `freeze` são persistidas no estado, mas sem teto.** Reiniciar
   o control plane não perde mais a reversibilidade: o `unfreeze` restaura o
   status anterior gravado (estado antigo sem a chave carrega sem marcas — o
-  `unfreeze` nele segue respondendo `409 KCF141`, fail-closed). O que continua
-  aberto: a lista não é podada — um alvo congelado cujo serviço/device é
-  removido deixa a marca órfã no arquivo até o próximo `save()` do alvo.
+  `unfreeze` nele segue respondendo `409 KCF141`, fail-closed). Remover um
+  alvo congelado (serviço ou device revogado) poda a marca — ids nunca se
+  repetem, então a marca de um id que saiu não serve para nada; a poda
+  persiste no arquivo (o `unfreeze` de removido segue 404, o de revogado
+  409).
 * **A expiração de `kfs_` é preguiçosa — e o incidente também.** Credencial
   vencida só é podada quando alguma validação de token passa por
   `serviceByServiceToken` (o que acontece a cada request AUTHENTICATED no

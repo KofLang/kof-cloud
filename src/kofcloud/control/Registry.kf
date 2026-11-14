@@ -878,6 +878,10 @@ class Registry {
         }
         if (found) {
             this.devices = updated
+            // REVOKED e terminal: o device nao volta, mas o registro fica —
+            // a marca de freeze dele (status anterior) nao serve para mais
+            // nada. Os servicos vao por removeServicesOfDevice junto.
+            this.freezeMarks.remove("device/" + deviceId)
             this.removeServicesOfDevice(deviceId)
             this.pruneServiceTokens()
             this.pruneCustomDomains()
@@ -1666,6 +1670,10 @@ class Registry {
         }
         if (found) {
             this.services = out
+            // Alvo removido leva a marca de freeze embora: ids (uuid) nunca
+            // se repetem, entao a marca do id removido nao serve mais para
+            // nada — sem a poda ela ficava orfa no arquivo para sempre.
+            this.freezeMarks.remove("service/" + serviceId)
             this.pruneServiceTokens()
             this.pruneCustomDomains()
             var svcOwner = this.accountById(accountId)
@@ -1720,6 +1728,10 @@ class Registry {
         for (var service in this.services) {
             if (service.deviceId != deviceId) {
                 out.add(service)
+            } else {
+                // Marca do servico removido junto: ids nao se repetem, a
+                // marca nao serve para nenhum outro alvo (ver removeService).
+                this.freezeMarks.remove("service/" + service.id)
             }
         }
         this.services = out

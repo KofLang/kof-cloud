@@ -102,6 +102,43 @@ test "contencao: marcas de freeze sobrevivem ao restart", "freeze-unit" {
     assert(legacy.frozenMarks().size == 0, "estado antigo comeca sem marcas")
 }
 
+test "contencao: remover alvo congelado poda a marca", "freeze-unit" {
+    // Medido (17-limitations): a marca de um alvo removido congelado ficava
+    // orfa no arquivo para sempre. Ids (uuid) nunca se repetem, entao a
+    // marca de um id que saiu nao serve para nada: remocao de servico e
+    // revoke de device levam a marca embora.
+    var path = freezePath("prune")
+    var registry = Registry(path)
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var a = registry.publishService(account, device.id, "a", "127.0.0.1", 8081, "http", "PUBLIC", "", "")
+    var b = registry.publishService(account, device.id, "b", "127.0.0.1", 8082, "http", "PUBLIC", "", "")
+    registry.freezeService(account.id, a.id)
+    registry.freezeService(account.id, b.id)
+    registry.freezeDevice(account.id, device.id)
+    assert(registry.frozenMarks().size == 3, "tres marcas (dois servicos + device)")
+
+    // Remover um servico congelado leva a marca dele embora.
+    assert(registry.removeService(account.id, a.id), "servico removido")
+    assert(registry.frozenMarks().size == 2, "marca do servico podada")
+
+    // Revoke e terminal: a marca do device sai junto com a dos servicos
+    // que o revoke remove (removeServicesOfDevice).
+    assert(registry.revokeDevice(account.id, device.id), "device revogado")
+    assert(registry.frozenMarks().size == 0, "marcas do device e do servico restante podadas")
+
+    // A poda persiste no arquivo: reload nao ressuscita marcas.
+    var reloaded = Registry(path)
+    assert(reloaded.frozenMarks().size == 0, "poda persiste no arquivo")
+
+    // Unfreeze de alvo sem marca segue a semantica honesta: servico removido
+    // e 404; device revogado existe, mas nao ha nada a reverter (409).
+    assert(registry.unfreezeService(account.id, a.id).ok == false, "servico removido: ok=false")
+    var outcome = registry.unfreezeDevice(account.id, device.id)
+    assert(outcome.ok, "device existe")
+    assert(outcome.restored == false, "device revogado sem marca: nada a reverter")
+}
+
 test "contencao: freeze de device cobre todos os servicos dele", "freeze-unit" {
     var registry = Registry(freezePath("dev"))
     var account = registry.createAccount("mel", "m@e.com", "segredo")
