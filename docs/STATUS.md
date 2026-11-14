@@ -81,7 +81,7 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | rotacao de kfs_ (Fase 19 s3) | `tests/rotate_test.kf` | 5 |
 | `security.txt` + `SECURITY.md` (Fase 19 s1 parcial) | `tests/security_test.kf` | 3 |
 | incidentes (Fase 17 s1 + template pós-mortem s3) | `tests/incidents_test.kf` | 15 |
-| contenção (Fase 17 s2) | `tests/freeze_test.kf` | 10 |
+| contenção (Fase 17 s2) | `tests/freeze_test.kf` | 11 |
 | status page (Fase 17 s3 parcial) | `tests/status_page_test.kf` | 5 |
 | publish com allowlist pela CLI (F10 s3) | `tests/publish_allow_test.kf` | 4 |
 | webhook de incidentes (F17 s3) | `tests/webhook_test.kf` | 8 |

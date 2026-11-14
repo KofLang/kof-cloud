@@ -55,6 +55,53 @@ test "contencao: unfreeze restaura o status anterior", "freeze-unit" {
     }
 }
 
+test "contencao: marcas de freeze sobrevivem ao restart", "freeze-unit" {
+    // Medido (17-limitations): as marcas viviam so em memoria — reiniciar o
+    // control plane fazia o unfreeze responder 409 KCF141 (nada a reverter)
+    // em vez de restaurar o status anterior. Agora elas viajam no arquivo
+    // de estado: carregar o mesmo path num registry novo mantem a
+    // reversibilidade.
+    var path = freezePath("restart")
+    var registry = Registry(path)
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    registry.setServiceStatus(service.id, "ONLINE")
+    // Device segue caminho proprio para cobrir os dois formatos de chave.
+    var other = registry.registerDevice(account, "outro", "pk2")
+    registry.setDeviceStatus(account.id, other.id, "DEGRADED", "")
+
+    registry.freezeService(account.id, service.id)
+    registry.freezeDevice(account.id, other.id)
+
+    // Restart: registry novo sobre o MESMO arquivo.
+    var reloaded = Registry(path)
+    assert(reloaded.loadStatus == "ok", "estado recarrega")
+    assert(reloaded.unfreezeService(account.id, service.id).restored, "descongelou apos restart")
+    var restored = reloaded.serviceById(service.id)
+    assert(restored != null, "existe apos restart")
+    if (restored != null) {
+        assert(restored.status == "ONLINE", "voltou ao status de antes do freeze: " + restored.status)
+    }
+    assert(reloaded.unfreezeDevice(account.id, other.id).restored, "device descongelou apos restart")
+    var devBack = reloaded.deviceById(other.id)
+    if (devBack != null) {
+        assert(devBack.status == "DEGRADED", "device voltou ao anterior: " + devBack.status)
+    }
+    // E a marca sai do disco: unfreeze repetido nao restaura mais nada.
+    assert(reloaded.unfreezeService(account.id, service.id).restored == false, "marca nao duplicou")
+    assert(reloaded.frozenMarks().size == 0, "mapa vazio apos unfreezes")
+
+    // Estado antigo (sem a chave freezeMarks) carrega sem quebrar: decode
+    // de campo de lista ausente no topo devolve lista vazia — a mesma regra
+    // que trouxe `incidents`/`webhooks` sem migrar estados anteriores.
+    var legacyPath = freezePath("legacy")
+    writeTextTo(legacyPath, "{\"accounts\":[],\"devices\":[],\"services\":[],\"tokens\":[],\"serviceTokens\":[],\"customDomains\":[],\"audit\":[],\"incidents\":[],\"webhooks\":[]}")
+    var legacy = Registry(legacyPath)
+    assert(legacy.loadStatus == "ok", "estado antigo carrega sem o campo novo")
+    assert(legacy.frozenMarks().size == 0, "estado antigo comeca sem marcas")
+}
+
 test "contencao: freeze de device cobre todos os servicos dele", "freeze-unit" {
     var registry = Registry(freezePath("dev"))
     var account = registry.createAccount("mel", "m@e.com", "segredo")

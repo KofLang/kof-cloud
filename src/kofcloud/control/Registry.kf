@@ -42,7 +42,15 @@ record UnfreezeResult(Bool ok, Bool restored)
 // Resultado da rotacao assistida (Fase 19 slice 3).
 record RotateResult(String token, Int revoked, Int pending)
 
-record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens, List<CustomDomain> customDomains, List<AuditEvent> audit, List<Incident> incidents, List<WebhookConfig> webhooks)
+record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens, List<CustomDomain> customDomains, List<AuditEvent> audit, List<Incident> incidents, List<WebhookConfig> webhooks, List<FreezeMark>? freezeMarks)
+
+// Marca de freeze persistida: `<alvo>/<id>` -> status anterior. NULAVEL de
+// proposito: estado gravado antes da Fase 17 s2 nao tem a chave e o decode
+// de campo nao-nulavel ausente lanca (JSN004, medido) — nulavel ausente
+// decodifica null e o estado antigo carrega. NAO iterar a lista nulavel com
+// for-in: desuga para bytecode de array e o verificador JVM recusa
+// (VerifyError medido); o load() copia por indice.
+record FreezeMark(String target, String status)
 
 class Registry {
     List<Account> accounts
@@ -131,11 +139,11 @@ class Registry {
             return
         }
         try {
-            // `json.decode` aceita chaves extras e devolve listas vazias para
-            // campos ausentes — um JSON qualquer "decodifica" como estado
-            // vazio. A forma e validada explicitamente: o arquivo precisa ter
-            // as chaves do ControlState (JSN004 so pega campo faltando em
-            // record aninhado, nao no topo).
+            // `json.decode` aceita chaves extras, mas campo ausente no
+            // ControlState lanca (JSN004, medido com `freezeMarks`) — campo
+            // novo de lista precisa ser nulavel para estado antigo carregar.
+            // A forma e validada explicitamente: o arquivo precisa ter as
+            // chaves do ControlState.
             if (looksLikeControlState(raw) == false) {
                 this.loadStatus = "corrupt"
                 return
@@ -150,6 +158,19 @@ class Registry {
             this.audit = state.audit
             this.incidents = state.incidents
             this.webhooks = state.webhooks
+            // Marcas de freeze: estado antigo nao tem a chave (decode null) —
+            // o map fica vazio e o unfreeze responde 409 KCF141 como antes.
+            // Estado novo reconstrói o map. Copia por indice (nao for-in):
+            // ver comentario do record FreezeMark.
+            var marks = state.freezeMarks
+            if (marks != null) {
+                var i = 0
+                while (i < marks.size) {
+                    var entry = marks.get(i)
+                    this.freezeMarks.put(entry.target, entry.status)
+                    i = i + 1
+                }
+            }
             this.loadStatus = "ok"
         } catch (String e) {
             this.loadStatus = "corrupt"
@@ -459,7 +480,14 @@ class Registry {
     }
 
     void save() {
-        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens, this.serviceTokens, this.customDomains, this.audit, this.incidents, this.webhooks)))
+        var marks = listOf<FreezeMark>()
+        for (var target in this.freezeMarks.keys()) {
+            var status = this.freezeMarks.get(target)
+            if (status != null) {
+                marks.add(FreezeMark(target, status))
+            }
+        }
+        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens, this.serviceTokens, this.customDomains, this.audit, this.incidents, this.webhooks, marks)))
     }
 
     // ---- contas ----
@@ -1260,9 +1288,10 @@ class Registry {
     // ---- contencao (Fase 17 slice 2) ----
     //
     // Freeze e REVERSIVEL por desenho: suspende o alvo e revoga as
-    // credenciais vivas, guardando o status anterior em `freezeMarks` (memoria
-    // do processo: e acao de resposta a incidente, nao estado de produto).
-    // Unfreeze restaura exatamente o status anterior. Configuracao (servicos,
+    // credenciais vivas, guardando o status anterior em `freezeMarks`. As
+    // marcas sao persistidas no estado (lista `freezeMarks` do ControlState):
+    // um restart do control plane nao perde a reversibilidade — o unfreeze
+    // restaura exatamente o status anterior. Configuracao (servicos,
     // dominios, allowlist) nunca e tocada.
 
     Map<String, String> freezeMarks
