@@ -1,3 +1,4 @@
+import kofcloud.cli.Commands
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.model.Service
@@ -140,4 +141,45 @@ test "rotacao: dois servicos rotacionam independentes (base do --all)", "rotate-
     // Cada servico tem 2 validas; uma nao autoriza a outra (isolamento).
     assert(registry.pendingRotationCount(siteId) == 2, "site com 2")
     assert(registry.pendingRotationCount(apiId) == 2, "api com 2")
+}
+
+test "rotacao: --all grava credenciais em arquivo e nao imprime kfs_", "rotate-all-files" {
+    // Medido: o `rotate --all` imprimia o kfs_ de CADA servico no stdout —
+    // N credenciais em claro no scrollback, o oposto da regra do kfs_ (o
+    // valor existe UMA vez, na emissao). Agora cada valor vai para um
+    // arquivo em ~/.kofcloud/service-tokens/<nome>.kfs e a tela mostra so o
+    // caminho.
+    //
+    // A funcao pura decide a linha; o conteudo do arquivo e o caminho para
+    // o teste ler sem HOME (o valor na tela nunca e o token).
+    var line = rotateAllLine("site", "/tmp/kofcloud-rotate-fake/site.kfs")
+    assert(line.indexOf("site") == 0, "comeca pelo nome")
+    assert(line.indexOf("/tmp/kofcloud-rotate-fake/site.kfs") >= 0, "mostra o caminho")
+    assert(line.indexOf("kfs_") < 0, "nunca carrega o valor")
+    assert(line.indexOf("uma vez") >= 0, "relembra a regra do kfs_")
+
+    // O diretorio e fonte unica (o help do --all nao precisa mudar junto).
+    assert(rotateAllDir().indexOf(".kofcloud") >= 0, "dentro do HOME do kofcloud")
+    assert(rotateAllDir().indexOf("service-tokens") >= 0, "diretorio dedicado")
+
+    // Trava de fonte: o loop do --all grava em arquivo e imprime a linha
+    // pura; nunca imprime `mapField(result, "token")` direto.
+    var raw = File("src/kofcloud/cli/Commands.kf").readText()
+    var text = ""
+    if (raw != null) {
+        text = raw
+    }
+    if (text.length == 0) {
+        return
+    }
+    var start = text.indexOf("Int rotateAllServices(")
+    var end = text.indexOf("Int cmdServiceRotate(", start)
+    if (end < 0) {
+        end = text.length
+    }
+    var body = text.substring(start, end)
+    assert(body.indexOf("writeTextTo(filePath") >= 0, "grava em arquivo")
+    assert(body.indexOf("rotateAllLine(") >= 0, "imprime a linha pura")
+    assert(body.indexOf("\" + mapField(result, \"token\")") < 0, "nao concatena o token na saida")
+    assert(body.indexOf("createDirectories()") >= 0, "cria o diretorio antes")
 }

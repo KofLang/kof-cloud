@@ -96,6 +96,11 @@ credencial sem expiração nunca é revogada em silêncio (fica contada em
 coisa, senão o operador se trancaria fora. `logout` continua sendo só local:
 para invalidar no servidor, use `token revoke`.
 
+**Rotação de serviços com `--all`.** O comando itera os serviços da conta e
+grava cada credencial nova em `~/.kofcloud/service-tokens/<nome>.kfs`
+(uma por serviço, em claro uma única vez, mesmo contrato do `service
+token`); a tela mostra só o caminho — nunca N `kfs_` no scrollback.
+
 **Acúmulo de logins.** Cada `login` emite uma credencial nova e **não**
 revoga a anterior; sem TTL por padrão, o inventário cresce a cada entrada e
 uma credencial vazada de um login antigo vale para sempre. `kof cloud token

@@ -1400,6 +1400,19 @@ Int cmdServiceTokenRevoke(List<String> args) {
 // (precedente: down --prune poda em lote); o resumo final lista ok/falhas
 // e o exit e 1 se alguma falhar. Sem --ttl segue a regra do singular:
 // credencial sem expiracao nunca e revogada em silencio.
+// Diretorio das credenciais emitidas pelo `rotate --all`. Fonte unica do
+// caminho (o help e o aviso derivam, os testes derivam tambem).
+String rotateAllDir() {
+    return kofcloudHome() + "/service-tokens"
+}
+
+// Linha do resumo do `rotate --all` para UM servico. Pura: em arquivo o
+// valor em claro aparece uma unica vez (regra do kfs_), na tela so o
+// caminho; em falha, o nome e o motivo sem valor nenhum.
+String rotateAllLine(String name, String filePath) {
+    return name + ": credencial gravada em " + filePath + " (uma vez; mova para o lugar definitivo)"
+}
+
 Int rotateAllServices(LocalSession session, List<Service> services, Int ttl, Bool prune) {
     var done = 0
     var failures = listOf<String>()
@@ -1415,7 +1428,19 @@ Int rotateAllServices(LocalSession session, List<Service> services, Int ttl, Boo
         try {
             var raw = requireOk(http.post(session.controlUrl + "/v1/services/rotate", json.encode(body), jsonHeader(session.token)))
             var result = json.decode<Map<String, String>>(raw)
-            println(service.name + ": nova " + mapField(result, "token") + " (revogadas " + mapField(result, "revoked") + ", valendo " + mapField(result, "pending") + ")")
+            // N credenciais em claro no scrollback e o oposto da regra do
+            // kfs_ (o valor existe UMA vez, na emissao). Grava em arquivo
+            // (best-effort sem chmod no Kof, L3) e imprime so o caminho —
+            // o mesmo que o `service token` recomenda ("copie agora"), sem
+            // obrigar o operador a copiar N valores na mao.
+            var dir = rotateAllDir()
+            Directory(dir).createDirectories()
+            var filePath = dir + "/" + service.name + ".kfs"
+            if (writeTextTo(filePath, mapField(result, "token") + "\n") == false) {
+                failures.add(service.name)
+                continue
+            }
+            println(rotateAllLine(service.name, filePath) + " (revogadas " + mapField(result, "revoked") + ", valendo " + mapField(result, "pending") + ")")
             done = done + 1
         } catch (String e) {
             failures.add(service.name)
@@ -1429,7 +1454,7 @@ Int rotateAllServices(LocalSession session, List<Service> services, Int ttl, Boo
         printFail("falha em " + intToString(failures.size) + " servico(s)", failures.get(0))
         return 1
     }
-    println("rotate --all ok: " + intToString(done) + " servico(s)")
+    println("rotate --all ok: " + intToString(done) + " servico(s); credenciais em " + rotateAllDir())
     return 0
 }
 
