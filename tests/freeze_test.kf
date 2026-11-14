@@ -147,6 +147,46 @@ test "contencao: remover alvo congelado poda a marca", "freeze-unit" {
     assert(code.indexOf("KCF023") >= 0, "codigo KCF023: " + code)
 }
 
+test "contencao: credencial de device terminal poda no load", "freeze-unit" {
+    // Estado sintetico do RESIDUO anterior as recusas: servico ainda existe,
+    // device dele REVOKED e credencial kfs_ apontando para o par. Antes a
+    // credencial autenticava para sempre um servico cuja rota nunca volta —
+    // ids (uuid) nao se repetem, manter serve para nada. A poda roda na
+    // carga e em toda remocao (fail-closed de higiene).
+    var legacyPath = freezePath("legacy-token")
+    var morta = crypto.sha256("kfs_morta")
+    var viva = crypto.sha256("kfs_viva")
+    var state = "{\"accounts\":[{\"id\":\"acc-x\",\"handle\":\"mel\",\"email\":\"m@e.com\",\"passwordHash\":\"h\",\"createdAt\":0}],"
+    state = state + "\"devices\":["
+    state = state + "{\"id\":\"d1\",\"accountId\":\"acc-x\",\"name\":\"morto\",\"publicKey\":\"pk\",\"status\":\"REVOKED\",\"lastSeenAt\":0,\"createdAt\":0},"
+    state = state + "{\"id\":\"d2\",\"accountId\":\"acc-x\",\"name\":\"vivo\",\"publicKey\":\"pk2\",\"status\":\"ACTIVE\",\"lastSeenAt\":0,\"createdAt\":0}],"
+    state = state + "\"services\":["
+    state = state + "{\"id\":\"s1\",\"accountId\":\"acc-x\",\"deviceId\":\"d1\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":8081,\"protocol\":\"http\",\"hostname\":\"site.mel.kofcloud.io\",\"exposure\":\"PUBLIC\",\"status\":\"SUSPENDED\",\"createdAt\":0,\"allowMethods\":\"\",\"allowPaths\":\"\"},"
+    state = state + "{\"id\":\"s2\",\"accountId\":\"acc-x\",\"deviceId\":\"d2\",\"name\":\"outro\",\"localAddress\":\"127.0.0.1\",\"localPort\":8082,\"protocol\":\"http\",\"hostname\":\"outro.mel.kofcloud.io\",\"exposure\":\"PUBLIC\",\"status\":\"ONLINE\",\"createdAt\":0,\"allowMethods\":\"\",\"allowPaths\":\"\"}],"
+    state = state + "\"tokens\":[],"
+    state = state + "\"serviceTokens\":["
+    state = state + "{\"serviceId\":\"s1\",\"accountId\":\"acc-x\",\"tokenHash\":\"" + morta + "\",\"createdAt\":0,\"expiresAt\":9999999999999},"
+    state = state + "{\"serviceId\":\"s2\",\"accountId\":\"acc-x\",\"tokenHash\":\"" + viva + "\",\"createdAt\":0,\"expiresAt\":9999999999999}],"
+    state = state + "\"customDomains\":[],\"audit\":[],\"incidents\":[],\"webhooks\":[],\"freezeMarks\":[]}"
+    writeTextTo(legacyPath, state)
+    var registry = Registry(legacyPath)
+    assert(registry.loadStatus == "ok", "estado legado carrega")
+
+    // A credencial do par terminal morre na carga; a do vivo vale.
+    assert(registry.serviceByServiceToken("kfs_morta") == null, "credencial de revogado podada")
+    var live = registry.serviceByServiceToken("kfs_viva")
+    assert(live != null, "credencial do vivo vale")
+    if (live != null) {
+        assert(live.id == "s2", "vale para o servico certo: " + live.id)
+    }
+
+    // Idempotente: nova carga nao ressuscita nem abre mais nada.
+    var again = Registry(legacyPath)
+    assert(again.loadStatus == "ok", "recarrega")
+    assert(again.serviceByServiceToken("kfs_morta") == null, "poda persiste no reload")
+    assert(again.serviceByServiceToken("kfs_viva") != null, "vivo segue valendo")
+}
+
 test "contencao: freeze de device cobre todos os servicos dele", "freeze-unit" {
     var registry = Registry(freezePath("dev"))
     var account = registry.createAccount("mel", "m@e.com", "segredo")

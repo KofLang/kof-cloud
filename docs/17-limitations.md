@@ -221,7 +221,11 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   alvo congelado (serviço ou device revogado) poda a marca — ids nunca se
   repetem, então a marca de um id que saiu não serve para nada; a poda
   persiste no arquivo (o `unfreeze` de removido segue 404, o de revogado
-  409).
+  recusa com `409 KCF023` — REVOKED é terminal nos dois sentidos do ciclo,
+  e a marca legada de um revogado fica inerte no arquivo). Resíduo de estados
+  anteriores às recusas (serviço vivo com device REVOKED e `kfs_` apontando
+  para o par) morre na carga: `pruneServiceTokens` roda no `load` — antes a
+  credencial autenticava para sempre um serviço cuja rota nunca volta.
 * **A expiração de `kfs_` é preguiçosa — e o incidente também.** Credencial
   vencida só é podada quando alguma validação de token passa por
   `serviceByServiceToken` (o que acontece a cada request AUTHENTICATED no

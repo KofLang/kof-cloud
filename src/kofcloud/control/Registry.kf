@@ -171,6 +171,9 @@ class Registry {
                     i = i + 1
                 }
             }
+            // Poda unica na carga: estado antigo pode ter credencial de
+            // servico apontando para device REVOKED (ver pruneServiceTokens).
+            this.pruneServiceTokens()
             this.loadStatus = "ok"
         } catch (String e) {
             this.loadStatus = "corrupt"
@@ -1142,12 +1145,24 @@ class Registry {
     }
 
     // Remove credenciais orfas (servico removido ou dispositivo revogado).
+    // Credencial de servico vive se o servico existe E o device dele nao e
+    // terminal (REVOKED). Estados gravados antes da recusa de freeze em
+    // revogado podiam deixar servico vivo com device REVOKED e credencial
+    // apontando para ele — a credencial autenticaria um servico cuja rota
+    // nunca volta. Ids (uuid) nunca se repetem; manter serve para nada.
+    // Idempotente: roda no load e em toda remocao.
     void pruneServiceTokens() {
         var alive = listOf<ServiceToken>()
         for (var entry in this.serviceTokens) {
-            if (this.serviceById(entry.serviceId) != null) {
-                alive.add(entry)
+            var service = this.serviceById(entry.serviceId)
+            if (service == null) {
+                continue
             }
+            var device = this.deviceById(service.deviceId)
+            if (device != null && deviceIsRevoked(device.status)) {
+                continue
+            }
+            alive.add(entry)
         }
         this.serviceTokens = alive
     }
