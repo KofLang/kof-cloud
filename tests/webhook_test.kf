@@ -234,3 +234,64 @@ test "device: posicional sobrando barra antes de revogar/suspender", "device-gua
         writeTextTo(sessionPath(), priorSession)
     }
 }
+test "webhook: host interno e SSRF barrado (literal e resolvido)", "webhook-ssrf" {
+    // O POST do webhook sai do processo do control plane com o header de
+    // assinatura. Um webhook apontado para 169.254.169.254 (metadata de
+    // nuvem) ou para a rede privada do operador deixava a conta disparar
+    // requests forjados para dentro — SSRF. Antes so http:// era confinado
+    // ao loopback; https:// aceitava QUALQUER host, inclusive interno.
+    var internal = listOf(
+        "https://169.254.169.254/latest/meta-data",
+        "https://10.0.0.5/hook",
+        "https://172.16.3.4/hook",
+        "https://192.168.1.10/hook",
+        "https://0.0.0.0/hook",
+        "https://metadata.internal.local/hook",
+        "https://fe80::1/hook"
+    )
+    for (var url in internal) {
+        assert(webhookUrlError(url) != "" || webhookHostIsInternal(webhookUrlHost(url)), "interno barrado: " + url)
+    }
+
+    // LOOPBACK fica de proposito fora do guard: o receptor de dev
+    // documentado e `http://127.0.0.1` (o http:// so aceita loopback), e o
+    // metadata service de nuvem nao escuta em loopback — recusa-lo quebraria
+    // o fluxo de teste sem fechar buraco real.
+    assert(webhookHostIsInternal("127.0.0.1") == false, "loopback nao e interno (receptor de dev)")
+    assert(webhookHostIsInternal("localhost") == false, "localhost idem")
+
+    // O predicado, direto: publicos nao sao internos.
+    assert(webhookHostIsInternal("example.com") == false, "publico")
+    assert(webhookHostIsInternal("hooks.example.com") == false, "subdominio publico")
+    assert(webhookHostIsInternal("8.8.8.8") == false, "ip publico")
+    assert(webhookHostIsInternal("172.32.0.1") == false, "fora de 172.16/12")
+    assert(webhookHostIsInternal("192.169.1.1") == false, "fora de 192.168/16")
+    assert(webhookHostIsInternal("172.15.0.1") == false, "fora de 172.16/12 por baixo")
+
+    // DNS: host publico que resolve para interno e barrado; falha de DNS
+    // nao recusa (o IP literal continua guardado pela checagem direta).
+    assert(webhookDnsError("rebind.example.com", listOf("169.254.169.254")) != "", "rebind barrado")
+    assert(webhookDnsError("rebind.example.com", listOf("10.1.2.3")) != "", "privado resolvido barrado")
+    assert(webhookDnsError("hooks.example.com", listOf("93.184.216.34")) == "", "publico passa")
+    assert(webhookDnsError("hooks.example.com", listOf<String>()) == "", "DNS vazio nao recusa")
+
+    // Fim a fim: set com host interno e recusado com o erro estavel e nada
+    // e gravado; set com host publico (DNS externo indisponivel aqui) segue.
+    var port = 19877
+    var registry = Registry(webhookPath("ssrf"))
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control no ar")
+    var created = httpPostJson(port, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+
+    var bad = httpPostJson(port, "/v1/webhook", "{\"action\":\"set\",\"url\":\"https://169.254.169.254/latest\",\"secret\":\"segredo-longo-suficiente\"}", token)
+    assert(statusOf(bad) == 400, "interno -> 400: " + intToString(statusOf(bad)))
+    assert(bodyOf(bad).indexOf("internal address") >= 0, "nomeia a causa")
+    var mel = registry.accountByHandle("mel")
+    var melId = ""
+    if (mel != null) {
+        melId = mel.id
+    }
+    assert(registry.webhookForAccount(melId) == null, "nada gravado")
+}

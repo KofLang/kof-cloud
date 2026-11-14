@@ -208,7 +208,13 @@ class Registry {
     // um incidente, nao um por ocorrencia). `accountId` "" = escopo global.
     // ---- webhook de incidentes (Fase 17 slice 3) ----
 
-    // Cadastra/troca o webhook da conta. Valida URL e segredo (puros).
+    // Cadastra/troca o webhook da conta. Valida URL e segredo (puros) e
+    // barra host que aponte para rede interna (SSRF): o POST sai do processo
+    // do control plane com o header de assinatura, entao um webhook apontado
+    // para 169.254.169.254 (metadata de nuvem) ou para a rede privada do
+    // operador seria um tunel de request forjado pela conta. O resolve roda
+    // AQUI (I/O na borda do Registry, padrao do verifyCustomDomain); DNS
+    // indisponivel nao bloqueia (fail-open com o IP literal ainda guardado).
     String setWebhook(String accountId, String url, String secret) {
         var urlError = webhookUrlError(url)
         if (urlError.length > 0) {
@@ -217,6 +223,20 @@ class Registry {
         var secretError = webhookSecretError(secret.trim())
         if (secretError.length > 0) {
             throw secretError
+        }
+        var host = webhookUrlHost(url)
+        if (webhookHostIsInternal(host)) {
+            throw "url host is an internal address"
+        }
+        var resolved = listOf<String>()
+        try {
+            resolved = net.resolve(host)
+        } catch (String e) {
+            // Sem DNS agora: segue (o erro de entrega aparece no POST real).
+        }
+        var dnsError = webhookDnsError(host, resolved)
+        if (dnsError.length > 0) {
+            throw dnsError
         }
         var out = listOf<WebhookConfig>()
         for (var existing in this.webhooks) {
