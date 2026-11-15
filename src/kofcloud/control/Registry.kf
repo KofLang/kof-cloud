@@ -69,6 +69,10 @@ class Registry {
     String path
     Int maxDevices
     Int maxServices
+    // Teto higiênico das marcas de freeze (fonte unica `limitFreezeMarks`).
+    // Nunca recusa containment: acima do teto, `sweepFreezeMarksIfOver` poda
+    // so marcas inertes; marcas vivas ficam mesmo acima do teto.
+    Int maxFreezeMarks
     // Destinos que a verificacao de dominio proprio aceita: IPs e/ou hostnames
     // do Edge (config `kofcloud.edgeHosts`, separados por virgula). Comparacao
     // exata, sem sufixo: subdominios de um host esperado NAO valem.
@@ -106,6 +110,7 @@ class Registry {
         this.loginProbes = mapOf()
         this.maxDevices = limitDevices()
         this.maxServices = limitServices()
+        this.maxFreezeMarks = limitFreezeMarks()
         this.edgeHosts = parseEdgeHosts(config.str("kofcloud.edgeHosts", ""))
         this.load()
     }
@@ -120,6 +125,13 @@ class Registry {
     void setLimits(Int devices, Int services) {
         this.maxDevices = devices
         this.maxServices = services
+    }
+
+    // Mesmo papel do `setLimits`: o teto das marcas e teto higiênico (poda
+    // inertes acima dele), e os testes precisam de um teto pequeno sem
+    // depender do env do processo.
+    void setMaxFreezeMarks(Int cap) {
+        this.maxFreezeMarks = cap
     }
 
     Int activeDeviceCount(String accountId) {
@@ -1319,6 +1331,52 @@ class Registry {
         return this.freezeMarks
     }
 
+    // Marca INERTE = alvo que nunca mais restaura, entao a marca nao serve
+    // para nada: removido do estado (o unfreeze responde 404) ou device
+    // REVOKED (terminal nos dois sentidos — o unfreeze recusa 409 KCF023
+    // sem ler a marca). Servico de device revogado NAO e inerte: o servico
+    // segue no estado e o `unfreezeService` restaura o status dele
+    // normalmente. Prefixo desconhecido nao e inerte: nao inventa semantica
+    // para alvo que o registry nao modela.
+    Bool freezeMarkIsInert(String target) {
+        if (target.startsWith("device/")) {
+            var device = this.deviceById(target.substring(7))
+            if (device == null) {
+                return true
+            }
+            return deviceIsRevoked(device.status)
+        }
+        if (target.startsWith("service/")) {
+            return this.serviceById(target.substring(8)) == null
+        }
+        return false
+    }
+
+    // Teto higiênico das marcas (fonte unica `limitFreezeMarks`, teto
+    // injetavel via `setMaxFreezeMarks` para teste). Chamado depois de cada
+    // freeze gravar marca: acima do teto, poda so as marcas inertes — o
+    // resíduo de estados legados morre no primeiro freeze que estourar o
+    // teto, e a poda persiste no proximo `save`. Marcas vivas ficam mesmo
+    // acima do teto (o teto cede): recusar ou descartar containment por
+    // limite seria o incidente mandando no remedio, e apagar marca viva
+    // perderia o status anterior do unfreeze.
+    void sweepFreezeMarksIfOver() {
+        if (this.freezeMarks.size <= this.maxFreezeMarks) {
+            return
+        }
+        var inert = listOf<String>()
+        for (var target in this.freezeMarks.keys()) {
+            if (this.freezeMarkIsInert(target)) {
+                inert.add(target)
+            }
+        }
+        var i = 0
+        while (i < inert.size) {
+            this.freezeMarks.remove(inert.get(i))
+            i = i + 1
+        }
+    }
+
     FreezeResult freezeService(String accountId, String serviceId) {
         var service = this.serviceById(serviceId)
         if (service == null) {
@@ -1346,6 +1404,7 @@ class Registry {
         if (this.freezeMarks.get("service/" + serviceId) == null) {
             this.freezeMarks.put("service/" + serviceId, prior)
         }
+        this.sweepFreezeMarksIfOver()
         var account = this.accountById(accountId)
         if (account != null) {
             this.audit(auditActorAccount(account.handle), auditServiceFrozen(), accountId + "/" + serviceId)
@@ -1401,6 +1460,7 @@ class Registry {
         if (this.freezeMarks.get("device/" + deviceId) == null) {
             this.freezeMarks.put("device/" + deviceId, prior)
         }
+        this.sweepFreezeMarksIfOver()
         var account = this.accountById(accountId)
         if (account != null) {
             this.audit(auditActorAccount(account.handle), auditDeviceFrozen(), accountId + "/" + deviceId)
@@ -1485,6 +1545,7 @@ class Registry {
             }
             this.suspendService(accountId, service.id)
         }
+        this.sweepFreezeMarksIfOver()
         this.audit(auditActorAccount(account.handle), auditAccountFrozen(), accountId)
         var incident = this.raiseIncident(incidentFreezeAccount(), accountId)
         var incidentId = ""

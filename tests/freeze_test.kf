@@ -4,6 +4,7 @@ import kofcloud.model.Errors
 import kofcloud.model.Incident
 import kofcloud.model.Service
 import kofcloud.store.Store
+import kofcloud.util.Limits
 import testkit.Support
 
 // Fase 17 slice 2 — contencao reversivel.
@@ -493,6 +494,59 @@ test "contencao: unfreeze honra a terminalidade de revogado (marca legada)", "fr
     if (deadAfter != null) {
         assert(deadAfter.status == "REVOKED", "revogado continua REVOKED: " + deadAfter.status)
     }
+}
+
+test "contencao: teto das marcas poda inertes e nunca recusa containment", "freeze-unit" {
+    // Estado sintetico com duas marcas inertes legadas (alvos que sairam) e
+    // uma viva. O teto (`limitFreezeMarks`, default 1000, afinavel por
+    // config) e higiênico: acima dele o freeze poda SO as inertes — o
+    // unfreeze nelas ja responde 404/409 sem ler a marca. Com todas vivas o
+    // teto cede: recusar containment por limite de marcas seria o incidente
+    // mandando no remedio, e apagar marca viva perderia o status anterior.
+    var capPath = freezePath("marks-cap")
+    var state = "{\"accounts\":[{\"id\":\"acc-x\",\"handle\":\"mel\",\"email\":\"m@e.com\",\"passwordHash\":\"h\",\"createdAt\":0}],"
+    state = state + "\"devices\":["
+    state = state + "{\"id\":\"d1\",\"accountId\":\"acc-x\",\"name\":\"um\",\"publicKey\":\"pk1\",\"status\":\"ACTIVE\",\"lastSeenAt\":0,\"createdAt\":0},"
+    state = state + "{\"id\":\"d2\",\"accountId\":\"acc-x\",\"name\":\"dois\",\"publicKey\":\"pk2\",\"status\":\"ACTIVE\",\"lastSeenAt\":0,\"createdAt\":0}],"
+    state = state + "\"services\":[],\"tokens\":[],\"serviceTokens\":[],\"customDomains\":[],\"audit\":[],\"incidents\":[],\"webhooks\":[],"
+    state = state + "\"freezeMarks\":[{\"target\":\"device/gone1\",\"status\":\"ACTIVE\"},{\"target\":\"service/gone2\",\"status\":\"ACTIVE\"},{\"target\":\"device/d2\",\"status\":\"ACTIVE\"}]}"
+    writeTextTo(capPath, state)
+    var registry = Registry(capPath)
+    assert(registry.loadStatus == "ok", "estado carrega")
+    assert(freezeMarkLimitFrom(0) == 1000, "zero recai no default")
+    assert(freezeMarkLimitFrom(-7) == 1000, "negativo recai no default")
+    assert(freezeMarkLimitFrom(50) == 50, "valor positivo passa")
+    assert(limitFreezeMarks() == 1000, "default 1000 na fonte unica")
+
+    // Classificacao de inerte: removido e servico-removido sao inertes;
+    // device vivo e prefixo desconhecido ficam.
+    assert(registry.freezeMarkIsInert("device/gone1"), "device removido e inerte")
+    assert(registry.freezeMarkIsInert("service/gone2"), "servico removido e inerte")
+    assert(registry.freezeMarkIsInert("device/d2") == false, "device vivo nao e inerte")
+    assert(registry.freezeMarkIsInert("outro/alvo") == false, "prefixo desconhecido fica")
+
+    // 3 marcas > teto 2: o freeze do alvo vivo poda as duas inertes e
+    // guarda a viva — containment segue funcionando acima do teto.
+    registry.setMaxFreezeMarks(2)
+    var result = registry.freezeDevice("acc-x", "d2")
+    assert(result.ok, "containment segue acima do teto")
+    assert(registry.frozenMarks().size == 1, "inertes podadas, so a viva fica")
+    assert(registry.frozenMarks().get("device/d2") != null, "marca viva fica")
+    assert(registry.frozenMarks().get("device/gone1") == null, "marca de removido podada")
+    assert(registry.frozenMarks().get("service/gone2") == null, "marca de servico removido podada")
+
+    // Todas vivas acima do teto: nada e podado e o freeze segue ok.
+    registry.setMaxFreezeMarks(1)
+    var second = registry.freezeDevice("acc-x", "d1")
+    assert(second.ok, "freeze sem inertes acima do teto segue ok")
+    assert(registry.frozenMarks().size == 2, "marcas vivas nao sao podadas")
+
+    // A poda persiste no arquivo (o proximo registry ja nasce sem o residuo).
+    var reloaded = Registry(capPath)
+    assert(reloaded.loadStatus == "ok", "estado podado carrega")
+    assert(reloaded.frozenMarks().get("device/d1") != null, "marca viva persiste")
+    assert(reloaded.frozenMarks().get("device/d2") != null, "segunda viva persiste")
+    assert(reloaded.frozenMarks().get("device/gone1") == null, "poda persiste no arquivo")
 }
 
 test "contencao: HTTP freeze de device revogado e 409 (nao 200)", "freeze" {

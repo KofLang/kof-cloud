@@ -1103,8 +1103,12 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   **Implementado (service|device):** `Registry.freezeService/freezeDevice`
   suspendem o alvo, revogam as credenciais vivas e abrem o incidente
   (`freeze_service`/`freeze_device`, WARN); o status anterior fica nas marcas
-  (`freezeMarks`, **persistidas no estado** — o restart não perde a
-  reversibilidade) e `unfreezeService/unfreezeDevice` restauram exatamente
+  (`freezeMarks`, **persistidas no estado com teto higiênico
+  (`limitFreezeMarks`, default 1000, afinável por
+  `kofcloud.limits.freezeMarks`) — acima do teto o freeze seguinte poda só
+  as marcas inertes (alvo removido ou device REVOKED); marcas vivas nunca
+  são podadas e o containment nunca falha por limite** — o restart não perde
+  a reversibilidade) e `unfreezeService/unfreezeDevice` restauram exatamente
   ele — configuração (serviços, domínios, allowlist) nunca é tocada.
   `POST /v1/freeze` e `/v1/unfreeze` (`{target,id}`; alvo alheio/inexistente
   → `404 KCF128` opaco; `KCF126`/`KCF127` para entrada inválida). CLI:

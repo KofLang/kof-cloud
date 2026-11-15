@@ -220,18 +220,25 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   acima de 596 h (~24,8 dias) e um `--ttl 720` (30 dias) nascia vencido — 401
   imediato. `ttlHours` continua `Int` (até ~2,1 bilhões de horas); a
   multiplicação é a única aritmética larga.
-* **As marcas de `freeze` são persistidas no estado, mas sem teto.** Reiniciar
-  o control plane não perde mais a reversibilidade: o `unfreeze` restaura o
-  status anterior gravado (estado antigo sem a chave carrega sem marcas — o
-  `unfreeze` nele segue respondendo `409 KCF141`, fail-closed). Remover um
-  alvo congelado (serviço ou device revogado) poda a marca — ids nunca se
-  repetem, então a marca de um id que saiu não serve para nada; a poda
-  persiste no arquivo (o `unfreeze` de removido segue 404, o de revogado
-  recusa com `409 KCF023` — REVOKED é terminal nos dois sentidos do ciclo,
-  e a marca legada de um revogado fica inerte no arquivo). Resíduo de estados
+* **As marcas de `freeze` são persistidas e agora têm teto higiênico
+  (`kofcloud.limits.freezeMarks`, default 1000).** Reiniciar o control plane
+  não perde a reversibilidade: o `unfreeze` restaura o status anterior
+  gravado (estado antigo sem a chave carrega sem marcas — o `unfreeze` nele
+  segue respondendo `409 KCF141`, fail-closed). Remover um alvo congelado
+  (serviço removido ou device revogado) poda a marca — ids nunca se repetem,
+  então a marca de um id que saiu não serve para nada; a poda persiste no
+  arquivo (o `unfreeze` de removido segue 404, o de revogado recusa com
+  `409 KCF023` — REVOKED é terminal nos dois sentidos do ciclo, e a marca
+  legada de um revogado fica inerte no arquivo). Resíduo de estados
   anteriores às recusas (serviço vivo com device REVOKED e `kfs_` apontando
   para o par) morre na carga: `pruneServiceTokens` roda no `load` — antes a
-  credencial autenticava para sempre um serviço cuja rota nunca volta.
+  credencial autenticava para sempre um serviço cuja rota nunca volta. O
+  teto (fonte única `limitFreezeMarks` em `util/Limits.kf`, recuo seguro
+  como os demais) **nunca recusa containment**: acima dele, o freeze
+  seguinte poda só as marcas inertes (`freezeMarkIsInert` — alvo removido
+  ou device REVOKED, cujo unfreeze já responde 404/409 sem ler a marca); se
+  todas forem vivas, o teto cede — congelar NUNCA falha por limite de
+  marcas, e apagar marca viva perderia o status anterior do unfreeze.
 * **A expiração de `kfs_` é preguiçosa — e o incidente também.** Credencial
   vencida só é podada quando alguma validação de token passa por
   `serviceByServiceToken` (o que acontece a cada request AUTHENTICATED no

@@ -3,14 +3,15 @@ package kofcloud.util
 // Limites do KofCloud. Configuraveis por kof.config/env
 // (KOF_KOFCLOUD_LIMITS_DEVICES, KOF_KOFCLOUD_LIMITS_SERVICES,
 //  KOF_KOFCLOUD_LIMITS_STREAMS, KOF_KOFCLOUD_LIMITS_HTTPREQUESTS,
-//  KOF_KOFCLOUD_LIMITS_HTTPWINDOWMS).
+//  KOF_KOFCLOUD_LIMITS_HTTPWINDOWMS, KOF_KOFCLOUD_LIMITS_FREEZEMARKS).
 //
 // Protegem as duas pontas: a infraestrutura KofCloud e a maquina do usuario.
 // O que e aplicado hoje: dispositivos ativos por conta, servicos por
 // dispositivo, streams simultaneos por tunel, requisicoes por hostname no
 // Edge, bytes por frame DATA no tunel, conexoes simultaneas por servico
 // (429 KCF108 antes do OPEN), idle timeout de tunel/stream (IDLE_TIMEOUT),
-// tamanho do anel de auditoria e de incidentes, e o teto do cabecalho da
+// tamanho do anel de auditoria e de incidentes, o teto das marcas de freeze
+// (poda inertes, nunca recusa containment) e o teto do cabecalho da
 // sonda de health.
 
 Int deviceLimitFrom(Int configured) {
@@ -405,6 +406,26 @@ Int limitIncidentRing() {
         return 100
     }
     return cap
+}
+
+// Teto das marcas de freeze (map alvo -> status anterior, persistido no
+// ControlState). NAO e teto de capacidade nem de cadastro: passar do teto
+// NUNCA recusa congelar (containment vem primeiro — recusar freeze de conta
+// por limite de marcas seria o incidente mandando no remedio). Acima do
+// teto, o Registry poda as marcas INERTES (alvo removido ou device REVOKED:
+// o unfreeze nelas ja responde 404/409 sem ler a marca). Marcas vivas nao
+// sao podadas — se mesmo assim passar do teto, o teto cede: a
+// reversibilidade de alvo congelado vale mais que o teto. Fonte pura para o
+// recuo ser provavel em teste (precedente `limitIncidentRing`).
+Int freezeMarkLimitFrom(Int configured) {
+    if (configured <= 0) {
+        return 1000
+    }
+    return configured
+}
+
+Int limitFreezeMarks() {
+    return freezeMarkLimitFrom(config.int("kofcloud.limits.freezeMarks", 1000))
 }
 
 // Teto do cabecalho lido na sonda de health local (Agent). O servico do
