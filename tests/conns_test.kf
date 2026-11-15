@@ -136,6 +136,29 @@ test "conexoes: contador libera e Hint orienta", "conns-unit" {
     edgeState.releaseServiceConn("s1")
     assert(edgeState.serviceConnOpen("s1") == 0, "nunca negativo (remove a chave)")
     assert(errHint("KCF108: too many connections for this service").indexOf("instantes") >= 0, "Hint sem dado de servico")
+
+    // Recuo seguro do teto (fonte pura `serviceConnLimitFrom`): zero/negativo
+    // recai no default 64 — com o valor cru, `0` recusaria TODO o relay com
+    // 429 KCF108 (o teto e maximo em aberto, 0 >= 0 e sempre verdade).
+    assert(serviceConnLimitFrom(0) == 64, "zero recai no default")
+    assert(serviceConnLimitFrom(-5) == 64, "negativo recai no default")
+    assert(serviceConnLimitFrom(10) == 10, "valor positivo passa")
+    assert(serviceConnLimitFrom(1) == 1, "limite apertado passa")
+    assert(limitServiceConns() == 64, "default 64 na fonte unica")
+
+    // O construtor do EdgeState delega na fonte: as 64 vagas do default abrem
+    // e a seguinte recusa.
+    var defaultState = EdgeState(registry)
+    var cap = limitServiceConns()
+    var acquired = 0
+    while (acquired < cap) {
+        if (defaultState.tryAcquireServiceConn("s-default") == false) {
+            break
+        }
+        acquired = acquired + 1
+    }
+    assert(acquired == cap, "construtor delega na fonte unica")
+    assert(defaultState.tryAcquireServiceConn("s-default") == false, "teto do default fecha")
 }
 
 // Servidor lento deterministico: dorme 2 s, responde corpo fixo.

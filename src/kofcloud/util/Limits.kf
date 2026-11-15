@@ -230,8 +230,23 @@ Int limitPublicConns() {
 // o Kof nao expoe mutex — ver 17-limitations.md L3): pode estourar em poucas
 // unidades, nunca falhar fechado nem travar. O rate limit (atomico) segura
 // o volume; este segura a profundidade.
+//
+// Recuo seguro, com fonte pura para o teste poder prova-lo (o fallback
+// inline nao e alcancavel em teste: a config vem do ambiente do processo —
+// precedente `httpWindowSeconds`). Zero/negativo recai no default porque
+// aqui zero NAO significa "sem limite": o teto e o MAXIMO de conexoes em
+// aberto, entao `0` faz `tryAcquireServiceConn` recusar TODO relay com
+// 429 KCF108 (0 >= 0 e sempre verdade) — um typo na config tirava todos os
+// servicos do ar em silencio.
+Int serviceConnLimitFrom(Int configured) {
+    if (configured <= 0) {
+        return 64
+    }
+    return configured
+}
+
 Int limitServiceConns() {
-    return config.int("kofcloud.limits.serviceConns", 64)
+    return serviceConnLimitFrom(config.int("kofcloud.limits.serviceConns", 64))
 }
 
 // Teto do corpo de uma requisicao publica (bytes). Excedeu -> 413 KCF110,

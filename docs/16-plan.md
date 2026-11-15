@@ -264,11 +264,13 @@ ou GOAWAY — antes, queda silenciosa parava o Agent. Prova:
 
 **Estado (conexões simultâneas por serviço — fecha os débitos): ✅
 implementado.** Contador por `serviceId` no Edge
-(`kofcloud.limits.serviceConns`, default 64); excedeu → `429 KCF108` +
+(`kofcloud.limits.serviceConns`, default 64, **zero/inválido recaem no
+default via `serviceConnLimitFrom` pura — 0 recusaria todo o relay com 429**);
+excedeu → `429 KCF108` +
 `Retry-After` antes do OPEN (sem consumir stream nem tocar no Agent).
 Aproximado sob corrida (documentado); métrica `_service_overloaded`.
 Prova: `tests/conns_test.kf` (2 testes: concorrência real com servidor
-lento, liberação, isolamento, métrica, Hint).
+lento, liberação, isolamento, métrica, Hint; recuo do teto com mutação).
 
 ## Abuse prevention (parcial, antes do deploy)
 
