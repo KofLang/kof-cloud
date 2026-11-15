@@ -30,4 +30,10 @@ test "backoff: defaults coerentes" {
     assert(defaultBackoffMax() == limitBackoffMaxMs(), "teto do Limits")
     assert(limitBackoffBaseMs() == 500, "default base 500 ms")
     assert(limitBackoffMaxMs() == 30000, "default teto 30000 ms")
+    assert(backoffBaseLimitFrom(0) == 500, "base zero recai no default")
+    assert(backoffBaseLimitFrom(-3) == 500, "base negativa recai no default")
+    assert(backoffBaseLimitFrom(250) == 250, "base positiva passa direto")
+    assert(backoffMaxLimitFrom(100, 500) == 500, "teto abaixo da base recai na base")
+    assert(backoffMaxLimitFrom(500, 500) == 500, "teto igual a base fica")
+    assert(backoffMaxLimitFrom(60000, 500) == 60000, "teto acima da base passa")
 }

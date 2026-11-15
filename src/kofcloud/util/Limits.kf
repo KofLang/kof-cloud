@@ -378,13 +378,28 @@ Int limitWafBodyInspectBytes() {
 // isso, afinar o ritmo de reconexao exigiria editar o produto, nao a config.
 // Afinaveis por config mas sem recuo silencioso: base zerada/negativa recai
 // no default (evita loop agressivo de reconexao) e teto abaixo da base recai
-// na base (evita `min(base, max)` invertido).
+// na base (evita `min(base, max)` invertido). Fontes puras para o recuo ser
+// provavel em teste (mesma receita da familia de recuo seguro).
+Int backoffBaseLimitFrom(Int configured) {
+    if (configured <= 0) {
+        return 500
+    }
+    return configured
+}
+
 Int limitBackoffBaseMs() {
-    return config.int("kofcloud.limits.backoffBaseMs", 500)
+    return backoffBaseLimitFrom(config.int("kofcloud.limits.backoffBaseMs", 500))
+}
+
+Int backoffMaxLimitFrom(Int configured, Int base) {
+    if (configured < base) {
+        return base
+    }
+    return configured
 }
 
 Int limitBackoffMaxMs() {
-    return config.int("kofcloud.limits.backoffMaxMs", 30000)
+    return backoffMaxLimitFrom(config.int("kofcloud.limits.backoffMaxMs", 30000), limitBackoffBaseMs())
 }
 
 // Tamanho do anel de auditoria operacional (eventos por control plane).

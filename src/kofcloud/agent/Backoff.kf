@@ -29,17 +29,9 @@ Int backoffDelay(Int attempt, Int base, Int maxDelay) {
 }
 
 Int defaultBackoffBase() {
-    var base = limitBackoffBaseMs()
-    if (base <= 0) {
-        base = 500
-    }
-    return base
+    return limitBackoffBaseMs()
 }
 
 Int defaultBackoffMax() {
-    var maxDelay = limitBackoffMaxMs()
-    if (maxDelay < defaultBackoffBase()) {
-        maxDelay = defaultBackoffBase()
-    }
-    return maxDelay
+    return limitBackoffMaxMs()
 }
