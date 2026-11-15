@@ -465,7 +465,8 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   legítima com `+` e UTF-8 percent seguem 200) + `wafdetect-unit`,
   `wafdetect`, `wafbody-unit`, `wafdetect-body`, `wafheader-unit`.
 * **Slice 2a — teto de corpo por requisição ✅.** `kofcloud.limits.httpBodyBytes`
-  (default 1 MiB); o Edge recusa antes do relay quando o `Content-Length`
+  (default 1 MiB, **zero/inválido recaem no default via `httpBodyLimitFrom`
+  pura — com 0 todo corpo viraria 413**); o Edge recusa antes do relay quando o `Content-Length`
   declarado passa → `413 KCF110` + métrica `_body_too_large`. Não consome
   stream nem toca no Agent; corpo exatamente no teto passa. Corpo sem
   `Content-Length` (transfer-encoding de requisição) é **recusado** com

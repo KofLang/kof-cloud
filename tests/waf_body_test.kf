@@ -18,6 +18,21 @@ test "waf corpo: limite default do config e positivo", "wafbody-unit" {
     assert(limitHttpBodyBytes() > 0, "teto positivo")
     assert(errBodyTooLarge().indexOf("KCF110") >= 0, "codigo KCF110")
     assert(errHint(errBodyTooLarge()).length > 0, "tem Hint")
+
+    // Recuo seguro do teto (fonte pura `httpBodyLimitFrom`): zero/negativo
+    // recaem no default 1 MiB — o Edge compara `declared > bodyLimit`, entao
+    // com 0 TODO pedido com corpo viraria 413 KCF110 (so GET sem corpo
+    // escaparia): outage parcial silencioso por um typo na config.
+    assert(httpBodyLimitFrom(0) == 1048576, "zero recai no default")
+    assert(httpBodyLimitFrom(-1) == 1048576, "negativo recai no default")
+    assert(httpBodyLimitFrom(10) == 10, "valor positivo passa")
+    assert(httpBodyLimitFrom(1) == 1, "limite apertado passa")
+    assert(limitHttpBodyBytes() == 1048576, "default 1 MiB na fonte unica")
+
+    // O construtor do EdgeState delega na fonte (o mesmo valor que o
+    // HttpFront compara contra o Content-Length declarado).
+    var defaultState = EdgeState(Registry("/tmp/kofcloud-wafu-" + crypto.randomHex(4) + ".json"))
+    assert(defaultState.bodyLimitBytes() == limitHttpBodyBytes(), "construtor delega na fonte unica")
 }
 
 test "waf corpo: Content-Length acima do teto e 413 KCF110 antes do relay", "wafbody" {

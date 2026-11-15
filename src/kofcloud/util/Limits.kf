@@ -280,8 +280,22 @@ Int limitServiceConns() {
 // Teto do corpo de uma requisicao publica (bytes). Excedeu -> 413 KCF110,
 // recusado no Edge ANTES do relay (nao consome stream nem toca no Agent).
 // Protege a maquina do usuario de uploads que ela nao pediu para aceitar.
+//
+// Recuo seguro, com fonte pura para o teste poder prova-lo (a config vem do
+// ambiente do processo — precedentes `serviceConnLimitFrom`/
+// `streamLimitFrom`/`httpRequestLimitFrom`): zero/negativo recai no default
+// porque o teto compara `declared > bodyLimit` — com 0, TODO pedido com
+// corpo vira 413 KCF110 e nenhum upload/formulario passa (so GET sem corpo
+// escapa): outage parcial silencioso por um typo na config.
+Int httpBodyLimitFrom(Int configured) {
+    if (configured <= 0) {
+        return 1048576
+    }
+    return configured
+}
+
 Int limitHttpBodyBytes() {
-    return config.int("kofcloud.limits.httpBodyBytes", 1048576)
+    return httpBodyLimitFrom(config.int("kofcloud.limits.httpBodyBytes", 1048576))
 }
 
 // Teto do `agent.log` local (bytes). Append que estourar corta o inicio
