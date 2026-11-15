@@ -130,6 +130,9 @@ Edge recusa), e um suspenso vira `FALHA dispositivo` apontando o
 | requisições por hostname | 100 / 60 s | `kofcloud.limits.httpRequests` / `httpWindowMs` | ✅ (429 `KCF107` + `Retry-After`) |
 | idle timeout do túnel | 120 s | `kofcloud.limits.tunnelIdleMs` | ✅ (cai sem frames úteis; PING não renova) |
 | idle timeout do stream | 30 s | `kofcloud.limits.streamIdleMs` | ✅ (`RESET IDLE_TIMEOUT`, sem matar a sessão) |
+| anel de auditoria | 100 eventos | `kofcloud.limits.auditEvents` | ✅ (o mais antigo sai; cadeia de hash por conta) |
+| anel de incidentes | 100 | `kofcloud.limits.incidents` | ✅ (o mais antigo resolvido sai primeiro) |
+| marcas de freeze | 1000 | `kofcloud.limits.freezeMarks` | ✅ (teto higiênico: acima dele o freeze seguinte poda só marcas inertes; **nunca recusa containment**) |
 
 Limites são lidos de `kof.config`/env (`KOF_KOFCLOUD_LIMITS_*`). Revogar um
 dispositivo libera a vaga; re-registrar o mesmo nome é idempotente e não
