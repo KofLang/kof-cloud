@@ -153,8 +153,22 @@ Int maxTunnelLineBytes() {
 // O Edge TCP nao expoe o IP de origem (sem `peer` em Conn), entao a chave e
 // o Host solicitado — que e exatamente o que o abuso (varredura de hostnames,
 // forca bruta em AUTHENTICATED) rotaciona menos.
+//
+// Recuo seguro, com fonte pura para o teste poder prova-lo (a config vem do
+// ambiente do processo — precedentes `serviceConnLimitFrom`/
+// `streamLimitFrom`): zero/negativo recai no default porque cota ZERO no
+// `security.rateLimit` recusa o PRIMEIRO pedido e todos os seguintes — todo
+// hostname ficaria em 429 KCF107 para sempre, a borda inteira fora do ar por
+// um typo na config.
+Int httpRequestLimitFrom(Int configured) {
+    if (configured <= 0) {
+        return 100
+    }
+    return configured
+}
+
 Int limitHttpRequests() {
-    return config.int("kofcloud.limits.httpRequests", 100)
+    return httpRequestLimitFrom(config.int("kofcloud.limits.httpRequests", 100))
 }
 
 Int limitHttpWindowMs() {

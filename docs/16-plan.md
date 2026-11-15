@@ -278,8 +278,10 @@ lento, liberação, isolamento, métrica, Hint; recuo do teto com mutação).
 
 **Estado (slice 1 — rate limit por hostname): ✅ implementado.**
 `security.rateLimit` (fixed-window, medido) fiado no Edge público:
-`kofcloud.limits.httpRequests` por hostname e janela
-(`kofcloud.limits.httpWindowMs`, defaults 100/60 s); excedeu → `429 KCF107`
+`kofcloud.limits.httpRequests` por hostname (default 100, **zero/inválido
+recaem no default via `httpRequestLimitFrom` pura — cota 0 recusaria o
+primeiro pedido de todo hostname, a borda inteira em 429**) e janela
+(`kofcloud.limits.httpWindowMs`, default 60 s); excedeu → `429 KCF107`
 + `Retry-After`, **antes** de rotear (não revela se o host existe, não
 consome túnel). Chave = hostname (o Edge TCP não expõe IP de origem) **já
 normalizado** por `hostOnly` — apara, remove a porta, abaixa a caixa e tira

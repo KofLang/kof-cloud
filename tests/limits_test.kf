@@ -150,4 +150,32 @@ test "rate limit: a janela em ms vira SEGUNDOS para o stdlib", "ratelimit-unit" 
     assert(security.rateLimit(key, 1, httpWindowSeconds(1000)) == false, "segunda barra")
     time.sleep(1200)
     assert(security.rateLimit(key, 1, httpWindowSeconds(1000)) == true, "libera apos a janela")
+
+    // Evidencia do perigo que o recuo evita: cota ZERO no stdlib recusa o
+    // primeiro pedido — e todos os seguintes (a borda inteira em 429 para
+    // sempre se a config de `httpRequests` fosse passada crua).
+    var zeroKey = "kofcloud-rlunit-zero-" + crypto.randomHex(4)
+    assert(security.rateLimit(zeroKey, 0, 1) == false, "cota zero recusa de cara")
+
+    // Recuo seguro do teto (fonte pura `httpRequestLimitFrom`): zero/negativo
+    // recaem no default 100, positivo passa.
+    assert(httpRequestLimitFrom(0) == 100, "zero recai no default")
+    assert(httpRequestLimitFrom(-1) == 100, "negativo recai no default")
+    assert(httpRequestLimitFrom(10) == 10, "valor positivo passa")
+    assert(httpRequestLimitFrom(1) == 1, "limite apertado passa")
+    assert(limitHttpRequests() == 100, "default 100 na fonte unica")
+
+    // O construtor do EdgeState delega na fonte: o hostname de sonda esgota
+    // as 100 requisicoes do default e a seguinte e barrada.
+    var defaultState = EdgeState(Registry("/tmp/kofcloud-rlunit-edge-" + crypto.randomHex(4) + ".json"))
+    var probeHost = "probe-" + crypto.randomHex(4) + ".example"
+    var served = 0
+    while (served < limitHttpRequests()) {
+        if (defaultState.checkHttpLimit(probeHost) == false) {
+            break
+        }
+        served = served + 1
+    }
+    assert(served == limitHttpRequests(), "construtor delega na fonte unica")
+    assert(defaultState.checkHttpLimit(probeHost) == false, "cota do default esgota")
 }
