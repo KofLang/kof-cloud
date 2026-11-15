@@ -88,6 +88,9 @@ test "suspensao: servico sai da rota e volta; health nao dessuspende", "abuse" {
     // travado; mutacao quebra). Recuo sem recuo silencioso: cap
     // nao-positivo recai no default em vez de desligar a trilha.
     assert(limitAuditEvents() == 100, "default anel 100 eventos")
+    assert(auditEventLimitFrom(0) == 100, "zero recai no default")
+    assert(auditEventLimitFrom(-2) == 100, "negativo recai no default")
+    assert(auditEventLimitFrom(50) == 50, "positivo passa direto")
 }
 
 test "suspensao: dispositivo recusado no tunel, nada removido", "abuse-device" {

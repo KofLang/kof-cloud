@@ -392,8 +392,17 @@ Int limitBackoffMaxMs() {
 // editar o produto, nao a config. Afinavel por config mas sem recuo
 // silencioso: zerado/negativo recai no default (anel desligado perderia a
 // trilha de abuso sem avisar; o default 100 cabe em disco e em memoria).
+// Fonte pura para o recuo ser provavel em teste (mesma receita do anel de
+// incidentes e do teto das marcas de freeze).
+Int auditEventLimitFrom(Int configured) {
+    if (configured <= 0) {
+        return 100
+    }
+    return configured
+}
+
 Int limitAuditEvents() {
-    return config.int("kofcloud.limits.auditEvents", 100)
+    return auditEventLimitFrom(config.int("kofcloud.limits.auditEvents", 100))
 }
 
 // Tamanho do anel de incidentes (os mais antigos ja resolvidos saem

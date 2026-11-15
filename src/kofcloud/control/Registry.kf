@@ -219,9 +219,6 @@ class Registry {
         var hash = auditEventHash(prev, at, actor, action, target)
         this.audit.add(AuditEvent(at, actor, action, target, prev, hash))
         var cap = limitAuditEvents()
-        if (cap <= 0) {
-            cap = 100
-        }
         while (this.audit.size > cap) {
             this.audit = this.audit.subList(1, this.audit.size)
         }
