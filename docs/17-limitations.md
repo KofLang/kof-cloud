@@ -164,10 +164,13 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   decodificado em **uma** passada antes do casamento (`wafDecodedContains`,
   sem reconstruir a string), então `%2e%2e%2f`, `union+select` e `%3Cscript`
   casam; dupla codificação (`%252e`) não é desfeita em cadeia, e base64
-  dentro de JSON/URL-encode aninhado continua fora. **Falta** um WAF mais
+  dentro de JSON/URL-encode aninhado continua fora. **Barra invertida casa
+  nos três lanes:** `..\` cru e a forma JSON-escapada `..\\` (que contém a
+  crua como prefixo) casam em path, corpo e header — sem normalizar a
+  string (concatenar em Kof é O(n²)); o pedido repassado segue byte a byte.
+  **Falta** um WAF mais
   profundo: regras por conta e corpo estruturalmente decodificado (JSON
-  base64). A barra invertida do JSON não é normalizada: traversal
-  JSON-escapado não casa no corpo nem no header (casa na query crua).
+  base64).
   Headers da plataforma ficam fora da varredura por desenho
   (`wafHeaderIgnored`): `Authorization` é credencial (nunca é lida nem ecoada
   pelo detector), `Host` é rota e `Content-Length`/`Connection` são do

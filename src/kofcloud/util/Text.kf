@@ -303,9 +303,11 @@ Bool wafDecodedContains(String text, String needle, Bool plusAsSpace) {
 }
 
 // Casamento literal (sem decodificar): a forma direta que ja existia.
-// `rawBackslash` liga o casamento de `..\` (barra invertida crua), que so
-// faz sentido onde o texto nao veio de JSON (path); corpo/header com JSON
-// escapado usariam `..\\`, que nao e traversal para o servidor local.
+// `rawBackslash` liga o casamento de `..\` (barra invertida crua). Vale
+// nos tres lanes (path, corpo, header): a forma JSON-escapada `..\\`
+// contem a crua como prefixo, e o servico local pode tratar `\` como
+// separador (Windows) — a visao do WAF e conservadora; o pedido repassado
+// segue byte a byte (nunca e normalizado).
 String wafSignatureLiteral(String target, Bool rawBackslash) {
     if (target.indexOf("..%2f") >= 0 || target.indexOf("..%5c") >= 0 || target.indexOf("../") >= 0) {
         return "traversal"
@@ -378,7 +380,7 @@ String wafDetectBodySignature(String body) {
     if (body.length == 0 || body.length > wafBodyInspectBytes()) {
         return ""
     }
-    return wafSignatureOf(body.toLowerCase(), false)
+    return wafSignatureOf(body.toLowerCase(), true)
 }
 
 String wafDetectSignature(String method, String path) {
@@ -410,7 +412,7 @@ String wafDetectHeadersSignature(List<String> headers) {
                 var value = line.substring(colon + 1).trim()
                 if (value.length > 0 && value.length <= wafBodyInspectBytes()) {
                     var lowerValue = value.toLowerCase()
-                    var hit = wafSignatureLiteral(lowerValue, false)
+                    var hit = wafSignatureLiteral(lowerValue, true)
                     if (hit.length == 0 && lowerValue.indexOf("%") >= 0) {
                         // Valor de header nao tem `+` significando espaco (isso
                         // e form-encoding de query/corpo) — so percent.

@@ -442,8 +442,9 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   (`Authorization` é credencial e nunca é lida, `Host` é rota,
   `Content-Length`/`Connection`/`X-Forwarded-For` são do protocolo). Path,
   corpo e header casam pela **mesma** lista (`wafSignatureOf`), então um padrão
-  novo vale nos três. Honestidade: a barra invertida do JSON não é normalizada
-  (traversal JSON-escapado não casa no corpo nem no header).
+  novo vale nos três. **Barra invertida ✅:** `..\` cru e a forma JSON-escapada
+  `..\\` (que contém a crua como prefixo) casam em path, corpo e header — sem
+  normalizar a string (O(n²) em Kof); o pedido repassado segue byte a byte.
   **Percent/form-encoded ✅ (uma passada):** quando o literal não casa e o
   texto tem `%` ou `+`, `wafSignatureDecoded` compara o **mesmo vocabulário**
   contra o texto decodificado — `%2e%2e%2f`, `..%5C`, `union+select`,

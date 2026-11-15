@@ -450,6 +450,14 @@ test "waf detectar: valores de header completam a cobertura", "wafheader-unit" {
     var encodedAgent = listOf<String>()
     encodedAgent.add("User-Agent: probe%3Cscript%3Ealert(1)")
     assert(wafDetectHeadersSignature(encodedAgent) == "xss-script", "xss percent no header")
+    // Barra invertida casa nos headers como no path/corpo: forma crua e
+    // JSON-escapada (o `..\\` contem `..\` como prefixo).
+    var backslashHeader = listOf<String>()
+    backslashHeader.add("Referer: http://x/..\\..\\secret")
+    assert(wafDetectHeadersSignature(backslashHeader) == "traversal", "traversal barra invertida no header")
+    var backslashJsonHeader = listOf<String>()
+    backslashJsonHeader.add("X-Data: {\"p\":\"..\\\\secret\"}")
+    assert(wafDetectHeadersSignature(backslashJsonHeader) == "traversal", "traversal JSON-escapado no header")
     // `+` literal no header nao vira espaco: "union+select" continua limpo.
     var plusHeader = listOf<String>()
     plusHeader.add("X-Plus: union+select")
@@ -463,9 +471,14 @@ test "waf detectar: corpo pequeno tambem e inspecionado", "wafbody-unit" {
     assert(wafDetectBodySignature("{\"u\":\"x' OR 1=1--\"}") == "sqli-tautology", "tautologia em JSON")
     assert(wafDetectBodySignature("{\"q\":\"<script>alert(1)</script>\"}") == "xss-script", "xss em JSON")
     assert(wafDetectBodySignature("file=../../etc/passwd") == "traversal", "traversal no corpo")
+    assert(wafDetectBodySignature("file=..\\..\\win\\system32") == "traversal", "traversal com barra invertida no corpo")
+    assert(wafDetectBodySignature("{\"p\":\"..\\\\secret\"}") == "traversal", "traversal JSON-escapado no corpo")
     assert(wafDetectBodySignature("a=%00b") == "nullbyte", "null byte no corpo")
     // Legitimo nao casa.
     assert(wafDetectBodySignature("{\"name\":\"Mel\",\"page\":2}") == "", "json legitimo")
+    // Path Windows legitimo com barra invertida nao e traversal (so `..\`
+    // com os dois pontos antes da barra conta).
+    assert(wafDetectBodySignature("{\"path\":\"C:\\\\Users\\\\mel\\\\docs\"}") == "", "path windows legitimo")
     assert(wafDetectBodySignature("") == "", "corpo vazio")
     // Acima do teto de inspecao nao e varrido (nao vira falso positivo caro).
     var big = ""
@@ -553,12 +566,24 @@ test "waf detectar: ataque no corpo (POST) conta e marca would-block", "wafdetec
     assert(responseHeader(evil, "X-KofCloud-WAF") == "would-block", "marca would-block")
     assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total_sqli_tautology") >= 1, "padrao do corpo contado")
 
+    // Traversal JSON-escapado no corpo (a barra invertida que 17-limitations
+    // listava como buraco): detectar conta traversal e segue.
+    var escaped = httpPostRaw(httpPort, "/submit", host, listOf<String>("Content-Type: application/json"), "{\"path\":\"..\\\\..\\\\etc\\\\passwd\"}")
+    assert(statusOf(escaped) == 200, "detectar nao bloqueia o escapado")
+    assert(responseHeader(escaped, "X-KofCloud-WAF") == "would-block", "escapado marcado")
+    assert(metricValue(observability.metrics(), "kofcloud_edge_waf_detected_total_traversal") >= 1, "traversal do escapado contado")
+
     // Enforce: o mesmo POST vira 403 KCF109 sem chegar ao servico local.
     edgeState.setWafEnforce(true)
     var blocked = httpPostRaw(httpPort, "/submit", host, listOf<String>("Content-Type: application/json"), "{\"q\":\"<script>alert(1)</script>\"}")
     assert(statusOf(blocked) == 403, "enforce bloqueia corpo")
     assert(bodyOf(blocked).indexOf("KCF109") >= 0, "KCF109")
     assert(responseHeader(blocked, "X-KofCloud-WAF") == "blocked", "marca blocked")
+
+    // Enforce no corpo com barra invertida crua: o mesmo lugar da borda.
+    var blockedBackslash = httpPostRaw(httpPort, "/submit", host, listOf<String>("Content-Type: application/json"), "file=..\\..\\etc\\passwd")
+    assert(statusOf(blockedBackslash) == 403, "enforce bloqueia barra invertida")
+    assert(responseHeader(blockedBackslash, "X-KofCloud-WAF") == "blocked", "barra invertida bloqueada")
 
     // Parada limpa.
     writeTextTo(agentStop, "stop")
