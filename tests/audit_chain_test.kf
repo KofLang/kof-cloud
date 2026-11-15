@@ -1,3 +1,4 @@
+import kofcloud.cli.Commands
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.model.Audit
@@ -198,4 +199,71 @@ test "cadeia: HTTP verify fica integra com duas contas ativas", "chain" {
     assert(bodyOf(melVerify).indexOf("\"ok\":\"true\"") >= 0, "mel integra: " + bodyOf(melVerify))
     var anaVerify = httpGetToken(controlPort, "/v1/audit/verify", anaToken)
     assert(bodyOf(anaVerify).indexOf("\"ok\":\"true\"") >= 0, "ana integra: " + bodyOf(anaVerify))
+}
+
+test "filtro de audit: --action e --tail na CLI (puros)", "chain-filter" {
+    // Medido: `kof cloud audit` despejava ate 100 eventos sem filtro —
+    // achar "quando o device foi revogado" era varredura visual. O filtro
+    // vive na CLI (sem API nova): acao casa exato (vocabulario do fio, sem
+    // lowercase escondendo typo) e tail corta os mais RECENTES (a ordem do
+    // anel e antigo -> novo).
+    var events = listOf(
+        AuditEntry("1", "account:mel", "account.created", "acc-1", "", "h1"),
+        AuditEntry("2", "account:mel", "device.registered", "acc-1/dev-1", "", "h2"),
+        AuditEntry("3", "account:mel", "service.published", "acc-1/svc-1", "", "h3"),
+        AuditEntry("4", "account:mel", "device.revoked", "acc-1/dev-1", "", "h4")
+    )
+
+    // Filtro de acao: exato, sem lowercase.
+    var revoked = auditFilterAction(events, "device.revoked")
+    assert(revoked.size == 1, "uma revocacao")
+    assert(revoked.get(0).at == "4", "o evento certo")
+    assert(auditFilterAction(events, "device.Revoked").size == 0, "casing nao perdoa typo")
+    assert(auditFilterAction(events, "device.").size == 0, "prefixo nao casa (acao e exata)")
+    assert(auditFilterAction(events, "nao.existe").size == 0, "acao inexistente: vazio")
+
+    // Tail: os mais recentes.
+    var tail2 = auditTail(events, 2)
+    assert(tail2.size == 2, "duas no tail")
+    assert(tail2.get(0).at == "3", "mais recente velho")
+    assert(tail2.get(1).at == "4", "o mais recente")
+    assert(auditTail(events, 0).size == 4, "tail 0 = tudo")
+    assert(auditTail(events, -1).size == 4, "negativo = tudo")
+    assert(auditTail(events, 99).size == 4, "acima do tamanho = tudo")
+
+    // Combinacao: filtra acao DEPOIS tail (ordem real do cmdAudit).
+    var combined = auditTail(auditFilterAction(events, "device.registered"), 5)
+    assert(combined.size == 1, "acao + tail")
+    assert(combined.get(0).at == "2", "o evento certo")
+
+    // Linha inclui o ator (antes "quem fez?" exigia a API crua).
+    var line = auditLine(events.get(3))
+    assert(line.indexOf("device.revoked") >= 0, "acao na linha")
+    assert(line.indexOf("account:mel") >= 0, "ator na linha")
+    assert(line.indexOf("acc-1/dev-1") >= 0, "alvo na linha")
+}
+
+test "filtro de audit: cmdAudit liga as flags nas funcoes puras (trava de fonte)", "chain-filter" {
+    // Os testes puros cobrem as funcoes; esta trava impede a regressao que
+    // realmente importa: o `cmdAudit` deixar de APLICAR os filtros (o
+    // operador pediria --action e receberia o dump inteiro, em silencio).
+    var raw = File("src/kofcloud/cli/Commands.kf").readText()
+    var text = ""
+    if (raw != null) {
+        text = raw
+    }
+    if (text.length == 0) {
+        return
+    }
+    var start = text.indexOf("Int cmdAudit(")
+    var end = text.indexOf("// ---- helpers de control plane ----", start)
+    if (end < 0) {
+        end = text.length
+    }
+    var body = text.substring(start, end)
+    assert(body.indexOf("auditFilterAction(") >= 0, "cmdAudit aplica o filtro de acao")
+    assert(body.indexOf("auditTail(") >= 0, "cmdAudit aplica o tail")
+    assert(body.indexOf("auditLine(") >= 0, "cmdAudit imprime a linha com ator")
+    assert(body.indexOf("flagMissingValue(args, \"--action\")") >= 0, "--action solta barra")
+    assert(body.indexOf("flagDuplicated(args, \"--action\")") >= 0, "--action repetida barra")
 }

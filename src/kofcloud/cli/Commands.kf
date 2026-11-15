@@ -229,7 +229,7 @@ List<String> valueFlags() {
         "--control", "--control-port", "--tunnel-port", "--http-port",
         "--state", "--waf", "--tls-cert", "--tls-key", "--service", "--file",
         "--password", "--from", "--to", "--resolve", "--secret",
-        "--allow-method", "--allow-path"
+        "--allow-method", "--allow-path", "--action"
     )
 }
 
@@ -2412,6 +2412,39 @@ String sbomText(List<String> modules, List<String> contents) {
 // Com --sbom: inventario local dos fontes (sem login, sem rede) — Fase 19
 // slice 1 parcial. Local por desenho: o SBOM descreve o que esta no disco,
 // nao o que o servidor diz que esta.
+// Eventos que sobrevivem ao filtro de acao (`--action`): casing exato e o
+// vocabulario do fio (device.revoked, service.published...) — sem lowercase
+// escondendo typo. Puro, sem rede nem HOME.
+List<AuditEntry> auditFilterAction(List<AuditEntry> events, String action) {
+    var out = listOf<AuditEntry>()
+    for (var event in events) {
+        if (event.action == action) {
+            out.add(event)
+        }
+    }
+    return out
+}
+
+// Ultimas `n` linhas da trilha FILTRADA (a ordem do anel e antigo -> novo,
+// entao "tail" significa os eventos mais recentes). `n` <= 0 ou acima do
+// tamanho devolve tudo. Puro, sem rede nem HOME.
+List<AuditEntry> auditTail(List<AuditEntry> events, Int n) {
+    if (n <= 0) {
+        return events
+    }
+    var size = events.size
+    if (n >= size) {
+        return events
+    }
+    return events.subList(size - n, size)
+}
+
+// Linha do evento para o `audit`: mesmo formato de sempre, com o ator —
+// sem ele, "quem revogou?" exigia cruzar com a resposta crua da API.
+String auditLine(AuditEntry event) {
+    return event.at + "  " + event.actor + "  " + event.action + "  " + event.target
+}
+
 Int cmdAudit(List<String> args) {
     if (hasFlag(args, "--sbom")) {
         if (extraPositional(args, 0) || flagDuplicated(args, "--sbom")) {
@@ -2456,8 +2489,19 @@ Int cmdAudit(List<String> args) {
             return 1
         }
     }
-    if (extraPositional(args, 0)) {
-        println("uso: kof cloud audit [--sbom] [--verify]")
+    // --action/--tail: filtrar na CLI (sem API nova). O anel tem 100
+    // eventos; achar "quando o device foi revogado" num dump de 100 linhas
+    // era varredura visual. Solta/repetida barra no uso (mesma regra de
+    // --tail do logs); valor invalido no tail tambem.
+    if (extraPositional(args, 0) || flagMissingValue(args, "--action") || flagDuplicated(args, "--action") || flagMissingValue(args, "--tail") || flagDuplicated(args, "--tail")) {
+        println("uso: kof cloud audit [--sbom] [--verify] [--action <acao>] [--tail <n>]")
+        return 1
+    }
+    var actionFilter = flagValue(args, "--action").trim()
+    var tailRaw = flagValue(args, "--tail").trim()
+    var tail = parseIntBounded(tailRaw, -1, 2147483647)
+    if (tailRaw.length > 0 && tail <= 0) {
+        println("tail invalido: use um numero positivo (ex: --tail 20)")
         return 1
     }
     var session = loadSession()
@@ -2468,12 +2512,22 @@ Int cmdAudit(List<String> args) {
     try {
         var raw = requireOk(http.get(session.controlUrl + "/v1/audit", authHeader(session.token)))
         var events = json.decode<List<AuditEntry>>(raw)
+        if (actionFilter.length > 0) {
+            events = auditFilterAction(events, actionFilter)
+        }
+        if (tail > 0) {
+            events = auditTail(events, tail)
+        }
         if (events.size == 0) {
-            println("sem eventos")
+            if (actionFilter.length > 0) {
+                println("sem eventos com acao " + actionFilter)
+            } else {
+                println("sem eventos")
+            }
             return 0
         }
         for (var event in events) {
-            println(event.at + "  " + event.action + "  " + event.target)
+            println(auditLine(event))
         }
         return 0
     } catch (String e) {
