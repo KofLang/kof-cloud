@@ -82,7 +82,7 @@ test "registry: limite de servicos e por dispositivo, nao por conta" {
     assert(other.name == "api", "cada dispositivo tem sua cota")
 }
 
-test "session: limite de streams simultaneos e libera ao fechar" {
+test "session: limite de streams simultaneos e libera ao fechar", "streams-limit" {
     var session = TunnelSession("s1", "d1", "a1", "")
     session.setMaxStreams(2)
     var a = session.openStream()
@@ -95,6 +95,30 @@ test "session: limite de streams simultaneos e libera ao fechar" {
     session.closeStream(a)
     assert(session.atCapacity() == false, "vaga liberada")
     assert(session.openStream().length > 0, "abre apos liberar")
+
+    // Recuo seguro do teto (fonte pura `streamLimitFrom`): zero/negativo
+    // recai no default 128 — com o valor cru, `0` recusaria TODO OPEN
+    // (atCapacity com 0 >= 0) e nenhum relay passaria, no Edge (429) nem
+    // no Agent (RESET LIMIT_EXCEEDED).
+    assert(streamLimitFrom(0) == 128, "zero recai no default")
+    assert(streamLimitFrom(-3) == 128, "negativo recai no default")
+    assert(streamLimitFrom(10) == 10, "valor positivo passa")
+    assert(streamLimitFrom(1) == 1, "limite apertado passa")
+    assert(limitStreams() == 128, "default 128 na fonte unica")
+
+    // O construtor da sessao delega na fonte: as 128 vagas do default abrem
+    // e a seguinte recusa.
+    var defaults = TunnelSession("sx", "dx", "ax", "")
+    var cap = limitStreams()
+    var opened = 0
+    while (opened < cap) {
+        if (defaults.openStream().length == 0) {
+            break
+        }
+        opened = opened + 1
+    }
+    assert(opened == cap, "construtor delega na fonte unica")
+    assert(defaults.openStream().length == 0, "teto do default fecha")
 }
 
 test "rate limit: a janela em ms vira SEGUNDOS para o stdlib", "ratelimit-unit" {

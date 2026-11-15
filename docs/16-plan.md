@@ -52,7 +52,9 @@ no E1/E2; a fase formaliza os limites por dispositivo.
 
 **Estado: ✅ implementado.** Limites aplicados: `kofcloud.limits.devices`
 (dispositivos ativos por conta), `kofcloud.limits.services` (por dispositivo) e
-`kofcloud.limits.streams` (por túnel, com `429`/`RESET LIMIT_EXCEEDED`).
+`kofcloud.limits.streams` (por túnel, default 128, **zero/inválido recaem no
+default via `streamLimitFrom` pura — 0 recusaria todo OPEN**, com
+`429`/`RESET LIMIT_EXCEEDED`).
 Prova: `tests/limits_test.kf` (6 testes) + `tests/e2e_multiservice_test.kf`
 (3 serviços no mesmo túnel, com isolamento de falha).
 

@@ -21,8 +21,22 @@ Int limitServices() {
     return config.int("kofcloud.limits.services", 10)
 }
 
+// Streams simultaneos por tunel. Fonte pura para o recuo ser provavel em
+// teste (a config vem do ambiente do processo — precedente
+// `serviceConnLimitFrom`): zero/negativo recai no default porque aqui zero
+// NAO significa "sem limite" — e o MAXIMO de streams abertos, entao 0 faz
+// `atCapacity()` responder sempre verdade e TODO OPEN ser recusado (429 no
+// Edge, RESET LIMIT_EXCEEDED no Agent): um typo na config tirava o relay do
+// ar inteiro em silencio.
+Int streamLimitFrom(Int configured) {
+    if (configured <= 0) {
+        return 128
+    }
+    return configured
+}
+
 Int limitStreams() {
-    return config.int("kofcloud.limits.streams", 128)
+    return streamLimitFrom(config.int("kofcloud.limits.streams", 128))
 }
 
 // Profundidade da fila de entrada POR STREAM (itens ainda nao consumidos).
