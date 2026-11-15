@@ -421,3 +421,39 @@ test "metricas: gauge de conexoes publicas abertas acompanha acquire/release", "
     assert(metricValue(expo, "kofcloud_edge_http_connections_open") == 1, "recusa nao soma")
     assert(state2.publicConnCount() == 1, "contador interno coerente")
 }
+
+test "metricas: gauge de vagas de relay por servico (total sem rotulo)", "metrics-relay-conns" {
+    // Mesma classe do gauge de conexoes publicas: as vagas de relay por
+    // servico (`serviceConns`, mapa no EdgeState) eram mantidas e nunca
+    // exportadas — o gargalo no servico local (429 KCF108) era invisivel
+    // nas metricas. Total SOMADO, sem rotulo por serviceId: serviceId e
+    // cardinalidade do operador e o export e agregado.
+    var registry = Registry("/tmp/kofcloud-metrelay-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+
+    var expo = observability.metrics()
+    assert(metricHas(expo, "kofcloud_edge_tunnel_service_conns_open"), "gauge existe")
+    assert(metricValue(expo, "kofcloud_edge_tunnel_service_conns_open") == 0, "zera sem relay")
+
+    // Dois servicos com vagas abertas: total soma os dois.
+    assert(edgeState.tryAcquireServiceConn("svc-a"), "vaga a")
+    assert(edgeState.tryAcquireServiceConn("svc-a"), "vaga a 2")
+    assert(edgeState.tryAcquireServiceConn("svc-b"), "vaga b")
+    expo = observability.metrics()
+    assert(metricValue(expo, "kofcloud_edge_tunnel_service_conns_open") == 3, "a(2) + b(1) = 3")
+
+    // Liberacao por servico: desce o total.
+    edgeState.releaseServiceConn("svc-a")
+    expo = observability.metrics()
+    assert(metricValue(expo, "kofcloud_edge_tunnel_service_conns_open") == 2, "a(1) + b(1)")
+
+    // Zera quando o ultimo de cada servico sai (o mapa remove a chave).
+    edgeState.releaseServiceConn("svc-a")
+    edgeState.releaseServiceConn("svc-b")
+    expo = observability.metrics()
+    assert(metricValue(expo, "kofcloud_edge_tunnel_service_conns_open") == 0, "zera")
+
+    // Isolamento de contagem continua valendo (o gauge le o mesmo mapa).
+    assert(edgeState.serviceConnOpen("svc-a") == 0, "a zerado")
+    assert(edgeState.serviceConnOpen("svc-b") == 0, "b zerado")
+}

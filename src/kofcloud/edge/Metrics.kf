@@ -225,6 +225,15 @@ void notePublicConnsOpen(Int open) {
     observability.gauge("kofcloud_edge_http_connections_open", open)
 }
 
+// Vagas de relay POR SERVICO em curso, somadas (gauge de instante, sem
+// rotulo — serviceId e cardinalidade do operador). Cruzado com o gauge de
+// conexoes publicas diz se o gargalo esta na borda (publicas sobem, relay
+// acompanha) ou no servico local (relay cravado no teto com 429 KCF108).
+// Alimentado nos DOIS lados da vaga (acquire/release em `EdgeState`).
+void noteServiceConnsOpen(Int open) {
+    observability.gauge("kofcloud_edge_tunnel_service_conns_open", open)
+}
+
 // Fila de entrada do stream estourou (consumidor lento): o stream e recusado
 // com RESET LIMIT_EXCEEDED e o tunel segue. Conta o evento, nunca o conteudo.
 void noteStreamQueueOverflow() {

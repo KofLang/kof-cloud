@@ -156,6 +156,15 @@ class EdgeState {
         return parseIntSafe(current, 0)
     }
 
+    // Total de vagas de relay em curso (todas os servicos), para o gauge.
+    Int serviceConnsTotal() {
+        var total = 0
+        for (var serviceId in this.serviceConns.keys()) {
+            total = total + this.serviceConnOpen(serviceId)
+        }
+        return total
+    }
+
     // Tenta reservar uma vaga de relay para o servico. False = cheio (429).
     Bool tryAcquireServiceConn(String serviceId) {
         if (this.serviceConnOpen(serviceId) >= this.serviceConnLimit) {
@@ -163,6 +172,7 @@ class EdgeState {
         }
         var opened = this.serviceConnOpen(serviceId)
         this.serviceConns.put(serviceId, intToString(opened + 1))
+        noteServiceConnsOpen(this.serviceConnsTotal())
         return true
     }
 
@@ -173,7 +183,7 @@ class EdgeState {
         } else {
             this.serviceConns.remove(serviceId)
         }
-
+        noteServiceConnsOpen(this.serviceConnsTotal())
     }
 
     // Permite aos testes fixarem o limite sem config de processo.
