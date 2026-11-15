@@ -392,11 +392,14 @@ test "metricas: gauge de conexoes publicas abertas acompanha acquire/release", "
     var registry = Registry("/tmp/kofcloud-metopen-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
 
+    // Gauge frio nao aparece na exposicao (vale -1 ate a primeira emissao —
+    // ver `metricHas`/`metrics-tunnel`): agir antes de assertar, nunca ler
+    // exposição fria. O próprio acquire já prova que o gauge existe.
+    assert(edgeState.tryAcquirePublicConn(), "vaga 1 alimenta o gauge")
     var expo = observability.metrics()
     assert(metricHas(expo, "kofcloud_edge_http_connections_open"), "gauge existe")
 
-    // Duas vagas reservadas: gauge acompanha para cima.
-    assert(edgeState.tryAcquirePublicConn(), "vaga 1")
+    // Segunda vaga reservada: gauge acompanha para cima.
     assert(edgeState.tryAcquirePublicConn(), "vaga 2")
     expo = observability.metrics()
     assert(metricValue(expo, "kofcloud_edge_http_connections_open") == 2, "duas abertas")
