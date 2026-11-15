@@ -45,7 +45,7 @@ String usageText() {
     out = out + "  daemon install|status|uninstall   (systemd --user, sem root)\n"
     out = out + "  doctor [--file " + defaultManifestPath() + "] [--tls-cert <pem>]       (diagnostico: login, control, device, tunel, tls, servicos)\n"
     out = out + "  audit [--sbom]              (trilha de auditoria da conta; --sbom = inventario local dos fontes)\n"
-    out = out + "  scan [--file <caminho>] [--tls-cert <pem>]  (segredos no manifesto/ambiente + PEM expirando; exit 1 com achado)\n"
+    out = out + "  scan [--file <caminho>] [--tls-cert <pem>]  (segredos no manifesto/ambiente, PEM expirando e .kfs commitado no repo; exit 1 com achado)\n"
     out = out + "  webhook set <url> --secret <s> | show | remove | test   (incidentes; HMAC-SHA256)\n"
     out = out + "  freeze service|device <nome|id>     (contencao: suspende + revoga credenciais + incidente)\n"
     out = out + "  freeze account                      (a conta inteira: devices + servicos + kfs_)\n"

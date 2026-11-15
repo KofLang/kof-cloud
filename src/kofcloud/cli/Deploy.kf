@@ -962,6 +962,24 @@ Int cmdDown(List<String> args) {
 // le o manifesto e acusa credencial literal ANTES do commit/deploy — sem
 // login, sem rede. Local por desenho: o que esta no disco e o que pode
 // vazar no git. Exit 1 com achado (falha o CI), 0 limpo.
+// Linha de achado para um arquivo de credencial commitado no repo. Pura:
+// recebe o caminho ja relativo ao repo e devolve o aviso sem o valor (o
+// scan nunca imprime segredo). `git rm --cached` mantem o arquivo local e
+// tira do historico FUTURO (o valor ja no historico continua vazado —
+// rotacionar e obrigatorio; o aviso diz isso).
+String scanKfsFinding(String trackedPath) {
+    var name = trackedPath
+    var slash = trackedPath.lastIndexOf("/")
+    if (slash >= 0) {
+        name = trackedPath.substring(slash + 1)
+    }
+    var stem = name
+    if (stem.endsWith(".kfs")) {
+        stem = stem.substring(0, stem.length - 4)
+    }
+    return "repo: credencial commitada: " + trackedPath + " — tire do git (git rm --cached) e rotacione: kof cloud service rotate " + stem + " --ttl 24 (o valor no historico segue vazado)"
+}
+
 Int cmdScan(List<String> args) {
     if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file") || flagMissingValue(args, "--tls-cert") || flagDuplicated(args, "--tls-cert")) {
         println("uso: kof cloud scan [--file <caminho>] [--tls-cert <pem>]")
@@ -995,8 +1013,44 @@ Int cmdScan(List<String> args) {
             }
         }
     }
+    // 4) Credenciais commitadas no repo (`.kfs` do rotate --all vazado):
+    //    o scan roda no CI a cada push, e um `.kfs` no indice (ou pronto
+    //    para o `git add .`) e exatamente o que ele existe para pegar.
+    //    Lista via `git ls-files` no diretorio do manifesto; git ausente ou
+    //    fora de repo = sem checagem (nunca inventa achado). Nunca le ou
+    //    imprime o valor do arquivo.
+    var repoDir = parentDir(path)
+    if (repoDir.length == 0) {
+        repoDir = "."
+    }
+    var gitOut = ""
+    try {
+        // `--cached` pega o ja commitado/staged; `--others --exclude-standard`
+        // pega o novo que um `git add .` pegaria (o ignore do .gitignore e
+        // respeitado — o que o operador excluiu de proposito nao e achado).
+        gitOut = process.run("git", "-C", repoDir, "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.kfs").stdout
+    } catch (String e) {
+        // git ausente: sem checagem, sem achado inventado.
+    }
+    var cursor = 0
+    while (cursor < gitOut.length) {
+        var nl = gitOut.indexOf("\n", cursor)
+        var lineEnd = gitOut.length
+        if (nl >= 0) {
+            lineEnd = nl
+        }
+        var tracked = gitOut.substring(cursor, lineEnd).trim()
+        if (tracked.length > 0) {
+            findings.add(scanKfsFinding(tracked))
+        }
+        if (nl < 0) {
+            cursor = gitOut.length
+        } else {
+            cursor = nl + 1
+        }
+    }
     if (findings.size == 0) {
-        println("scan ok: nenhum segredo no manifesto/ambiente e nenhum PEM expirando")
+        println("scan ok: nenhum segredo no manifesto/ambiente, nenhum PEM expirando e nenhuma credencial commitada")
         return 0
     }
     for (var finding in findings) {

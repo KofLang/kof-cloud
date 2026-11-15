@@ -68,3 +68,34 @@ test "scan: usage documenta --tls-cert", "scan-usage" {
     assert(help.indexOf("scan [--file") >= 0, "scan documentado")
     assert(help.indexOf("--tls-cert") >= 0, "scan anuncia --tls-cert")
 }
+test "scan: credencial .kfs commitada no repo e achado (e2e com git real)", "scan-kfs" {
+    // Medido: o `rotate --all` grava `<nome>.kfs` com o valor em claro; se o
+    // operador rodar o comando dentro de um repo (ou copiar os arquivos para
+    // um), o `git add .` commita o segredo — e o scan, que roda no CI a cada
+    // push, nao olhava `.kfs` nenhum. Agora lista via `git ls-files` no
+    // diretorio do manifesto; git ausente/fora de repo = sem checagem.
+    var repo = "/tmp/kofcloud-scan-repo-" + crypto.randomHex(4)
+    Directory(repo).createDirectories()
+    var setup = process.run("git", "-C", repo, "init", "-q")
+    assert(setup.exitCode == 0, "repo de teste iniciado")
+    writeTextTo(repo + "/kofcloud.json", "{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
+    writeTextTo(repo + "/site.kfs", "kfs_NUNCA-imprima-isto-0123456789abcdef")
+
+    // O scan roda com o caminho ABSOLUTO do manifesto: `git -C <dir>` acha o
+    // repo a partir do diretorio do manifesto.
+    var withLeak = cmdScan(listOf("--file", repo + "/kofcloud.json"))
+    assert(withLeak == 1, "kfs commitado -> exit 1")
+
+    // A linha de achado: nome do arquivo, dica de rotacao pelo stem, sem valor.
+    var finding = scanKfsFinding("site.kfs")
+    assert(finding.indexOf("site.kfs") >= 0, "nomeia o arquivo")
+    assert(finding.indexOf("kfs_") < 0, "nunca carrega o valor")
+    assert(finding.indexOf("rotate site --ttl 24") >= 0, "dica com o stem")
+
+    // Limpo: sem .kfs rastreado, scan segue os passos de sempre.
+    var cleanDir = "/tmp/kofcloud-scan-clean-" + crypto.randomHex(4)
+    Directory(cleanDir).createDirectories()
+    process.run("git", "-C", cleanDir, "init", "-q")
+    writeTextTo(cleanDir + "/kofcloud.json", "{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
+    assert(cmdScan(listOf("--file", cleanDir + "/kofcloud.json")) == 0, "repo sem kfs passa")
+}
