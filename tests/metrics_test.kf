@@ -431,8 +431,14 @@ test "metricas: gauge de vagas de relay por servico (total sem rotulo)", "metric
     var registry = Registry("/tmp/kofcloud-metrelay-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
 
+    // Gauge frio nao aparece na exposicao (vale -1 ate a primeira emissao —
+    // mesmo idioma do `metrics-conns-open`): agir antes de assertar, nunca
+    // ler exposicao fria. O proprio acquire ja alimenta o gauge.
+    assert(edgeState.tryAcquireServiceConn("svc-a"), "vaga a alimenta o gauge")
     var expo = observability.metrics()
     assert(metricHas(expo, "kofcloud_edge_tunnel_service_conns_open"), "gauge existe")
+    edgeState.releaseServiceConn("svc-a")
+    expo = observability.metrics()
     assert(metricValue(expo, "kofcloud_edge_tunnel_service_conns_open") == 0, "zera sem relay")
 
     // Dois servicos com vagas abertas: total soma os dois.
