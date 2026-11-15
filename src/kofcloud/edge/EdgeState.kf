@@ -129,12 +129,14 @@ class EdgeState {
             return false
         }
         this.publicConns = this.publicConns + 1
+        notePublicConnsOpen(this.publicConns)
         return true
     }
 
     void releasePublicConn() {
         if (this.publicConns > 0) {
             this.publicConns = this.publicConns - 1
+            notePublicConnsOpen(this.publicConns)
         }
     }
 

@@ -382,3 +382,39 @@ test "metricas: todo KCF passado ao noteHttpFinished tem sufixo (invariante de f
         assert(body.indexOf("\"" + code + "\"") < 0, code + " nao deveria ter ramo proprio")
     }
 }
+
+test "metricas: gauge de conexoes publicas abertas acompanha acquire/release", "metrics-conns-open" {
+    // Saturacao da borda era invisivel: `publicConnCount()` existia no
+    // EdgeState mas nada exportava. Agora o gauge
+    // `kofcloud_edge_http_connections_open` e alimentado nos DOIS lados da
+    // vaga (acquire/release), igual ao gauge de sessoes de tunel — o
+    // operador ve a borda enchendo antes do 503 KCF117.
+    var registry = Registry("/tmp/kofcloud-metopen-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+
+    var expo = observability.metrics()
+    assert(metricHas(expo, "kofcloud_edge_http_connections_open"), "gauge existe")
+
+    // Duas vagas reservadas: gauge acompanha para cima.
+    assert(edgeState.tryAcquirePublicConn(), "vaga 1")
+    assert(edgeState.tryAcquirePublicConn(), "vaga 2")
+    expo = observability.metrics()
+    assert(metricValue(expo, "kofcloud_edge_http_connections_open") == 2, "duas abertas")
+
+    // Liberada uma: desce. Liberada a outra: volta ao base.
+    edgeState.releasePublicConn()
+    expo = observability.metrics()
+    assert(metricValue(expo, "kofcloud_edge_http_connections_open") == 1, "uma apos liberar")
+    edgeState.releasePublicConn()
+    expo = observability.metrics()
+    assert(metricValue(expo, "kofcloud_edge_http_connections_open") == 0, "zera com todas liberadas")
+
+    // Recusa no teto nao muda o gauge (a vaga nao foi reservada).
+    var state2 = EdgeState(registry)
+    state2.setPublicConnLimit(1)
+    assert(state2.tryAcquirePublicConn(), "primeira passa")
+    assert(state2.tryAcquirePublicConn() == false, "segunda recusa (teto 1)")
+    expo = observability.metrics()
+    assert(metricValue(expo, "kofcloud_edge_http_connections_open") == 1, "recusa nao soma")
+    assert(state2.publicConnCount() == 1, "contador interno coerente")
+}

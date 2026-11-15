@@ -216,6 +216,15 @@ void notePublicConnRefused() {
     observability.counter("kofcloud_edge_http_connections_refused_total")
 }
 
+// Conexoes publicas EM CURSO (gauge de instante): saturacao da borda visivel
+// — subindo junto de latencia significa fila de clientes lentos; cravado no
+// teto com 503 significa `publicConnLimit` pequeno demais. Alimentado nos
+// DOIS lados da vaga (acquire/release em `EdgeState`), igual ao gauge de
+// sessoes de tunel. Sem cardinalidade por cliente: so o numero.
+void notePublicConnsOpen(Int open) {
+    observability.gauge("kofcloud_edge_http_connections_open", open)
+}
+
 // Fila de entrada do stream estourou (consumidor lento): o stream e recusado
 // com RESET LIMIT_EXCEEDED e o tunel segue. Conta o evento, nunca o conteudo.
 void noteStreamQueueOverflow() {
