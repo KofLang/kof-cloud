@@ -51,7 +51,9 @@ Um Agent, N hostnames, N portas locais, todos no mesmo túnel. Ja coberto
 no E1/E2; a fase formaliza os limites por dispositivo.
 
 **Estado: ✅ implementado.** Limites aplicados: `kofcloud.limits.devices`
-(dispositivos ativos por conta), `kofcloud.limits.services` (por dispositivo) e
+(dispositivos ativos por conta, default 5, **zero/inválido recaem no
+default via `deviceLimitFrom` pura — com o valor cru `count >= 0`
+congelava TODO cadastro novo em TODA conta**), `kofcloud.limits.services` (por dispositivo, default 10, **mesmo recuo via `serviceLimitFrom` pura**) e
 `kofcloud.limits.streams` (por túnel, default 128, **zero/inválido recaem no
 default via `streamLimitFrom` pura — 0 recusaria todo OPEN**, com
 `429`/`RESET LIMIT_EXCEEDED`).

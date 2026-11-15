@@ -12,6 +12,18 @@ String limitTestPath(String name) {
 }
 
 test "registry: limite de dispositivos ativos por conta" {
+    // Recuo seguro dos tetos (fontes puras `deviceLimitFrom`/
+    // `serviceLimitFrom`): zero/negativo recaem no default — com o valor
+    // cru, `0` congelava TODO cadastro novo (`count >= 0` sempre verdade),
+    // em TODA conta, silencioso.
+    assert(deviceLimitFrom(0) == 5, "zero recai no default")
+    assert(deviceLimitFrom(-2) == 5, "negativo recai no default")
+    assert(deviceLimitFrom(3) == 3, "valor positivo passa")
+    assert(limitDevices() == 5, "default 5 na fonte unica")
+    assert(serviceLimitFrom(0) == 10, "zero recai no default")
+    assert(serviceLimitFrom(-1) == 10, "negativo recai no default")
+    assert(serviceLimitFrom(2) == 2, "valor positivo passa")
+    assert(limitServices() == 10, "default 10 na fonte unica")
     var registry = Registry(limitTestPath("devices"))
     registry.setLimits(2, 10)
     var account = registry.createAccount("mel", "m@e.com", "segredo")

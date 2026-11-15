@@ -32,7 +32,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | `edge/` | listener de túnel, router por `Host`, HTTP front, relay, parada limpa | `e2e_test.kf` |
 | `agent/` | connect, reconexão com backoff, heartbeat, health, relay, parada | `e2e_test.kf`, `backoff_test.kf` |
 | `cli/` | dispatcher + comandos (`login`, `connect`, `publish`, …) | aceitação manual |
-| limites | `util/Limits.kf` + enforcement no registry/sessão; tetos de capacidade com recuo seguro (`serviceConnLimitFrom`/`streamLimitFrom`/`httpRequestLimitFrom`/`httpBodyLimitFrom`/`publicConnLimitFrom` puras: zero/inválido recaem no default — 0 viraria outage total/parcial de relay/borda silencioso) | `limits_test.kf`, `conns_test.kf`, `waf_body_test.kf` |
+| limites | `util/Limits.kf` + enforcement no registry/sessão; tetos de capacidade E de cadastro com recuo seguro (`deviceLimitFrom`/`serviceLimitFrom`/`serviceConnLimitFrom`/`streamLimitFrom`/`httpRequestLimitFrom`/`httpBodyLimitFrom`/`publicConnLimitFrom` puras: zero/inválido recaem no default — 0 viraria outage total/parcial de relay/borda ou freeze de TODO cadastro, silencioso) | `limits_test.kf`, `conns_test.kf`, `waf_body_test.kf` |
 | múltiplos serviços | roteamento por `Host` no mesmo túnel | `e2e_multiservice_test.kf` |
 | credencial de serviço | `kfs_` emitido no control plane, validado no Edge; revogacao por token (`token-revoke`) + inventario sem valores (`token-list`) + expiracao opcional (`--ttl`, `KCF062`) | `service_token_test.kf`, `e2e_authenticated_test.kf` |
 | erros estáveis (R6) | `model/Errors.kf`: `KCFnnn` no control plane e no Edge + `Hint:` na CLI | `errors_test.kf` |

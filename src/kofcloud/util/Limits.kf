@@ -13,12 +13,26 @@ package kofcloud.util
 // tamanho do anel de auditoria e de incidentes, e o teto do cabecalho da
 // sonda de health.
 
+Int deviceLimitFrom(Int configured) {
+    if (configured <= 0) {
+        return 5
+    }
+    return configured
+}
+
 Int limitDevices() {
-    return config.int("kofcloud.limits.devices", 5)
+    return deviceLimitFrom(config.int("kofcloud.limits.devices", 5))
+}
+
+Int serviceLimitFrom(Int configured) {
+    if (configured <= 0) {
+        return 10
+    }
+    return configured
 }
 
 Int limitServices() {
-    return config.int("kofcloud.limits.services", 10)
+    return serviceLimitFrom(config.int("kofcloud.limits.services", 10))
 }
 
 // Streams simultaneos por tunel. Fonte pura para o recuo ser provavel em
