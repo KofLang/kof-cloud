@@ -244,12 +244,23 @@ Int limitLoginWindowMs() {
 // exaustao da maquina. Excedeu -> 503 KCF117 + fecha, antes de ler o pedido.
 // Contagem aproximada sob corrida (check-then-act sem lock, L3): erra por
 // poucas unidades, nunca recusa a menos nem trava.
-Int limitPublicConns() {
-    var limit = config.int("kofcloud.limits.publicConns", 1024)
-    if (limit <= 0) {
+//
+// Recuo em fonte pura para o teste poder prova-lo (a config vem do ambiente
+// do processo — precedentes `serviceConnLimitFrom`/`streamLimitFrom`/
+// `httpRequestLimitFrom`/`httpBodyLimitFrom`): zero/negativo recai no default
+// porque o teto conta conexoes em aberto — com 0, o PRIMEIRO accept ja seria
+// recusado com 503 KCF117 e a borda nunca atenderia ninguem. O ramo era
+// inline e correto, mas inalcançavel em teste (o `<= 0` nunca roda) — a
+// extração o torna provável por mutação.
+Int publicConnLimitFrom(Int configured) {
+    if (configured <= 0) {
         return 1024
     }
-    return limit
+    return configured
+}
+
+Int limitPublicConns() {
+    return publicConnLimitFrom(config.int("kofcloud.limits.publicConns", 1024))
 }
 
 // Conexoes publicas simultaneas EM RELAY por servico (o recurso caro: tunel

@@ -25,6 +25,15 @@ test "conexoes publicas: fonte unica e codigo de erro", "connlimit-unit" {
     assert(errTooManyPublicConns().indexOf("KCF117") >= 0, "KCF117")
     assert(errHint(errTooManyPublicConns()).indexOf("publicConns") >= 0, "Hint aponta o teto")
 
+    // Recuo seguro do teto (fonte pura `publicConnLimitFrom`): zero/negativo
+    // recaem no default 1024 — o Edge compara `count >= limit` no accept,
+    // entao com 0 a PRIMEIRA conexao ja viraria 503 KCF117 (borda muda,
+    // outage total silencioso por um typo na config).
+    assert(publicConnLimitFrom(0) == 1024, "zero recai no default")
+    assert(publicConnLimitFrom(-3) == 1024, "negativo recai no default")
+    assert(publicConnLimitFrom(10) == 10, "valor positivo passa")
+    assert(publicConnLimitFrom(1) == 1, "limite apertado passa")
+
     var registry = Registry(publicConnPath("unit"))
     var state = EdgeState(registry)
     assert(state.publicConnCount() == 0, "comeca zerado")

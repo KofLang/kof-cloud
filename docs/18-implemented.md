@@ -32,7 +32,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | `edge/` | listener de túnel, router por `Host`, HTTP front, relay, parada limpa | `e2e_test.kf` |
 | `agent/` | connect, reconexão com backoff, heartbeat, health, relay, parada | `e2e_test.kf`, `backoff_test.kf` |
 | `cli/` | dispatcher + comandos (`login`, `connect`, `publish`, …) | aceitação manual |
-| limites | `util/Limits.kf` + enforcement no registry/sessão; tetos de capacidade com recuo seguro (`serviceConnLimitFrom`/`streamLimitFrom`/`httpRequestLimitFrom`/`httpBodyLimitFrom` puras: zero/inválido recaem no default — 0 viraria outage total/parcial de relay/borda silencioso) | `limits_test.kf`, `conns_test.kf`, `waf_body_test.kf` |
+| limites | `util/Limits.kf` + enforcement no registry/sessão; tetos de capacidade com recuo seguro (`serviceConnLimitFrom`/`streamLimitFrom`/`httpRequestLimitFrom`/`httpBodyLimitFrom`/`publicConnLimitFrom` puras: zero/inválido recaem no default — 0 viraria outage total/parcial de relay/borda silencioso) | `limits_test.kf`, `conns_test.kf`, `waf_body_test.kf` |
 | múltiplos serviços | roteamento por `Host` no mesmo túnel | `e2e_multiservice_test.kf` |
 | credencial de serviço | `kfs_` emitido no control plane, validado no Edge; revogacao por token (`token-revoke`) + inventario sem valores (`token-list`) + expiracao opcional (`--ttl`, `KCF062`) | `service_token_test.kf`, `e2e_authenticated_test.kf` |
 | erros estáveis (R6) | `model/Errors.kf`: `KCFnnn` no control plane e no Edge + `Hint:` na CLI | `errors_test.kf` |
@@ -91,7 +91,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | origem do serviço na CLI (F4) | `status`/`service list`/`service status` mostram `device: <nome>` (mesma `serviceListLine`); `status`/`token` recusam nome homônimo (estado legado) em vez de escolher o primeiro (id quando o device saiu da conta); antes a lista não dizia onde o serviço roda | `service_device_test.kf` |
 | estado do agente no `status` (F4) | `agentStatusLine` deriva de presença real (ATIVO só com túnel vivo; sem presença = desconhecido; PARADO distingue parada pedida de nunca subiu) — antes dizia ATIVO só por ausência do stopFile | `device_presence_test.kf` |
 | presença no `device list` (F4) | linha mostra `tunel: ONLINE/OFFLINE/desconhecido` via `/v1/presence`; falha não vira OFFLINE inventado | `device_presence_test.kf` |
-| teto de conexões públicas (F4) | 1024 simultâneas; excedeu → `503 KCF117` no `accept`, sem ler o pedido; vaga liberada em `finally` | `conn_limit_test.kf` |
+| teto de conexões públicas (F4) | 1024 simultâneas; excedeu → `503 KCF117` no `accept`, sem ler o pedido; vaga liberada em `finally`; recuo seguro do teto (`publicConnLimitFrom` pura: zero/inválido recaem no default — 0 recusaria a primeira conexão) | `conn_limit_test.kf` |
 | profundidade de fila por stream (F4) | teto de 64 itens por stream; fila cheia → `RESET LIMIT_EXCEEDED` no stream, túnel segue (política única em `routeData`) | `queue_depth_test.kf` |
 | higiene de logins (F19 s3) | `token prune` / `POST /v1/tokens/prune`: revoga as credenciais antigas da conta e mantém a da sessão atual (cada `login` emitia uma nova sem revogar a anterior) | `account_token_test.kf` |
 | vocabulário fechado do status (F5) | `POST /v1/services/status` recusa status fora do vocabulário com `400 KCF048` (antes `BANANA` virava 200 e ficava no estado); `SUSPENDED` não é reportável por health | `status_report_test.kf` |

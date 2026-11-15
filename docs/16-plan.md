@@ -76,7 +76,9 @@ exaurir a máquina. Agora `EdgeState.tryAcquirePublicConn` reserva a vaga no
 `accept` (antes de ler o pedido) e `handlePublicConnection` libera em
 `finally` — sem isso, uma exceção no relay vazaria a vaga e o Edge acabaria
 recusando todo mundo. Excedeu → `503 KCF117` + métrica
-`kofcloud_edge_http_connections_refused_total`. Prova:
+`kofcloud_edge_http_connections_refused_total`. O teto tem recuo seguro via
+`publicConnLimitFrom` pura (zero/inválido recaem no default 1024 — com 0 a
+primeira conexão já seria recusada). Prova:
 `tests/conn_limit_test.kf` (2).
 
 **Profundidade de fila por stream (parte do contrato de `08-multiplexing.md`).**
