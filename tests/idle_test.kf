@@ -218,3 +218,92 @@ test "idle: stream preso leva RESET sem derrubar a sessao", "idle-reset" {
     // O RESET do protocolo e decidido pelo chamador; aqui so a deteccao.
     assert(session.streamCount() == 1, "sessao intacta")
 }
+
+test "edge: stop envia GOAWAY e o agent sai limpo (sem erro nem reconnect)", "shutdown" {
+    // Medido: o Edge nunca enviava GOAWAY — o stop do `serve` derrubava os
+    // tuneis com EOF e o Agent tratava como queda: log de erro + backoff
+    // tentando reconectar num Edge morto. O contrato do fio (GOAWAY = saida
+    // limpa) ja existia no Agent e no doc; o lado do Edge que faltava.
+    //
+    // A prova fica no runtime log do Agent (fonte comum aos dois cenarios):
+    // GOAWAY gera "edge asked to go away" (warn de saida limpa) e NENHUM
+    // "reconnecting" depois; EOF derrubado geraria "edge closed connection"
+    // (error) + "reconnecting in Nms".
+    var controlPort = 20261
+    var tunnelPort = 20262
+    var httpPort = 20263
+    var localSvc = 20264
+
+    var registry = Registry("/tmp/kofcloud-shut-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-shut-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-shut-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var runtimeLog = agentRuntimeLogPath()
+    File(runtimeLog).delete()
+
+    var app = web.app()
+    app.get("/") { return "svc-shut" }
+    var appServer = spawn { app.listen(localSvc) }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 1000)
+    var agentTask = spawn { runAgent(config, false) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent online antes do shutdown")
+    assert(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-shut", "tunel serve antes")
+
+    var before = readTextOr(runtimeLog, "")
+
+    writeTextTo(edgeStop, "stop")
+    var goawayLogged = false
+    var waits = 80
+    while (waits > 0 && goawayLogged == false) {
+        var now = readTextOr(runtimeLog, "")
+        if (now.length > before.length && now.substring(before.length).indexOf("edge asked to go away") >= 0) {
+            goawayLogged = true
+        }
+        if (goawayLogged == false) {
+            time.sleep(250)
+            waits = waits - 1
+        }
+    }
+    assert(goawayLogged, "agent registrou o GOAWAY (saida limpa, nao queda)")
+    var after = readTextOr(runtimeLog, "")
+    var tail = ""
+    if (after.length > before.length) {
+        tail = after.substring(before.length)
+    }
+    assert(tail.indexOf("edge closed connection") < 0, "GOAWAY nao e queda (sem error de EOF)")
+    assert(tail.indexOf("reconnecting") < 0, "sem reconexao apos o shutdown")
+    // Parada coordenada: o agent encerra sozinho (o GOAWAY sai o processo).
+    time.sleep(1500)
+
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}

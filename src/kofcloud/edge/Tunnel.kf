@@ -37,6 +37,11 @@ void serveTunnel(EdgeState state, Int port, String tunnelSecret, String stopFile
             open = false
         }
     }
+    // Listener fechado (stopFile): avisa as sessoes vivas com GOAWAY
+    // SHUTDOWN antes do socket morrer — contrato do fio, o Agent encerra sem
+    // throw e sem reconectar para um Edge morto. Sem isso o stop derruba os
+    // tuneis com EOF e cada Agent registra erro + backoff inutil.
+    state.goawayAll("SHUTDOWN")
 }
 
 void listenerWatcher(Listener listener, String stopFile) {

@@ -37,7 +37,7 @@ Agent ──── net.connect(edgeHost, edgePort) ────► Edge
 | `DATA` | ambos | `s`, `d` (base64) | bytes do stream |
 | `END` | ambos | `s` | fim limpo do stream |
 | `RESET` | ambos | `s`, `code` | erro no stream |
-| `GOAWAY` | Edge→Agent | `code` | encerra a sessão |
+| `GOAWAY` | Edge→Agent | `code` | encerra a sessão (o Edge envia no shutdown: `serveTunnel` avisa as sessões vivas antes de fechar o listener) |
 
 `s` = `streamId` (Int, ≥ 1, único por sessão, alocado por quem abre).
 

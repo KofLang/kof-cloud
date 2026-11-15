@@ -3,6 +3,7 @@ package kofcloud.edge
 import kofcloud.control.Registry
 import kofcloud.model.Service
 import kofcloud.protocol.Session
+import kofcloud.protocol.Tunnel
 import kofcloud.util.Limits
 import kofcloud.util.Text
 
@@ -229,6 +230,31 @@ class EdgeState {
 
     TunnelSession? sessionFor(String deviceId) {
         return this.sessions.get(deviceId)
+    }
+
+    // Todas as sessoes vivas (para o aviso de desligamento). Puro sobre o
+    // mapa; a ordem nao importa (cada Agent recebe o seu GOAWAY).
+    List<TunnelSession> liveSessions() {
+        var out = listOf<TunnelSession>()
+        for (var deviceId in this.sessions.keys()) {
+            var session = this.sessions.get(deviceId)
+            if (session != null) {
+                out.add(session)
+            }
+        }
+        return out
+    }
+
+    // Avisa cada sessao viva que o Edge esta saindo (GOAWAY SHUTDOWN) e
+    // fecha o canal de saida — o writer drena o que ja enfileirou (o GOAWAY)
+    // e termina. O Agent encerra SEM throw e sem reconectar (contrato do
+    // fio: GOAWAY = saida limpa); sem isso o stop derruba os tuneis com EOF
+    // e cada Agent registra erro e volta com backoff para um Edge morto.
+    void goawayAll(String code) {
+        for (var session in this.liveSessions()) {
+            session.send(goawayFrame(code))
+            session.close()
+        }
     }
 
     Bool isOnline(String deviceId) {
