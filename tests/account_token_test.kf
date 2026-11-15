@@ -180,6 +180,28 @@ test "credencial de conta: HTTP lista sem valores, revoga e rotaciona", "atok" {
     var status = httpPostJson(controlPort, "/v1/tokens/rotation", "{}", fresh)
     assert(statusOf(status) == 200, "rotation 200")
     assert(bodyOf(status).indexOf("\"pending\":\"1\"") >= 0, "uma credencial valida")
+
+    // Auto-revogacao do `logout` POR ULTIMO (a sessao morre aqui): revogar
+    // o proprio token da sessao pelo valor completo — e o que o logout faz
+    // antes de apagar os arquivos locais (fresh deixa de autorizar).
+    var selfRevoked = httpPostJson(controlPort, "/v1/tokens/revoke", "{\"token\":\"" + fresh + "\"}", fresh)
+    assert(statusOf(selfRevoked) == 200, "auto-revoke 200")
+    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", fresh)) == 401, "credencial da sessao morreu")
+}
+
+test "credencial de conta: logoutDisposition trava as quatro saidas", "atok-unit" {
+    // O logout tenta auto-revogar antes de apagar o local (antes era
+    // so-local e o kfc_ seguia valido para sempre). As quatro saidas:
+    // sem sessao ("local"), confirmado ("revoked"), KCF004 = ja vencida/
+    // revogada ("dead" — nada vivo, nao e falha), outra falha de rede
+    // ("warn" — a credencial sobreviveu e o operador precisa saber).
+    assert(logoutDisposition(false, false, "") == "local", "sem sessao: local")
+    assert(logoutDisposition(true, true, "") == "revoked", "confirmado: revoked")
+    assert(logoutDisposition(true, false, "KCF004: missing or invalid account token") == "dead", "KCF004: dead")
+    assert(logoutDisposition(true, false, "conexao recusada") == "warn", "rede: warn")
+    // O body de 401 do control plane passa pelo requireOk como texto de erro;
+    // qualquer texto com KCF004 conta como "credencial ja morta".
+    assert(logoutDisposition(true, false, "KCF004") == "dead", "KCF004 curto: dead")
 }
 
 test "credencial de conta: prune preserva a da sessao e revoga as antigas", "atok-unit" {

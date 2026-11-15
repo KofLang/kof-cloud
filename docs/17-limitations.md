@@ -205,8 +205,11 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   podada quando alguma validação passa por ela (`accountByToken` /
   `serviceByServiceToken`). Numa conta ociosa, credenciais vencidas ficam no
   estado até a próxima validação — não há varredura periódica. `logout`
-  continua sendo **só local**: apaga o arquivo da máquina, não invalida no
-  servidor (para isso existe `kof cloud token revoke`). Cada `login` também
+  agora tenta auto-revogar a credencial da sessão no servidor antes de apagar
+  o local (falha de rede/control fora do ar vira aviso explícito e a
+  credencial sobrevive — o operador revoga com `kof cloud token revoke`).
+  Credencial já vencida/revogada no `logout` conta como `dead` (nada vivo,
+  não é falha). Cada `login` também
   emite credencial nova sem revogar a anterior: `kof cloud token prune` remove
   as antigas, mas a poda é manual — não há expiração automática por padrão.
   O instante de expiração é calculado em `Long` (`tokenExpiryAt`, fonte única

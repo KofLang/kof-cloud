@@ -396,11 +396,63 @@ Int cmdLogout(List<String> args) {
         println("uso: kof cloud logout")
         return 1
     }
+    // Revoga a credencial no servidor ANTES de apagar o local — antes o
+    // logout era so-local e o kfc_ seguia valido para sempre (17-limitations).
+    // Auto-revogacao: o valor da sessao autoriza e e o alvo (o endpoint nao
+    // tem guarda de "token em uso"). KCF004 na revogacao = a credencial ja
+    // nao era valida (vencida/revogada): nada vivo a revogar, nao e falha.
+    var session = loadSession()
+    var attempted = false
+    var confirmed = false
+    var revokeError = ""
+    if (session != null) {
+        var token = session.token
+        if (token.length > 0) {
+            attempted = true
+            var body = mapOf()
+            body.put("token", token)
+            try {
+                requireOk(http.post(session.controlUrl + "/v1/tokens/revoke", json.encode(body), jsonHeader(token)))
+                confirmed = true
+            } catch (String e) {
+                revokeError = e
+            }
+        }
+    }
     File(identityPath()).delete()
     File(sessionPath()).delete()
     File(stopPath()).delete()
-    println("Sessao encerrada.")
+    var disposition = logoutDisposition(attempted, confirmed, revokeError)
+    if (disposition == "revoked") {
+        println("Sessao encerrada. Credencial revogada no servidor.")
+    } else if (disposition == "dead") {
+        println("Sessao encerrada. Credencial ja nao era valida no servidor.")
+    } else if (disposition == "local") {
+        println("Sessao encerrada.")
+    } else {
+        println("Sessao encerrada localmente.")
+        println("aviso: nao consegui revogar a credencial no servidor — ela segue valida.")
+        println("Rode `kof cloud token revoke` apos logar de novo.")
+    }
     return 0
+}
+
+// Saida do logout a partir da tentativa de revogacao (a rede fica no
+// chamador): "local" = sem sessao; "revoked" = servidor confirmou; "dead" =
+// KCF004 (credencial ja vencida/revogada — nada vivo, nao e falha); "warn"
+// = outra falha (rede/control fora) — a credencial sobreviveu e o operador
+// precisa saber. Pura para travar as quatro saidas sem HOME nem rede.
+String logoutDisposition(Bool attempted, Bool confirmed, String revokeError) {
+    if (attempted == false) {
+        return "local"
+    }
+    if (confirmed) {
+        return "revoked"
+    }
+    if (revokeError.indexOf("KCF004") >= 0) {
+        return "dead"
+    }
+    return "warn"
 }
 
 // ---- connect / disconnect ----
