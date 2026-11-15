@@ -21,6 +21,14 @@ import testkit.Support
 test "frames: encodeChunks fatia e recompoe", "frames" {
     assert(limitFrameBytes() == 1048576, "default 1 MiB")
     assert(maxTunnelLineBytes() == 1048576 * 2 + 4096, "teto com margem UTF-8+JSON")
+    // Recuo seguro do teto (fonte pura `frameLimitFrom`): zero/negativo
+    // recaem no default 1 MiB — com 0 o remetente continua mandando blocos
+    // de sendChunkBytes (o clamp so age com cap > 0) enquanto o receptor
+    // recusa linha acima de 4096: dessincronia silenciosa no meio do relay.
+    assert(frameLimitFrom(0) == 1048576, "zero recai no default")
+    assert(frameLimitFrom(-1) == 1048576, "negativo recai no default")
+    assert(frameLimitFrom(10) == 10, "valor positivo passa")
+    assert(frameLimitFrom(1) == 1, "limite apertado passa")
     // Fonte unica do teto de corpo do relay: o serve passa ao
     // HttpFront/relay a partir daqui.
     assert(limitMaxBodyBytes() == 16777216, "teto de corpo 16 MiB")

@@ -253,7 +253,11 @@ blocos de 16 KiB (`kofcloud.limits.sendChunkBytes`) já codificados, um frame
 DATA por bloco; recepção recusa linha acima de `maxTunnelLineBytes()`
 (2×frameBytes + margem, fail-closed com `LINE_OVERFLOW` no Edge). Chunk
 adaptativo (encolhe até caber — o base64 do stdlib passa por UTF-8 e expande
-bytes altos). Prova: `tests/frames_test.kf` (4 testes: fatiamento +
+bytes altos). O teto tem recuo seguro via `frameLimitFrom` pura
+(zero/inválido recaem no default 1 MiB — com 0 o remetente seguiria
+mandando blocos de `sendChunkBytes` enquanto o receptor recusaria linha
+acima de 4096, quebrando o relay no meio em silêncio). Prova:
+`tests/frames_test.kf` (4 testes: fatiamento +
 recomposição byte-idêntica, codec fail-closed, HELLO gigante fecha sem
 WELCOME, 1.5 MiB fim a fim).
 

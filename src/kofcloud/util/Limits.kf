@@ -58,8 +58,23 @@ Int limitQueueDepth() {
 // quem recebe recusa a linha inteira acima de ~4/3 disso (margem do base64).
 // Protege os dois lados contra um peer que manda uma linha gigante de uma
 // vez (o LineCodec acumularia sem teto).
+//
+// Recuo em fonte pura (precedentes `serviceConnLimitFrom`/`publicConnLimitFrom`):
+// zero/invalido recai no default porque com 0 os dois lados do fio
+// DESACORDAM — o remetente continua mandando blocos de sendChunkBytes (o
+// clamp so age com cap > 0) enquanto o receptor recusa linha acima de
+// 0*2+4096 = 4096 bytes: o relay quebra no meio, silencioso. Nao e kill
+// switch (um desligamento deliberado de DATA recusaria frames, nao
+// dessincronizaria os peers) e nada documenta 0 como intencao aqui.
+Int frameLimitFrom(Int configured) {
+    if (configured <= 0) {
+        return 1048576
+    }
+    return configured
+}
+
 Int limitFrameBytes() {
-    return config.int("kofcloud.limits.frameBytes", 1048576)
+    return frameLimitFrom(config.int("kofcloud.limits.frameBytes", 1048576))
 }
 
 // Bloco de envio de cada frame DATA. Bem menor que o teto: blocos pequenos
