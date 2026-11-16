@@ -349,9 +349,19 @@ Int limitLogBytes() {
 
 // Teto do corpo HTTP que o Edge aceita/acumula no relay (bytes). Fonte
 // unica: o `serve` passa ao HttpFront/relay; sem isso o config default e
-// o fallback do parse andariam separados.
+// o fallback do parse andariam separados. Afinavel por config mas sem recuo
+// silencioso: zero/negativo recaem no default (com 0 todo pedido com corpo
+// viraria 413 KCF110 — a mesma classe de outage dos tetos de capacidade).
+// Fonte pura para o recuo ser provavel em teste (mesma receita da familia).
+Int maxBodyLimitFrom(Int configured) {
+    if (configured <= 0) {
+        return 16777216
+    }
+    return configured
+}
+
 Int limitMaxBodyBytes() {
-    return config.int("kofcloud.maxBodyBytes", 16777216)
+    return maxBodyLimitFrom(config.int("kofcloud.maxBodyBytes", 16777216))
 }
 
 // Teto da resposta do servico local que o Edge acumula por requisicao
@@ -359,8 +369,18 @@ Int limitMaxBodyBytes() {
 // Agent parar de empurrar bytes. Fonte unica do `maxResponseBytes` do relay
 // (os 16 MiB de `limitMaxBodyBytes` sao o teto do CORPO da REQUISICAO; antes,
 // a resposta herdava esse numero e, ao passar dele, era cortada em silencio).
+// Sem recuo silencioso: zero/negativo recaem no default (com 0 toda resposta
+// com corpo viraria 502 KCF115). Fonte pura para o recuo ser provavel em
+// teste (mesma receita da familia).
+Int maxResponseLimitFrom(Int configured) {
+    if (configured <= 0) {
+        return 16777216
+    }
+    return configured
+}
+
 Int limitMaxResponseBytes() {
-    return config.int("kofcloud.maxResponseBytes", 16777216)
+    return maxResponseLimitFrom(config.int("kofcloud.maxResponseBytes", 16777216))
 }
 
 // Teto do corpo que o WAF inspeciona por assinatura (bytes). Acima disso o

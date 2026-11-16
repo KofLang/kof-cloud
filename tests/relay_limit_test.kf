@@ -22,6 +22,12 @@ test "relay limite: codigo e Hint", "relaylimit-unit" {
     assert(errResponseTooLarge().indexOf("KCF115") >= 0, "codigo KCF115")
     assert(errHint(errResponseTooLarge()).indexOf("maxResponseBytes") >= 0, "Hint aponta o teto")
     assert(limitMaxResponseBytes() > 0, "teto positivo")
+    // Recuo seguro (fonte pura `maxResponseLimitFrom`): zero/negativo recaem
+    // no default 16 MiB — com 0 toda resposta com corpo viraria 502 KCF115.
+    assert(limitMaxResponseBytes() == 16777216, "teto de resposta 16 MiB")
+    assert(maxResponseLimitFrom(0) == 16777216, "resposta zero recai no default")
+    assert(maxResponseLimitFrom(-5) == 16777216, "resposta negativo recai no default")
+    assert(maxResponseLimitFrom(1024) == 1024, "resposta positivo passa direto")
 }
 
 test "relay limite: resposta acima do teto vira 502 KCF115, nunca 200 truncado", "relaylimit" {
