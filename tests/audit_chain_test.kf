@@ -3,6 +3,7 @@ import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.model.Audit
 import kofcloud.store.Store
+import kofcloud.util.Limits
 import testkit.Support
 
 // Fase 19 slice 4 (parcial) — trilha de auditoria com hash encadeado.
@@ -462,4 +463,52 @@ test "worm: HTTP /v1/audit/verify espelha o estado do arquivo", "worm" {
     assert(bodyOf(brokenVerify).indexOf("\"mirrorOk\":\"false\"") >= 0, "espelho adulterado: " + bodyOf(brokenVerify))
     assert(bodyOf(brokenVerify).indexOf("\"mirrorBrokenAt\":\"1\"") >= 0, "quebra no indice 1")
     assert(bodyOf(brokenVerify).indexOf("\"ok\":\"true\"") >= 0, "anel segue integra (campos aditivos)")
+}
+
+test "worm: podador do espelho mantem linhas inteiras e o evento novo", "worm-unit" {
+    assert(wormMirrorBytesFrom(0) == 8388608, "zero recai no default (8 MiB)")
+    assert(wormMirrorBytesFrom(-5) == 8388608, "negativo recai no default")
+    assert(wormMirrorBytesFrom(12345) == 12345, "valor positivo passa direto")
+    // Sob o teto: byte a byte o append cru.
+    assert(wormMirrorNext("a\n", "b", 1000) == "a\nb\n", "sob teto intacto")
+    var h1 = auditEventHash("", "1", "account:mel", "account.created", "acc-1")
+    var h2 = auditEventHash(h1, "2", "account:mel", "device.registered", "acc-1/dev-1")
+    var h3 = auditEventHash(h2, "3", "account:mel", "device.revoked", "acc-1/dev-1")
+    var e1 = auditEventJson(AuditEvent("1", "account:mel", "account.created", "acc-1", "", h1))
+    var e2 = auditEventJson(AuditEvent("2", "account:mel", "device.registered", "acc-1/dev-1", h1, h2))
+    var e3 = auditEventJson(AuditEvent("3", "account:mel", "device.revoked", "acc-1/dev-1", h2, h3))
+    // Teto que so guarda as duas ultimas linhas: a cabeca (e1) sai inteira,
+    // sem partir linha no meio.
+    var cap = e2.length + e3.length + 2
+    var trimmed = wormMirrorNext(e1 + "\n" + e2 + "\n", e3, cap)
+    assert(trimmed == e2 + "\n" + e3 + "\n", "poda a cabeca em linha inteira")
+    var verified = auditWormVerify(trimmed)
+    assert(verified.parseable == true, "podado parseavel")
+    assert(verified.brokenAt == "", "podado integra (raiz desconhecida tolerada)")
+    assert(verified.events == 2, "dois eventos no podado: " + intToString(verified.events))
+    // Teto menor que uma linha: o evento novo nunca e descartado.
+    var newestOnly = wormMirrorNext(e1 + "\n" + e2 + "\n", e3, 10)
+    assert(newestOnly == e3 + "\n", "so o mais novo sobrevive")
+}
+
+test "worm: Registry poda o espelho pelo teto e o anel fica intacto", "worm" {
+    var state = chainPath("worm-cap")
+    var registry = Registry(state)
+    registry.createAccount("mel", "m@e.com", "segredo")
+    registry.createAccount("ana", "a@e.com", "segredo")
+    registry.createAccount("bia", "b@e.com", "segredo")
+    var full = readTextOr(state + ".worm.jsonl", "")
+    var expected = auditEventJson(registry.audit.get(0)) + "\n" + auditEventJson(registry.audit.get(1)) + "\n" + auditEventJson(registry.audit.get(2)) + "\n"
+    assert(full == expected, "append sob teto identico ao cru")
+    // Teto que so comporta a linha mais nova: o proximo append poda a cabeca.
+    var newest = auditEventJson(registry.audit.get(2))
+    registry.setWormCapBytes(newest.length + 10)
+    registry.createAccount("dan", "d@e.com", "segredo")
+    var trimmed = readTextOr(state + ".worm.jsonl", "")
+    assert(trimmed == auditEventJson(registry.audit.get(3)) + "\n", "espelho podado mantem so o mais novo")
+    assert(registry.audit.size == 4, "anel intacto: " + intToString(registry.audit.size))
+    var verified = registry.wormVerify()
+    assert(verified.parseable == true, "podado parseavel")
+    assert(verified.brokenAt == "", "podado integra (raiz desconhecida)")
+    assert(verified.events == 1, "um evento no espelho: " + intToString(verified.events))
 }

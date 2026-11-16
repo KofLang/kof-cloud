@@ -1305,8 +1305,8 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
 
   **Implementado (espelho append-only, parcial):** cada `Registry.audit`
   grava UMA linha JSON no `<estado>.worm.jsonl` (mesma serialização da API,
-  pura `auditEventJson` — o fio e o arquivo nunca divergem), sem cap nem
-  poda: sobrevive à evicção do anel (cap 100) e à rescrita inteira do
+  pura `auditEventJson` — o fio e o arquivo nunca divergem), à época sem cap
+  nem poda: sobrevive à evicção do anel (cap 100) e à rescrita inteira do
   `control-state.json` (o `save` não o toca). Best-effort por desenho: falha
   de IO jamais quebra a requisição (o anel + o estado são a fonte; o espelho
   é trilha redundante) e adulterá-lo não afeta a API. **Honestidade:** o
@@ -1326,6 +1326,17 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   sai 1 com o espelho comprometido (trilha redundante) e diz
   "desconhecido" contra control plane antigo, sem os campos. Prova:
   `tests/audit_chain_test.kf` (`worm-unit` ×5 + `worm` ×2, total 17).
+
+  **Implementado (teto do espelho — "rotação" sem rename):** o espelho tem
+  teto em bytes (`kofcloud.limits.wormMirrorBytes`, default 8 MiB — recuo
+  seguro da família `wormMirrorBytesFrom`): acima dele o append poda a
+  CABEÇA do arquivo em linhas inteiras, sempre mantendo o evento mais novo
+  (pura `wormMirrorNext`; `appendLineCapped` guarda o contrato never-throw).
+  Sob o teto o append é byte a byte o anterior — nada muda para deploy
+  existente. As raízes desconhecidas que a poda produz são toleradas pelo
+  verify de sufixo por desenho; a poda remove eventos antigos do espelho
+  (indistinguível de remoção por quem tem o disco — 17-limitations).
+  Prova: `tests/audit_chain_test.kf` (`worm-unit` ×6 + `worm` ×3, total 19).
   Pendente: WORM real em storage separado (objeto
   com lock de retenção) e o relatório SOC2-tipo-II.
 **Regras:** segurança por default em todo slice novo (a pergunta "o que

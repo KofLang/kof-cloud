@@ -666,3 +666,23 @@ Long limitMassTokenExpiryWindowMs() {
     }
     return window
 }
+
+// Teto do espelho WORM do audit em bytes (`<estado>.worm.jsonl`, Fase 19
+// slice 4). O espelho nasceu sem cap e crescia para sempre — esgotar o
+// disco do control plane com trilha operacional e DoS, nao historia. Acima
+// do teto o append poda a CABECA do arquivo em linhas inteiras (sempre
+// mantendo o evento mais novo): a rotacao possivel sem rename no stdlib. O
+// verify de sufixo tolera as raizes desconhecidas que a poda produz (ver
+// `auditWormChainError`). Recuo seguro da familia: zerado/negativo recai no
+// default — 0 aqui nao significa "sem teto", significaria descartar todo
+// append e deixar o arquivo com no maximo uma linha.
+Int wormMirrorBytesFrom(Int configured) {
+    if (configured <= 0) {
+        return 8388608
+    }
+    return configured
+}
+
+Int limitWormMirrorBytes() {
+    return wormMirrorBytesFrom(config.int("kofcloud.limits.wormMirrorBytes", 8388608))
+}

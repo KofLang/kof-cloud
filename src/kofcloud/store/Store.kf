@@ -1,5 +1,7 @@
 package kofcloud.store
 
+import kofcloud.model.Audit
+
 // Persistencia em arquivo JSON. Sem banco: o MVP guarda estado em disco com
 // File/Directory do kof.io. Escrita nao e atomica (o Kof nao expoe rename
 // atomico) — documentado em docs/17-limitations.md.
@@ -24,17 +26,20 @@ Bool fileExists(String path) {
     return File(path).exists()
 }
 
-// Append best-effort de uma linha em arquivo texto (read+write — o stdlib
-// nao expoe append atomico nem fd de append; mesma limitacao do rename do
-// cabecalho, ver 17-limitations). NUNCA lanca: devolve false em falha de IO
-// para o chamador decidir ignorar (contrato do espelho WORM do audit: a
-// trilha redundante jamais quebra o caminho da requisicao). Duas linhas
-// concorrentes podem intercalar (sem lock, L3) — o espelho e aproximação
-// como os contadores; a cadeia de hashes detecta linha perdida/adulterada.
-Bool appendLineTo(String path, String line) {
+// Append com teto do espelho WORM do audit (Fase 19 s4): o conteudo
+// inteiro do arquivo depois do append vem da pura `wormMirrorNext` — sob o
+// teto e byte a byte o append cru (`existing + line + "\n"`); acima, poda a
+// cabeca em linhas inteiras (rotacao sem rename). Mesmo contrato do append:
+// read+write (o stdlib nao expoe append atomico nem fd de append; ver
+// 17-limitations), NUNCA lanca (devolve false em falha de IO para o
+// chamador decidir ignorar — a trilha redundante jamais quebra o caminho da
+// requisicao). Duas linhas concorrentes podem intercalar (sem lock, L3) —
+// o espelho e aproximacao como os contadores; a cadeia de hashes detecta
+// linha perdida/adulterada.
+Bool appendLineCapped(String path, String line, Int capBytes) {
     try {
         var existing = readTextOr(path, "")
-        writeTextTo(path, existing + line + "\n")
+        writeTextTo(path, wormMirrorNext(existing, line, capBytes))
         return true
     } catch (String e) {
         return false

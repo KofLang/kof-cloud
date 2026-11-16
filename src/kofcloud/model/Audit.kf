@@ -234,3 +234,51 @@ WormVerify auditWormVerify(String raw) {
     }
     return WormVerify(true, auditWormChainError(events), events.size)
 }
+
+// Proximo conteudo do espelho WORM dado o conteudo atual e a linha nova:
+// `raw + line + "\n"` quando cabe no teto (byte a byte o append cru); acima
+// do teto, poda a CABECA em linhas inteiras mantendo sempre o evento mais
+// novo (mesmo que ele sozinho exceda o teto — o append jamais perde o que
+// acabou de chegar). E a "rotacao" possivel sem rename no stdlib; a poda
+// de cabeca produz raizes desconhecidas que o verify de sufixo tolera por
+// desenho (`auditWormChainError`). Pura: decide o texto, nunca toca disco.
+// Sob o teto o texto passa intacto (linhas vazias estranhas preservadas);
+// so a poda descarta vazias. Linhas concorrentes podem intercalar no disco
+// (sem lock) — a pura trata o raw como veio.
+String wormMirrorNext(String raw, String line, Int capBytes) {
+    var combined = raw + line + "\n"
+    if (combined.length <= capBytes) {
+        return combined
+    }
+    var lines = combined.split("\n")
+    var start = lines.size
+    var size = 0
+    var kept = 0
+    while (start > 0) {
+        var candidate = lines[start - 1]
+        if (candidate.length > 0) {
+            if (kept > 0 && size + candidate.length + 1 > capBytes) {
+                break
+            }
+            size = size + candidate.length + 1
+            kept = kept + 1
+        }
+        start = start - 1
+    }
+    var out = ""
+    var index = start
+    while (index < lines.size) {
+        var piece = lines[index]
+        if (piece.length > 0) {
+            if (out.length > 0) {
+                out = out + "\n"
+            }
+            out = out + piece
+        }
+        index = index + 1
+    }
+    if (out.length > 0) {
+        out = out + "\n"
+    }
+    return out
+}

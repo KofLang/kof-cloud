@@ -179,7 +179,8 @@ WAF, timeout de upstream, allowlist WAF, painel somente-leitura, rotação de kf
   sem revelar se o host existe e sem consumir o túnel; suspensão reversível
   de serviço/dispositivo (`SUSPENDED`, opaco) + trilha de auditoria
   (`kof cloud audit`, anel de 100 eventos só com metadados + espelho
-  append-only `<estado>.worm.jsonl`, sem cap; `audit --verify` confirma
+  append-only `<estado>.worm.jsonl` com teto de 8 MiB que poda a cabeça
+  (`kofcloud.limits.wormMirrorBytes`); `audit --verify` confirma
   anel E espelho).
 * Hot-reload: publicar depois do `connect` não exige reconnect (o Agent
   re-busca os serviços e o próximo OPEN já roteia); OPEN recusado responde

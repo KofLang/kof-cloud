@@ -56,8 +56,13 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   mas o append é read+write (o stdlib não expõe append atômico, então duas
   escritas concorrentes podem intercalar e quem tem o disco pode reescrever
   o arquivo inteiro); WORM real (storage separado com lock de retenção)
-  segue pendente. O espelho também não tem teto: cresce para sempre; rotação
-  (ex.: por tamanho/data) é desenho futuro.
+  segue pendente. O espelho agora tem teto (`kofcloud.limits.wormMirrorBytes`,
+  default 8 MiB): acima dele o append poda a **cabeça** do arquivo em linhas
+  inteiras, mantendo sempre o evento mais novo — é a rotação possível sem
+  rename no stdlib. Honestidade: a poda remove eventos antigos do espelho
+  (indistinguível de remoção por quem tem o disco) e o `audit --verify`
+  tolera essas raízes desconhecidas por desenho (verify de sufixo) — trilha
+  completa e imutável de verdade continua dependendo do WORM real.
 * **Estado em arquivo JSON único, sem backend de banco.** A carga agora é
   explícita (`ok`/`absent`/`corrupt`, com aviso no `serve`) e há
   `migrate --dry-run`, mas ainda não existe backend SQLite/Postgres atrás de

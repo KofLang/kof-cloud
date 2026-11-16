@@ -73,6 +73,11 @@ class Registry {
     // Nunca recusa containment: acima do teto, `sweepFreezeMarksIfOver` poda
     // so marcas inertes; marcas vivas ficam mesmo acima do teto.
     Int maxFreezeMarks
+    // Teto do espelho WORM em bytes (fonte unica `limitWormMirrorBytes`).
+    // Acima dele o append poda a cabeca do `<estado>.worm.jsonl` em linhas
+    // inteiras (a rotacao possivel sem rename); o anel e capado em eventos,
+    // o espelho em bytes.
+    Int wormCapBytes
     // Destinos que a verificacao de dominio proprio aceita: IPs e/ou hostnames
     // do Edge (config `kofcloud.edgeHosts`, separados por virgula). Comparacao
     // exata, sem sufixo: subdominios de um host esperado NAO valem.
@@ -111,6 +116,7 @@ class Registry {
         this.maxDevices = limitDevices()
         this.maxServices = limitServices()
         this.maxFreezeMarks = limitFreezeMarks()
+        this.wormCapBytes = limitWormMirrorBytes()
         this.edgeHosts = parseEdgeHosts(config.str("kofcloud.edgeHosts", ""))
         this.load()
     }
@@ -132,6 +138,13 @@ class Registry {
     // depender do env do processo.
     void setMaxFreezeMarks(Int cap) {
         this.maxFreezeMarks = cap
+    }
+
+    // Mesmo papel do `setMaxFreezeMarks`: o teto do espelho em bytes e
+    // podado por tamanho (poda de cabeca), e os testes precisam de um teto
+    // pequeno sem depender do env do processo.
+    void setWormCapBytes(Int cap) {
+        this.wormCapBytes = cap
     }
 
     Int activeDeviceCount(String accountId) {
@@ -223,18 +236,24 @@ class Registry {
         while (this.audit.size > cap) {
             this.audit = this.audit.subList(1, this.audit.size)
         }
-        // Espelho WORM (Fase 19 slice 4 parcial): uma linha JSON por evento
-        // no `<estado>.worm.jsonl`, NUNCA capado nem truncado — sobrevive a
-        // poda do anel e a rescrita inteira do control-state.json. Best-effort
-        // de proposito (`appendLineTo` engole falha de IO): o espelho jamais
-        // quebra o caminho da requisicao — o anel em memoria + o estado
-        // persistido continuam sendo a fonte de verdade; o espelho e trilha
-        // redundante. Honestidade: append via read+write (o stdlib nao expoe
-        // append atomico — ver 17-limitations); quem tem o disco pode
-        // reescrever o arquivo inteiro, mas remover/adulterar UMA linha
-        // quebra a cadeia (hashes encadeados, verificavel por terceiro).
-        // Sem dado de cliente: os mesmos 6 campos do endpoint /v1/audit.
-        appendLineTo(this.path + ".worm.jsonl", auditEventJson(event))
+        // Espelho WORM (Fase 19 slice 4): uma linha JSON por evento no
+        // `<estado>.worm.jsonl` — sobrevive a poda do anel e a rescrita
+        // inteira do control-state.json (o save nao o toca). Teto em bytes
+        // (`wormCapBytes`): acima dele o append poda a CABECA em linhas
+        // inteiras — a rotacao possivel sem rename no stdlib; as raizes
+        // desconhecidas que a poda produz sao toleradas pelo verify de
+        // sufixo (`auditWormChainError`). Best-effort de proposito
+        // (`appendLineCapped` engole falha de IO): o espelho jamais quebra
+        // o caminho da requisicao — o anel em memoria + o estado persistido
+        // continuam sendo a fonte de verdade; o espelho e trilha redundante.
+        // Honestidade: append via read+write (o stdlib nao expoe append
+        // atomico — ver 17-limitations); quem tem o disco pode reescrever o
+        // arquivo inteiro, e a poda de cabeca remove eventos antigos do
+        // espelho (indistinguivel de remocao por terceiro — para trilha
+        // completa e imutavel de verdade, WORM real em storage separado
+        // segue pendente). Sem dado de cliente: os mesmos 6 campos do
+        // endpoint /v1/audit.
+        appendLineCapped(this.path + ".worm.jsonl", auditEventJson(event), this.wormCapBytes)
     }
 
     List<AuditEvent> auditForAccount(String accountId) {

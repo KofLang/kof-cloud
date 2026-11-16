@@ -133,6 +133,7 @@ Edge recusa), e um suspenso vira `FALHA dispositivo` apontando o
 | anel de auditoria | 100 eventos | `kofcloud.limits.auditEvents` | ✅ (o mais antigo sai; cadeia de hash por conta) |
 | anel de incidentes | 100 | `kofcloud.limits.incidents` | ✅ (o mais antigo resolvido sai primeiro) |
 | marcas de freeze | 1000 | `kofcloud.limits.freezeMarks` | ✅ (teto higiênico: acima dele o freeze seguinte poda só marcas inertes; **nunca recusa containment**) |
+| espelho WORM do audit | 8 MiB | `kofcloud.limits.wormMirrorBytes` | ✅ (acima do teto o append poda a cabeça em linhas inteiras, sempre com o evento mais novo; `audit --verify` tolera as raízes desconhecidas da poda) |
 
 Limites são lidos de `kof.config`/env (`KOF_KOFCLOUD_LIMITS_*`). Revogar um
 dispositivo libera a vaga; re-registrar o mesmo nome é idempotente e não

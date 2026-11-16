@@ -299,7 +299,8 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 * **Segurança contínua (Fase 19)** — SBOM + `security.txt`, scan no CI,
   rotação assistida + kill-switch **documentado** (`SECURITY.md` ##
   Contenção), audit log WORM rumo a SOC2 (espelho append-only
-  `<estado>.worm.jsonl` — sem cap — e o `audit --verify` cobre anel+espelho;
-  WORM real em storage separado pendente).
+  `<estado>.worm.jsonl` com teto configurável que poda a cabeça em linhas
+  inteiras — `kofcloud.limits.wormMirrorBytes`, 8 MiB — e o `audit --verify`
+  cobre anel+espelho; WORM real em storage separado pendente).
 
 Ver `16-plan.md` para as fases e `17-limitations.md` para as lacunas.
