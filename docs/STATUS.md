@@ -100,10 +100,11 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | enquadramento HTTP nos dois sentidos (F10/F14) | `tests/framing_test.kf` | 14 |
 | presença no `device list` (F4) | `tests/device_presence_test.kf` | 5 |
 | origem do serviço + presença no `service status` (F4) | `tests/service_device_test.kf` | 6 |
+| PEM visível no `service status` (F9 s3) | `tests/status_cert_test.kf` | 3 |
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor, booleanas sem duplicação e posicional sobrando (CLI) | `tests/value_flags_test.kf` | 4 |
 
-Total: 375 testes. Ver `15-tests.md` para a matriz.
+Total: 378 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

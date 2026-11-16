@@ -1,0 +1,147 @@
+import kofcloud.cli.Commands
+import kofcloud.cli.Local
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.model.Service
+import kofcloud.store.Store
+import testkit.Support
+
+// Expiração/validade do PEM visível no `service status` (Fase 9 slice 3 —
+// item "Pendente" do plano). O operador já tinha o veredito no
+// `domain verify --tls-cert`, no `doctor --tls-cert` e no `scan --tls-cert`,
+// mas o `service status` — o comando que olha UM serviço de relance —
+// nada dizia: HTTPS quebrado por certificado errado só aparecia no
+// handshake, em produção.
+//
+// A regra de veredito continua sendo UMA (`certHostVerdict` via
+// `domainCertLine`); o novo é o rodapé do status: openssl roda UMA vez e
+// cada hostname impresso no status (default da conta + customs) ganha a
+// mesma linha do `domain verify`.
+
+Service statusCertService(String name) {
+    return Service("s-" + name, "acc", "dev-1", name, "127.0.0.1", 8080, "http",
+                   name + ".mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "")
+}
+
+test "service status: serviceCertLines roda openssl uma vez e julga cada host", "svcdevice-unit" {
+    // Sem --tls-cert: lista vazia (o status nao muda para quem nao pediu).
+    assert(serviceCertLines("", listOf("site.mel.kofcloud.io")).size == 0, "sem PEM: nada")
+    assert(serviceCertLines("/tmp/x.pem", listOf<String>()).size == 0, "sem hosts: nada")
+
+    // Arquivo ausente: FALHA com o caminho (mesma linha do domain verify).
+    var missing = serviceCertLines("/tmp/kofcloud-sem-pem-" + crypto.randomHex(4) + ".pem", listOf("site.mel.kofcloud.io"))
+    assert(missing.size == 1, "um host, uma linha")
+    assert(missing.get(0).startsWith("FALHA tls"), "ausente e FALHA")
+    assert(missing.get(0).indexOf("nao encontrado") >= 0, "diz o problema")
+
+    var dir = "/tmp/kofcloud-status-cert-" + crypto.randomHex(4)
+    var good = dir + "/good.pem"
+    var shortPem = dir + "/short.pem"
+    var wrong = dir + "/wrong.pem"
+    var gen = process.run("sh", "-c", "mkdir -p " + dir + " && openssl req -x509 -newkey rsa:2048 -keyout " + dir + "/k1.pem -out " + good + " -days 3650 -nodes -subj /CN=kofcloud.io -addext subjectAltName=DNS:*.mel.kofcloud.io 2>/dev/null && openssl req -x509 -newkey rsa:2048 -keyout " + dir + "/k2.pem -out " + shortPem + " -days 1 -nodes -subj /CN=kofcloud.io -addext subjectAltName=DNS:*.mel.kofcloud.io 2>/dev/null && openssl req -x509 -newkey rsa:2048 -keyout " + dir + "/k3.pem -out " + wrong + " -days 3650 -nodes -subj /CN=other.example -addext subjectAltName=DNS:other.example 2>/dev/null")
+    var probe = process.run("openssl", "version")
+    if (probe.exitCode != 0 || gen.exitCode != 0) {
+        // Mesmo criterio do doctor-tls/scan: sem openssl, a integracao pula
+        // (os casos puros acima e o trava de fonte seguem rodando).
+        return
+    }
+
+    // PEM real que cobre (curinga da conta), valido por 10 anos: ok por host.
+    var okLines = serviceCertLines(good, listOf("site.mel.kofcloud.io", "loja.mel.kofcloud.io"))
+    assert(okLines.size == 2, "uma linha por hostname")
+    assert(okLines.get(0).startsWith("ok"), "curinga cobre o default: " + okLines.get(0))
+    assert(okLines.get(0).indexOf("site.mel.kofcloud.io") >= 0, "linha nomeia o host")
+    assert(okLines.get(0).indexOf("expira") < 0, "sem aviso de expiracao")
+    assert(okLines.get(1).startsWith("ok"), "segundo host tambem")
+
+    // PEM real expirando em 30 dias: aviso na linha ok, NAO FALHA (mesma
+    // semantica do domain verify; o doctor e quem trata expiracao como falha).
+    var shortLines = serviceCertLines(shortPem, listOf("site.mel.kofcloud.io"))
+    assert(shortLines.get(0).startsWith("ok"), "expirando segue ok: " + shortLines.get(0))
+    assert(shortLines.get(0).indexOf("expira em menos de 30 dias") >= 0, "aviso de expiracao")
+
+    // PEM real de outro dominio: FALHA dizendo o que cobre.
+    var wrongLines = serviceCertLines(wrong, listOf("site.mel.kofcloud.io"))
+    assert(wrongLines.get(0).startsWith("FALHA tls"), "outro dominio e FALHA: " + wrongLines.get(0))
+    assert(wrongLines.get(0).indexOf("other.example") >= 0, "diz o que o PEM cobre")
+}
+
+test "service status: cmdServiceStatus julga o PEM e sai 1 na FALHA", "status-cert" {
+    var controlPort = 19965
+    var registry = Registry("/tmp/kofcloud-svccert-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    var url = "http://127.0.0.1:" + intToString(controlPort)
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var device = registerDevice(url, token, "notebook", "pk1")
+    requireOk(http.post(url + "/v1/services", "{\"deviceId\":\"" + device + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", jsonHeader(token)))
+
+    var dir = "/tmp/kofcloud-svccert-pem-" + crypto.randomHex(4)
+    var good = dir + "/good.pem"
+    var wrong = dir + "/wrong.pem"
+    var gen = process.run("sh", "-c", "mkdir -p " + dir + " && openssl req -x509 -newkey rsa:2048 -keyout " + dir + "/k1.pem -out " + good + " -days 3650 -nodes -subj /CN=kofcloud.io -addext subjectAltName=DNS:*.mel.kofcloud.io 2>/dev/null && openssl req -x509 -newkey rsa:2048 -keyout " + dir + "/k2.pem -out " + wrong + " -days 3650 -nodes -subj /CN=other.example -addext subjectAltName=DNS:other.example 2>/dev/null")
+    var probe = process.run("openssl", "version")
+    if (probe.exitCode != 0 || gen.exitCode != 0) {
+        return
+    }
+
+    // Flags soltas/repetidas barram antes de qualquer rede (sem sessao).
+    var prior = readTextOr(sessionPath(), "")
+    saveSession(LocalSession("", "mel", token, url))
+    var looseCode = cmdServiceStatus(listOf("site", "--tls-cert"))
+    var dupCode = cmdServiceStatus(listOf("site", "--tls-cert", good, "--tls-cert", wrong))
+    var goodCode = cmdServiceStatus(listOf("site", "--tls-cert", good))
+    var wrongCode = cmdServiceStatus(listOf("site", "--tls-cert", wrong))
+    if (prior.length == 0) {
+        File(sessionPath()).delete()
+    } else {
+        writeTextTo(sessionPath(), prior)
+    }
+    assert(looseCode == 1, "flag solta recusa")
+    assert(dupCode == 1, "flag repetida recusa")
+    assert(goodCode == 0, "PEM que cobre: exit 0")
+    assert(wrongCode == 1, "PEM de outro dominio: exit 1")
+
+    // Trava de fonte: o status precisa julgar via `serviceCertLines` (a
+    // regra UNICA `domainCertLine`) e tratar FALHA como exit 1.
+    var raw = File("src/kofcloud/cli/Commands.kf").readText()
+    var text = ""
+    if (raw != null) {
+        text = raw
+    }
+    if (text.length == 0) {
+        return
+    }
+    var start = text.indexOf("Int cmdServiceStatus(")
+    var end = text.indexOf("Int cmdServiceSuspend(", start)
+    if (end < 0) {
+        end = text.length
+    }
+    var body = text.substring(start, end)
+    assert(body.indexOf("serviceCertLines(") >= 0, "delega no openssl-once")
+    assert(body.indexOf("flagMissingValue(args, \"--tls-cert\")") >= 0, "guarda flag solta")
+    assert(body.indexOf("flagDuplicated(args, \"--tls-cert\")") >= 0, "guarda flag repetida")
+}
+
+test "service status: customs do servico entram no julgamento do PEM", "status-cert" {
+    // O rodape julga o hostname DEFAULT + os customs impressos no status
+    // (customDomainsFor): um PEM de custom nao cobre o default e vice-versa —
+    // o operador ve linha por linha. Puro: a selecao de hosts e a regra nova.
+    var domains = listOf(
+        DomainEntry("api.exemplo.com", "custom", "site", "VERIFIED"),
+        DomainEntry("outro.exemplo.com", "custom", "loja", "PENDING")
+    )
+    var service = statusCertService("site")
+    var hosts = listOf(service.hostname)
+    for (var custom in customDomainsFor(domains, "site")) {
+        hosts.add(custom.hostname)
+    }
+    assert(hosts.size == 2, "default + custom do servico")
+    assert(hosts.get(0) == "site.mel.kofcloud.io", "default primeiro")
+    assert(hosts.get(1) == "api.exemplo.com", "custom do proprio servico")
+    assert(customDomainsFor(domains, "loja").get(0).hostname == "outro.exemplo.com", "loja pega o seu")
+    // PENDING tambem entra: DNS pendente nao muda o PEM exigido pelo host.
+}

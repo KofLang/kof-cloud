@@ -418,9 +418,19 @@ entre cliente e Edge. Cloud robusta de verdade exige HTTPS ponta a ponta
   regra só): PEM que não cobre vira `FALHA tls`, curinga da conta cobre, e
   sem SAN consultado (openssl ausente) não se inventa falha. Prova:
   `tests/doctor_test.kf` (`doctor-tls`, 3 testes a mais, com PEM real).
+  **`service status` aceita o PEM ✅** (`--tls-cert <pem>`): o veredito
+  visível fecha a lista dos comandos que olham um serviço de relance —
+  openssl roda UMA vez (`serviceCertLines`) e cada hostname impresso no
+  status (default da conta + customs via `customDomainsFor`) ganha a MESMA
+  linha do `domain verify --tls-cert` (`domainCertLine`/`certHostVerdict`,
+  uma regra só): expirando em 30 dias é aviso na linha `ok`, PEM
+  ausente/inválido/que não cobre é `FALHA tls` e sai exit 1; flags soltas/
+  repetidas barram antes de qualquer rede. Prova:
+  `tests/status_cert_test.kf` (`svcdevice-unit` + `status-cert`, com PEM
+  real e pula sem openssl; mutação na expiração quebra o aviso e foi
+  revertida).
   Pendente: SNI por hostname (mapa em memória, recarregado sem derrubar o
-  Edge — depende do runtime), renovação automática, e expiração visível
-  também no `service status`.
+  Edge — depende do runtime) e renovação automática.
   ACME de verdade (DNS-01) depende de ES256 no stdlib — sem isso, emissão
   continua externa (ver `12-tls.md`).
 

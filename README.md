@@ -108,7 +108,7 @@ publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--addre
         [--allow-method VERBO]... [--allow-path /caminho]...
 unpublish <nome>
 service list
-service status <nome>
+service status <nome> [--tls-cert <pem>]  (com o PEM, julga expiracao e cobertura para o hostname do servico + dominios proprios)
 service suspend <nome>       (fora da rota, nada removido)
 service unsuspend <nome>
 service token <nome> [--ttl <horas>]  (credencial kfs_ para AUTHENTICATED; ex.: --ttl 24)

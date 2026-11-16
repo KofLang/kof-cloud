@@ -27,7 +27,7 @@ String usageText() {
     out = out + "  publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>] [--allow-method VERBO]... [--allow-path /caminho]...\n"
     out = out + "  unpublish <nome>\n"
     out = out + "  service list\n"
-    out = out + "  service status <nome>\n"
+    out = out + "  service status <nome> [--tls-cert <pem>]  (com o PEM, julga expiracao e cobertura para os hosts do servico)\n"
     out = out + "  service suspend <nome>\n"
     out = out + "  service unsuspend <nome>\n"
     out = out + "  service token <nome> [--ttl <horas>]  (credencial kfs_ para AUTHENTICATED)\n"

@@ -1004,6 +1004,12 @@ String serviceReachabilityNote(String status, Bool tunnelOnline, Bool tunnelKnow
 }
 
 Int cmdServiceStatus(List<String> args) {
+    // Flag solta/repetida barra antes de qualquer rede (precedente:
+    // --tls-cert do domain verify e do scan).
+    if (flagMissingValue(args, "--tls-cert") || flagDuplicated(args, "--tls-cert")) {
+        println("uso: kof cloud service status <nome> [--tls-cert <pem>]")
+        return 1
+    }
     var session = loadSession()
     if (session == null) {
         println(notLoggedInLine())
@@ -1011,7 +1017,7 @@ Int cmdServiceStatus(List<String> args) {
     }
     var name = firstPositional(args)
     if (name.trim().length == 0 || extraPositional(args, 1)) {
-        println("uso: kof cloud service status <nome>")
+        println("uso: kof cloud service status <nome> [--tls-cert <pem>]")
         return 1
     }
     try {
@@ -1081,14 +1087,43 @@ Int cmdServiceStatus(List<String> args) {
                 // Dominios proprios vinculados: o operador ve de relance se
                 // o servico tem customs (e se falta DNS em algum). Falha
                 // silenciosa nao derruba o status (mesma regra do inventario).
+                var statusHosts = listOf<String>()
                 try {
                     var domainRaw = requireOk(http.get(session.controlUrl + "/v1/domains", authHeader(session.token)))
                     var domains = json.decode<List<DomainEntry>>(domainRaw)
                     var customs = customDomainsFor(domains, service.name)
                     for (var custom in customs) {
                         println("Dominio: " + domainListLine(custom))
+                        statusHosts.add(custom.hostname)
                     }
                 } catch (String innerDomains) {
+                }
+                // Rodaapé TLS (Fase 9 slice 3): com --tls-cert, o PEM julgado
+                // contra o hostname do status + os customs (uma linha por
+                // hostname, via a mesma `domainCertLine` do domain verify).
+                // PEM que nao cobre ou invalido vira FALHA (exit 1); aviso de
+                // expiracao ou openssl ausente so aparecem na linha. Sem
+                // --tls-cert nada e impresso — o status nao muda para quem
+                // nao pediu.
+                var certPath = flagValue(args, "--tls-cert").trim()
+                if (certPath.length > 0) {
+                    var certHosts = listOf(service.hostname)
+                    for (var domainHost in statusHosts) {
+                        if (domainHost != service.hostname) {
+                            certHosts.add(domainHost)
+                        }
+                    }
+                    var certLines = serviceCertLines(certPath, certHosts)
+                    var certFailed = false
+                    for (var certLine in certLines) {
+                        println(certLine)
+                        if (certLine.startsWith("FALHA")) {
+                            certFailed = true
+                        }
+                    }
+                    if (certFailed) {
+                        return 1
+                    }
                 }
                 return 0
             }
@@ -1932,6 +1967,43 @@ Bool domainTlsBlocks(String certPath, String hostname) {
     var line = domainCertLine(certPath, hostname, exists, parseExit, sanOut, subjectOut, expiring)
     println(line)
     return line.startsWith("FALHA")
+}
+
+// Rodapé TLS do `service status --tls-cert` (Fase 9 slice 3): roda o openssl
+// UMA vez (parse + checkend + SAN + subject, o mesmo quarteto do
+// `domainTlsBlocks`) e devolve uma linha `domainCertLine` POR hostname do
+// serviço — o default da conta e os customs impressos no próprio status.
+// Reusar a linha do `domain verify --tls-cert` mantém UMA regra de veredito
+// (`certHostVerdict`): expiração visível como aviso na linha ok, PEM
+// ausente/inválido/que não cobre como FALHA; openssl ausente vira aviso, não
+// recusa inventada. Lista vazia (sem --tls-cert) devolve lista vazia.
+List<String> serviceCertLines(String certPath, List<String> hosts) {
+    var out = listOf<String>()
+    if (certPath.length == 0 || hosts.size == 0) {
+        return out
+    }
+    var exists = fileExists(certPath)
+    var parseExit = -1
+    var sanOut = ""
+    var subjectOut = ""
+    var expiring = false
+    if (exists) {
+        try {
+            parseExit = process.run("openssl", "x509", "-in", certPath, "-noout").exitCode
+            if (parseExit == 0) {
+                sanOut = process.run("openssl", "x509", "-in", certPath, "-noout", "-ext", "subjectAltName").stdout
+                subjectOut = process.run("openssl", "x509", "-in", certPath, "-noout", "-subject").stdout
+                var checkend = process.run("openssl", "x509", "-in", certPath, "-noout", "-checkend", tlsCheckendWindowSec())
+                expiring = tlsCertExpiringSoon(checkend.exitCode)
+            }
+        } catch (String e) {
+            parseExit = -1
+        }
+    }
+    for (var host in hosts) {
+        out.add(domainCertLine(certPath, host, exists, parseExit, sanOut, subjectOut, expiring))
+    }
+    return out
 }
 
 Int cmdDomainVerify(List<String> args) {
