@@ -71,6 +71,24 @@ test "painel: status do dominio usa o vocabulario da API (VERIFIED/PENDING)", "p
     assert(count == 2, "definicao + uma chamada por carregamento")
 }
 
+test "painel s2: criar conta pelo painel (escopo do slice, mesma rota da CLI)", "panel-actions-unit" {
+    // O escopo do slice 2 promete "criar conta ... tudo pelo painel", mas o
+    // painel so tinha o campo de colar token — criar conta exigia terminal.
+    // O HTML tem o formulario e chama a MESMA rota publica (POST
+    // /v1/accounts) que o CLI usa; o kfc_ devolvido segue a regra do kfs_:
+    // aparece UMA vez (para colar no campo acima) e nunca e gravado.
+    var html = panelHtml()
+    assert(html.indexOf("/v1/accounts','POST'") >= 0, "rota publica de criar conta")
+    assert(html.indexOf("newhandle") >= 0 && html.indexOf("newpass") >= 0, "campos do formulario")
+    assert(html.indexOf("token aparece UMA vez") >= 0, "aviso de emissao unica")
+    // Seguranca: nenhum valor de token embutido (a pagina nao sabe nenhum
+    // kfc_); a senha da conta nova nunca vai para value/HTML estatico.
+    assert(html.indexOf("kfc_") < 0, "sem token no HTML")
+    assert(html.indexOf("localStorage") < 0, "sem persistencia")
+    // Sem usuario/senha, o painel nem chama a rota.
+    assert(html.indexOf("informe usuario e senha") >= 0, "guarda local de campos vazios")
+}
+
 test "painel s2: as rotas que o painel chama funcionam (publica e remove)", "panel-actions" {
     var controlPort = 19931
     var registry = Registry("/tmp/kofcloud-pa-" + crypto.randomHex(4) + ".json")
@@ -143,6 +161,40 @@ test "painel s2: adicionar dominio usa o NOME do servico (contrato da API)", "pa
     assert(statusOf(listed) == 200, "listou")
     assert(bodyOf(listed).indexOf("\"status\":\"PENDING\"") >= 0, "dominio novo nasce PENDING")
     assert(bodyOf(listed).indexOf("ACTIVE") < 0, "listagem nunca fala ACTIVE")
+}
+
+test "painel s2: criar conta funciona pela rota que o botao chama", "panel-actions" {
+    // O botao "Criar conta" manda {handle, email, password} para POST
+    // /v1/accounts e mostra o token UMA vez. O e2e prova a rota com esse
+    // corpo exato, incluindo as recusas (senha curta, handle repetido).
+    var controlPort = 19934
+    var registry = Registry("/tmp/kofcloud-pa4-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    control.enablePanel()
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    // Corpo exato que o painel envia.
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
+    assert(statusOf(created) == 200, "conta criada")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    assert(token.length > 0, "token devolvido uma vez")
+
+    // O token devolvido funciona de verdade (a conta existe e autentica).
+    var devs = httpGetToken(controlPort, "/v1/devices", token)
+    assert(statusOf(devs) == 200, "token novo autentica")
+
+    // Senha curta: a API recusa (o painel nem deixaria chegar sem senha).
+    var curta = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"bob\",\"email\":\"b@e.com\",\"password\":\"abc\"}", "")
+    assert(statusOf(curta) == 400, "senha curta recusada")
+
+    // Handle repetido: recusado (sem duplicar conta).
+    var repetida = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"outra@e.com\",\"password\":\"segredo2\"}", "")
+    assert(statusOf(repetida) == 409, "handle repetido recusado")
+
+    // E a pagina servida expoe o formulario (nao so a API).
+    var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
+    assert(bodyOf(page).indexOf("newhandle") >= 0, "formulario no ar")
 }
 
 Bool isHexChar(Char c) {

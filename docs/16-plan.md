@@ -792,9 +792,9 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   remover domínio, revogar dispositivo, revogar todas as credenciais) pedem
   `confirm()`. O `kfs_` aparece **uma única vez** na emissão e nunca em
   listagem; o token da conta continua só na memória da aba. Prova:
-  `tests/panel_actions_test.kf` (5 — o HTML expõe cada ação, o e2e
-  publica/suspende/emite/remove pelas rotas que o painel usa, e o contrato do
-  "Adicionar domínio").
+  `tests/panel_actions_test.kf` (8 — o HTML expõe cada ação, o e2e
+  publica/suspende/emite/remove pelas rotas que o painel usa, o contrato do
+  "Adicionar domínio" e o "Criar conta" pela mesma rota pública da CLI).
 
   **Bug corrigido (device do publish).** O painel publicava sempre no
   **primeiro** dispositivo da lista (`STATE.devs[0]`), sem escolha: com mais
@@ -822,6 +822,18 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   vezes por carregamento (chamada duplicada na mesma função). Prova:
   `tests/panel_actions_test.kf` (trava do vocabulário no HTML + e2e da
   listagem PENDING; mutação revertendo a comparação quebra).
+
+  **Gap fechado (criar conta pelo painel).** O escopo do slice 2 prometia
+  "criar conta ... tudo pelo painel", mas o painel só tinha o campo de colar
+  token — criar conta exigia terminal. Agora a seção Conta tem o formulário
+  (usuário/email/senha) chamando a MESMA rota pública `POST /v1/accounts`
+  da CLI, com guarda local (vazio nem chama a rota) e o token devolvido
+  aparecendo UMA vez (para colar no campo acima) e nunca gravado (sem
+  `localStorage`, sem URL — a regra já valia para o `kfs_` na emissão).
+  O painel segue sem endpoint privilegiado. Prova:
+  `tests/panel_actions_test.kf` (trava do formulário no HTML + e2e do corpo
+  exato, do token que autentica, da senha curta 400 e do handle repetido
+  409; mutação da rota quebra).
 * **Slice 3 — onboarding guiado.** Criar conta → baixar desktop client →
   publish do primeiro serviço em 3 telas, com diagnóstico embutido
   (reaproveita a lógica do `doctor`, camada por camada). Prova: fluxo

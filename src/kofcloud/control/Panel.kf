@@ -15,7 +15,7 @@ package kofcloud.control
 
 // Versao do painel (aparece no rodape; ajuda a saber o que esta no ar).
 String panelVersion() {
-    return "2"
+    return "3"
 }
 
 // O HTML e uma constante: um unico lugar para revisar. Nenhum dado de conta
@@ -51,6 +51,10 @@ footer{padding:16px 24px;color:#5b606a;font-size:12px}
   <button onclick=\"carregar()\">Carregar</button>
   <span id=\"msg\" class=\"muted\"></span>
   <p class=\"muted\">O token (o mesmo do <code>kof cloud login</code>) fica so na memoria desta aba. Nada e gravado.</p>
+  <div class=\"row\"><input id=\"newhandle\" placeholder=\"novo usuario\"><input id=\"newemail\" placeholder=\"email\">
+  <input id=\"newpass\" type=\"password\" placeholder=\"senha (4+ letras)\" autocomplete=\"new-password\">
+  <button onclick=\"acao('signup')\">Criar conta</button></div>
+  <div id=\"novaconta\"></div>
 </section>
 <section><h2>Dispositivos</h2><div id=\"devs\"></div>
   <p class=\"muted\">Revogar e permanente — suspender e reversivel.</p>
@@ -76,7 +80,7 @@ footer{padding:16px 24px;color:#5b606a;font-size:12px}
   <button onclick=\"acao('domain-verify')\">Verificar DNS</button>
   <button class=\"danger\" onclick=\"acao('domain-remove')\">Remover</button></div></section>
 </main>
-<footer>KofCloud painel v" + panelVersion() + " — usa /v1/devices, /v1/presence, /v1/services, /v1/domains, /v1/services/token, /v1/domains/{add,verify,remove}, /v1/devices/{revoke,suspend,unsuspend}, /v1/services/{suspend,unsuspend}</footer>
+<footer>KofCloud painel v" + panelVersion() + " — usa /v1/accounts, /v1/devices, /v1/presence, /v1/services, /v1/domains, /v1/services/token, /v1/domains/{add,verify,remove}, /v1/devices/{revoke,suspend,unsuspend}, /v1/services/{suspend,unsuspend}</footer>
 <script>
 var TOKEN = '';  // so na memoria da aba; nunca persistido
 var STATE = {svcs: [], devs: []};
@@ -161,7 +165,21 @@ function carregar(){
 }
 function acao(tipo){
   var p;
-  if(tipo === 'publish'){
+  if(tipo === 'signup'){
+    var nh=document.getElementById('newhandle').value.trim();
+    var ne=document.getElementById('newemail').value.trim();
+    var np=document.getElementById('newpass').value;
+    if(!nh || !np){ erro('informe usuario e senha'); return; }
+    // Conta nova: a rota devolve o token da conta — mesma regra da
+    // credencial de servico: o token aparece UMA vez (para colar no campo
+    // acima) e nunca e gravado na pagina (so vive na memoria da aba).
+    p = api('/v1/accounts','POST',{handle: nh, email: ne, password: np}).then(function(j){
+      var el=document.getElementById('novaconta');
+      el.innerHTML = '<p class=\"muted\">Conta criada — o token aparece UMA vez; cole no campo acima:</p>' +
+                     '<div class=\"secret\">' + esc(j.token) + '</div>';
+      return {ok: 'conta criada'};
+    });
+  } else if(tipo === 'publish'){
     var nome=document.getElementById('svcname').value.trim();
     var porta=document.getElementById('svcport').value.trim();
     if(!nome || !porta){ erro('informe nome e porta'); return; }
