@@ -867,6 +867,20 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   `tests/panel_actions_test.kf` (trava do HTML + e2e das três rotas no
   estado que o painel renderiza; mutação da rota de auditoria quebra).
 
+  **Segundo passo ✅ (banner do próximo passo).** O painel agora aponta o
+  que falta na conta, derivado do que a página JÁ buscou (devices e
+  serviços — nenhuma consulta nova, nenhum estado inventado): sem
+  dispositivo = passo 1 (botão Registrar, ou `kof cloud login --device
+  <nome>` na máquina); device sem serviço = passo 2 (publicar — a rota
+  pública responde quando o `kof cloud connect` estiver rodando); com
+  serviço, a conta está no ar e o banner some. O banner se atualiza no
+  carregamento inicial e após cada ação (idempotente: `innerHTML`
+  sobrescreve, nada acumula). O fluxo guiado de 3 telas segue pendente —
+  este passo costura os que já existem. Prova:
+  `tests/panel_actions_test.kf` (trava do banner e das duas chamadas +
+  e2e que percorre os três estados da conta — `[]` → device → serviço
+  publicado; mutação removendo a chamada do carregamento quebra).
+
 **Regras:** o painel nunca mostra `kfs_` depois da emissão (mesma regra da
 CLI); nunca loga corpo/token; é estático + `fetch`, sem framework pesado
 (o Kof serve arquivo + JSON; o resto é HTML/JS simples).

@@ -282,6 +282,25 @@ test "painel: secao Diagnostico usa as camadas do doctor pela API (F12 s3)", "pa
     assert(html.indexOf("ACTIVE") < 0, "sem vocabulario velho")
 }
 
+test "painel: banner de onboarding aponta o proximo passo (F12 s3)", "panel-actions-unit" {
+    // Segundo passo do onboarding guiado: a pagina aponta o proximo passo
+    // da conta derivado do que ELA JA BUSCOU (devices e servicos) — sem
+    // consulta nova, sem estado inventado. Sem device = passo 1 (registrar);
+    // device sem servico = passo 2 (publicar); com servico o banner some.
+    var html = panelHtml()
+    assert(html.indexOf("id=\"onboarding\"") >= 0, "div do banner existe")
+    assert(html.indexOf("function onboarding(devs, svcs)") >= 0, "funcao derivada do que ja foi buscado")
+    assert(html.indexOf("Primeiro passo") >= 0 && html.indexOf("Registrar") >= 0, "passo 1 orienta o registro")
+    assert(html.indexOf("Quase la") >= 0 && html.indexOf("publique o primeiro servico") >= 0, "passo 2 orienta o publish")
+    assert(html.indexOf("kof cloud login --device") >= 0, "cita o login da maquina")
+    // O banner se atualiza junto: chamado no carregamento inicial E depois
+    // de cada acao (a segunda chamada era o bug da duplicata — aqui e de
+    // proposito e idempotente: innerHTML sobrescreve, nada acumula).
+    assert(html.indexOf("onboarding(devs, svcs);") >= 0, "banner atualiza ao carregar")
+    assert(html.indexOf("onboarding(STATE.devs, STATE.svcs);") >= 0, "banner atualiza apos cada acao")
+    assert(html.indexOf("el.innerHTML = '';") >= 0, "some quando a conta esta no ar")
+}
+
 test "painel s2: registrar device funciona pela rota e a maquina adota", "panel-actions" {
     // Corpo exato que o botao "Registrar" envia: reserva o NOME. A maquina
     // adota com `login --device <nome>` — o re-registro com a chave dela
@@ -362,4 +381,43 @@ test "painel: diagnostico le as rotas que o doctor consulta (F12 s3)", "panel-ac
     var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
     assert(bodyOf(page).indexOf("id=\"diag\"") >= 0, "secao no ar")
     assert(bodyOf(page).indexOf("/v1/audit/verify") >= 0, "usa a rota do doctor")
+}
+
+test "painel: banner de onboarding acompanha o estado real da conta (F12 s3)", "panel-actions" {
+    // O banner deriva o passo do que a pagina busca: /v1/devices e
+    // /v1/services. O e2e percorre os estados na ordem do onboarding —
+    // conta nova (passo 1), device registrado (passo 2), servico publicado
+    // (banner some) — provando que os dados que alimentam a decisao evoluem
+    // como o HTML espera.
+    var controlPort = 19937
+    var registry = Registry("/tmp/kofcloud-pa7-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    control.enablePanel()
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+
+    // Estado 1: conta nova, nada registrado — o banner aponta o passo 1.
+    var devs1 = httpGetToken(controlPort, "/v1/devices", token)
+    assert(statusOf(devs1) == 200, "devices 200")
+    assert(bodyOf(devs1) == "[]", "sem dispositivos — passo 1")
+
+    // Estado 2: device registrado — o banner aponta o passo 2.
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+    assert(statusOf(deviceResponse) == 200, "device registrado")
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var svcs1 = httpGetToken(controlPort, "/v1/services", token)
+    assert(bodyOf(svcs1) == "[]", "sem servicos — passo 2")
+
+    // Estado 3: servico publicado — o banner some.
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "servico publicado")
+    var svcs2 = httpGetToken(controlPort, "/v1/services", token)
+    assert(bodyOf(svcs2).indexOf("\"name\":\"site\"") >= 0, "conta no ar — banner some")
+
+    // E a pagina servida carrega o banner e as duas fontes de decisao.
+    var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
+    assert(bodyOf(page).indexOf("id=\"onboarding\"") >= 0, "banner no ar")
 }
