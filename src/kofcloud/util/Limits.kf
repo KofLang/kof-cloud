@@ -398,12 +398,25 @@ Int limitHttpBodyBytes() {
     return httpBodyLimitFrom(config.int("kofcloud.limits.httpBodyBytes", 1048576))
 }
 
-// Teto do `agent.log` local (bytes). Append que estourar corta o inicio
-// (linhas inteiras, via trimLogHead) em vez de crescer sem limite: log
-// local de diagnostico, nao trilha de auditoria (essa vive no control
-// plane, em anel de 100). Default folgado para sessoes longas de connect.
+// Teto do `agent.log` e do `agent-runtime.log` locais (bytes). Append que
+// estourar corta o inicio (linhas inteiras, via trimLogHead) em vez de
+// crescer sem limite: log local de diagnostico, nao trilha de auditoria
+// (essa vive no control plane, em anel de 100). Default folgado para
+// sessoes longas de connect.
+//
+// Recuo em fonte pura: com 0/negativo o `trimLogHead` devolve o texto sem
+// cortar (`maxBytes <= 0` = sem teto) e os DOIS logs crescem sem limite —
+// disco cheio e o processo do Agent morre numa escrita. Zero nunca foi
+// "sem log": a saida continua no stdout.
+Int logBytesFrom(Int configured) {
+    if (configured <= 0) {
+        return 262144
+    }
+    return configured
+}
+
 Int limitLogBytes() {
-    return config.int("kofcloud.limits.logBytes", 262144)
+    return logBytesFrom(config.int("kofcloud.limits.logBytes", 262144))
 }
 
 // Teto do corpo HTTP que o Edge aceita/acumula no relay (bytes). Fonte
