@@ -139,23 +139,56 @@ Int limitStreamIdleMs() {
 // Intervalo do heartbeat do tunel (PING/PONG, ms). Fonte unica: o Edge
 // anuncia no WELCOME e no /v1/connect, e o Agent recai no mesmo valor
 // quando o fio vem sem heartbeat valido. Mesmo valor nos tres pontos.
+//
+// Recuo em fonte pura: com 0/negativo o pinger vira `time.sleep(0)` e
+// martela PING sem parar (busy-loop que torra CPU nos dois lados). Nada
+// documenta 0 como intencao aqui — zerado recai no default, como os irmaos.
+Int heartbeatMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 15000
+    }
+    return configured
+}
+
 Int limitHeartbeatMs() {
-    return config.int("kofcloud.limits.heartbeatMs", 15000)
+    return heartbeatMsFrom(config.int("kofcloud.limits.heartbeatMs", 15000))
 }
 
 // Passo da varredura de ociosidade (ms): Edge e Agent verificam a cada
 // passo se a sessao passou do idle ou se ha streams presos. Fonte unica
 // para os dois sweepers varrerem no mesmo ritmo.
+//
+// Recuo em fonte pura: com 0/negativo o sweeper vira `time.sleep(0)` e gira
+// sem parar (busy-loop). Zerado recai no default.
+Int idleSweepMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 5000
+    }
+    return configured
+}
+
 Int limitIdleSweepMs() {
-    return config.int("kofcloud.limits.idleSweepMs", 5000)
+    return idleSweepMsFrom(config.int("kofcloud.limits.idleSweepMs", 5000))
 }
 
 // Intervalo do health check local do Agent (ms): a cada passo o Agent
 // reconecta TCP nos servicos e reporta mudanca ao Edge; o refresher da
 // tabela re-busca os servicos a cada 6 passos. Fonte unica para que o
 // ciclo de health e o de refresh andem juntos.
+//
+// Recuo em fonte pura: com 0/negativo o laco de health vira `time.sleep(0)`
+// e sonda os servicos locais sem parar (busy-loop). O refresh e derivado
+// (`limitRefreshMs(healthMs)`), entao o piso aqui tambem protege o refresh.
+// Zerado recai no default.
+Int healthMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 5000
+    }
+    return configured
+}
+
 Int limitHealthMs() {
-    return config.int("kofcloud.limits.healthMs", 5000)
+    return healthMsFrom(config.int("kofcloud.limits.healthMs", 5000))
 }
 
 // Prazo de UMA checagem de health do servico local (ms). O `receive` bloqueia

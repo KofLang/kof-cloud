@@ -26,14 +26,28 @@ test "idle: touch so em frame util; PING nao renova", "idle" {
     assert(streamIdleMsFrom(-1) == 30000, "stream negativo recai no default")
     assert(streamIdleMsFrom(10000) == 10000, "stream positivo passa")
     // Fonte unica do heartbeat (Edge anuncia, connect ecoa, Agent recai):
-    // mudar no Limits muda os tres juntos.
+    // mudar no Limits muda os tres juntos. Recuo em fonte pura: com 0/neg
+    // o pinger vira `time.sleep(0)` e martela PING sem parar (busy-loop).
     assert(limitHeartbeatMs() == 15000, "heartbeat default 15 s")
+    assert(heartbeatMsFrom(0) == 15000, "heartbeat zero recai no default")
+    assert(heartbeatMsFrom(-1) == 15000, "heartbeat negativo recai no default")
+    assert(heartbeatMsFrom(3000) == 3000, "heartbeat positivo passa")
     // Mesmo passo nos dois sweepers (Edge + Agent): mudar num so lado
-    // dessincronizava a deteccao de tunel zumbi.
+    // dessincronizava a deteccao de tunel zumbi. Recuo: com 0/neg o sweeper
+    // gira sem parar (`time.sleep(0)`).
     assert(limitIdleSweepMs() == 5000, "sweep default 5 s")
+    assert(idleSweepMsFrom(0) == 5000, "sweep zero recai no default")
+    assert(idleSweepMsFrom(-5) == 5000, "sweep negativo recai no default")
+    assert(idleSweepMsFrom(1000) == 1000, "sweep positivo passa")
     // Health local e refresh da tabela andam juntos (refresh = 6xhealth):
-    // o fallback do Agent recai aqui quando a config vem sem health.
+    // o fallback do Agent recai aqui quando a config vem sem health. Recuo:
+    // com 0/neg o laco de health vira `time.sleep(0)` e sonda sem parar.
     assert(limitHealthMs() == 5000, "health default 5 s")
+    assert(healthMsFrom(0) == 5000, "health zero recai no default")
+    assert(healthMsFrom(-1) == 5000, "health negativo recai no default")
+    assert(healthMsFrom(1000) == 1000, "health positivo passa")
+    // O refresh deriva do health, entao o piso do health tambem o protege.
+    assert(limitRefreshMs(healthMsFrom(0)) == 30000, "health zerado ainda gera refresh valido")
     // Fonte unica do refresh: o spawn e o fallback do refresher passam
     // pela mesma funcao (sem isso o `* 6` do chamador e o `30000` do
     // fallback andariam separados).
