@@ -15,7 +15,7 @@ package kofcloud.control
 
 // Versao do painel (aparece no rodape; ajuda a saber o que esta no ar).
 String panelVersion() {
-    return "3"
+    return "4"
 }
 
 // O HTML e uma constante: um unico lugar para revisar. Nenhum dado de conta
@@ -58,6 +58,9 @@ footer{padding:16px 24px;color:#5b606a;font-size:12px}
 </section>
 <section><h2>Dispositivos</h2><div id=\"devs\"></div>
   <p class=\"muted\">Revogar e permanente — suspender e reversivel.</p>
+  <div class=\"row\"><input id=\"devnew\" placeholder=\"nome do novo dispositivo\">
+  <button onclick=\"acao('device-add')\">Registrar</button></div>
+  <p class=\"muted\">Registrar aqui reserva o nome: a maquina assume o dispositivo com <code>kof cloud login --device &lt;nome&gt;</code> — a chave verdadeira nasce na maquina, nunca na pagina.</p>
   <div class=\"row\"><input id=\"devname\" placeholder=\"nome do dispositivo\">
   <button onclick=\"acao('device-suspend')\">Suspender</button>
   <button onclick=\"acao('device-unsuspend')\">Reativar</button>
@@ -217,6 +220,16 @@ function acao(tipo){
       }
       return chain;
     });
+  } else if(tipo === 'device-add'){
+    var nn=document.getElementById('devnew').value.trim();
+    if(!nn){ erro('informe o nome do dispositivo'); return; }
+    // Registrar aqui reserva o NOME: a maquina assume esse mesmo dispositivo
+    // com `login --device <nn>` (dedup por nome devolve o mesmo id, entao o
+    // publish feito pelo painel ja espera a maquina certa). A chave
+    // verdadeira nasce e vive na maquina — o fio exige uma no corpo, entao
+    // vai o marcador abaixo; ele nunca e verificado no handshake e nem
+    // painel nem CLI o exibem.
+    p = api('/v1/devices','POST',{name: nn, publicKey: 'aguardando-maquina'});
   } else if(tipo === 'device-suspend' || tipo === 'device-unsuspend' || tipo === 'device-revoke'){
     var dn=document.getElementById('devname').value.trim();
     var devId = idPorNome(STATE.devs, dn);

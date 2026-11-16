@@ -218,6 +218,22 @@ test "painel s2: publicar exige escolher o dispositivo (nunca o primeiro)", "pan
     assert(html.indexOf("document.getElementById('svcdev').value") >= 0, "publish usa a escolha")
 }
 
+test "painel s2: registrar device pelo painel (escopo do slice, mesmo contrato do login)", "panel-actions-unit" {
+    // O escopo do slice 2 promete "registrar device ... tudo pelo painel",
+    // mas a secao Dispositivos so suspendia/reativava/revogava — registrar
+    // exigia terminal. O formulario reserva o NOME: a maquina assume o
+    // dispositivo com `login --device <nome>` (dedup por nome devolve o
+    // mesmo id). A chave verdadeira nasce na maquina; o corpo exige uma,
+    // entao vai o marcador honesto (nunca verificado no handshake, nunca
+    // exibido em painel nem CLI).
+    var html = panelHtml()
+    assert(html.indexOf("/v1/devices','POST'") >= 0, "rota publica de registrar device")
+    assert(html.indexOf("devnew") >= 0, "campo do nome existe")
+    assert(html.indexOf("informe o nome do dispositivo") >= 0, "guarda local de nome vazio")
+    assert(html.indexOf("login --device") >= 0, "dica de adocao pela maquina")
+    assert(html.indexOf("aguardando-maquina") >= 0, "marcador de chave honesto")
+}
+
 test "painel s2: publicar no dispositivo escolhido funciona pela rota", "panel-actions" {
     var controlPort = 19933
     var registry = Registry("/tmp/kofcloud-pa3-" + crypto.randomHex(4) + ".json")
@@ -241,4 +257,45 @@ test "painel s2: publicar no dispositivo escolhido funciona pela rota", "panel-a
     // Sem device: a API recusa (o painel nem deixa chegar aqui).
     var semDevice = httpPostJson(controlPort, "/v1/services", "{\"deviceId\":\"\",\"name\":\"x\",\"localPort\":\"1\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", token)
     assert(statusOf(semDevice) != 200, "sem device nao publica")
+}
+
+test "painel s2: registrar device funciona pela rota e a maquina adota", "panel-actions" {
+    // Corpo exato que o botao "Registrar" envia: reserva o NOME. A maquina
+    // adota com `login --device <nome>` — o re-registro com a chave dela
+    // devolve o MESMO id (dedup por nome entre ativos), entao o publish
+    // feito pelo painel ja espera a maquina certa.
+    var controlPort = 19935
+    var registry = Registry("/tmp/kofcloud-pa5-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    control.enablePanel()
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+
+    var reserved = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"aguardando-maquina\"}", token)
+    assert(statusOf(reserved) == 200, "reserva o nome")
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(reserved)), "deviceId")
+    assert(deviceId.length > 0, "id devolvido")
+
+    // A maquina adota: mesmo nome, chave dela — mesmo id, sem duplicar.
+    var adopted = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"chave-real-da-maquina\"}", token)
+    assert(statusOf(adopted) == 200, "adota sem erro")
+    assert(mapField(json.decode<Map<String, String>>(bodyOf(adopted)), "deviceId") == deviceId, "mesmo dispositivo")
+
+    // E o publish no pre-registrado funciona (o que o painel faria depois).
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "publica no pre-registrado")
+
+    // A listagem mostra o dispositivo (a tabela do painel o renderiza).
+    var listed = httpGetToken(controlPort, "/v1/devices", token)
+    assert(bodyOf(listed).indexOf(deviceId) >= 0, "device listado")
+
+    // Nome vazio: a API recusa (o painel nem deixa chegar aqui).
+    assert(statusOf(httpPostJson(controlPort, "/v1/devices", "{\"name\":\"\",\"publicKey\":\"pk\"}", token)) == 400, "nome vazio recusado")
+
+    // E a pagina servida expoe o formulario (nao so a API).
+    var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
+    assert(bodyOf(page).indexOf("devnew") >= 0, "formulario no ar")
 }

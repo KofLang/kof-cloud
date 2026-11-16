@@ -834,6 +834,21 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   `tests/panel_actions_test.kf` (trava do formulário no HTML + e2e do corpo
   exato, do token que autentica, da senha curta 400 e do handle repetido
   409; mutação da rota quebra).
+
+  **Gap fechado (registrar device pelo painel).** O mesmo escopo prometia
+  "registrar device ... tudo pelo painel", mas a seção Dispositivos só
+  suspendia/reativava/revogava — registrar exigia terminal. Agora o botão
+  "Registrar" reserva o NOME pela MESMA rota pública `POST /v1/devices` da
+  CLI, com guarda local (vazio nem chama a rota). A chave pública verdadeira
+  nasce na máquina — o corpo do fio exige uma, então vai o marcador honesto
+  `aguardando-maquina` (nunca verificado no handshake; nem painel nem CLI o
+  exibem). A máquina assume o dispositivo com `login --device <nome>`: o
+  dedup por nome entre ativos devolve o MESMO id, então o publish feito pelo
+  painel já espera a máquina certa. O painel segue sem endpoint
+  privilegiado. Prova: `tests/panel_actions_test.kf` (trava do formulário no
+  HTML + e2e do contrato de adoção — re-registro com a chave da máquina
+  devolve o mesmo id, publish no pré-registrado funciona, nome vazio é 400;
+  mutação da rota quebra).
 * **Slice 3 — onboarding guiado.** Criar conta → baixar desktop client →
   publish do primeiro serviço em 3 telas, com diagnóstico embutido
   (reaproveita a lógica do `doctor`, camada por camada). Prova: fluxo
