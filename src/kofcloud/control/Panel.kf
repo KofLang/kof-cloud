@@ -15,7 +15,7 @@ package kofcloud.control
 
 // Versao do painel (aparece no rodape; ajuda a saber o que esta no ar).
 String panelVersion() {
-    return "7"
+    return "8"
 }
 
 // O HTML e uma constante: um unico lugar para revisar. Nenhum dado de conta
@@ -51,6 +51,7 @@ footer{padding:16px 24px;color:#5b606a;font-size:12px}
   <h2>Conta</h2>
   <input id=\"tok\" type=\"password\" placeholder=\"cole aqui o token da conta\" autocomplete=\"off\">
   <button onclick=\"carregar()\">Carregar</button>
+  <button onclick=\"sair()\">Sair</button>
   <span id=\"msg\" class=\"muted\"></span>
   <p class=\"muted\">O token (o mesmo do <code>kof cloud login</code>) fica so na memoria desta aba. Nada e gravado.</p>
   <div class=\"row\"><input id=\"newhandle\" placeholder=\"novo usuario\"><input id=\"newemail\" placeholder=\"email\">
@@ -89,7 +90,7 @@ footer{padding:16px 24px;color:#5b606a;font-size:12px}
   <p class=\"muted\">O que depende da sua maquina (portas locais, DNS da sua rede) segue no <code>kof cloud doctor</code>.</p>
   <div id=\"diag\"></div></section>
 </main>
-<footer>KofCloud painel v" + panelVersion() + " — usa /v1/accounts, /v1/devices, /v1/presence, /v1/services, /v1/domains, /v1/services/token, /v1/domains/{add,verify,remove}, /v1/devices/{revoke,suspend,unsuspend}, /v1/services/{suspend,unsuspend}, /v1/audit/verify</footer>
+<footer>KofCloud painel v" + panelVersion() + " — usa /v1/accounts, /v1/devices, /v1/presence, /v1/services, /v1/domains, /v1/services/token, /v1/domains/{add,verify,remove}, /v1/devices/{revoke,suspend,unsuspend}, /v1/services/{suspend,unsuspend}, /v1/audit/verify, /v1/tokens/revoke</footer>
 <script>
 var TOKEN = '';  // so na memoria da aba; nunca persistido
 var STATE = {svcs: [], devs: []};
@@ -157,6 +158,39 @@ function carregar(){
       onboarding(devs, svcs);
     })
     .catch(function(e){ TOKEN=''; erro('falha: ' + e.message); });
+}
+// Sair encerra a sessao da aba no SERVIDOR antes de limpar a memoria —
+// a mesma regra do logout da CLI: um token colado que so saia da tela
+// seguiria valido para sempre. Sucesso e token ja morto limpam a pagina;
+// qualquer outra falha (control fora do ar) avisa e NAO limpa: limpar
+// faria o operador achar que revogou quando nao revogou.
+function sair(){
+  if(!TOKEN) return;
+  api('/v1/tokens/revoke','POST',{token: TOKEN}).then(function(){
+    limparAba();
+    ok('sessao encerrada — token revogado no servidor');
+  }).catch(function(e){
+    if(String(e.message || '').indexOf('KCF004') >= 0){
+      limparAba();
+      ok('sessao encerrada — o token ja nao era valido');
+    } else {
+      erro('falha ao revogar (o token segue valido) — use: kof cloud token revoke');
+    }
+  });
+}
+function limparAba(){
+  TOKEN = '';
+  document.getElementById('tok').value = '';
+  STATE.svcs = [];
+  STATE.devs = [];
+  document.getElementById('devs').innerHTML = '';
+  document.getElementById('svcs').innerHTML = '';
+  document.getElementById('doms').innerHTML = '';
+  preencherDevices([]);
+  document.getElementById('onboarding').innerHTML = '';
+  document.getElementById('diag').innerHTML = '';
+  document.getElementById('secret').innerHTML = '';
+  document.getElementById('novaconta').innerHTML = '';
 }
 // As tres tabelas sao renderizadas por UM unico lugar. O carregamento
 // inicial e o recarregar-apos-acao produziam o MESMO HTML por codigo

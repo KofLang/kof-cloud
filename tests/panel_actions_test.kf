@@ -46,6 +46,16 @@ test "painel s2: HTML expoe as acoes da gestao completa", "panel-actions-unit" {
     }
     assert(labelsOnly, "nenhum valor kfs_ com cara de token")
     assert(html.indexOf("localStorage") < 0, "token nao persistido")
+    // Sair: o token colado na pagina vivia para sempre no servidor — fechar
+    // a aba nao encerra nada (o logout da CLI ja auto-revogava; o painel
+    // nao tinha equivalente). O botao revoga pela MESMA rota publica antes
+    // de limpar a memoria; token ja morto tambem limpa; outra falha avisa
+    // e NAO limpa (limpar faria o operador achar que revogou).
+    assert(html.indexOf("onclick=\"sair()\"") >= 0, "botao sair existe")
+    assert(html.indexOf("/v1/tokens/revoke'") >= 0, "rota publica do sair")
+    assert(html.indexOf("KCF004") >= 0, "token ja morto tambem encerra")
+    assert(html.indexOf("kof cloud token revoke") >= 0, "falha aponta o revoke da CLI")
+    assert(html.indexOf("token segue valido") >= 0, "falha avisa e nao limpa")
 }
 
 test "painel: status do dominio usa o vocabulario da API (VERIFIED/PENDING)", "panel-actions-unit" {
@@ -59,16 +69,22 @@ test "painel: status do dominio usa o vocabulario da API (VERIFIED/PENDING)", "p
     // Entradas sem status (zona wildcard, hostname de servico) viram '-'
     // sem herdar cor de pendencia.
     assert(html.indexOf("d.status ?") >= 0, "sem status nao herda cor")
-    // Limpeza do mesmo trecho: o select de dispositivos era preenchido
-    // DUAS vezes por carregamento (chamada duplicada reconstruia as
-    // opcoes; a segunda apagava e recriava o que a primeira fez).
+    // Rebuild do select: uma chamada por carregamento + o reset do sair
+    // (limpa as opcoes junto com a memoria; 3 definicao + carregar + sair).
+    // Se essa contagem subir de novo sem motivo, ou o carregamento voltou
+    // a duplicar trabalho, ou alguem limpa UI sem passar pelo preencher.
     var count = 0
     var cursor = html.indexOf("preencherDevices(devs)")
     while (cursor >= 0) {
         count = count + 1
         cursor = html.indexOf("preencherDevices(devs)", cursor + 1)
     }
-    assert(count == 2, "definicao + uma chamada por carregamento")
+    cursor = html.indexOf("preencherDevices([])")
+    while (cursor >= 0) {
+        count = count + 1
+        cursor = html.indexOf("preencherDevices([])", cursor + 1)
+    }
+    assert(count == 3, "definicao + carregar + sair")
     // Divergencia real paga uma vez: as tres tabelas eram renderizadas por
     // codigo duplicado no carregamento inicial e no recarregar-apos-acao —
     // o vocabulario do dominio precisou ser corrigido nas DUAS copias.
@@ -141,6 +157,14 @@ test "painel s2: as rotas que o painel chama funcionam (publica e remove)", "pan
     assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "removeu")
     var after = httpGetToken(controlPort, "/v1/services", token)
     assert(bodyOf(after).indexOf("\"name\":\"site\"") < 0, "sumiu da lista")
+
+    // Sair (POR ULTIMO — mata a sessao): auto-revoga o proprio token da
+    // aba pela MESMA rota publica que o botao chama; depois a credencial
+    // nao autentica mais. E o caminho do KCF004 (token ja morto) que o
+    // painel tambem trata como "sessao encerrada".
+    var sair = httpPostJson(controlPort, "/v1/tokens/revoke", "{\"token\":\"" + token + "\"}", token)
+    assert(statusOf(sair) == 200, "sair revoga o proprio token")
+    assert(statusOf(httpGetToken(controlPort, "/v1/devices", token)) == 401, "credencial da aba morreu")
 
     // E a pagina continua servida sem token.
     var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")

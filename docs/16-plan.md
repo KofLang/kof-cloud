@@ -889,6 +889,18 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   e os dois caminhos a chamam; a trava existe: a definição + 2 chamadas e
   o ramo `'VERIFIED'` exatamente UMA vez no HTML (duplicar de volta quebra).
 
+  **Sair encerra a sessão no servidor.** O token colado na página vivia para
+  sempre: fechar a aba não revoga nada, e só sobrevivia o `logout` da CLI
+  porque ela auto-revoga — o painel não tinha equivalente. O botão Sair
+  chama a MESMA rota pública `POST /v1/tokens/revoke` com o próprio token
+  antes de limpar a memória da aba (tabelas, select, banner, diagnóstico e
+  segredos exibidos); token já morto (`KCF004`) também encerra; qualquer
+  outra falha avisa "o token segue válido" e aponta `kof cloud token revoke`
+  sem limpar — limpar faria o operador acreditar numa revogação que não
+  aconteceu. Sem endpoint novo. Prova: `tests/panel_actions_test.kf`
+  (travas do HTML + e2e: auto-revoga 200 → a credencial morre 401; mutação
+  na rota quebra).
+
 **Regras:** o painel nunca mostra `kfs_` depois da emissão (mesma regra da
 CLI); nunca loga corpo/token; é estático + `fetch`, sem framework pesado
 (o Kof serve arquivo + JSON; o resto é HTML/JS simples).
