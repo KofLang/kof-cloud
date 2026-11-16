@@ -881,6 +881,14 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   e2e que percorre os três estados da conta — `[]` → device → serviço
   publicado; mutação removendo a chamada do carregamento quebra).
 
+  **Higiene travada (fonte única da renderização).** As três tabelas eram
+  renderizadas por código duplicado (carregamento inicial × recarregar
+  após ação) — e o custo já foi pago: o vocabulário do domínio precisou ser
+  corrigido nas duas cópias e o select era reconstruído duas vezes pelo
+  mesmo motivo. Agora `renderListas` dita o HTML das tabelas uma única vez
+  e os dois caminhos a chamam; a trava existe: a definição + 2 chamadas e
+  o ramo `'VERIFIED'` exatamente UMA vez no HTML (duplicar de volta quebra).
+
 **Regras:** o painel nunca mostra `kfs_` depois da emissão (mesma regra da
 CLI); nunca loga corpo/token; é estático + `fetch`, sem framework pesado
 (o Kof serve arquivo + JSON; o resto é HTML/JS simples).

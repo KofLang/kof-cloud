@@ -69,6 +69,25 @@ test "painel: status do dominio usa o vocabulario da API (VERIFIED/PENDING)", "p
         cursor = html.indexOf("preencherDevices(devs)", cursor + 1)
     }
     assert(count == 2, "definicao + uma chamada por carregamento")
+    // Divergencia real paga uma vez: as tres tabelas eram renderizadas por
+    // codigo duplicado no carregamento inicial e no recarregar-apos-acao —
+    // o vocabulario do dominio precisou ser corrigido nas DUAS copias.
+    // Agora ha UMA funcao renderListas (dita o HTML das tabelas) chamada
+    // nos dois caminhos: uma soma Σ dos ramos so pode ser 1.
+    var umaChamada = 0
+    var r = html.indexOf("renderListas(")
+    while (r >= 0) {
+        umaChamada = umaChamada + 1
+        r = html.indexOf("renderListas(", r + 1)
+    }
+    assert(umaChamada == 3, "definicao + chamada no inicial + chamada no recarregar")
+    var verificado = 0
+    var v = html.indexOf("d.status === 'VERIFIED'")
+    while (v >= 0) {
+        verificado = verificado + 1
+        v = html.indexOf("d.status === 'VERIFIED'", v + 1)
+    }
+    assert(verificado == 1, "ramo de dominio existe uma vez so")
 }
 
 test "painel s2: criar conta pelo painel (escopo do slice, mesma rota da CLI)", "panel-actions-unit" {

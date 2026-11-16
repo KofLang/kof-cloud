@@ -15,7 +15,7 @@ package kofcloud.control
 
 // Versao do painel (aparece no rodape; ajuda a saber o que esta no ar).
 String panelVersion() {
-    return "6"
+    return "7"
 }
 
 // O HTML e uma constante: um unico lugar para revisar. Nenhum dado de conta
@@ -152,26 +152,34 @@ function carregar(){
       STATE.devs = devs;
       STATE.svcs = svcs;
       preencherDevices(devs);
-      document.getElementById('devs').innerHTML = tabela(['nome','id','status','tunel'], devs.map(function(d){
-        var vivo = online.indexOf(d.id || d.deviceId) >= 0;
-        return [esc(d.name), esc(d.id || d.deviceId), esc(d.status),
-                vivo ? '<span class=\"on\">ONLINE</span>' : '<span class=\"off\">OFFLINE</span>'];
-      }));
-      document.getElementById('svcs').innerHTML = tabela(['nome','hostname','exposicao','status'], svcs.map(function(s){
-        var st = s.status === 'ONLINE' ? '<span class=\"on\">' : (s.status === 'OFFLINE' ? '<span class=\"off\">' : '<span class=\"pend\">');
-        return [esc(s.name), 'https://'+esc(s.hostname), esc(s.exposure), st + esc(s.status) + '</span>'];
-      }));
-      document.getElementById('doms').innerHTML = tabela(['hostname','tipo','servico','status'], doms.map(function(d){
-        // casar pelo vocabulario real: o literal antigo que estava aqui
-        // nunca casava com o que a API devolve, e TODO dominio verificado
-        // ficava amarelo. Sem status (wildcard/servico) vira '-' sem cor.
-        var st = d.status === 'VERIFIED' ? '<span class=\"on\">' : (d.status ? '<span class=\"pend\">' : '');
-        return [esc(d.hostname), esc(d.kind), esc(d.service), d.status ? st + esc(d.status) + '</span>' : '<span class=\"muted\">-</span>'];
-      }));
+      renderListas(devs, online, svcs, doms);
       document.getElementById('msg').textContent = '';
       onboarding(devs, svcs);
     })
     .catch(function(e){ TOKEN=''; erro('falha: ' + e.message); });
+}
+// As tres tabelas sao renderizadas por UM unico lugar. O carregamento
+// inicial e o recarregar-apos-acao produziam o MESMO HTML por codigo
+// duplicado — e ja divergiram uma vez (o vocabulario do dominio precisou
+// ser corrigido nas DUAS copias, e o select era reconstruido duas vezes
+// pelo mesmo motivo). Quem atualiza STATE, o select e o banner segue
+// sendo cada chamada; so o HTML das tabelas tem fonte unica.
+function renderListas(devs, online, svcs, doms){
+  document.getElementById('devs').innerHTML = tabela(['nome','id','status','tunel'], devs.map(function(d){
+    var vivo = online.indexOf(d.id || d.deviceId) >= 0;
+    return [esc(d.name), esc(d.id || d.deviceId), esc(d.status),
+            vivo ? '<span class=\"on\">ONLINE</span>' : '<span class=\"off\">OFFLINE</span>'];
+  }));
+  document.getElementById('svcs').innerHTML = tabela(['nome','hostname','exposicao','status'], svcs.map(function(s){
+    var st = s.status === 'ONLINE' ? '<span class=\"on\">' : (s.status === 'OFFLINE' ? '<span class=\"off\">' : '<span class=\"pend\">');
+    return [esc(s.name), 'https://'+esc(s.hostname), esc(s.exposure), st + esc(s.status) + '</span>'];
+  }));
+  document.getElementById('doms').innerHTML = tabela(['hostname','tipo','servico','status'], doms.map(function(d){
+    // PENDING/VERIFIED da API, nunca o vocabulario antigo; sem status
+    // (wildcard/servico) vira '-' sem cor.
+    var st = d.status === 'VERIFIED' ? '<span class=\"on\">' : (d.status ? '<span class=\"pend\">' : '');
+    return [esc(d.hostname), esc(d.kind), esc(d.service), d.status ? st + esc(d.status) + '</span>' : '<span class=\"muted\">-</span>'];
+  }));
 }
 // Onboarding guiado (Fase 12 s3, segundo passo): o proximo passo da conta,
 // derivado do que a pagina JA buscou — sem consulta nova e sem inventar
@@ -279,21 +287,7 @@ function carregarListas(){
     var svcs=r[0], doms=r[1], devs=r[2], online=r[3];
     STATE.svcs = svcs;
     STATE.devs = devs;
-    document.getElementById('devs').innerHTML = tabela(['nome','id','status','tunel'], devs.map(function(d){
-      var vivo = online.indexOf(d.id || d.deviceId) >= 0;
-      return [esc(d.name), esc(d.id || d.deviceId), esc(d.status),
-              vivo ? '<span class=\"on\">ONLINE</span>' : '<span class=\"off\">OFFLINE</span>'];
-    }));
-    document.getElementById('svcs').innerHTML = tabela(['nome','hostname','exposicao','status'], svcs.map(function(s){
-      var st = s.status === 'ONLINE' ? '<span class=\"on\">' : (s.status === 'OFFLINE' ? '<span class=\"off\">' : '<span class=\"pend\">');
-      return [esc(s.name), 'https://'+esc(s.hostname), esc(s.exposure), st + esc(s.status) + '</span>'];
-    }));
-    document.getElementById('doms').innerHTML = tabela(['hostname','tipo','servico','status'], doms.map(function(d){
-      // Mesma regra do carregamento inicial: PENDING/VERIFIED da API, nunca
-      // o vocabulario antigo; sem status (wildcard/servico) vira '-' sem cor.
-      var st = d.status === 'VERIFIED' ? '<span class=\"on\">' : (d.status ? '<span class=\"pend\">' : '');
-      return [esc(d.hostname), esc(d.kind), esc(d.service), d.status ? st + esc(d.status) + '</span>' : '<span class=\"muted\">-</span>'];
-    }));
+    renderListas(devs, online, svcs, doms);
     onboarding(STATE.devs, STATE.svcs);
   });
 }
