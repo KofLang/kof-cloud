@@ -546,6 +546,13 @@ HttpResult handleVerifyAudit(Registry registry, String? authHeader) {
     out.put("ok", boolToString(broken.length == 0))
     out.put("brokenAt", broken)
     out.put("events", intToString(events.size))
+    // Espelho WORM (Fase 19 s4): campos ADITIVOS — cliente antigo continua
+    // decodificando {ok, brokenAt, events}. A cadeia do anel e por conta
+    // (lista filtrada); a do espelho e do sufixo global do arquivo.
+    var mirror = registry.wormVerify()
+    out.put("mirrorOk", boolToString(mirror.parseable && mirror.brokenAt.length == 0))
+    out.put("mirrorBrokenAt", mirror.brokenAt)
+    out.put("mirrorEvents", intToString(mirror.events))
     return HttpResult(200, json.encode(out))
 }
 

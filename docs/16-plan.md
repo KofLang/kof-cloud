@@ -1300,7 +1300,19 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   limitations), então quem tem o disco pode reescrever o arquivo inteiro;
   o que o espelho compra é **sobrevivência à poda e à rescrita do estado**,
   não imutabilidade física. Prova: `tests/audit_chain_test.kf` (`worm-unit`
-  ×2 + `worm`, total 13). Pendente: WORM real em storage separado (objeto
+  ×2 + `worm`, total 13).
+
+  **Implementado (verify do espelho):** `/v1/audit/verify` e
+  `kof cloud audit --verify` cobrem também o espelho — campos ADITIVOS
+  (`mirrorOk`/`mirrorBrokenAt`/`mirrorEvents`; cliente antigo continua
+  decodificando os três originais). A cadeia do arquivo tolera RAIZ
+  DESCONHECIDA (a 1ª ocorrência de cada conta pode apontar para evento
+  anterior ao espelho — deploy antigo não vira falso "quebrada"), mas pega
+  adulteração de campo, remoção do meio e linha ilegível (`parse`). A CLI
+  sai 1 com o espelho comprometido (trilha redundante) e diz
+  "desconhecido" contra control plane antigo, sem os campos. Prova:
+  `tests/audit_chain_test.kf` (`worm-unit` ×5 + `worm` ×2, total 17).
+  Pendente: WORM real em storage separado (objeto
   com lock de retenção) e o relatório SOC2-tipo-II.
 **Regras:** segurança por default em todo slice novo (a pergunta "o que
 pode vazar aqui?" entra no template de teste); nenhum dado de cliente

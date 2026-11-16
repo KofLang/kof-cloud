@@ -268,8 +268,7 @@ test "filtro de audit: cmdAudit liga as flags nas funcoes puras (trava de fonte)
     assert(body.indexOf("flagDuplicated(args, \"--action\")") >= 0, "--action repetida barra")
 }
 
-test "worm: serializacao pura do evento (fio e arquivo na mesma fonte)", "worm-unit" {
-    // A fonte unica e `auditEventJson`: /v1/audit e o espelho em arquivo
+test "worm: serializacao pura do evento (fio e arquivo na mesma fonte)", "worm-unit" {    // A fonte unica e `auditEventJson`: /v1/audit e o espelho em arquivo
     // imprimem a MESMA linha — divergencia entre os dois formatos quebra
     // o terceiro verificador, entao a serializacao nao pode existir em dois
     // lugares (mutacao na pura quebra aqui E na listagem HTTP).
@@ -349,4 +348,118 @@ test "worm: HTTP cria eventos no espelho; adulterar o espelho nao afeta a API", 
     }
     assert(readTextOr(state + ".worm.jsonl", "").indexOf("hackeado") >= 0, "append preserva o que ha no disco")
     assert(readTextOr(state + ".worm.jsonl", "").indexOf("device.registered") >= 0, "novo evento entra")
+}
+
+test "worm: verify do espelho tolera raiz desconhecida mas pega adulteracao", "worm-unit" {
+    // Construo uma trilha de sufixo: a primeira ocorrencia da conta aponta
+    // para um hash anterior ao espelho (deploy antigo) — NAO e cadeia
+    // quebrada. A partir da segunda ocorrencia, a igualdade e exigida.
+    var h1 = auditEventHash("hash-fora-do-espelho", "1", "account:mel", "account.created", "acc-1")
+    var h2 = auditEventHash(h1, "2", "account:mel", "device.registered", "acc-1/dev-1")
+    var h3 = auditEventHash(h2, "3", "account:mel", "device.revoked", "acc-1/dev-1")
+    var suffix = listOf(
+        AuditEvent("1", "account:mel", "account.created", "acc-1", "hash-fora-do-espelho", h1),
+        AuditEvent("2", "account:mel", "device.registered", "acc-1/dev-1", h1, h2),
+        AuditEvent("3", "account:mel", "device.revoked", "acc-1/dev-1", h2, h3)
+    )
+    assert(auditWormChainError(suffix) == "", "sufixo com raiz desconhecida integra")
+    // Adulterar o ALVO da segunda ocorrencia: hash nao bate mais.
+    var tampered = listOf(
+        suffix.get(0),
+        AuditEvent("2", "account:mel", "device.hacked", "acc-1/dev-1", h1, h2),
+        suffix.get(2)
+    )
+    assert(auditWormChainError(tampered) == "1", "adulteracao no indice 1")
+    // Remover o do meio: o prevHash do seguinte nao fecha.
+    var withoutMiddle = listOf(suffix.get(0), suffix.get(2))
+    assert(auditWormChainError(withoutMiddle) == "1", "remocao no indice 1")
+    // Duas contas intercaladas: cada uma com raiz desconhecida propria.
+    var hA1 = auditEventHash("fora", "1", "account:mel", "account.created", "acc-1")
+    var hA2 = auditEventHash(hA1, "2", "account:mel", "device.registered", "acc-1/dev-1")
+    var hB1 = auditEventHash("fora", "1", "account:ana", "account.created", "acc-2")
+    var intercalated = listOf(
+        AuditEvent("1", "account:mel", "account.created", "acc-1", "fora", hA1),
+        AuditEvent("1", "account:ana", "account.created", "acc-2", "fora", hB1),
+        AuditEvent("2", "account:mel", "device.registered", "acc-1/dev-1", hA1, hA2)
+    )
+    assert(auditWormChainError(intercalated) == "", "raiz desconhecida por conta")
+}
+
+test "worm: auditWormVerify decodifica JSONL e acusa linha ilegivel", "worm-unit" {
+    var valid1 = auditEventJson(AuditEvent("1", "account:mel", "account.created", "acc-1", "", auditEventHash("", "1", "account:mel", "account.created", "acc-1")))
+    var h1 = auditEventHash("", "1", "account:mel", "account.created", "acc-1")
+    var h2 = auditEventHash(h1, "2", "account:mel", "device.registered", "acc-1/dev-1")
+    var valid2 = auditEventJson(AuditEvent("2", "account:mel", "device.registered", "acc-1/dev-1", h1, h2))
+    var ok = auditWormVerify(valid1 + "\n" + valid2 + "\n")
+    assert(ok.parseable == true, "parseavel")
+    assert(ok.brokenAt == "", "integra")
+    assert(ok.events == 2, "dois eventos")
+    assert(auditWormVerify("").parseable == true, "arquivo vazio = integra")
+    assert(auditWormVerify("").brokenAt == "", "vazio integra")
+    assert(auditWormVerify("").events == 0, "vazio zero eventos")
+    // Linha com lixo (escrita trunca/adultera): parseable=false, brokenAt=parse.
+    var broken = auditWormVerify(valid1 + "\n{lixo\n")
+    assert(broken.parseable == false, "linha ilegivel")
+    assert(broken.brokenAt == "parse", "indice de parse: " + broken.brokenAt)
+    // Linha valida mas com hash adulterado: brokenAt numerico.
+    var hacked = auditEventJson(AuditEvent("1", "account:mel", "account.created", "acc-1", "", "hash-falso"))
+    var tampered = auditWormVerify(valid1 + "\n" + hacked + "\n")
+    assert(tampered.parseable == true, "linha decodifica")
+    assert(tampered.brokenAt == "1", "hash falso no indice 1")
+}
+
+test "worm: Registry.wormVerify le o arquivo real", "worm-unit" {
+    var state = chainPath("worm-verify")
+    var registry = Registry(state)
+    var result = registry.wormVerify()
+    assert(result.parseable == true, "arquivo ausente = parseavel")
+    assert(result.brokenAt == "", "arquivo ausente = integra")
+    assert(result.events == 0, "arquivo ausente = zero")
+    registry.createAccount("mel", "m@e.com", "segredo")
+    var result2 = registry.wormVerify()
+    assert(result2.parseable == true, "com evento: parseavel")
+    assert(result2.brokenAt == "", "com evento: integra")
+    assert(result2.events == 1, "um evento: " + intToString(result2.events))
+    // Linha truncada no meio (escrita trunca): parseable=false.
+    var good = readTextOr(state + ".worm.jsonl", "")
+    writeTextTo(state + ".worm.jsonl", good + "{\"at\":\"1\"," )
+    var broken = registry.wormVerify()
+    assert(broken.parseable == false, "linha ilegivel detectada")
+    assert(broken.brokenAt == "parse", "indice de parse")
+}
+
+test "worm: HTTP /v1/audit/verify espelha o estado do arquivo", "worm" {
+    var controlPort = 19914
+    var state = chainPath("worm-verify-http")
+    var registry = Registry(state)
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+
+    var ok = httpGetToken(controlPort, "/v1/audit/verify", token)
+    assert(statusOf(ok) == 200, "verify 200")
+    assert(bodyOf(ok).indexOf("\"ok\":\"true\"") >= 0, "anel integra")
+    assert(bodyOf(ok).indexOf("\"mirrorOk\":\"true\"") >= 0, "espelho integra: " + bodyOf(ok))
+    assert(bodyOf(ok).indexOf("\"mirrorBrokenAt\":\"\"") >= 0, "sem quebra no espelho")
+
+    // Espelho com hash falso na linha 2 (a raiz e tolerada, a segunda nao):
+    // mirrorOk=false com mirrorBrokenAt=1 — cliente antigo sem os campos
+    // continua decodificando {ok, brokenAt, events}.
+    var mel = registry.accountByHandle("mel")
+    var melId = ""
+    if (mel != null) {
+        melId = mel.id
+    }
+    var events = registry.auditForAccount(melId)
+    var h2 = auditEventHash(events.get(0).hash, "2", "account:mel", "device.registered", "acc-1/dev-1")
+    var hackedSecond = AuditEvent(events.get(1).at, events.get(1).actor, "device.hacked", events.get(1).target, events.get(0).hash, h2)
+    writeTextTo(state + ".worm.jsonl", auditEventJson(events.get(0)) + "\n" + auditEventJson(hackedSecond) + "\n")
+    var brokenVerify = httpGetToken(controlPort, "/v1/audit/verify", token)
+    assert(bodyOf(brokenVerify).indexOf("\"mirrorOk\":\"false\"") >= 0, "espelho adulterado: " + bodyOf(brokenVerify))
+    assert(bodyOf(brokenVerify).indexOf("\"mirrorBrokenAt\":\"1\"") >= 0, "quebra no indice 1")
+    assert(bodyOf(brokenVerify).indexOf("\"ok\":\"true\"") >= 0, "anel segue integra (campos aditivos)")
 }

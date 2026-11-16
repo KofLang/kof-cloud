@@ -178,3 +178,59 @@ String auditEventJson(AuditEvent event) {
     entry.put("hash", event.hash)
     return json.encode(entry)
 }
+
+// Resultado da verificacao do espelho WORM. `parseable=false` = alguma linha
+// do arquivo nao decodifica como evento (adulteracao ou escrita trunca);
+// `brokenAt` = primeiro indice com a cadeia quebrada ("" = integra).
+record WormVerify(Bool parseable, String brokenAt, Int events)
+
+// Cadeia do espelho WORM: como `auditChainError`, mas tolera RAIZ
+// DESCONHECIDA — a primeira ocorrencia de cada conta no arquivo pode apontar
+// para um evento anterior ao espelho (deploy antigo tem anel que ja existia
+// quando o primeiro append aconteceu; exigir prevHash vazio ali daria
+// "quebrada" sem adulteracao nenhuma, falso positivo). O hash de cada linha
+// continua obrigatorio (determinismo) e a partir da SEGUNDA ocorrencia da
+// conta a igualdade prevHash->hash anterior e exigida: adulteracao de campo
+// e remocao no meio do arquivo continuam detectaveis. O que a verificacao
+// do sufixo NAO pega: remocao da CABECA do arquivo (a linha apagada nao
+// tem quem a acuse) — o arquivo e append-only por desenho e a remocao
+// inteira e visivel (arquivo menor que o anel refere). Pura.
+String auditWormChainError(List<AuditEvent> events) {
+    var lastHashByAccount = mapOf()
+    var index = 0
+    for (var event in events) {
+        var accountId = auditEventAccount(event)
+        var known = lastHashByAccount.get(accountId)
+        if (known != null) {
+            if (event.prevHash != known) {
+                return intToString(index)
+            }
+        }
+        var expected = auditEventHash(event.prevHash, event.at, event.actor, event.action, event.target)
+        if (event.hash != expected) {
+            return intToString(index)
+        }
+        lastHashByAccount.put(accountId, event.hash)
+        index = index + 1
+    }
+    return ""
+}
+
+// Verifica o texto do espelho (JSONL): decodifica cada linha nao vazia como
+// AuditEvent e roda `auditWormChainError`. Pura (recebe o texto, nao toca
+// arquivo) — o IO fica no Registry (`wormVerify`).
+WormVerify auditWormVerify(String raw) {
+    var events = listOf<AuditEvent>()
+    var lines = raw.split("\n")
+    for (var line in lines) {
+        if (line.length == 0) {
+            continue
+        }
+        try {
+            events.add(json.decode<AuditEvent>(line))
+        } catch (String e) {
+            return WormVerify(false, "parse", events.size)
+        }
+    }
+    return WormVerify(true, auditWormChainError(events), events.size)
+}

@@ -2479,6 +2479,18 @@ Int cmdAudit(List<String> args) {
             var events = mapField(result, "events")
             if (mapField(result, "ok") == "true") {
                 println("Cadeia de auditoria integra (" + events + " eventos).")
+                // Espelho WORM (Fase 19 s4): campos aditivos no fio — control
+                // plane antigo responde sem eles e o verify segue honesto
+                // (mostra "desconhecido" em vez de mentir "ok").
+                var mirrorOk = mapField(result, "mirrorOk")
+                if (mirrorOk == "true") {
+                    println("Espelho WORM integra (" + mapField(result, "mirrorEvents") + " eventos).")
+                } else if (mirrorOk == "false") {
+                    println("ESPELHO WORM com problema (" + mapField(result, "mirrorEvents") + " eventos, quebra em \"" + mapField(result, "mirrorBrokenAt") + "\") — trilha redundante comprometida.")
+                    return 1
+                } else {
+                    println("Espelho WORM: desconhecido (control plane sem verificacao do espelho).")
+                }
                 return 0
             }
             println("CADEIA QUEBRADA no evento " + mapField(result, "brokenAt") + " de " + events + ".")

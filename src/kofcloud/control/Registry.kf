@@ -247,6 +247,14 @@ class Registry {
         return out
     }
 
+    // Verificacao do espelho WORM (Fase 19 s4): le `<estado>.worm.jsonl` e
+    // delega na pura `auditWormVerify`. O espelho e o SUFIXO da trilha —
+    // tolerate raiz desconhecida (ver comentario da pura). Arquivo ausente
+    // (deploy antigo, sem append ainda) = integra com 0 eventos, nao erro.
+    WormVerify wormVerify() {
+        return auditWormVerify(readTextOr(this.path + ".worm.jsonl", ""))
+    }
+
     // ---- incidentes (Fase 17 slice 1) ----
 
     // Abre um incidente. Idempotente por (kind, accountId): se ja ha um
