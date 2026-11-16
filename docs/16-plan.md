@@ -247,6 +247,12 @@ deploy (fail-fast) e no `--check`/doctor (aviso); plano marca `(build)`/
 `(artifact)`. Falta: artefato transferível, cache, build remoto),
 auto-update. `kof cloud doctor` (somente-leitura: login, control plane,
 device, servicos do manifesto) responde "onde quebrou" sem alterar nada.
+**Camada da auditoria (Fase 19 slice 4):** `doctorAuditLine` pura sobre o
+corpo do `/v1/audit/verify` — cadeia quebrada ou espelho comprometido
+viram FALHA com orientação (`kof cloud audit --verify`); control plane
+antigo sem os campos do espelho vira ok honesto "espelho nao reportado",
+nunca FALHA nem mentira. Prova: `tests/doctor_test.kf` (`doctor-audit`,
+2 testes: puro em 6 casos + e2e que trunca o espelho no disco).
 
 ## Débitos de limites (antes do deploy)
 

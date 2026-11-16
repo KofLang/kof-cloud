@@ -59,6 +59,52 @@ String doctorDeviceLine(String deviceStatus) {
     return doctorOkLine("dispositivo registrado (" + deviceStatus + ")")
 }
 
+// Linha da camada da auditoria a partir do corpo de /v1/audit/verify ja
+// buscado (ou do erro da busca): pura, sem rede nem HOME — testavel sem
+// control plane (mesmo padrao de doctorTunnelLine/doctorDeviceLine).
+//
+// Antes o doctor aprovava "tudo ok" com a trilha de auditoria comprometida
+// (cadeia quebrada = adulteracao/remocao; espelho comprometido = trilha
+// redundante adulterada) — o operador so descobria rodando `audit --verify`
+// por conta própria. Mesma decisao do comando (campos do fio, aditivos:
+// control plane antigo sem mirrorOk = "espelho nao reportado", nunca FALHA
+// nem mentira "integra"). Sem dado sensivel: so contadores e indices.
+String doctorAuditLine(String verifyRaw, String fetchError) {
+    if (fetchError.length > 0) {
+        return doctorFailLine("auditoria", "verificacao indisponivel (" + fetchError + ")")
+    }
+    var fields = mapOf<String, String>()
+    try {
+        fields = json.decode<Map<String, String>>(verifyRaw)
+    } catch (String e) {
+        return doctorFailLine("auditoria", "resposta inesperada de /v1/audit/verify")
+    }
+    var events = mapField(fields, "events")
+    if (mapField(fields, "ok") == "true") {
+        if (mapField(fields, "mirrorOk") == "false") {
+            return doctorFailLine("auditoria", "espelho comprometido (quebra em " + mapField(fields, "mirrorBrokenAt") + ") — trilha redundante adulterada; investigue (detalhes: kof cloud audit --verify)")
+        }
+        var mirror = auditMirrorNote(fields)
+        return doctorOkLine("auditoria integra (" + events + " eventos na cadeia" + mirror + ")")
+    }
+    return doctorFailLine("auditoria", "cadeia quebrada no evento " + mapField(fields, "brokenAt") + " de " + events + " — alguem alterou ou removeu um evento da trilha; investigue antes de confiar nela (detalhes: kof cloud audit --verify)")
+}
+
+// Nota do espelho para a linha ok da auditoria: "" quando integra,
+// " — espelho nao reportado" contra control plane antigo (campos aditivos
+// no fio). Espelho adulterado nao passa por aqui — vira FALHA dedicada na
+// `doctorAuditLine`. Pura.
+String auditMirrorNote(Map<String, String> fields) {
+    var mirrorOk = mapField(fields, "mirrorOk")
+    if (mirrorOk == "true") {
+        return ""
+    }
+    if (mirrorOk == "false") {
+        return " — ESPELHO COMPROMETIDO"
+    }
+    return " — espelho nao reportado (control plane antigo)"
+}
+
 // Linha da camada TLS a partir do resultado de `openssl x509` ja executado
 // (pura, sem rede nem HOME): "" quando nao ha `--tls-cert` (nada a checar).
 // Distingue arquivo ausente, PEM invalido e expiracao em 30 dias — o
@@ -201,6 +247,23 @@ DoctorReport doctorCheckWith(String manifestPath, String tlsCertPath) {
     }
     lines.add(tunnelLine)
     if (tunnelLine.startsWith("FALHA")) {
+        failed = true
+    }
+
+    // 4a. Integridade da trilha de auditoria (Fase 19 slice 4): cadeia
+    // quebrada ou espelho comprometido viram FALHA com orientacao — mesma
+    // decisao do `audit --verify`, pura em doctorAuditLine (com teste); aqui
+    // so busca (o endpoint existe no control plane atual; num antigo ele
+    // falha e a camada reporta "indisponivel", nao inventa ok).
+    var auditLine = ""
+    try {
+        var verifyRaw = requireOk(http.get(session.controlUrl + "/v1/audit/verify", authHeader(session.token)))
+        auditLine = doctorAuditLine(verifyRaw, "")
+    } catch (String e) {
+        auditLine = doctorAuditLine("", e)
+    }
+    lines.add(auditLine)
+    if (auditLine.startsWith("FALHA")) {
         failed = true
     }
 

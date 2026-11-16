@@ -78,6 +78,8 @@ test "doctor: ajuda lista a camada do tunel", "doctor-usage" {
     // Fase 9 slice 3 parcial: o doctor checa o PEM quando informado.
     assert(help.indexOf("doctor [--file kofcloud.json] [--tls-cert <pem>]") >= 0, "doctor anuncia --tls-cert")
     assert(help.indexOf("tls") >= 0, "menciona a camada tls")
+    // Camada da auditoria (Fase 19 s4): o help nao fica para tras de novo.
+    assert(help.indexOf("auditoria") >= 0, "menciona a camada da auditoria")
 }
 
 test "doctor: manifesto invalido e reportado com caminho", "doctor-manifest" {
@@ -326,4 +328,70 @@ test "doctor: camada do device distingue REVOKED de SUSPENDED de ACTIVE", "docto
     assert(body.indexOf("doctorDeviceLine(") >= 0, "doctorCheck usa a linha pura")
     assert(body.indexOf("deviceStatus = device.status") >= 0, "le o ciclo de vida da lista")
     assert(body.indexOf("dispositivo registrado (\" + identity.deviceId + \")") < 0, "nao imprime ok direto")
+}
+
+test "doctor: camada da auditoria decide sem rede nem HOME", "doctor-audit" {
+    // Busca falhou (control plane caiu entre as camadas): FALHA, sem mentir.
+    var failed = doctorAuditLine("", "KCF004: unauthorized")
+    assert(failed.startsWith("FALHA auditoria"), "erro de busca e FALHA")
+    assert(failed.indexOf("indisponivel") >= 0, "diz que nao deu para saber")
+    // Corpo ilegivel (nao e o JSON do verify): FALHA, nao excecao.
+    var garbage = doctorAuditLine("{lixo", "")
+    assert(garbage.startsWith("FALHA auditoria"), "lixo e FALHA")
+    assert(garbage.indexOf("inesperada") >= 0, "aponta a resposta")
+    // Tudo integro (anel + espelho) no formato real do fio.
+    var healthy = doctorAuditLine("{\"ok\":\"true\",\"brokenAt\":\"\",\"events\":\"7\",\"mirrorOk\":\"true\",\"mirrorBrokenAt\":\"\",\"mirrorEvents\":\"7\"}", "")
+    assert(healthy.startsWith("ok"), "integro e ok")
+    assert(healthy.indexOf("auditoria integra") >= 0, "rotula a camada")
+    assert(healthy.indexOf("7 eventos") >= 0, "mostra a contagem")
+    // Cadeia quebrada: FALHA com o indice e a orientacao de investigar.
+    var broken = doctorAuditLine("{\"ok\":\"false\",\"brokenAt\":\"3\",\"events\":\"10\",\"mirrorOk\":\"true\",\"mirrorBrokenAt\":\"\",\"mirrorEvents\":\"10\"}", "")
+    assert(broken.startsWith("FALHA auditoria"), "cadeia quebrada e FALHA")
+    assert(broken.indexOf("3") >= 0, "diz o indice")
+    assert(broken.indexOf("investigue") >= 0, "orienta o operador")
+    assert(broken.indexOf("audit --verify") >= 0, "aponta o detalhe")
+    // Espelho comprometido com anel integro: FALHA propria, nao ok manchado.
+    var mirrorDown = doctorAuditLine("{\"ok\":\"true\",\"brokenAt\":\"\",\"events\":\"2\",\"mirrorOk\":\"false\",\"mirrorBrokenAt\":\"1\",\"mirrorEvents\":\"2\"}", "")
+    assert(mirrorDown.startsWith("FALHA auditoria"), "espelho ruim e FALHA")
+    assert(mirrorDown.indexOf("espelho comprometido") >= 0, "nomeia o espelho")
+    assert(mirrorDown.indexOf("1") >= 0, "diz o indice")
+    // Control plane antigo (sem os campos do espelho): ok honesto, sem FALHA
+    // nem mentira "integra" para o espelho.
+    var legacy = doctorAuditLine("{\"ok\":\"true\",\"brokenAt\":\"\",\"events\":\"4\"}", "")
+    assert(legacy.startsWith("ok"), "anel ok e ok")
+    assert(legacy.indexOf("espelho nao reportado") >= 0, "diz que nao sabe do espelho")
+}
+
+test "doctor: camada da auditoria contra o endpoint real", "doctor-audit" {
+    // O puro decide sobre o corpo REAL do /v1/audit/verify: integro agora,
+    // FALHA depois de truncar o espelho no disco (sem tocar a API/o anel).
+    var controlPort = 19964
+    var path = "/tmp/kofcloud-doctor-audit-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    assert(statusOf(httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pubkey\"}", accountToken)) == 200, "device criado")
+
+    var before = doctorAuditLine(bodyOf(httpGetToken(controlPort, "/v1/audit/verify", accountToken)), "")
+    assert(before.startsWith("ok"), "trilha integra e ok: " + before)
+    assert(before.indexOf("2 eventos") >= 0, "conta os dois eventos: " + before)
+
+    // Trunca a segunda linha do espelho no meio: o fiel (anel) segue
+    // integro, mas o espelho deixa de decodificar — verify real acusa.
+    var raw = readTextOr(path + ".worm.jsonl", "")
+    var firstBreak = raw.indexOf("\n")
+    var second = raw.substring(firstBreak + 1, raw.length)
+    var half = second.substring(0, second.length - (second.length / 2))
+    writeTextTo(path + ".worm.jsonl", raw.substring(0, firstBreak + 1) + half + "\n")
+    var verify = bodyOf(httpGetToken(controlPort, "/v1/audit/verify", accountToken))
+    assert(verify.indexOf("\"ok\":\"true\"") >= 0, "anel segue integro")
+    assert(verify.indexOf("\"mirrorOk\":\"false\"") >= 0, "espelho real quebrou")
+    var after = doctorAuditLine(verify, "")
+    assert(after.startsWith("FALHA auditoria"), "espelho truncado e FALHA: " + after)
+    assert(after.indexOf("espelho comprometido") >= 0, "nomeia o espelho")
+    assert(after.indexOf("parse") >= 0, "diz o indice de parse")
 }
