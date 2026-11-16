@@ -454,6 +454,22 @@ class Registry {
         return null
     }
 
+    // Detector de suspensao em lote (por conta, idempotente): varios
+    // `service.suspended`/`device.suspended` na mesma janela. A suspensao
+    // NAO revoga nada, entao nenhum detector de revoke dispara — e o padrao
+    // de um token de conta comprometido tirando os sites do ar (ou de uma
+    // automacao malfeita). Idempotente como os irmaos: um incidente aberto
+    // por tipo+conta e o mesmo sinal ate ser resolvido.
+    Incident? detectBulkSuspensions(String accountId, Long windowMs) {
+        var since = time.now() - windowMs
+        var count = this.auditCountSince(accountId, auditServiceSuspended(), since)
+            + this.auditCountSince(accountId, auditDeviceSuspended(), since)
+        if (count >= bulkRevokeThreshold()) {
+            return this.raiseIncident(incidentBulkSuspensions(), accountId)
+        }
+        return null
+    }
+
     // O arquivo tem a forma de um ControlState? Checa as chaves de topo que
     // o save() sempre grava. Pura sobre o texto.
     Bool looksLikeControlState(String raw) {
@@ -907,7 +923,11 @@ class Registry {
     // Suspensao administrativa de dispositivo: recusa o tunel com
     // DEVICE_SUSPENDED, sem remover nada. Idempotente.
     Bool suspendDevice(String accountId, String deviceId) {
-        return this.setDeviceStatus(accountId, deviceId, deviceSuspended(), auditDeviceSuspended())
+        var suspended = this.setDeviceStatus(accountId, deviceId, deviceSuspended(), auditDeviceSuspended())
+        if (suspended) {
+            this.detectBulkSuspensions(accountId, bulkRevokeWindowMs())
+        }
+        return suspended
     }
 
     Bool unsuspendDevice(String accountId, String deviceId) {
@@ -1791,7 +1811,11 @@ class Registry {
     // Suspensao administrativa de servico: sai da rota (opaco, como PRIVATE),
     // sem remover nada. Idempotente. O dono ve SUSPENDED em `service status`.
     Bool suspendService(String accountId, String serviceId) {
-        return this.setServiceStatusOwned(accountId, serviceId, statusSuspended(), auditServiceSuspended())
+        var suspended = this.setServiceStatusOwned(accountId, serviceId, statusSuspended(), auditServiceSuspended())
+        if (suspended) {
+            this.detectBulkSuspensions(accountId, bulkRevokeWindowMs())
+        }
+        return suspended
     }
 
     Bool unsuspendService(String accountId, String serviceId) {

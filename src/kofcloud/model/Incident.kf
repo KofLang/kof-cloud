@@ -63,6 +63,15 @@ String incidentMassTokenExpiry() {
     return "mass_token_expiry"
 }
 
+// Suspensao em lote (por conta): varios servicos/dispositivos suspensos na
+// mesma janela. Suspensao isolada e operacao de rotina (manutencao); varias
+// juntas — especialmente sem freeze em curso — sao o padrao de um token de
+// conta comprometido tirando o site do ar (suspender nao revoga, entao
+// nenhum detector de revoke dispara).
+String incidentBulkSuspensions() {
+    return "bulk_suspensions"
+}
+
 // Contencao (slice 2): o incidente registra o alvo congelado.
 String incidentFreezeService() {
     return "freeze_service"
@@ -87,7 +96,7 @@ String incidentSeverityFor(String kind) {
     if (kind == incidentEdgeIdleTimeouts()) {
         return severityWarn()
     }
-    if (kind == incidentMassTokenExpiry()) {
+    if (kind == incidentMassTokenExpiry() || kind == incidentBulkSuspensions()) {
         return severityWarn()
     }
     if (kind == incidentFreezeService() || kind == incidentFreezeDevice() || kind == incidentFreezeAccount()) {
@@ -115,6 +124,9 @@ String incidentSummaryFor(String kind) {
     }
     if (kind == incidentMassTokenExpiry()) {
         return "many service credentials expired in a short window"
+    }
+    if (kind == incidentBulkSuspensions()) {
+        return "many services or devices suspended in a short window"
     }
     if (kind == incidentFreezeService()) {
         return "service frozen for incident containment"

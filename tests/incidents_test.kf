@@ -546,3 +546,77 @@ test "incidents: --resolve com valor segue ate o control plane", "incident-usage
         writeTextTo(sessionPath(), prior)
     }
 }
+
+
+Incident? bulkSuspensionIncident(Registry registry, String accountId) {
+    for (var incident in registry.incidentsForAccount(accountId, false)) {
+        if (incident.kind == incidentBulkSuspensions()) {
+            return incident
+        }
+    }
+    return null
+}
+
+test "incidente: suspensao em lote abre bulk_suspensions (WARN)", "incident-susp" {
+    // Medido: os detectores cobriam revoke em lote (device/token), mas a
+    // SUSPENSAO nao revoga nada — um token de conta comprometido podia
+    // suspender todos os servicos sem incidente nenhum: cada site saia do
+    // ar (404 opaco) e nenhum sinal disparava. Mesmo padrao do
+    // `bulk_token_revokes`: limiar na janela, audit ring, idempotente.
+    var registry = Registry(incidentsPath("susp"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var site = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    var api = registry.publishService(mel, device.id, "api", "127.0.0.1", 3000, "http", "PUBLIC", "", "")
+    var db = registry.publishService(mel, device.id, "db", "127.0.0.1", 5432, "http", "PRIVATE", "", "")
+
+    // Dois suspends: abaixo do limiar (3), nada abre.
+    assert(registry.suspendService(mel.id, site.id), "suspende site")
+    assert(registry.suspendService(mel.id, api.id), "suspende api")
+    var before = registry.incidentsForAccount(mel.id, false)
+    var bulkBefore = 0
+    for (var incident in before) {
+        if (incident.kind == incidentBulkSuspensions()) {
+            bulkBefore = bulkBefore + 1
+        }
+    }
+    assert(bulkBefore == 0, "dois suspends nao abrem")
+
+    // Terceiro (limiar): abre WARN, escopo da conta.
+    assert(registry.suspendService(mel.id, db.id), "suspende db")
+    var opened = bulkSuspensionIncident(registry, mel.id)
+    assert(opened != null, "incidente bulk_suspensions aberto")
+    if (opened != null) {
+        assert(opened.severity == severityWarn(), "severidade WARN")
+        assert(opened.accountId == mel.id, "escopo da conta")
+        assert(opened.summary.indexOf("suspended") >= 0, "resumo diz suspended")
+    }
+
+    // Idempotente: mais um suspend nao abre outro (o mesmo e o sinal).
+    var db2 = registry.publishService(mel, device.id, "db2", "127.0.0.1", 5433, "http", "PRIVATE", "", "")
+    assert(registry.suspendService(mel.id, db2.id), "quarto suspend")
+    var after = bulkSuspensionIncident(registry, mel.id)
+    var openedId = ""
+    if (opened != null) {
+        openedId = opened.id
+    }
+    if (after != null) {
+        assert(after.id == openedId, "mesmo incidente (idempotente)")
+    }
+    var count = 0
+    for (var incident in registry.incidentsForAccount(mel.id, false)) {
+        if (incident.kind == incidentBulkSuspensions()) {
+            count = count + 1
+        }
+    }
+    assert(count == 1, "um incidente so")
+
+    // Suspend de device tambem alimenta a mesma sinal (device.suspended).
+    var dev2 = registry.registerDevice(mel, "srv", "pk2")
+    assert(registry.suspendDevice(mel.id, dev2.id), "suspende device")
+    assert(count == 1, "device suspend nao duplica")
+
+    // Conta sem suspensos: nada.
+    var ana = registry.createAccount("ana", "ana@e.com", "segredo")
+    assert(bulkSuspensionIncident(registry, ana.id) == null, "outra conta intocada")
+}
