@@ -17,6 +17,14 @@ import testkit.Support
 test "idle: touch so em frame util; PING nao renova", "idle" {
     assert(limitTunnelIdleMs() == 120000, "default 120 s")
     assert(limitStreamIdleMs() == 30000, "default 30 s")
+    // Recuo seguro em fonte pura: 0 nao e "nunca derruba" — e derruba na
+    // hora (sweep compara idle > limite; upstreamWaitMs herda o do tunel).
+    assert(tunnelIdleMsFrom(0) == 120000, "tunel zero recai no default")
+    assert(tunnelIdleMsFrom(-1000) == 120000, "tunel negativo recai no default")
+    assert(tunnelIdleMsFrom(60000) == 60000, "tunel positivo passa")
+    assert(streamIdleMsFrom(0) == 30000, "stream zero recai no default")
+    assert(streamIdleMsFrom(-1) == 30000, "stream negativo recai no default")
+    assert(streamIdleMsFrom(10000) == 10000, "stream positivo passa")
     // Fonte unica do heartbeat (Edge anuncia, connect ecoa, Agent recai):
     // mudar no Limits muda os tres juntos.
     assert(limitHeartbeatMs() == 15000, "heartbeat default 15 s")

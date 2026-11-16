@@ -97,17 +97,43 @@ Int limitFrameBytes() {
 // sobre tudo, evitam o custo O(n^2) de `bytesToString` em blocos grandes
 // (medido: ~1 s para 100 KiB em bytesToBase64; o custo total e n*tamanho —
 // ver 17-limitations). O teto (limitFrameBytes) continua valendo na recepcao.
+// ver 17-limitations). O teto (limitFrameBytes) continua valendo na recepcao.
+//
 // Ociosidade maxima sem frames uteis (nao-PING) antes de derrubar a sessao
 // (ms). Heartbeat sozinho nao renova: tunel parado e tunel morto para fins
 // de roteamento — o Agent reconecta sozinho e o Edge limpa a rota.
+//
+// Recuo em fonte pura (familia deviceLimitFrom et al.): zero/invalido recai
+// no default porque 0 nao e "nunca derruba" — e derruba TUDO: o sweep compara
+// `idleMs() > limite`, entao com 0 todo tunel quieto cai 1 ms apos o touch e
+// o upstreamWaitMs do Edge (herdado deste valor) zera a espera de resposta
+// (todo proxy devolve 504). Nada documenta 0 como intencao aqui.
+Int tunnelIdleMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 120000
+    }
+    return configured
+}
+
 Int limitTunnelIdleMs() {
-    return config.int("kofcloud.limits.tunnelIdleMs", 120000)
+    return tunnelIdleMsFrom(config.int("kofcloud.limits.tunnelIdleMs", 120000))
 }
 
 // Vida maxima de um stream sem END (ms): stream preso (peer que abre e some
 // no meio do DATA) e encerrado com RESET sem derrubar a sessao.
+//
+// Recuo em fonte pura pelo mesmo motivo: com 0 o primeiro sweep RESETA todo
+// stream aberto (idleStreams compara `ocioso > limite`) — o servico para de
+// responder na hora, com o tunel "vivo". Zero nunca foi kill switch.
+Int streamIdleMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 30000
+    }
+    return configured
+}
+
 Int limitStreamIdleMs() {
-    return config.int("kofcloud.limits.streamIdleMs", 30000)
+    return streamIdleMsFrom(config.int("kofcloud.limits.streamIdleMs", 30000))
 }
 
 // Intervalo do heartbeat do tunel (PING/PONG, ms). Fonte unica: o Edge
