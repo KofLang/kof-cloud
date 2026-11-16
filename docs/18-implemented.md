@@ -298,6 +298,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   com `--plan`, OTel/billing, segredos externos; sem lock-in, dry-run.
 * **Segurança contínua (Fase 19)** — SBOM + `security.txt`, scan no CI,
   rotação assistida + kill-switch **documentado** (`SECURITY.md` ##
-  Contenção), audit log WORM rumo a SOC2.
+  Contenção), audit log WORM rumo a SOC2 (espelho append-only
+  `<estado>.worm.jsonl` — sem cap; WORM real em storage separado pendente).
 
 Ver `16-plan.md` para as fases e `17-limitations.md` para as lacunas.

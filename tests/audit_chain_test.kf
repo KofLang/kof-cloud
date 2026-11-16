@@ -267,3 +267,86 @@ test "filtro de audit: cmdAudit liga as flags nas funcoes puras (trava de fonte)
     assert(body.indexOf("flagMissingValue(args, \"--action\")") >= 0, "--action solta barra")
     assert(body.indexOf("flagDuplicated(args, \"--action\")") >= 0, "--action repetida barra")
 }
+
+test "worm: serializacao pura do evento (fio e arquivo na mesma fonte)", "worm-unit" {
+    // A fonte unica e `auditEventJson`: /v1/audit e o espelho em arquivo
+    // imprimem a MESMA linha — divergencia entre os dois formatos quebra
+    // o terceiro verificador, entao a serializacao nao pode existir em dois
+    // lugares (mutacao na pura quebra aqui E na listagem HTTP).
+    var line = auditEventJson(AuditEvent("1700000000000", "account:mel", "device.registered", "acc-1/dev-1", "", "abc123"))
+    assert(line.indexOf("\"at\":\"1700000000000\"") >= 0, "at")
+    assert(line.indexOf("\"actor\":\"account:mel\"") >= 0, "ator")
+    assert(line.indexOf("\"action\":\"device.registered\"") >= 0, "acao")
+    assert(line.indexOf("\"target\":\"acc-1/dev-1\"") >= 0, "alvo")
+    assert(line.indexOf("\"prevHash\":\"\"") >= 0, "prevHash (vazio vai)")
+    assert(line.indexOf("\"hash\":\"abc123\"") >= 0, "hash")
+    assert(line.indexOf("senha") < 0 && line.indexOf("password") < 0, "sem dado de cliente: so os 6 campos")
+}
+
+test "worm: espelho append-only sobrevive a poda do anel", "worm-unit" {
+    var state = chainPath("worm-unit")
+    var registry = Registry(state)
+    var wormPath = state + ".worm.jsonl"
+    // 101 contas = 101 eventos no espelho; o anel (cap 100 da fonte unica)
+    // poda o mais antigo. O espelho NAO tem cap — e esse o ponto.
+    var i = 0
+    while (i < 101) {
+        registry.createAccount("user" + intToString(i), "user" + intToString(i) + "@e.com", "segredo")
+        i = i + 1
+    }
+    assert(registry.audit.size == 100, "anel podado em 100: " + intToString(registry.audit.size))
+    var raw = readTextOr(wormPath, "FALTA")
+    assert(raw.indexOf("FALTA") < 0, "espelho existe")
+    var lines = raw.split("\n")
+    var nonEmpty = 0
+    for (var line in lines) {
+        if (line.length > 0) {
+            nonEmpty = nonEmpty + 1
+        }
+    }
+    assert(nonEmpty == 101, "espelho com todas as linhas: " + intToString(nonEmpty))
+    // Rescrita inteira do estado (save normal de qualquer mutacao) NAO toca
+    // o espelho: o control-state.json e reescrito, o .worm.jsonl so cresce.
+    var before = readTextOr(wormPath, "")
+    registry.save()
+    assert(readTextOr(wormPath, "") == before, "save nao rescreve o espelho")
+}
+
+test "worm: HTTP cria eventos no espelho; adulterar o espelho nao afeta a API", "worm" {
+    var controlPort = 19913
+    var state = chainPath("worm-http")
+    var registry = Registry(state)
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+
+    var raw = readTextOr(state + ".worm.jsonl", "")
+    assert(raw.indexOf("account.created") >= 0, "evento da conta no espelho")
+    assert(raw.indexOf("device.registered") >= 0, "evento do device no espelho")
+    // A linha do espelho e JSON da fonte unica, com hash (o terceiro pode
+    // verificar a trilha do arquivo sem acesso a API). A primeira linha e a
+    // raiz da cadeia: prevHash vazio.
+    var firstLine = raw.substring(0, raw.indexOf("\n"))
+    var decoded = json.decode<Map<String, String>>(firstLine)
+    assert(mapField(decoded, "action") == "account.created", "primeira linha e o primeiro evento")
+    assert(mapField(decoded, "hash").length == 64, "hash sha256 na linha")
+    assert(mapField(decoded, "prevHash") == "", "raiz sem anterior")
+
+    // O espelho e trilha REDUNDANTE: adultera-lo nao afeta a API (o anel
+    // em memoria e a fonte), nem e sobrescrito no proximo evento — o proximo
+    // append cresce a partir do que esta no disco.
+    writeTextTo(state + ".worm.jsonl", "{\"hackeado\":true}\n")
+    var listed = httpGetToken(controlPort, "/v1/audit", token)
+    assert(statusOf(listed) == 200, "listagem intacta")
+    assert(bodyOf(listed).indexOf("account.created") >= 0, "anel e a fonte, nao o espelho")
+    var mel = registry.accountByHandle("mel")
+    if (mel != null) {
+        registry.registerDevice(mel, "nb2", "pk2")
+    }
+    assert(readTextOr(state + ".worm.jsonl", "").indexOf("hackeado") >= 0, "append preserva o que ha no disco")
+    assert(readTextOr(state + ".worm.jsonl", "").indexOf("device.registered") >= 0, "novo evento entra")
+}

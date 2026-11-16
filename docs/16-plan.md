@@ -1287,8 +1287,21 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   não é WORM de verdade — quem tem o arquivo ainda pode reescrevê-lo inteiro
   (inclusive recalculando a cadeia); o que existe é **detecção** de
   adulteração parcial, não imutabilidade. Prova: `tests/audit_chain_test.kf`
-  (5). Pendente: WORM real (append-only no filesystem/objeto) e o relatório
-  SOC2-tipo-II.
+  (5 + 2 do filtro de audit).
+
+  **Implementado (espelho append-only, parcial):** cada `Registry.audit`
+  grava UMA linha JSON no `<estado>.worm.jsonl` (mesma serialização da API,
+  pura `auditEventJson` — o fio e o arquivo nunca divergem), sem cap nem
+  poda: sobrevive à evicção do anel (cap 100) e à rescrita inteira do
+  `control-state.json` (o `save` não o toca). Best-effort por desenho: falha
+  de IO jamais quebra a requisição (o anel + o estado são a fonte; o espelho
+  é trilha redundante) e adulterá-lo não afeta a API. **Honestidade:** o
+  append é read+write (o stdlib não expõe append atômico — ver 17-
+  limitations), então quem tem o disco pode reescrever o arquivo inteiro;
+  o que o espelho compra é **sobrevivência à poda e à rescrita do estado**,
+  não imutabilidade física. Prova: `tests/audit_chain_test.kf` (`worm-unit`
+  ×2 + `worm`, total 13). Pendente: WORM real em storage separado (objeto
+  com lock de retenção) e o relatório SOC2-tipo-II.
 **Regras:** segurança por default em todo slice novo (a pergunta "o que
 pode vazar aqui?" entra no template de teste); nenhum dado de cliente
 em log/métrica/audit — sem exceção, sem "só dessa vez".

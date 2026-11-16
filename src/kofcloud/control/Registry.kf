@@ -217,11 +217,24 @@ class Registry {
         }
         var at = longToString(time.now())
         var hash = auditEventHash(prev, at, actor, action, target)
-        this.audit.add(AuditEvent(at, actor, action, target, prev, hash))
+        var event = AuditEvent(at, actor, action, target, prev, hash)
+        this.audit.add(event)
         var cap = limitAuditEvents()
         while (this.audit.size > cap) {
             this.audit = this.audit.subList(1, this.audit.size)
         }
+        // Espelho WORM (Fase 19 slice 4 parcial): uma linha JSON por evento
+        // no `<estado>.worm.jsonl`, NUNCA capado nem truncado — sobrevive a
+        // poda do anel e a rescrita inteira do control-state.json. Best-effort
+        // de proposito (`appendLineTo` engole falha de IO): o espelho jamais
+        // quebra o caminho da requisicao — o anel em memoria + o estado
+        // persistido continuam sendo a fonte de verdade; o espelho e trilha
+        // redundante. Honestidade: append via read+write (o stdlib nao expoe
+        // append atomico — ver 17-limitations); quem tem o disco pode
+        // reescrever o arquivo inteiro, mas remover/adulterar UMA linha
+        // quebra a cadeia (hashes encadeados, verificavel por terceiro).
+        // Sem dado de cliente: os mesmos 6 campos do endpoint /v1/audit.
+        appendLineTo(this.path + ".worm.jsonl", auditEventJson(event))
     }
 
     List<AuditEvent> auditForAccount(String accountId) {

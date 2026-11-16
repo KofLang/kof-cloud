@@ -24,6 +24,23 @@ Bool fileExists(String path) {
     return File(path).exists()
 }
 
+// Append best-effort de uma linha em arquivo texto (read+write — o stdlib
+// nao expoe append atomico nem fd de append; mesma limitacao do rename do
+// cabecalho, ver 17-limitations). NUNCA lanca: devolve false em falha de IO
+// para o chamador decidir ignorar (contrato do espelho WORM do audit: a
+// trilha redundante jamais quebra o caminho da requisicao). Duas linhas
+// concorrentes podem intercalar (sem lock, L3) — o espelho e aproximação
+// como os contadores; a cadeia de hashes detecta linha perdida/adulterada.
+Bool appendLineTo(String path, String line) {
+    try {
+        var existing = readTextOr(path, "")
+        writeTextTo(path, existing + line + "\n")
+        return true
+    } catch (String e) {
+        return false
+    }
+}
+
 String parentDir(String path) {
     var index = -1
     for (var i = 0; i < path.length; i++) {

@@ -178,7 +178,8 @@ WAF, timeout de upstream, allowlist WAF, painel somente-leitura, rotação de kf
   — excedeu, `429 KCF107` + `Retry-After` antes de rotear,
   sem revelar se o host existe e sem consumir o túnel; suspensão reversível
   de serviço/dispositivo (`SUSPENDED`, opaco) + trilha de auditoria
-  (`kof cloud audit`, anel de 100 eventos só com metadados).
+  (`kof cloud audit`, anel de 100 eventos só com metadados + espelho
+  append-only `<estado>.worm.jsonl`, sem cap).
 * Hot-reload: publicar depois do `connect` não exige reconnect (o Agent
   re-busca os serviços e o próximo OPEN já roteia); OPEN recusado responde
   `502` em vez de travar o relay.

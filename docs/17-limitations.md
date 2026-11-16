@@ -50,9 +50,14 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 ## Limites do MVP implementado
 
 * **A trilha de auditoria é detectável, não imutável.** Cada evento tem hash
-  encadeado (`audit --verify` acusa adulteração/remoção parcial), mas o
-  arquivo de estado pode ser reescrito inteiro por quem tem o disco — WORM
-  real (append-only em storage separado) segue pendente.
+  encadeado (`audit --verify` acusa adulteração/remoção parcial) e há espelho
+  append-only em `<estado>.worm.jsonl` (uma linha JSON por evento, mesma
+  serialização da API; sobrevive à poda do anel e à rescrita do estado) —
+  mas o append é read+write (o stdlib não expõe append atômico, então duas
+  escritas concorrentes podem intercalar e quem tem o disco pode reescrever
+  o arquivo inteiro); WORM real (storage separado com lock de retenção)
+  segue pendente. O espelho também não tem teto: cresce para sempre; rotação
+  (ex.: por tamanho/data) é desenho futuro.
 * **Estado em arquivo JSON único, sem backend de banco.** A carga agora é
   explícita (`ok`/`absent`/`corrupt`, com aviso no `serve`) e há
   `migrate --dry-run`, mas ainda não existe backend SQLite/Postgres atrás de

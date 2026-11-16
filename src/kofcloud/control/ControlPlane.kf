@@ -527,14 +527,7 @@ HttpResult handleListAudit(Registry registry, String? authHeader) {
     }
     var parts = listOf<String>()
     for (var event in registry.auditForAccount(account.id)) {
-        var entry = mapOf()
-        entry.put("at", event.at)
-        entry.put("actor", event.actor)
-        entry.put("action", event.action)
-        entry.put("target", event.target)
-        entry.put("prevHash", event.prevHash)
-        entry.put("hash", event.hash)
-        parts.add(json.encode(entry))
+        parts.add(auditEventJson(event))
     }
     return HttpResult(200, "[" + joinStrings(parts, ",") + "]")
 }

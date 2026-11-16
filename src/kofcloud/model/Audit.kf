@@ -164,3 +164,17 @@ String auditAccountFrozen() {
 String auditAccountUnfrozen() {
     return "account.unfrozen"
 }
+
+// Serializacao JSON de UM evento de auditoria. Fonte unica: o `GET /v1/audit`
+// e o espelho WORM em arquivo (Fase 19 s4) usam a mesma — o formato do fio e
+// o do arquivo nunca divergem (escape via `json.encode`, inclusive). Pura.
+String auditEventJson(AuditEvent event) {
+    var entry = mapOf()
+    entry.put("at", event.at)
+    entry.put("actor", event.actor)
+    entry.put("action", event.action)
+    entry.put("target", event.target)
+    entry.put("prevHash", event.prevHash)
+    entry.put("hash", event.hash)
+    return json.encode(entry)
+}
