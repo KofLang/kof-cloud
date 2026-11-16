@@ -25,7 +25,11 @@ import kofcloud.util.Text
 
 record AgentConfig(String controlUrl, String deviceId, String accountId, String token, String privateKey, String stopFile, String edgeHost, Int edgePort, Int healthMs)
 
-record EdgeEndpoint(String host, Int port, Int heartbeatMs, List<Service> services)
+// `best` e o vencedor do ranking (a sonda de menor latencia) ou a probe
+// vazia quando nao houve ranking (override do operador, Edge unico). O
+// refresher usa para detectar drift entre o que a sessao usa e o que o
+// ranking aponta agora.
+record EdgeEndpoint(String host, Int port, Int heartbeatMs, List<Service> services, EdgeProbe best)
 
 // Um Edge candidato e a latencia medida (ms; -1 = nao respondeu).
 record EdgeProbe(String host, Int port, Long latencyMs)
@@ -119,6 +123,7 @@ EdgeEndpoint fetchEdge(AgentConfig config) {
     // Ranking por latencia (Fase 14 slice 2): o control plane publica a lista
     // e o Agent escolhe o mais proximo. Override explicito de host/porta
     // (testes e operador) vence a escolha automatica.
+    var best = EdgeProbe("", 0, -1)
     if (config.edgeHost.length == 0 && config.edgePort <= 0) {
         var addresses = json.decode<List<String>>(mapField(map, "edges"))
         if (addresses.size > 1) {
@@ -126,8 +131,13 @@ EdgeEndpoint fetchEdge(AgentConfig config) {
             if (chosen.host.length > 0) {
                 host = chosen.host
                 port = chosen.port
+                best = chosen
             }
         }
+    }
+    if (best.host.length == 0) {
+        // Sem ranking (override ou Edge unico): o vencedor e o proprio host.
+        best = EdgeProbe(host, port, 0)
     }
     return EdgeEndpoint(
         host,
@@ -136,7 +146,8 @@ EdgeEndpoint fetchEdge(AgentConfig config) {
         // para um valor absurdo nao virar 200 ms ou negativo por wrap; zero
         // ou lixo recai no default e o loop abaixo ja corrige <= 0.
         parseIntBounded(mapField(map, "heartbeatMs"), limitHeartbeatMs(), 3600000),
-        services
+        services,
+        best
     )
 }
 
@@ -480,9 +491,34 @@ void pruneHealthMemory(Map<String, String> last, List<String> probed) {
 // e nao sao tocados. Servico removido sai (OPEN futuro = SERVICE_UNKNOWN);
 // servico novo entra e o proximo OPEN ja roteia. Falha de rede = ignora e
 // tenta no proximo ciclo (nunca derruba o tunel por causa do refresh).
+// O Edge atual esta apontado por override explicito (config/operador)? Puro.
+Bool edgeIsOverridden(AgentConfig config) {
+    return config.edgeHost.length > 0 || config.edgePort > 0
+}
+
+// Linha de drift: o ranking atual aponta um Edge DIFERENTE do que a sessao
+// usa. Pura — decide so a mensagem; o emit vive no refresher. "" quando nao
+// ha drift (mesmo Edge ou override do operador, que manda e nao e drift).
+// Migrar sessao em curso significa matar o tunel, entao a fatia e visibilidade:
+// o operador decide reiniciar o connect quando quiser.
+String edgeDriftLine(String currentHost, Int currentPort, EdgeProbe best, Bool overridden) {
+    if (overridden) {
+        return ""
+    }
+    if (best.host.length == 0) {
+        return ""
+    }
+    if (best.host == currentHost && best.port == currentPort) {
+        return ""
+    }
+    return "edge ranking aponta " + best.host + ":" + intToString(best.port) + " (atual: " + currentHost + ":" + intToString(currentPort) + ") — reinicie o connect para migrar"
+}
+
 void agentRefresher(TunnelSession session, AgentConfig config, Int refreshMs) {
     var gap = limitRefreshMs(refreshMs)
     var open = true
+    var currentHost = ""
+    var currentPort = 0
     while (open) {
         time.sleep(gap)
         if (session.open == false) {
@@ -491,6 +527,20 @@ void agentRefresher(TunnelSession session, AgentConfig config, Int refreshMs) {
             try {
                 var endpoint = fetchEdge(config)
                 session.setServices(endpoint.services)
+                // Reavaliacao do ranking (Fase 14 slice 2, observacao): o
+                // fetchEdge ja sondou todos os Edges e descartou o ranking.
+                // Migrar a sessao significa matar o tunel — nao trocamos
+                // sozinhos; registramos o drift para o operador decidir
+                // (logs --runtime mostra, o mesmo caminho dos outros sinais).
+                if (currentHost.length == 0) {
+                    currentHost = endpoint.host
+                    currentPort = endpoint.port
+                } else {
+                    var line = edgeDriftLine(currentHost, currentPort, endpoint.best, edgeIsOverridden(config))
+                    if (line.length > 0) {
+                        agentEvent("info", line)
+                    }
+                }
             } catch (String e) {
                 // rede falhou: mantem a lista atual, tenta de novo depois
             }

@@ -1,3 +1,4 @@
+import kofcloud.agent.Agent
 
 import kofcloud.agent.Backoff
 import kofcloud.util.Limits
@@ -36,4 +37,51 @@ test "backoff: defaults coerentes" {
     assert(backoffMaxLimitFrom(100, 500) == 500, "teto abaixo da base recai na base")
     assert(backoffMaxLimitFrom(500, 500) == 500, "teto igual a base fica")
     assert(backoffMaxLimitFrom(60000, 500) == 60000, "teto acima da base passa")
+}
+
+test "edge drift: linha so quando ranking aponta outro Edge (puro)", "edge-drift" {
+    // Pendente da F14 s2 resolvido como observacao: o refresher ja sondava e
+    // ranqueava todos os Edges a cada ciclo (`fetchEdge`) e DESCARTAVA o
+    // ranking. Migrar a sessao significa matar o tunel, entao a fatia
+    // honesta e o sinal: o operador ve o drift no `logs --runtime` e decide.
+    var cur = EdgeProbe("edge-a", 7000, 20)
+    var other = EdgeProbe("edge-b", 7000, 10)
+
+    // Drift real: ranking aponta outro Edge.
+    var drift = edgeDriftLine("edge-a", 7000, other, false)
+    assert(drift.indexOf("edge-b:7000") >= 0, "nomeia o apontado")
+    assert(drift.indexOf("edge-a:7000") >= 0, "nomeia o atual")
+    assert(drift.indexOf("reinicie o connect") >= 0, "diz o proximo passo")
+
+    // Mesmo Edge: sem linha (nao e drift).
+    assert(edgeDriftLine("edge-a", 7000, cur, false) == "", "mesmo edge: sem drift")
+
+    // Override do operador: config manda, nunca e drift.
+    assert(edgeDriftLine("edge-a", 7000, other, true) == "", "override: sem drift")
+
+    // Ranking vazio (nenhum Edge respondeu): sem linha.
+    var empty = EdgeProbe("", 0, -1)
+    assert(edgeDriftLine("edge-a", 7000, empty, false) == "", "ranking vazio: sem drift")
+
+    // Porta diferente no mesmo host tambem e drift.
+    var portDrift = edgeDriftLine("edge-a", 7000, EdgeProbe("edge-a", 7001, 5), false)
+    assert(portDrift.indexOf("edge-a:7001") >= 0, "porta diferente e drift")
+
+    // Trava de fonte: o refresher registra o drift pelo agenteEvent (o mesmo
+    // caminho dos outros sinais, visivel no `logs --runtime`) e guarda o
+    // Edge da sessao para comparar.
+    var raw = File("src/kofcloud/agent/Agent.kf").readText()
+    var text = ""
+    if (raw != null) {
+        text = raw
+    }
+    if (text.length == 0) {
+        return
+    }
+    var start = text.indexOf("void agentRefresher(")
+    var bodyEnd = text.length
+    var body = text.substring(start, bodyEnd)
+    assert(body.indexOf("edgeDriftLine(") >= 0, "refresher detecta drift")
+    assert(body.indexOf("agentEvent(\"info\", line)") >= 0, "sinal vai ao runtime log")
+    assert(body.indexOf("endpoint.best") >= 0, "usa o ranking do fetchEdge")
 }

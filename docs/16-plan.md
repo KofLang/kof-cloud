@@ -895,9 +895,15 @@ sem mudar formato público):
   latência (`chooseFastestEdge`, pura; quem não respondeu é ignorado e, se
   nenhum responder, fica o principal). Override explícito de host/porta
   (testes/operador) vence a escolha automática. O contrato antigo
-  (`edgeHost`/`edgePort`) continua. **Pendente:** reavaliar a cada N minutos
-  (hoje a escolha acontece em cada `connect`, que já é o ciclo de reconexão)
-  e o Edge dedicado por conta.
+  (`edgeHost`/`edgePort`) continua. **Reavaliação ✅ (parte observável):**
+  o `agentRefresher` já chamava `fetchEdge` a cada ciclo, que sonda e
+  ranqueia todos os Edges — e descartava o ranking. Agora `EdgeEndpoint`
+  carrega o vencedor (`best`) e o refresher emite um evento `info` no
+  runtime log quando o ranking aponta outro Edge que o da sessão
+  (`edgeDriftLine`, pura; override do operador nunca é drift). Migrar
+  sessão significa matar o túnel, então NÃO trocamos sozinhos: o operador
+  vê em `logs --runtime` e reinicia o `connect`. Pendente: troca
+  automática de sessão e o Edge dedicado por conta.
 * **Slice 3 — caminho de bytes O(n).** Tirar `bytesToString`/`base64` via
   String do caminho quente: chunks maiores (64 KiB) + cópia direta de
   bytes quando o stdlib permitir; handshake comprime `services[]`
