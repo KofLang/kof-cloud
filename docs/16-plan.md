@@ -1093,6 +1093,19 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   — o rate limit já conta por hostname, mas abrir incidente por hostname
   violaria a regra de não ter cardinalidade por cliente.
 
+  **Implementado (suspensão em lote):** os detectores cobriam revoke em
+  lote, mas a SUSPENSÃO não revoga nada — um token de conta comprometido
+  podia suspender todos os serviços (cada site sai do ar com 404 opaco) sem
+  incidente nenhum. `detectBulkSuspensions` (mesmo padrão do
+  `detectBulkRevokes`: anel de auditoria, janela
+  `kofcloud.limits.bulkRevokeWindowMs`, limiar `bulkRevokeThreshold` = 3)
+  soma `service.suspended` + `device.suspended` da conta e abre
+  `bulk_suspensions` (WARN, escopo da conta) no limiar; ligado em
+  `suspendService` e `suspendDevice`; idempotente como os irmãos (um
+  incidente aberto por tipo+conta e o mesmo sinal até resolvido); o freeze
+  já tem incidente próprio e não passa pelo detector. Prova:
+  `incident-susp` em `tests/incidents_test.kf`.
+
 * **Slice 2 — contenção em um comando.** `kof cloud freeze <alvo>`
   (conta|device|service|edge): congela tudo do alvo (suspend + revoga
   tokens vivos + derruba sessões) e gera ID de incidente; `unfreeze`
@@ -1142,8 +1155,7 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   `tests/status_page_test.kf` (5). **Implementado (template):**
   `docs/incidents/README.md` — contrato do post-mortem (causa, impacto,
   timeline, correção, ação preventiva com dono e prazo; sem dado de
-  cliente), com trava de regressão (`postmortem-template`). **Pendente:**
-  webhook assinado Ed25519.
+  cliente), com trava de regressão (`postmortem-template`).
 
   **Implementado (webhook):** `model/Webhook.kf` + `Registry.setWebhook/
   removeWebhook/deliverWebhook` + `POST /v1/webhook` (set|show|remove|test) e
@@ -1213,7 +1225,9 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   Prova: `tests/security_test.kf` (`security-unit` + `security` +
   `security-policy`) + `tests/hosts_test.kf` (`audit-sbom`). Pendente:
   o resto do ritmo (`rotate --all` ✅ no slice 3, `scan` ✅ no slice 2,
-  PEM, kill-switch ✅ documentado, WORM).
+  PEM ✅ — aviso de expiração em 30 dias no `doctor --tls-cert` (Fase 9 s3)
+  e no `scan --tls-cert`; kill-switch ✅ documentado; WORM ✅ parcial no
+  slice 4 — espelho append-only + verify; storage separado pendente).
 * **Slice 2 — varredura contínua (parcial: scan do manifesto ✅).**
   `kof cloud scan [--file]` lê o manifesto e acusa `kfs_`/`kfc_`/password
   literal (exit 1 com achado, 0 limpo) — sem login, sem rede, para rodar
@@ -1268,10 +1282,10 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   credencial vazada de um login antigo vale para sempre. `POST
   /v1/tokens/prune` + `kof cloud token prune` mantêm apenas a da sessão atual
   e revogam o resto (escopo por conta; sem token → 401; idempotente). Prova:
-  `tests/account_token_test.kf` (8). Pendente: PEMs com 30 dias de antecedência; kill-switch ✅ documentado
-  (`docs/SECURITY.md` ## Contenção — procedimento manual reversível com
-  o que existe; o `freeze` de um comando da Fase 17 automatiza quando
-  existir).
+  `tests/account_token_test.kf` (8). PEM com 30 dias de antecedência ✅
+  (`doctor --tls-cert`, Fase 9 s3, e `scan --tls-cert` no slice 2);
+  kill-switch ✅ documentado (`docs/SECURITY.md` ## Contenção) e
+  automatizado pelo `freeze` de um comando da Fase 17 slice 2.
 * **Slice 4 — auditoria externa.** Trilha imutável (audit log WORM:
   append-only com hash encadeado, verificável por terceiro); relatório
   SOC2-tipo-II como meta (controles mapeados 1:1 com o que já existe:
