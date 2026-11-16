@@ -57,7 +57,7 @@ congelava TODO cadastro novo em TODA conta**), `kofcloud.limits.services` (por d
 `kofcloud.limits.streams` (por túnel, default 128, **zero/inválido recaem no
 default via `streamLimitFrom` pura — 0 recusaria todo OPEN**, com
 `429`/`RESET LIMIT_EXCEEDED`).
-Prova: `tests/limits_test.kf` (6 testes) + `tests/e2e_multiservice_test.kf`
+Prova: `tests/limits_test.kf` (7 testes) + `tests/e2e_multiservice_test.kf`
 (3 serviços no mesmo túnel, com isolamento de falha).
 
 **Presença visível no `device list` (parte do contrato de `03-device.md`).**
@@ -68,7 +68,7 @@ Edge. O `device list` mostrava só o cadastro, então responder "este notebook
 está no ar?" exigia cruzar dois comandos. Agora a linha traz
 `tunel: ONLINE|OFFLINE|desconhecido (motivo)` via `/v1/presence`, com a mesma
 regra do `status`/`doctor`; falha na consulta nunca vira `OFFLINE` inventado.
-Prova: `tests/device_presence_test.kf` (2).
+Prova: `tests/device_presence_test.kf` (5).
 
 **Teto de conexões públicas simultâneas (parte do contrato de `10-edge.md`).**
 A tabela prometia "1024 conexões públicas simultâneas → `503` + fecha", mas o
@@ -101,7 +101,7 @@ respondia `500` continuava `ONLINE` no Edge. Agora `agent/Health.kf` faz `GET`
 de verdade (status < 500 = `ONLINE`, ≥ 500 ou sem resposta no prazo =
 `DEGRADED`, recusa = `OFFLINE`); o prazo (`kofcloud.limits.healthTimeoutMs`,
 2 s) usa o único mecanismo do Kof para `receive` sem timeout: uma task fecha
-a conexão e o receive em voo lança (medido). Prova: `tests/health_test.kf` (2).
+a conexão e o receive em voo lança (medido). Prova: `tests/health_test.kf` (4).
 
 ## Fase 5 — autenticação
 
@@ -122,7 +122,7 @@ opaco entre contas (existente-alheio indistinguível de inexistente);
 owner-gate em `POST /v1/services/status` (só a conta dona altera); CLI com
 `Hint:` humana (`printFail`); validação de `publish` devolve o HTTP certo por
 família (400 validação, 404 dono/recurso, 429 limite). Prova:
-`tests/errors_test.kf` (10 testes: códigos do control plane, 404 opaco,
+`tests/errors_test.kf` (11 testes: códigos do control plane, 404 opaco,
 limites/owner-gate no registry, códigos do Edge, Hint + trava de regressao
 100% + revoke/TTL + nome|id + fail-fast de flags).
 
@@ -138,7 +138,7 @@ VERIFIED, poda junto com serviço/dispositivo. Dono verificado antes do DNS
 `domain verify [--tls-cert <pem>]`, `domain remove`; erros `KCF120`–`KCF124`
 com `Hint:`. O `--tls-cert` julga o PEM localmente antes da rede (cobre o
 hostname? expira em 30 dias?) — ver Fase 9 slice 3.
-Prova: `tests/domains_test.kf` (11 testes: validação, registro/idempotência,
+Prova: `tests/domains_test.kf` (12 testes: validação, registro/idempotência,
 verificação sem rede, rota/poda, API com service preenchido, Edge via túnel real, Hint + serializadores, certificado × hostname puro e com openssl real).
 
 Falta (fatiado de propósito): TLS por SNI no Edge (o Kof não expõe — ver
@@ -219,7 +219,7 @@ install|status|uninstall`: gera `kofcloud-agent.service` (mesmo `connect`,
 `Restart=always`, `NoNewPrivileges`, enable manual de proposito), erro
 honesto sem systemd; artefato por SO na Fase 13 slice 1 (systemd continua o
 padrao no Linux). Prova:
-`tests/daemon_test.kf` (8 testes + 5 da Fase 13 slice 1 — ver U28).
+`tests/daemon_test.kf` (13 testes: 8 do daemon + 5 da Fase 13 slice 1 — ver U28).
 
 **Estado (hot-reload — debito quitado): ✅ implementado.** O Agent re-busca
 `services[]` via `/v1/connect` a cada `6×healthMs` e troca a tabela DA SESSAO
@@ -270,7 +270,7 @@ nos dois lados: túnel ocioso cai (`kofcloud.limits.tunnelIdleMs`, default
 IDLE_TIMEOUT` (`kofcloud.limits.streamIdleMs`, default 30 s) sem derrubar a
 sessão. EOF limpo virou throw (reconecta com backoff), exceto com stopFile
 ou GOAWAY — antes, queda silenciosa parava o Agent. Prova:
-`tests/idle_test.kf` (4 testes).
+`tests/idle_test.kf` (5 testes).
 
 **Estado (conexões simultâneas por serviço — fecha os débitos): ✅
 implementado.** Contador por `serviceId` no Edge
@@ -314,7 +314,7 @@ libera); enforcement imediato no Edge (request derruba a sessão) e contínuo
 via PING (cai em até um heartbeat); trilha de auditoria em anel (fonte unica
 `limitAuditEvents()`, `kofcloud.limits.auditEvents`, default 100 eventos, só
 metadados) com `GET /v1/audit` filtrado por conta + `kof cloud
-audit`. Prova: `tests/abuse_test.kf` (3 testes: rota/health/API, device no
+audit`. Prova: `tests/abuse_test.kf` (5 testes: rota/health/API, device no
 túnel, Edge fim a fim + audit via HTTP).
 
 ## Observabilidade mínima (parcial, antes do deploy)
@@ -328,7 +328,7 @@ nenhum hostname, corpo, credencial ou chave chega às métricas.
 **Estado (slice 2): ✅ implementado.** `control/Metrics.kf` conta lifecycle
 no Registry (contas, logins, devices, serviços, tokens, domínios) e
 `GET /v1/metrics` serve o export Prometheus sem auth (igual ao `/v1/health`).
-Prova: `tests/metrics_test.kf` (6 testes: formato, recusa por motivo, Edge
+Prova: `tests/metrics_test.kf` (12 testes: formato, recusa por motivo, Edge
 fim a fim, privacidade, endpoint + contadores via HTTP e via registry).
 
 **Estado (slice 3 — fecha): ✅ implementado.** `agent/Metrics.kf` conta
@@ -489,7 +489,7 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   divergente, valor não numérico/vazio/com sinal, nome fora da forma canônica,
   `Transfer-Encoding`), o Edge responde `400 KCF118` antes de rotear e o corpo
   relayado é fatiado **exatamente** no declarado. Prova:
-  `tests/framing_test.kf` (3: unit, e2e 400/413, relay com corpo mentiroso).
+  `tests/framing_test.kf` (14 testes; os 3 do teto de corpo — ver U54: unit, e2e 400/413, relay com corpo mentiroso).
 * **Slice 2d — `Host` não ambíguo ✅.** Fechado o outro lado da mesma classe:
   o Edge roteia pelo `Host` e reconstrói o pedido para o serviço local, mas
   com **dois** `Host` ele roteava pelo primeiro e repassava os dois — o
@@ -696,7 +696,7 @@ Desenho fatiado:
   Agent). Fail-closed só para quem declarou — lista vazia = sem restrição
   (serviço legado passa). Política malformada não publica: `400 KCF113`
   (método: só verbos exatos em maiúsculas) / `400 KCF114` (path: absoluto
-  `/...`, sem espaço). Prova: `tests/waf_allow_test.kf` (4 testes:
+  `/...`, sem espaço). Prova: `tests/waf_allow_test.kf` (5 testes:
   normalização de métodos e paths, `splitList`, e2e — 403 por path e por
   método, path permitido 200, serviço sem política não barra). O deploy
   declarativo cobre os campos: `kofcloud.json` aceita `allowMethods`/
@@ -776,7 +776,7 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   remover domínio, revogar dispositivo, revogar todas as credenciais) pedem
   `confirm()`. O `kfs_` aparece **uma única vez** na emissão e nunca em
   listagem; o token da conta continua só na memória da aba. Prova:
-  `tests/panel_actions_test.kf` (3 — o HTML expõe cada ação, o e2e
+  `tests/panel_actions_test.kf` (5 — o HTML expõe cada ação, o e2e
   publica/suspende/emite/remove pelas rotas que o painel usa, e o contrato do
   "Adicionar domínio").
 
@@ -1155,7 +1155,7 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   prefixo). Falha de entrega não impede o incidente de existir. **Divergência
   registrada:** o desenho pedia Ed25519, mas o stdlib não expõe par Ed25519
   utilizável (SECN014, `13-kof-apis.md` L17). Prova:
-  `tests/webhook_test.kf` (5).
+  `tests/webhook_test.kf` (8).
 **Regras:** contenção sempre reversível; comunicação sempre antes do
 fix secreto (avisa o impacto, depois corrige); todo incidente vira teste
 novo (se não tem regressão, não fechou).
@@ -1227,7 +1227,7 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   vez — mais qualquer valor com `kfs_`/`kfc_`/`password`) e o **PEM do
   operador** (`--tls-cert`: expirado ou expirando em 30 dias, via
   `openssl x509 -checkend`). Nunca imprime valor, só o nome. Prova:
-  `tests/scan_extra_test.kf` (4). **Pendente:** dependências (exige resolver
+  `tests/scan_extra_test.kf` (5). **Pendente:** dependências (exige resolver
   `kofdeps`/rede) e `kfs_` sem TTL em serviço crítico (exige conta).
 
   **Higiene de credenciais ✅:** `kof cloud service tokens` (e
@@ -1244,7 +1244,7 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   1 se alguma falhar); `service rotation <nome>` mostra quantas ainda
   valem. Credencial **sem** expiração nunca é revogada em silêncio — fica
   contada como pendente até ser revogada à mão. Prova:
-  `tests/rotate_test.kf` (5: `rotate-all` com dois serviços independentes).
+  `tests/rotate_test.kf` (6: `rotate-all` com dois serviços independentes).
   **Credencial da CONTA (`kfc_`) com ciclo de vida ✅.** O `kfc_` é o token
   mais poderoso do sistema (publica, revoga device, congela conta) e era o
   único sem ciclo de vida: `logout` apagava só o arquivo local e o valor
@@ -1256,7 +1256,7 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   (antigas só caem depois do TTL; sem TTL nada é revogado em silêncio).
   CLI: `kof cloud token list|revoke|rotate|rotation`; o `rotate` grava a
   nova credencial na sessão local antes de imprimir. Prova:
-  `tests/account_token_test.kf` (5: TTL/poda/legado, revoke por valor e id
+  `tests/account_token_test.kf` (8: TTL/poda/legado, revoke por valor e id
   curto com escopo por conta, ambiguidade, overlap, HTTP fim a fim).
   **TTL longo (30 dias) não estourava por acaso:** `ttlHours * 3600000` era
   aritmética de `Int` (32 bits), que estoura acima de 596 h — `--ttl 720`
@@ -1268,7 +1268,7 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   credencial vazada de um login antigo vale para sempre. `POST
   /v1/tokens/prune` + `kof cloud token prune` mantêm apenas a da sessão atual
   e revogam o resto (escopo por conta; sem token → 401; idempotente). Prova:
-  `tests/account_token_test.kf` (7). Pendente: PEMs com 30 dias de antecedência; kill-switch ✅ documentado
+  `tests/account_token_test.kf` (8). Pendente: PEMs com 30 dias de antecedência; kill-switch ✅ documentado
   (`docs/SECURITY.md` ## Contenção — procedimento manual reversível com
   o que existe; o `freeze` de um comando da Fase 17 automatiza quando
   existir).
