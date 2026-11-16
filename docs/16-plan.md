@@ -812,6 +812,16 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   (HTML e rota). Junto: `carregarListas` passou a recarregar dispositivos e
   presença, então suspender/revogar pelo painel atualiza a tabela em vez de
   deixar a linha velha na tela.
+  **Bug corrigido (vocabulário do domínio).** A tabela de domínios comparava
+  com `'ACTIVE'` — vocabulário que a API nunca devolve (`CustomDomain` é
+  PENDING/VERIFIED) — então todo domínio VERIFIED aparecia amarelo e o
+  operador não distinguia verificado de pendente. Agora VERIFIED é verde,
+  PENDING é amarelo e entradas sem status (zona wildcard, hostname de
+  serviço) são `-` sem cor inventada, nas duas renderizações (`carregar` e
+  `carregarListas`). Junto: o `select` de dispositivos era reconstruído DUAS
+  vezes por carregamento (chamada duplicada na mesma função). Prova:
+  `tests/panel_actions_test.kf` (trava do vocabulário no HTML + e2e da
+  listagem PENDING; mutação revertendo a comparação quebra).
 * **Slice 3 — onboarding guiado.** Criar conta → baixar desktop client →
   publish do primeiro serviço em 3 telas, com diagnóstico embutido
   (reaproveita a lógica do `doctor`, camada por camada). Prova: fluxo

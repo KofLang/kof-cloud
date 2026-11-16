@@ -48,6 +48,29 @@ test "painel s2: HTML expoe as acoes da gestao completa", "panel-actions-unit" {
     assert(html.indexOf("localStorage") < 0, "token nao persistido")
 }
 
+test "painel: status do dominio usa o vocabulario da API (VERIFIED/PENDING)", "panel-actions-unit" {
+    // Bug real: a tabela de dominios comparava com 'ACTIVE' — vocabulario
+    // que a API nunca devolve (model/CustomDomain e PENDING/VERIFIED) —
+    // entao TODO dominio verificado ficava amarelo de pendencia e o
+    // operador nao distinguia verificado de pendente na tabela.
+    var html = panelHtml()
+    assert(html.indexOf("'VERIFIED'") >= 0, "VERIFIED e a cor de ok")
+    assert(html.indexOf("ACTIVE") < 0, "nenhum ACTIVE no vocabulario do painel")
+    // Entradas sem status (zona wildcard, hostname de servico) viram '-'
+    // sem herdar cor de pendencia.
+    assert(html.indexOf("d.status ?") >= 0, "sem status nao herda cor")
+    // Limpeza do mesmo trecho: o select de dispositivos era preenchido
+    // DUAS vezes por carregamento (chamada duplicada reconstruia as
+    // opcoes; a segunda apagava e recriava o que a primeira fez).
+    var count = 0
+    var cursor = html.indexOf("preencherDevices(devs)")
+    while (cursor >= 0) {
+        count = count + 1
+        cursor = html.indexOf("preencherDevices(devs)", cursor + 1)
+    }
+    assert(count == 2, "definicao + uma chamada por carregamento")
+}
+
 test "painel s2: as rotas que o painel chama funcionam (publica e remove)", "panel-actions" {
     var controlPort = 19931
     var registry = Registry("/tmp/kofcloud-pa-" + crypto.randomHex(4) + ".json")
@@ -113,6 +136,13 @@ test "painel s2: adicionar dominio usa o NOME do servico (contrato da API)", "pa
     var added = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"api.example.com\",\"service\":\"site\"}", token)
     assert(statusOf(added) == 200, "dominio adicionado pelo painel")
     assert(bodyOf(added).indexOf("CNAME api.example.com") >= 0, "instrucao CNAME devolvida")
+
+    // O vocabulario que a tabela do painel renderiza: a listagem devolve
+    // PENDING/VERIFIED (nunca ACTIVE) — a comparacao do HTML trava com ela.
+    var listed = httpGetToken(controlPort, "/v1/domains", token)
+    assert(statusOf(listed) == 200, "listou")
+    assert(bodyOf(listed).indexOf("\"status\":\"PENDING\"") >= 0, "dominio novo nasce PENDING")
+    assert(bodyOf(listed).indexOf("ACTIVE") < 0, "listagem nunca fala ACTIVE")
 }
 
 Bool isHexChar(Char c) {

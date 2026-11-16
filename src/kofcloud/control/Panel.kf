@@ -15,7 +15,7 @@ package kofcloud.control
 
 // Versao do painel (aparece no rodape; ajuda a saber o que esta no ar).
 String panelVersion() {
-    return "1"
+    return "2"
 }
 
 // O HTML e uma constante: um unico lugar para revisar. Nenhum dado de conta
@@ -137,7 +137,7 @@ function carregar(){
     .then(function(r){
       var devs = r[0], online = r[1], svcs = r[2], doms = r[3];
       STATE.devs = devs;
-    preencherDevices(devs); STATE.svcs = svcs;
+      STATE.svcs = svcs;
       preencherDevices(devs);
       document.getElementById('devs').innerHTML = tabela(['nome','id','status','tunel'], devs.map(function(d){
         var vivo = online.indexOf(d.id || d.deviceId) >= 0;
@@ -149,8 +149,11 @@ function carregar(){
         return [esc(s.name), 'https://'+esc(s.hostname), esc(s.exposure), st + esc(s.status) + '</span>'];
       }));
       document.getElementById('doms').innerHTML = tabela(['hostname','tipo','servico','status'], doms.map(function(d){
-        var st = d.status === 'ACTIVE' ? '<span class=\"on\">' : '<span class=\"pend\">';
-        return [esc(d.hostname), esc(d.kind), esc(d.service), st + esc(d.status || '-') + '</span>'];
+        // casar pelo vocabulario real: o literal antigo que estava aqui
+        // nunca casava com o que a API devolve, e TODO dominio verificado
+        // ficava amarelo. Sem status (wildcard/servico) vira '-' sem cor.
+        var st = d.status === 'VERIFIED' ? '<span class=\"on\">' : (d.status ? '<span class=\"pend\">' : '');
+        return [esc(d.hostname), esc(d.kind), esc(d.service), d.status ? st + esc(d.status) + '</span>' : '<span class=\"muted\">-</span>'];
       }));
       document.getElementById('msg').textContent = '';
     })
@@ -233,8 +236,10 @@ function carregarListas(){
       return [esc(s.name), 'https://'+esc(s.hostname), esc(s.exposure), st + esc(s.status) + '</span>'];
     }));
     document.getElementById('doms').innerHTML = tabela(['hostname','tipo','servico','status'], doms.map(function(d){
-      var st = d.status === 'ACTIVE' ? '<span class=\"on\">' : '<span class=\"pend\">';
-      return [esc(d.hostname), esc(d.kind), esc(d.service), st + esc(d.status || '-') + '</span>'];
+      // Mesma regra do carregamento inicial: PENDING/VERIFIED da API, nunca
+      // o vocabulario antigo; sem status (wildcard/servico) vira '-' sem cor.
+      var st = d.status === 'VERIFIED' ? '<span class=\"on\">' : (d.status ? '<span class=\"pend\">' : '');
+      return [esc(d.hostname), esc(d.kind), esc(d.service), d.status ? st + esc(d.status) + '</span>' : '<span class=\"muted\">-</span>'];
     }));
   });
 }
