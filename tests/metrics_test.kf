@@ -463,3 +463,61 @@ test "metricas: gauge de vagas de relay por servico (total sem rotulo)", "metric
     assert(edgeState.serviceConnOpen("svc-a") == 0, "a zerado")
     assert(edgeState.serviceConnOpen("svc-b") == 0, "b zerado")
 }
+
+test "metricas: gauge de streams abertos reflete o relay vivo (nao 0 fixo)", "metrics-streams-open" {
+    // Medido: `noteHttpFinished` gravava `kofcloud_edge_tunnel_streams_open`
+    // SEMPRE como 0 — o gauge documentado ("streams abertos no relay") era
+    // uma constante sem significado. Agora o valor e o total vivo somado nas
+    // sessoes (`EdgeState.streamsOpenTotal`), fotografado no `finally` de
+    // toda conexao publica (todos os desfechos passam por ali).
+    var registry = Registry("/tmp/kofcloud-metstreams-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+
+    var expo = observability.metrics()
+    assert(metricHas(expo, "kofcloud_edge_tunnel_streams_open"), "gauge existe")
+
+    // Sessao viva com 2 streams abertos: total reflete a sessao.
+    var session = TunnelSession("s1", "dev-1", "acc", "")
+    session.openStream()
+    session.openStream()
+    edgeState.bind("dev-1", session)
+    assert(edgeState.streamsOpenTotal() == 2, "dois streams vivos")
+    noteStreamsOpen(edgeState.streamsOpenTotal())
+    expo = observability.metrics()
+    assert(metricValue(expo, "kofcloud_edge_tunnel_streams_open") == 2, "gauge = 2")
+
+    // Fecha um stream: total cai; some a sessao: total zera.
+    var firstId = session.inboxes.keys().get(0)
+    session.closeStream(firstId)
+    assert(edgeState.streamsOpenTotal() == 1, "um stream vivo")
+    edgeState.unbind("dev-1", "s1")
+    assert(edgeState.streamsOpenTotal() == 0, "sessao fora = zero streams")
+    noteStreamsOpen(edgeState.streamsOpenTotal())
+    expo = observability.metrics()
+    assert(metricValue(expo, "kofcloud_edge_tunnel_streams_open") == 0, "gauge zera")
+
+    // Deux sessoes somam (nunca rotulo por cliente: so o numero).
+    var a = TunnelSession("s2", "dev-2", "acc", "")
+    var b = TunnelSession("s3", "dev-3", "acc", "")
+    a.openStream()
+    b.openStream()
+    b.openStream()
+    edgeState.bind("dev-2", a)
+    edgeState.bind("dev-3", b)
+    assert(edgeState.streamsOpenTotal() == 3, "soma entre sessoes")
+
+    // Trava de fonte: o fim da requisicao fotografia o total vivo (e nao 0).
+    var raw = File("src/kofcloud/edge/HttpFront.kf").readText()
+    var text = ""
+    if (raw != null) {
+        text = raw
+    }
+    if (text.length == 0) {
+        return
+    }
+    var start = text.indexOf("void handlePublicConnection(")
+    var body = text.substring(start, text.indexOf("void refusePublicConnection(", start))
+    assert(body.indexOf("noteStreamsOpen(state.streamsOpenTotal())") >= 0, "foto no finally")
+    var metrics = readTextOr("src/kofcloud/edge/Metrics.kf", "")
+    assert(metrics.indexOf("gauge(metricStreamsOpen(), 0)") < 0, "nao grava 0 fixo")
+}

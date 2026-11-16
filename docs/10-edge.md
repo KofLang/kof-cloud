@@ -150,6 +150,7 @@ export Prometheus em `observability.metrics()`, servido sem auth em
 | `kofcloud_edge_http_request_bytes_total` | counter | bytes de pedido somados |
 | `kofcloud_edge_http_response_bytes_total` | counter | bytes de resposta somados |
 | `kofcloud_edge_tunnel_streams_total` | counter | streams abertos no relay |
+| `kofcloud_edge_tunnel_streams_open` | gauge | streams vivos no relay agora (soma das sessões; foto no fim de cada conexão pública) |
 | `kofcloud_edge_http_connections_open` | gauge | conexões públicas em curso (alimentado no acquire/release da vaga; saturação da borda visível antes do 503 KCF117) |
 | `kofcloud_edge_tunnel_service_conns_open` | gauge | vagas de relay por serviço em curso, somadas (sem rótulo por serviceId; gargalo no serviço local visível antes do 429 KCF108) |
 | `kofcloud_edge_http_request_latency_ms_{count,sum}` | histogram | latência fim-a-fim por requisição (ms) |

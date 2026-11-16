@@ -201,13 +201,21 @@ void noteHttpFinished(String outcome, String deniedDetail, Int requestBytes, Int
     observability.increment(metricResponseBytes(), responseBytes)
     noteResponseSize(responseBytes)
     noteRequestLatency(elapsedMs)
-    observability.gauge(metricStreamsOpen(), 0)
+    // O gauge de streams NAO e zerado aqui: o chamador informa o total
+    // vivo (`EdgeState.streamsOpenTotal`) via `noteStreamsOpen` — gravar 0
+    // a cada requisicao tornava o numero constante e inutil.
 }
 
 // Streams abertos no relay: gauge pontual por requisicao (abre/fecha no mesmo
 // fluxo; o valor global exato vive na sessao).
 void noteStreamOpened() {
     observability.counter("kofcloud_edge_tunnel_streams_total")
+}
+
+// Foto dos streams vivos no relay (todas as sessoes). Sem rotulo por
+// cliente: so o numero.
+void noteStreamsOpen(Int open) {
+    observability.gauge(metricStreamsOpen(), open)
 }
 
 // Conexao publica recusada pelo teto de simultaneas. Conta o evento, nunca

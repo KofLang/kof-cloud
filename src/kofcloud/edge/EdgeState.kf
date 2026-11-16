@@ -277,6 +277,19 @@ class EdgeState {
         return this.sessions.size
     }
 
+    // Streams abertos NO RELAY agora, somados em todas as sessoes vivas. O
+    // gauge `kofcloud_edge_tunnel_streams_open` era gravado sempre como 0 ao
+    // fim de cada requisicao — numero constante e sem significado. O valor
+    // exato vive na sessao (`TunnelSession.streamCount`), entao o gauge e
+    // uma foto deste somatorio.
+    Int streamsOpenTotal() {
+        var total = 0
+        for (var session in this.liveSessions()) {
+            total = total + session.streamCount()
+        }
+        return total
+    }
+
     // Resolve uma rota publica pelo hostname. Devolve null para host
     // desconhecido OU servico nao roteavel (PRIVATE nunca revela existencia).
     Service? route(String hostname) {

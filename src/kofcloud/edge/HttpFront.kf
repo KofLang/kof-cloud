@@ -51,6 +51,11 @@ void handlePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         // Sem finally, uma excecao no relay vazaria a vaga para sempre e o
         // Edge acabaria recusando todo mundo.
         state.releasePublicConn()
+        // Foto dos streams vivos depois deste relay: o stream ja fechou (o
+        // relay fecha no fim, ou a sessao cai e a sessao inteira some do
+        // mapa). Fica aqui porque o caminho tem `state` e passa por TODOS os
+        // desfechos — antes o gauge era sempre 0 e nao dizia nada.
+        noteStreamsOpen(state.streamsOpenTotal())
     }
 }
 
