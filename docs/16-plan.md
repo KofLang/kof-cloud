@@ -854,6 +854,19 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   (reaproveita a lógica do `doctor`, camada por camada). Prova: fluxo
   completo num control plane de teste.
 
+  **Primeiro passo ✅ (diagnóstico embutido no painel).** A seção
+  Diagnóstico roda, pela API pública `/v1` (nenhum endpoint novo), as
+  camadas do `doctor` que a página enxerga: ciclo de vida do dispositivo
+  (REVOKED = FALHA orientando re-registro; SUSPENDED = FALHA apontando o
+  `device unsuspend`), túnel confirmado pelo Edge (`/v1/presence` sem
+  sessão = FALHA com "rode: kof cloud connect") e cadeia de auditoria
+  (`/v1/audit/verify`: cadeia quebrada e espelho comprometido = FALHA,
+  integra = ok com contagem de eventos) — mesmo vocabulário ok/FALHA da
+  CLI. Limite honesto na página: o que depende da máquina do usuário
+  (portas locais, DNS da sua rede) segue no `kof cloud doctor`. Prova:
+  `tests/panel_actions_test.kf` (trava do HTML + e2e das três rotas no
+  estado que o painel renderiza; mutação da rota de auditoria quebra).
+
 **Regras:** o painel nunca mostra `kfs_` depois da emissão (mesma regra da
 CLI); nunca loga corpo/token; é estático + `fetch`, sem framework pesado
 (o Kof serve arquivo + JSON; o resto é HTML/JS simples).
