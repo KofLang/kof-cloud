@@ -807,3 +807,126 @@ test "text: breakdowns por tag da matriz U batem com os arquivos", "u-counts" {
     assert(rows >= 20, "linhas com breakdown reconhecidas=" + intToString(rows))
     assert(tagChecks >= 20, "tags conferidas=" + intToString(tagChecks))
 }
+
+test "text: provas citadas no plano batem com os arquivos", "prova-counts" {
+    // Irma da status-counts/u-counts para a PROSA do plano: cada
+    // "Prova: tests/x.kf (N)" do 16-plan e um numero que ninguem conferia
+    // — a mesma doenca que apodreceu os breakdowns da matriz (run do
+    // u-counts achou 4 drifts, todos com o total do arquivo intacto).
+    // Formas travadas: total puro "(N)" ou "(N:", total com substantivo
+    // exato "(N testes...)" — "(3 servicos..." NAO e contagem de testes —
+    // e peca "`tag` ×N" (mesma tecnica de contagem de tag do u-counts:
+    // ocorrencias de `, "tag"`). Fora da trava POR DESENHO: parentese que
+    // nao comeca em digito tem escopo de tag ("`daemon-os` ×4..." e peca
+    // travada; "`doctor-tls`, 3 testes a mais" e delta historico), lista de
+    // tags sem ×N e substantivo que nao e "testes".
+    var plan = readTextOr("docs/16-plan.md", "")
+    assert(plan.length > 0, "plano existe")
+    var pos = 0
+    var citations = 0
+    var totalChecks = 0
+    var pieceChecks = 0
+    while (true) {
+        var at = plan.indexOf("tests/", pos)
+        if (at < 0) {
+            break
+        }
+        var end = at + 6
+        while (end < plan.length && plan.charAt(end) != 96 && plan.charAt(end) != 32 && plan.charAt(end) != 10) {
+            end = end + 1
+        }
+        var name = plan.substring(at + 6, end)
+        assert(name.endsWith(".kf"), "citacao termina em .kf: " + name)
+        assert(name.indexOf("/") < 0, "citacao e arquivo simples: " + name)
+        var src = readTextOr("tests/" + name, "")
+        assert(src.length > 0, "tests/" + name + " citado no plano existe")
+        citations = citations + 1
+        pos = end + 1
+        // O parentese opcional vem apos a crase de fechamento (e espacos).
+        var j = end + 1
+        while (j < plan.length && (plan.charAt(j) == 32 || plan.charAt(j) == 10 || plan.charAt(j) == 9)) {
+            j = j + 1
+        }
+        if (j >= plan.length || plan.charAt(j) != 40) {
+            continue
+        }
+        // Fecha com profundidade — a prosa tem paren aninhado real
+        // (`if(!STATE.pronto)`) — e teto de tamanho.
+        var depth = 0
+        var close = -1
+        var k = j
+        while (k < plan.length && k < j + 400) {
+            var c = plan.charAt(k)
+            if (c == 40) {
+                depth = depth + 1
+            } else if (c == 41) {
+                depth = depth - 1
+                if (depth == 0) {
+                    close = k
+                    break
+                }
+            }
+            k = k + 1
+        }
+        if (close < 0) {
+            continue
+        }
+        var inner = plan.substring(j + 1, close)
+        // Total: parente que COMECA em digito. "(N)" seco, "(N:" e
+        // "(N testes..." (substantivo exato) sao contagem do arquivo.
+        if (inner.length > 0 && inner.charAt(0) >= 48 && inner.charAt(0) <= 57) {
+            var dEnd = 0
+            while (dEnd < inner.length && inner.charAt(dEnd) >= 48 && inner.charAt(dEnd) <= 57) {
+                dEnd = dEnd + 1
+            }
+            var rest = inner.substring(dEnd)
+            var isTotal = rest.length == 0 || rest.startsWith(":") || rest.startsWith(" testes")
+            if (isTotal) {
+                var n = parseIntBounded(inner.substring(0, dEnd), -1, 1000000)
+                var real = countTestDeclarations("tests/" + name)
+                assert(real == n, "plano cita tests/" + name + " com " + intToString(n) + " testes mas o arquivo tem " + intToString(real))
+                totalChecks = totalChecks + 1
+            }
+        }
+        // Pecas "`tag` ×N". split("×") remove o separador inteiro — nada de
+        // indexar dentro do multibyte (mesma regra do u-counts).
+        var parts = inner.split("×")
+        var i2 = 1
+        while (i2 < parts.length) {
+            var prev = parts[i2 - 1]
+            var cur = parts[i2]
+            if (prev.length >= 2 && prev.charAt(prev.length - 1) == 32 && prev.charAt(prev.length - 2) == 96) {
+                var tEnd = prev.length - 2
+                var tStart = tEnd
+                while (tStart > 0) {
+                    var c3 = prev.charAt(tStart - 1)
+                    if ((c3 >= 97 && c3 <= 122) || (c3 >= 48 && c3 <= 57) || c3 == 45) {
+                        tStart = tStart - 1
+                    } else {
+                        break
+                    }
+                }
+                if (tStart > 0 && prev.charAt(tStart - 1) == 96 && tEnd > tStart) {
+                    var tag = prev.substring(tStart, tEnd)
+                    var dEnd2 = 0
+                    while (dEnd2 < cur.length && cur.charAt(dEnd2) >= 48 && cur.charAt(dEnd2) <= 57) {
+                        dEnd2 = dEnd2 + 1
+                    }
+                    if (dEnd2 > 0) {
+                        var n2 = parseIntBounded(cur.substring(0, dEnd2), -1, 100000)
+                        var real2 = src.split(", \"" + tag + "\"").length - 1
+                        assert(real2 == n2, "plano cita " + tag + " ×" + intToString(n2) + " em tests/" + name + " mas o arquivo tem " + intToString(real2))
+                        pieceChecks = pieceChecks + 1
+                    }
+                }
+            }
+            i2 = i2 + 1
+        }
+    }
+    // Sanidade da propria trava: se o formato da prosa mudar e nada casar,
+    // ela nao pode passar em silencio. Pisos proporcionais ao que o plano
+    // tem hoje (104 citacoes, 33 totais, 4 pecas ×N).
+    assert(citations >= 90, "citacoes reconhecidas=" + intToString(citations))
+    assert(totalChecks >= 28, "totais conferidos=" + intToString(totalChecks))
+    assert(pieceChecks >= 4, "pecas ×N conferidas=" + intToString(pieceChecks))
+}

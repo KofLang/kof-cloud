@@ -945,8 +945,7 @@ Desenho fatiado:
   `RunAtLoad`) e `daemonWindowsScript` (`sc create ... start= auto`). O
   `daemon install` grava no caminho do SO (`daemonArtifactPath`) e imprime a
   ativação (`daemonActivateHint`) — **nunca** ativa sozinho; no Windows o
-  script pede Administrador. Prova: `tests/daemon_test.kf` (`daemon-os`, 4
-  testes puros, sem instalar nada).
+  script pede Administrador. Prova: `tests/daemon_test.kf` (`daemon-os` ×4: testes puros, sem instalar nada).
   **Bug corrigido junto:** `daemonSystemctl` chamava
   `process.run("systemctl --user …")` como string única — o Kof não faz split
   de shell, então a chamada procurava um executável com esse nome e falhava
@@ -1280,7 +1279,7 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   existir: um servidor que já estava `SUSPENDED` volta `SUSPENDED`, e um
   segundo freeze não sobrescreve o estado original (reversibilidade; o
   mesmo guarda foi aplicado a `freezeService`/`freezeDevice`). Prova:
-  `tests/freeze_test.kf` (`freeze-unit` ×2 + HTTP). **Pendente:** alvo
+  `tests/freeze_test.kf` (`freeze-unit` ×14 + HTTP). **Pendente:** alvo
   `edge` (exige coordenação multi-Edge, Fase 16).
 * **Slice 3 — comunicação e post-mortem.** Status page mínima (lê os
   incidentes globais; sem login), notificação por webhook configurável
@@ -1297,7 +1296,7 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   próprio renderer; nada de dado de conta). Estado geral derivado dos abertos
   (`operational` / `partial_outage` / `major_outage`), timestamps ISO-8601
   UTC, `kind` interno não vaza, texto sempre escapado (HTML e JSON). Prova:
-  `tests/status_page_test.kf` (5). **Implementado (template):**
+  `tests/status_page_test.kf` (6). **Implementado (template):**
   `docs/incidents/README.md` — contrato do post-mortem (causa, impacto,
   timeline, correção, ação preventiva com dono e prazo; sem dado de
   cliente), com trava de regressão (`postmortem-template`).
@@ -1454,8 +1453,8 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   hashes, então um terceiro pode verificar por conta própria. **Honestidade:**
   não é WORM de verdade — quem tem o arquivo ainda pode reescrevê-lo inteiro
   (inclusive recalculando a cadeia); o que existe é **detecção** de
-  adulteração parcial, não imutabilidade. Prova: `tests/audit_chain_test.kf`
-  (5 + 2 do filtro de audit).
+  adulteração parcial, não imutabilidade. Prova: `tests/audit_chain_test.kf` (`chain-unit`
+  + `chain-filter`).
 
   **Implementado (espelho append-only, parcial):** cada `Registry.audit`
   grava UMA linha JSON no `<estado>.worm.jsonl` (mesma serialização da API,
