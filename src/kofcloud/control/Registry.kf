@@ -319,6 +319,12 @@ class Registry {
         }
         out.add(WebhookConfig(accountId, url.trim(), secret.trim(), time.now()))
         this.webhooks = out
+        // Rastro: o set muta a configuracao da conta. O evento carrega so
+        // acao e conta — o segredo NUNCA entra (regra do Audit.kf).
+        var issuer = this.accountById(accountId)
+        if (issuer != null) {
+            this.audit(auditActorAccount(issuer.handle), auditWebhookSet(), accountId)
+        }
         this.save()
         return "ok"
     }
@@ -335,6 +341,12 @@ class Registry {
         }
         if (found) {
             this.webhooks = out
+            // So o remove REAL registra (o 404 de webhook inexistente nao
+            // vira evento); mesmo contrato do token revoke.
+            var issuer = this.accountById(accountId)
+            if (issuer != null) {
+                this.audit(auditActorAccount(issuer.handle), auditWebhookRemoved(), accountId)
+            }
             this.save()
         }
         return found

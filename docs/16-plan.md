@@ -1315,10 +1315,13 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   (`http.timeout`, 15 s por pedido) deixaria um receptor que aceita e não
   responde pendurar o sweeper e handlers por 3x mais que o necessário; o
   e2e usa o mesmo fixture de socket cru do timeout de upstream e separa os
-  dois mundos por uma borda de 12 s. **Divergência registrada:** o desenho
-  pedia Ed25519, mas o stdlib não expõe par Ed25519
+  dois mundos por uma borda de 12 s. `webhook set`/`remove` também deixam
+  **rastro de auditoria** (`webhook.set`/`webhook.removed`, ator e conta —
+  o segredo nunca entra no evento, no anel nem no espelho WORM; remove
+  real registra, o 404 de inexistente não). **Divergência registrada:** o
+  desenho pedia Ed25519, mas o stdlib não expõe par Ed25519
   utilizável (SECN014, `13-kof-apis.md` L17). Prova:
-  `tests/webhook_test.kf` (10).
+  `tests/webhook_test.kf` (11).
 **Regras:** contenção sempre reversível; comunicação sempre antes do
 fix secreto (avisa o impacto, depois corrige); todo incidente vira teste
 novo (se não tem regressão, não fechou).

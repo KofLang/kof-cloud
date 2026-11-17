@@ -165,6 +165,18 @@ String auditAccountUnfrozen() {
     return "account.unfrozen"
 }
 
+// Ciclo de vida do webhook de incidentes (Fase 17 slice 3): set/remove
+// mutam a configuracao da conta e precisam de rastro como as demais
+// mutacoes. O segredo NUNCA entra (regra do modelo): o evento carrega
+// so acao e conta; a URL segue visivel pelo proprio `webhook show`.
+String auditWebhookSet() {
+    return "webhook.set"
+}
+
+String auditWebhookRemoved() {
+    return "webhook.removed"
+}
+
 // Serializacao JSON de UM evento de auditoria. Fonte unica: o `GET /v1/audit`
 // e o espelho WORM em arquivo (Fase 19 s4) usam a mesma — o formato do fio e
 // o do arquivo nunca divergem (escape via `json.encode`, inclusive). Pura.

@@ -2,6 +2,7 @@ import kofcloud.cli.Commands
 import kofcloud.cli.Local
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
+import kofcloud.model.Audit
 import kofcloud.model.Errors
 import kofcloud.model.Webhook
 import kofcloud.store.Store
@@ -350,4 +351,51 @@ test "webhook: host interno e SSRF barrado (literal e resolvido)", "webhook-ssrf
         melId = mel.id
     }
     assert(registry.webhookForAccount(melId) == null, "nada gravado")
+}
+test "webhook: set/remove deixam rastro de auditoria sem o segredo", "webhook-audit" {
+    // O webhook era a unica mutacao de configuracao da conta sem evento de
+    // auditoria: `webhook set`/`remove` mudavam o destino das entregas
+    // assinadas sem deixar rastro no anel nem no espelho WORM. O evento
+    // carrega acao e conta — o segredo NUNCA entra (mesma regra do payload
+    // e da API, que so devolve o prefixo).
+    var controlPort = 19907
+    var statePath = webhookPath("audit")
+    var registry = Registry(statePath)
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var mel = registry.accountByHandle("mel")
+    var melId = ""
+    if (mel != null) {
+        melId = mel.id
+    }
+    var secret = "segredo-do-rastro-1"
+    var setBody = "{\"action\":\"set\",\"url\":\"https://hooks.example.com/a\",\"secret\":\"" + secret + "\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/webhook", setBody, token)) == 200, "cadastrou")
+
+    // O fio tem o evento com a acao e a conta; NUNCA o segredo.
+    var wire = bodyOf(httpGetToken(controlPort, "/v1/audit", token))
+    assert(wire.indexOf("\"webhook.set\"") >= 0, "acao webhook.set no fio")
+    assert(wire.indexOf("\"account:" + melId + "\"") >= 0 || wire.indexOf("account:mel") >= 0, "ator da conta")
+    assert(wire.indexOf(secret) < 0, "segredo fora do fio")
+    // E o espelho WORM (mesma fonte `auditEventJson`) tambem esta limpo.
+    var mirror = readTextOr(statePath + ".worm.jsonl", "")
+    assert(mirror.indexOf("webhook.set") >= 0, "acao no espelho WORM")
+    assert(mirror.indexOf(secret) < 0, "segredo fora do espelho")
+
+    // Trocar o webhook registra outro set (a ultima configuracao vence).
+    assert(statusOf(httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"set\",\"url\":\"https://hooks.example.com/b\",\"secret\":\"" + secret + "\"}", token)) == 200, "trocou")
+    var wire2 = bodyOf(httpGetToken(controlPort, "/v1/audit", token))
+    assert(wire2.split("\"webhook.set\"").length >= 2, "segundo set registra")
+
+    // Remocao real registra; remover de novo (404) nao vira evento.
+    assert(statusOf(httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"remove\"}", token)) == 200, "removeu")
+    var before = bodyOf(httpGetToken(controlPort, "/v1/audit", token)).split("\"webhook.removed\"").length
+    assert(before >= 1, "acao webhook.removed no fio")
+    assert(statusOf(httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"remove\"}", token)) == 404, "segunda remocao e 404")
+    var after = bodyOf(httpGetToken(controlPort, "/v1/audit", token)).split("\"webhook.removed\"").length
+    assert(after == before, "404 nao registra evento")
 }
