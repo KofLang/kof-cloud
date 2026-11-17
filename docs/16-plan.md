@@ -1490,7 +1490,7 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   existente. As raízes desconhecidas que a poda produz são toleradas pelo
   verify de sufixo por desenho; a poda remove eventos antigos do espelho
   (indistinguível de remoção por quem tem o disco — 17-limitations).
-  Prova: `tests/audit_chain_test.kf` (`worm-unit` ×6 + `worm` ×3, total 19).
+  Prova: `tests/audit_chain_test.kf` (`worm-unit` ×6 + `worm` ×3).
   Pendente: WORM real em storage separado (objeto
   com lock de retenção) e o relatório SOC2-tipo-II.
 
@@ -1501,9 +1501,10 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   um literal de ação reaparecer fora de Audit.kf ou se a emissão deixar de
   delegar: o `audit --action` casa exato, então literal cru escapava do
   vocabulário (typo viraria ação invisível no filtro). **Privacidade do
-  espelho** (trava do worker, `worm-privacy`): com emissão e revogação real
-  de `kfs_`, o arquivo não contém `kfs_`/`kfc_`/senha — o anel guarda só
-  metadados; se um dia vazasse, o `scan` do CI pega. Prova:
+  anel** (trava do worker estendida, `worm-privacy`): com emissão e
+  revogação real de `kfs_`, nem o arquivo nem o FIO `/v1/audit` contêm
+  `kfs_`/`kfc_`/senha — o anel guarda só metadados e o fio é a mesma
+  serialização do espelho; se um dia vazasse, o `scan` do CI pega. Prova:
   `tests/audit_chain_test.kf` (21).
 **Regras:** segurança por default em todo slice novo (a pergunta "o que
 pode vazar aqui?" entra no template de teste); nenhum dado de cliente

@@ -557,4 +557,24 @@ test "worm: o espelho nunca carrega segredo (sem kfs_/kfc_/password no jsonl)", 
     assert(mirror.indexOf(kfs) < 0, "sem o valor do kfs no espelho")
     assert(mirror.indexOf(token) < 0, "sem o valor do kfc no espelho")
 
+    // E o FIO tem de carregar a MESMA garantia: /v1/audit imprime a mesma
+    // serializacao do espelho (fonte unica `auditEventJson`, travada em
+    // worm-unit), entao limpar so o arquivo seria metade da historia — o
+    // operador consulta o anel pela API, nao pelo disco. Prova no fio de
+    // verdade: control plane com este mesmo estado, emissao e revogacao
+    // reais no anel, e nenhum padrao de segredo na resposta.
+    var wirePort = 19915
+    var control = ControlPlane(registry, wirePort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(wirePort, 60), "control no ar")
+    var wire = httpGetToken(wirePort, "/v1/audit", token)
+    assert(statusOf(wire) == 200, "fio lista eventos")
+    var wireBody = bodyOf(wire)
+    assert(wireBody.indexOf("service.token_issued") >= 0, "fio tem o evento da emissao")
+    assert(wireBody.indexOf("kfs_") < 0, "sem kfs_ no fio")
+    assert(wireBody.indexOf("kfc_") < 0, "sem kfc_ no fio")
+    assert(wireBody.indexOf("segredo-123") < 0, "sem senha no fio")
+    assert(wireBody.indexOf(kfs) < 0, "sem o valor do kfs no fio")
+    assert(wireBody.indexOf(token) < 0, "sem o valor do kfc no fio")
+
 }
