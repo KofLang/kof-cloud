@@ -24,6 +24,40 @@ test "status: estado geral agrega severidade dos abertos", "status-unit" {
     assert(overallStatusLabel("major_outage").indexOf("Interrupcao") >= 0, "rotulo")
 }
 
+test "status: estado corrupto aparece como degradacao (nunca verde)", "status-unit" {
+    // Medido: com o arquivo de estado ilegivel o `serve` sobe VAZIO (avisa
+    // so no stdout) e a status page continua "Operacional" — o mundo via
+    // verde sobre perda de dados. Agora corrupt = partial_outage, com aviso
+    // explicito no HTML e no JSON.
+    var empty = listOf<Incident>()
+    assert(overallStatusWith(empty, false) == "operational", "sem corrupt: operational")
+    assert(overallStatusWith(empty, true) == "partial_outage", "corrupt: degradacao")
+    // CRIT vence corrupt (interrupcao maior e mais grave).
+    var crit = Incident("1", "x", "CRIT", "", "s", 0, 0)
+    assert(overallStatusWith(listOf(crit), true) == "major_outage", "CRIT vence corrupt")
+    // WARN + corrupt continua partial (nao sobe nem desce por causa do corrupt).
+    var warn = Incident("2", "y", "WARN", "", "s", 0, 0)
+    assert(overallStatusWith(listOf(warn), true) == "partial_outage", "WARN + corrupt = partial")
+    // A linha do aviso: "" quando ok, texto fixo sem dado de conta quando corrupt.
+    assert(stateWarningLine(false) == "", "sem aviso quando ok")
+    assert(stateWarningLine(true).indexOf("VAZIO") >= 0, "aviso nomeia a causa")
+    // Na pagina: status != operational e aviso presente.
+    var html = statusPageHtml(empty, true)
+    assert(html.indexOf("Degradacao parcial") >= 0, "HTML mostra degradacao")
+    assert(html.indexOf("VAZIO") >= 0, "HTML mostra o aviso")
+    var json = statusPageJson(empty, true)
+    assert(json.indexOf("\"status\":\"partial_outage\"") >= 0, "JSON degradado")
+    assert(json.indexOf("\"dataCorrupt\":\"true\"") >= 0, "JSON carrega o flag")
+    assert(json.indexOf("\"warning\"") >= 0, "JSON carrega o aviso")
+    // Estado saudavel segue verde e sem aviso.
+    var okHtml = statusPageHtml(empty, false)
+    assert(okHtml.indexOf("Operacional") >= 0, "ok: operacional")
+    assert(okHtml.indexOf("VAZIO") < 0, "ok: sem aviso")
+    var okJson = statusPageJson(empty, false)
+    assert(okJson.indexOf("\"dataCorrupt\":\"false\"") >= 0, "ok: flag false")
+    assert(okJson.indexOf("\"warning\"") < 0, "ok: sem warning")
+}
+
 test "status: so os globais passam, nunca dado de conta", "status-unit" {
     var accountIncident = Incident("1", "x", "CRIT", "conta-1", "s", 0, 0)
     var global = Incident("2", "y", "WARN", "", "s", 0, 0)
@@ -31,8 +65,8 @@ test "status: so os globais passam, nunca dado de conta", "status-unit" {
     assert(filtered.size == 1, "um global")
     assert(filtered.get(0).accountId.length == 0, "sem conta")
     // O JSON e o HTML construidos a partir da lista COMPLETA tambem filtram.
-    assert(statusPageJson(listOf(accountIncident, global)).indexOf("conta-1") < 0, "json sem conta")
-    assert(statusPageHtml(listOf(accountIncident, global)).indexOf("conta-1") < 0, "html sem conta")
+    assert(statusPageJson(listOf(accountIncident, global), false).indexOf("conta-1") < 0, "json sem conta")
+    assert(statusPageHtml(listOf(accountIncident, global), false).indexOf("conta-1") < 0, "html sem conta")
 }
 
 test "status: timestamp ISO-8601 UTC", "status-unit" {
@@ -44,10 +78,10 @@ test "status: timestamp ISO-8601 UTC", "status-unit" {
 
 test "status: HTML escapa e JSON e valido", "status-unit" {
     var evil = Incident("1", "x", "WARN", "", "<script>alert(1)</script>", 0, 0)
-    var html = statusPageHtml(listOf(evil))
+    var html = statusPageHtml(listOf(evil), false)
     assert(html.indexOf("<script>alert(1)</script>") < 0, "script escapado")
     assert(html.indexOf("&lt;script&gt;") >= 0, "escape presente")
-    var body = statusPageJson(listOf(evil))
+    var body = statusPageJson(listOf(evil), false)
     assert(body.startsWith("{\"status\":\"partial_outage\""), "status no JSON")
     assert(body.indexOf("<script>") < 0, "JSON nao interpola HTML")
     // O JSON decodifica (nao e texto solto).

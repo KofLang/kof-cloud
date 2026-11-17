@@ -8,9 +8,28 @@ import kofcloud.util.Text
 // a lista de entrada so contem os globais, e o renderer nao tem acesso ao
 // Registry. Sem login, sem token, sem escrita.
 
-// Nivel do estado geral a partir dos incidentes globais ABERTOS.
-// Pura: mesma entrada, mesma saida.
-String overallStatus(List<Incident> incidents) {
+// Nivel do estado geral a partir dos incidentes globais ABERTOS e do
+// estado do arquivo de dados. Pura: mesma entrada, mesma saida.
+//
+// `dataCorrupt` = o arquivo de estado existe mas nao decodifica (o `serve`
+// avisou no stdout e subiu VAZIO). Sem isso, a status page publica
+// continuava "Operacional" enquanto a plataforma tinha perdido todas as
+// contas — o mundo via verde sobre perda de dados, e o operador que confia
+// nela deixa de investigar. Ordem: CRIT (major_outage) vence tudo;
+// corrupt empata com WARN (partial_outage) — e o aviso explicito
+// (`stateWarning`) nomeia a causa, que o incidente WARN sozinho nao nomeia.
+String overallStatusWith(List<Incident> incidents, Bool dataCorrupt) {
+    var worst = statusFromIncidents(incidents)
+    if (dataCorrupt && worst == "operational") {
+        return "partial_outage"
+    }
+    return worst
+}
+
+// Base interna: so os incidentes (sem o fator de estado do arquivo).
+// `overallStatus` (compat) e `overallStatusWith` delegam aqui — o contrario
+// seria recursao infinita entre os dois nomes publicos.
+String statusFromIncidents(List<Incident> incidents) {
     var worst = "operational"
     for (var incident in incidents) {
         if (incident.resolvedAt == 0) {
@@ -23,6 +42,19 @@ String overallStatus(List<Incident> incidents) {
         }
     }
     return worst
+}
+
+String overallStatus(List<Incident> incidents) {
+    return overallStatusWith(incidents, false)
+}
+
+// Linha do aviso de estado corrupto para o corpo ("" quando ok). O texto e
+// FIXO e sem dado de conta: a perda e de plataforma, nao de cliente.
+String stateWarningLine(Bool dataCorrupt) {
+    if (dataCorrupt == false) {
+        return ""
+    }
+    return "O arquivo de estado da plataforma nao pôde ser lido — o serviço subiu VAZIO. Preserve o arquivo e investigue antes de criar contas."
 }
 
 // Rotulo humano do estado geral.
@@ -101,8 +133,9 @@ String statusPageTitle() {
 }
 
 // Corpo JSON (maquina): o estado geral + os incidentes globais.
-String statusPageJson(List<Incident> incidents) {
+String statusPageJson(List<Incident> incidents, Bool dataCorrupt) {
     var globals = globalOnly(incidents)
+    var status = overallStatusWith(globals, dataCorrupt)
     var parts = listOf<String>()
     for (var incident in globals) {
         var entry = mapOf()
@@ -117,8 +150,18 @@ String statusPageJson(List<Incident> incidents) {
         }
         parts.add(json.encode(entry))
     }
-    var out = "{\"status\":\"" + overallStatus(globals) + "\",\"incidents\":["
-    return out + joinParts(parts) + "]}"
+    var warning = stateWarningLine(dataCorrupt)
+    var out = "{\"status\":\"" + status + "\",\"incidents\":["
+    out = out + joinParts(parts) + "]"
+    if (warning.length > 0) {
+        out = out + ",\"warning\":\"" + escapeHtml(warning) + "\""
+    }
+    var corruptText = "false"
+    if (dataCorrupt) {
+        corruptText = "true"
+    }
+    out = out + ",\"dataCorrupt\":\"" + corruptText + "\""
+    return out + "}"
 }
 
 String joinParts(List<String> parts) {
@@ -136,9 +179,9 @@ String joinParts(List<String> parts) {
 }
 
 // Corpo HTML (humano): estado, lista de incidentes globais, atualize a pagina.
-String statusPageHtml(List<Incident> incidents) {
+String statusPageHtml(List<Incident> incidents, Bool dataCorrupt) {
     var globals = globalOnly(incidents)
-    var status = overallStatus(globals)
+    var status = overallStatusWith(globals, dataCorrupt)
     var color = "#3fb950"
     if (status == "partial_outage") {
         color = "#d29922"
@@ -157,6 +200,10 @@ String statusPageHtml(List<Incident> incidents) {
     out = out + "<header><h1 style=\"font-size:16px;margin:0\">" + statusPageTitle() + "</h1></header>\n<main>\n"
     out = out + "<h2><span class=\"dot\" style=\"background:" + color + "\"></span>" + overallStatusLabel(status) + "</h2>\n"
     out = out + "<p class=\"muted\">Estado da plataforma. Atualiza a cada 30 s.</p>\n"
+    var warning = stateWarningLine(dataCorrupt)
+    if (warning.length > 0) {
+        out = out + "<p style=\"color:#d29922\">" + escapeHtml(warning) + "</p>\n"
+    }
     if (globals.size == 0) {
         out = out + "<p>Nenhum incidente registrado.</p>\n"
     } else {

@@ -1349,10 +1349,13 @@ class ControlPlane {
 
         if (this.statusPageEnabled) {
             app.get("/status.json") {
-                return statusPageJson(reg.allIncidents())
+                // Estado do arquivo de dados vai para a pagina: corrupt =
+                // o serve subiu vazio e o mundo precisa saber (antes a page
+                // ficava "Operacional" sobre perda de dados).
+                return statusPageJson(reg.allIncidents(), reg.loadStatus == "corrupt")
             }
             app.get("/status") {
-                return statusPageHtml(reg.allIncidents())
+                return statusPageHtml(reg.allIncidents(), reg.loadStatus == "corrupt")
             }
         }
 
