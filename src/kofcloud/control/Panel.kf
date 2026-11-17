@@ -88,12 +88,19 @@ footer{padding:16px 24px;color:#5b606a;font-size:12px}
   <button onclick=\"acao('domain-add')\">Adicionar</button>
   <button onclick=\"acao('domain-verify')\">Verificar DNS</button>
   <button class=\"danger\" onclick=\"acao('domain-remove')\">Remover</button></div></section>
+<section><h2>Webhook</h2>
+  <div id=\"wb\"></div>
+  <div class=\"row\"><input id=\"wburl\" placeholder=\"https:// receptor do incidente\"><input id=\"wbsecret\" type=\"password\" placeholder=\"segredo (16+ caracteres)\" autocomplete=\"new-password\">
+  <button onclick=\"webhookAcao('set')\">Configurar</button>
+  <button onclick=\"webhookAcao('test')\">Testar entrega</button>
+  <button class=\"danger\" onclick=\"webhookAcao('remove')\">Remover</button></div>
+  <p class=\"muted\">Aviso de incidente da conta por POST assinado (<code>X-KofCloud-Signature: sha256=&lt;hex&gt;</code> do corpo com o segredo). O segredo fica so no servidor e nunca volta inteiro — a pagina mostra so o prefixo.</p></section>
 <section><h2>Diagnostico</h2>
   <div class=\"row\"><button onclick=\"diagnostico()\">Rodar</button><span class=\"muted\">mesmas camadas do <code>doctor</code> que a pagina enxerga pela API: credencial da conta, dispositivo, tunel, auditoria</span></div>
   <p class=\"muted\">O que depende da sua maquina (portas locais, DNS da sua rede) segue no <code>kof cloud doctor</code>.</p>
   <div id=\"diag\"></div></section>
 </main>
-<footer>KofCloud painel v" + panelVersion() + " — usa /v1/accounts, /v1/devices, /v1/presence, /v1/services, /v1/domains, /v1/services/token, /v1/domains/{add,verify,remove}, /v1/devices/{revoke,suspend,unsuspend}, /v1/services/{suspend,unsuspend}, /v1/audit/verify, /v1/tokens/revoke</footer>
+<footer>KofCloud painel v" + panelVersion() + " — usa /v1/accounts, /v1/devices, /v1/presence, /v1/services, /v1/domains, /v1/services/token, /v1/domains/{add,verify,remove}, /v1/devices/{revoke,suspend,unsuspend}, /v1/services/{suspend,unsuspend}, /v1/audit/verify, /v1/tokens/revoke, /v1/webhook</footer>
 <script>
 var TOKEN = '';  // so na memoria da aba; nunca persistido
 var STATE = {svcs: [], devs: [], pronto: false};
@@ -161,6 +168,7 @@ function carregar(){
       document.getElementById('msg').textContent = '';
       onboarding(devs, svcs);
       fluxoPasso();
+      webhookCarregar();
     })
     .catch(function(e){ TOKEN=''; erro('falha: ' + e.message); });
 }
@@ -351,6 +359,42 @@ function acao(tipo){
   } else { return; }
   p.then(function(j){ ok(j.ok || 'feito'); carregarListas(); })
    .catch(function(e){ erro('falha: ' + e.message); });
+}
+// Webhook de incidentes (F12 s2): a mesma rota publica que o CLI (`POST
+// /v1/webhook` com `action`), o mesmo vocabulario do `webhook show` (so a
+// URL e o prefixo do segredo — `secretHint`, o valor nunca volta pela API)
+// e as mesmas regras do painel (sem token embutido, nada gravado: o segredo
+// digitado viaja no POST e e limpo do campo apos configurar). Carrega
+// separado do Carregar: conta sem webhook recebe 404 na rota (por desenho),
+// entao falha vira o placeholder de sem-webhook na secao — nunca erro que
+// impediria as
+// listas (a rota existe no control plane atual). Remover pede confirmacao
+// (perde o aviso de incidente da conta); configurar e testar nao.
+function webhookMostrar(w){
+  var alvo = document.getElementById('wb');
+  if(!w || !w.url){ alvo.innerHTML = '<p class=\"muted\">sem webhook configurado — incidentes da conta nao sao notificados.</p>'; return; }
+  alvo.innerHTML = '<p class=\"on\">webhook: ' + esc(w.url) + ' — segredo ' + esc(w.secretHint || '(prefixo)') + '</p>';
+}
+function webhookCarregar(){
+  return api('/v1/webhook','POST',{action: 'show'})
+    .then(function(j){ webhookMostrar(j); })
+    .catch(function(){ webhookMostrar(null); });
+}
+function webhookAcao(acao){
+  if(acao === 'remove' && !confirm('Remover o webhook? Os incidentes da conta deixam de ser notificados.')) return;
+  var corpo = {action: acao};
+  if(acao === 'set'){
+    corpo.url = document.getElementById('wburl').value.trim();
+    corpo.secret = document.getElementById('wbsecret').value;
+    if(!corpo.url || !corpo.secret){ erro('webhook: informe a URL e o segredo (16+ caracteres)'); return; }
+    if(corpo.secret.length < 16){ erro('webhook: segredo curto demais (minimo 16 caracteres)'); return; }
+  }
+  api('/v1/webhook','POST',corpo).then(function(j){
+    document.getElementById('wbsecret').value = '';
+    if(acao === 'set'){ webhookMostrar(j); ok('Webhook configurado.'); }
+    else if(acao === 'remove'){ webhookMostrar(null); ok('Webhook removido.'); }
+    else { ok(j.delivered === '200' ? 'Entrega de teste OK.' : 'Entrega de teste falhou (o incidente fica registrado de qualquer forma).'); }
+  }).catch(function(e){ erro('webhook: ' + e.message); });
 }
 function carregarListas(){
   Promise.all([api('/v1/services'), api('/v1/domains'), api('/v1/devices'), api('/v1/presence')]).then(function(r){

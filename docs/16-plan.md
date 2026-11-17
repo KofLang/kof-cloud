@@ -800,11 +800,19 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   suspender/reativar/revogar dispositivo. Destrutivas (remover serviço,
   remover domínio, revogar dispositivo, revogar todas as credenciais) pedem
   `confirm()`. O `kfs_` aparece **uma única vez** na emissão e nunca em
-  listagem; o token da conta continua só na memória da aba. Prova:
-  `tests/panel_actions_test.kf` (16: o HTML expõe cada ação, o e2e
+  listagem; o token da conta continua só na memória da aba. **Webhook ✅
+  (F17 s3 pela API):** o último recurso da conta sem formulário na página —
+  a seção chama a MESMA rota `POST /v1/webhook` do CLI (`action`
+  set/show/remove/test), mostra só a URL e o prefixo do segredo
+  (`secretHint`; o valor nunca volta pela API), o segredo digitado sai do
+  campo após configurar, remover pede `confirm()`, e o carregamento é
+  separado do Carregar porque `show` sem nada é `404 KCF130` por desenho
+  (vira placeholder, nunca erro que impediria as listas). Prova:
+  `tests/panel_actions_test.kf` (18: o HTML expõe cada ação, o e2e
   publica/suspende/emite/remove pelas rotas que o painel usa, o contrato do
   "Adicionar domínio", o "Criar conta"/registrar device pela mesma rota da
-  CLI, o Diagnóstico, o banner e o fluxo guiado do slice 3).
+  CLI, o webhook com entrega real num receptor, o Diagnóstico, o banner e o
+  fluxo guiado do slice 3).
 
   **Bug corrigido (device do publish).** O painel publicava sempre no
   **primeiro** dispositivo da lista (`STATE.devs[0]`), sem escolha: com mais
