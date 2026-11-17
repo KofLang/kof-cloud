@@ -1493,6 +1493,18 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   Prova: `tests/audit_chain_test.kf` (`worm-unit` ×6 + `worm` ×3, total 19).
   Pendente: WORM real em storage separado (objeto
   com lock de retenção) e o relatório SOC2-tipo-II.
+
+  **Implementado (vocabulário fechado):** toda ação de audit vive nos
+  construtores de `model/Audit.kf` — o último literal cru do código
+  (`service.token_issued`, único sem construtor) virou
+  `auditServiceTokenIssued()` e a trava de fonte (`chain-unit`) quebra se
+  um literal de ação reaparecer fora de Audit.kf ou se a emissão deixar de
+  delegar: o `audit --action` casa exato, então literal cru escapava do
+  vocabulário (typo viraria ação invisível no filtro). **Privacidade do
+  espelho** (trava do worker, `worm-privacy`): com emissão e revogação real
+  de `kfs_`, o arquivo não contém `kfs_`/`kfc_`/senha — o anel guarda só
+  metadados; se um dia vazasse, o `scan` do CI pega. Prova:
+  `tests/audit_chain_test.kf` (21).
 **Regras:** segurança por default em todo slice novo (a pergunta "o que
 pode vazar aqui?" entra no template de teste); nenhum dado de cliente
 em log/métrica/audit — sem exceção, sem "só dessa vez".

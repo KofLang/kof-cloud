@@ -269,6 +269,22 @@ test "filtro de audit: cmdAudit liga as flags nas funcoes puras (trava de fonte)
     assert(body.indexOf("flagDuplicated(args, \"--action\")") >= 0, "--action repetida barra")
 }
 
+test "cadeia: vocabulario de acoes vive em Audit.kf (fonte unica)", "chain-unit" {
+    // O vocabulario e fechado e cresce por adicao nos construtores de
+    // `model/Audit.kf`; um literal cru no chamador escapa da fonte e do
+    // filtro exato do CLI (`audit --action` nao perdoa typo — medido:
+    // `service.token_issued` vivia cru no Registry, o unico sem construtor).
+    var audit = readTextOr("src/kofcloud/model/Audit.kf", "")
+    assert(audit.length > 0, "Audit.kf existe")
+    var parts = audit.split("service.token_issued")
+    assert(parts.length == 2, "literal so no construtor do Audit.kf")
+    assert(auditServiceTokenIssued() == "service.token_issued", "construtor devolve o vocabulario do fio")
+    var registry = readTextOr("src/kofcloud/control/Registry.kf", "")
+    assert(registry.length > 0, "Registry.kf existe")
+    assert(registry.indexOf("service.token_issued") < 0, "Registry nao tem literal cru de acao")
+    assert(registry.indexOf("auditServiceTokenIssued()") >= 0, "emissao delega no construtor")
+}
+
 test "worm: serializacao pura do evento (fio e arquivo na mesma fonte)", "worm-unit" {    // A fonte unica e `auditEventJson`: /v1/audit e o espelho em arquivo
     // imprimem a MESMA linha — divergencia entre os dois formatos quebra
     // o terceiro verificador, entao a serializacao nao pode existir em dois

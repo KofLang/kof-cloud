@@ -113,6 +113,14 @@ String auditServiceTokenRevoked() {
     return "service.token_revoked"
 }
 
+// Emissao de credencial de SERVICO (kfs_) — por `service token` ou pelo
+// `service rotate`. Nunca registra o valor. Todo literal de acao vive
+// AQUI (vocabulario fechado, cresce por adicao): o chamador delega no
+// construtor — trava de fonte no teste da cadeia.
+String auditServiceTokenIssued() {
+    return "service.token_issued"
+}
+
 // Credencial da CONTA (kfc_) revogada — por `token revoke` ou pela rotacao
 // que passou do prazo. Nunca registra o valor.
 String auditAccountTokenRevoked() {

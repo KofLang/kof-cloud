@@ -1107,7 +1107,7 @@ class Registry {
         this.serviceTokens.add(ServiceToken(serviceId, accountId, tokenHash(token), time.now(), expiresAt))
         var issuer = this.accountById(accountId)
         if (issuer != null) {
-            this.audit(auditActorAccount(issuer.handle), "service.token_issued", accountId + "/" + serviceId)
+            this.audit(auditActorAccount(issuer.handle), auditServiceTokenIssued(), accountId + "/" + serviceId)
         }
         this.save()
         noteServiceTokenIssued()
