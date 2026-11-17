@@ -267,6 +267,10 @@ test "text: contagem por suite no STATUS bate com os arquivos", "status-counts" 
     var readme = readTextOr("README.md", "")
     var readmeMark = "(" + intToString(suites) + " suites)"
     assert(readme.indexOf(readmeMark) >= 0, "README cita " + intToString(suites) + " suites")
+    // O resumo final da CLI ("57 passed, 0 failed") conta SUITES — o mesmo
+    // contador reconhecido acima; a frase do run total no STATUS viaja junto.
+    var runMark = "`" + intToString(suites) + " passed, 0 failed`"
+    assert(status.indexOf(runMark) >= 0, "STATUS cita o run total de " + intToString(suites) + " passed")
     assert(suites > 50, "sanidade da trava de suites=" + intToString(suites))
 }
 

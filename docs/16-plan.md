@@ -680,8 +680,10 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   fora da tabela viajava defasada do mesmo jeito: README e STATUS diziam
   "56 suites" com a suite real em 57. Corrigido e a trava derivou os números
   em prosa AO VIVO — `Total: N testes` = soma real dos arquivos (não o
-  declarado na tabela), `# N suites` do STATUS e `(N suites)` do README =
-  linhas reconhecidas; sanidade exige suites > 50.
+  declarado na tabela), `# N suites` do STATUS, `(N suites)` do README e o
+  run total `N passed, 0 failed` do STATUS = linhas reconhecidas (o resumo
+  final da CLI conta suites, não testes; o run total viajava em 56 com
+  57 suites reais). Sanidade exige suites > 50.
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task
