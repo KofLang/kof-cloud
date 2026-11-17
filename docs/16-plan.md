@@ -57,7 +57,8 @@ congelava TODO cadastro novo em TODA conta**), `kofcloud.limits.services` (por d
 `kofcloud.limits.streams` (por túnel, default 128, **zero/inválido recaem no
 default via `streamLimitFrom` pura — 0 recusaria todo OPEN**, com
 `429`/`RESET LIMIT_EXCEEDED`).
-Prova: `tests/limits_test.kf` (7 testes) + `tests/e2e_multiservice_test.kf`
+Prova: `tests/limits_test.kf` (8 testes: limites + recuo seguro do passo
+da varredura de credenciais) + `tests/e2e_multiservice_test.kf`
 (3 serviços no mesmo túnel, com isolamento de falha).
 
 **Presença visível no `device list` (parte do contrato de `03-device.md`).**
@@ -334,8 +335,8 @@ nenhum hostname, corpo, credencial ou chave chega às métricas.
 **Estado (slice 2): ✅ implementado.** `control/Metrics.kf` conta lifecycle
 no Registry (contas, logins, devices, serviços, tokens, domínios) e
 `GET /v1/metrics` serve o export Prometheus sem auth (igual ao `/v1/health`).
-Prova: `tests/metrics_test.kf` (12 testes: formato, recusa por motivo, Edge
-fim a fim, privacidade, endpoint + contadores via HTTP e via registry).
+Prova: `tests/metrics_test.kf` (13 testes: formato, recusa por motivo,
+Edge fim a fim, privacidade, endpoint + contadores via HTTP e via registry).
 
 **Estado (slice 3 — fecha): ✅ implementado.** `agent/Metrics.kf` conta
 connects, reconnects (backoff), recusas fatais por motivo, health reports,
@@ -797,9 +798,10 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   remover domínio, revogar dispositivo, revogar todas as credenciais) pedem
   `confirm()`. O `kfs_` aparece **uma única vez** na emissão e nunca em
   listagem; o token da conta continua só na memória da aba. Prova:
-  `tests/panel_actions_test.kf` (8 — o HTML expõe cada ação, o e2e
+  `tests/panel_actions_test.kf` (16: o HTML expõe cada ação, o e2e
   publica/suspende/emite/remove pelas rotas que o painel usa, o contrato do
-  "Adicionar domínio" e o "Criar conta" pela mesma rota pública da CLI).
+  "Adicionar domínio", o "Criar conta"/registrar device pela mesma rota da
+  CLI, o Diagnóstico, o banner e o fluxo guiado do slice 3).
 
   **Bug corrigido (device do publish).** O painel publicava sempre no
   **primeiro** dispositivo da lista (`STATE.devs[0]`), sem escolha: com mais
