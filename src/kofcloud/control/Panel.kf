@@ -15,7 +15,7 @@ package kofcloud.control
 
 // Versao do painel (aparece no rodape; ajuda a saber o que esta no ar).
 String panelVersion() {
-    return "9"
+    return "10"
 }
 
 // O HTML e uma constante: um unico lugar para revisar. Nenhum dado de conta
@@ -167,7 +167,7 @@ function carregar(){
       preencherDevices(devs);
       renderListas(devs, online, svcs, doms);
       document.getElementById('msg').textContent = '';
-      onboarding(devs, svcs);
+      onboarding(devs, svcs, online);
       fluxoPasso();
       webhookCarregar();
     })
@@ -233,17 +233,25 @@ function renderListas(devs, online, svcs, doms){
 }
 // Onboarding guiado (Fase 12 s3, segundo passo): o proximo passo da conta,
 // derivado do que a pagina JA buscou — sem consulta nova e sem inventar
-// estado. Sem dispositivo = passo 1; com dispositivo e sem servico = passo
-// 2; com servico, a conta esta no ar e o banner some. As acoes citadas sao
-// as que a propria pagina oferece (e o login da maquina, que nela fica).
-function onboarding(devs, svcs){
+// estado. Sem dispositivo = passo 1; com dispositivo e NENHUM no ar (mesmo
+// com servico publicado, a rota nao responde) = a maquina desconectada,
+// aponta o connect; com dispositivo no ar e sem servico = passo 2; com
+// servico e tunel vivo, a conta esta no ar e o banner some. As acoes citadas
+// sao as que a propria pagina oferece (e o login da maquina, que nela fica).
+function onboarding(devs, svcs, online){
   var el = document.getElementById('onboarding');
   if(!devs || devs.length == 0){
     el.innerHTML = '<div class=\"passo\"><b>Primeiro passo</b> — registre o dispositivo: botao <b>Registrar</b> na secao Dispositivos abaixo (ou <code>kof cloud login --device &lt;nome&gt;</code> na maquina).</div>';
-  } else if(!svcs || svcs.length == 0){
-    el.innerHTML = '<div class=\"passo\"><b>Quase la</b> — publique o primeiro servico na secao Servicos abaixo (nome, porta e o dispositivo): a rota publica aparece na tabela e responde quando o <code>kof cloud connect</code> estiver rodando na maquina.</div>';
   } else {
-    el.innerHTML = '';
+    var noAr = false;
+    devs.forEach(function(d){ if(online && online.indexOf(d.id || d.deviceId) >= 0) noAr = true; });
+    if(!noAr){
+      el.innerHTML = '<div class=\"passo\"><b>Maquina desconectada</b> — o tunel nao esta no ar: rode <code>kof cloud connect</code> na maquina (ou adote o dispositivo com <code>kof cloud login --device &lt;nome&gt;</code> se ainda nao adotou).</div>';
+    } else if(!svcs || svcs.length == 0){
+      el.innerHTML = '<div class=\"passo\"><b>Quase la</b> — publique o primeiro servico na secao Servicos abaixo (nome, porta e o dispositivo): a rota publica aparece na tabela e responde quando o <code>kof cloud connect</code> estiver rodando na maquina.</div>';
+    } else {
+      el.innerHTML = '';
+    }
   }
 }
 // Fluxo guiado (Fase 12 s3, terceiro passo): as 3 telas prometidas — conta,
@@ -403,7 +411,7 @@ function carregarListas(){
     STATE.svcs = svcs;
     STATE.devs = devs;
     renderListas(devs, online, svcs, doms);
-    onboarding(STATE.devs, STATE.svcs);
+    onboarding(STATE.devs, STATE.svcs, online);
     fluxoPasso();
   });
 }

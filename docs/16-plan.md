@@ -892,18 +892,24 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   a entrada nova; mutação da rota de auditoria quebra, mutação que tira o
   `/v1/tokens` do `diagnostico()` quebra).
 
-  **Segundo passo ✅ (banner do próximo passo).** O painel agora aponta o
-  que falta na conta, derivado do que a página JÁ buscou (devices e
-  serviços — nenhuma consulta nova, nenhum estado inventado): sem
-  dispositivo = passo 1 (botão Registrar, ou `kof cloud login --device
-  <nome>` na máquina); device sem serviço = passo 2 (publicar — a rota
-  pública responde quando o `kof cloud connect` estiver rodando); com
-  serviço, a conta está no ar e o banner some. O banner se atualiza no
-  carregamento inicial e após cada ação (idempotente: `innerHTML`
-  sobrescreve, nada acumula). Prova: `tests/panel_actions_test.kf`
-  (trava do banner e das duas chamadas + e2e que percorre os três estados
-  da conta — `[]` → device → serviço publicado; mutação removendo a
-  chamada do carregamento quebra).
+  **Segundo passo ✅ (banner do próximo passo, com presença confirmada).**
+  O painel agora aponta o que falta na conta, derivado do que a página JÁ
+  buscou (devices, serviços e presença — nenhuma consulta nova, nenhum
+  estado inventado): sem dispositivo = passo 1 (botão Registrar, ou
+  `kof cloud login --device <nome>` na máquina); dispositivo no cadastro
+  com NENHUM no `/v1/presence` = **máquina desconectada** — aponta o
+  `kof cloud connect` **mesmo com serviço publicado**, porque a rota
+  pública não responde e o banner antigo sumia dando a conta por no ar
+  (o cadastro nunca é prova de túnel; a presença do Edge é); device no ar
+  sem serviço = passo 2 (publicar); com serviço e túnel vivo a conta está
+  no ar e o banner some. O banner se atualiza no carregamento inicial e
+  após cada ação (idempotente: `innerHTML` sobrescreve, nada acumula; as
+  duas chamadas passam a lista de presença que o mesmo carregamento já
+  buscou). Prova: `tests/panel_actions_test.kf` (trava do banner e das
+  duas chamadas + e2e que percorre os estados — `[]` → device sem sessão
+  → serviço publicado com túnel fora; nenhum agente conecta, a presença
+  nunca contém o device; mutação removendo o `online` da chamada do
+  carregamento quebra).
 
   **Fluxo guiado ✅ (as 3 telas, opt-in).** A seção "Começar" liga o modo
   passo a passo: Tela 1 (conta — criar ou colar token e Carregar), Tela 2

@@ -334,20 +334,25 @@ test "painel: secao Diagnostico usa as camadas do doctor pela API (F12 s3)", "pa
 
 test "painel: banner de onboarding aponta o proximo passo (F12 s3)", "panel-actions-unit" {
     // Segundo passo do onboarding guiado: a pagina aponta o proximo passo
-    // da conta derivado do que ELA JA BUSCOU (devices e servicos) — sem
-    // consulta nova, sem estado inventado. Sem device = passo 1 (registrar);
-    // device sem servico = passo 2 (publicar); com servico o banner some.
+    // da conta derivado do que ELA JA BUSCOU (devices, servicos e presenca)
+    // — sem consulta nova, sem estado inventado. Sem device = passo 1
+    // (registrar); device sem NENHUM no ar = maquina desconectada (connect),
+    // mesmo com servico publicado; device no ar sem servico = passo 2
+    // (publicar); com servico e tunel vivo o banner some.
     var html = panelHtml()
     assert(html.indexOf("id=\"onboarding\"") >= 0, "div do banner existe")
-    assert(html.indexOf("function onboarding(devs, svcs)") >= 0, "funcao derivada do que ja foi buscado")
+    assert(html.indexOf("function onboarding(devs, svcs, online)") >= 0, "banner le a presenca confirmada pelo Edge")
     assert(html.indexOf("Primeiro passo") >= 0 && html.indexOf("Registrar") >= 0, "passo 1 orienta o registro")
+    assert(html.indexOf("Maquina desconectada") >= 0, "device sem tunel aponta o connect")
+    assert(html.indexOf("online.indexOf(d.id || d.deviceId)") >= 0, "mesma fonte de presenca das tabelas")
     assert(html.indexOf("Quase la") >= 0 && html.indexOf("publique o primeiro servico") >= 0, "passo 2 orienta o publish")
     assert(html.indexOf("kof cloud login --device") >= 0, "cita o login da maquina")
     // O banner se atualiza junto: chamado no carregamento inicial E depois
     // de cada acao (a segunda chamada era o bug da duplicata — aqui e de
-    // proposito e idempotente: innerHTML sobrescreve, nada acumula).
-    assert(html.indexOf("onboarding(devs, svcs);") >= 0, "banner atualiza ao carregar")
-    assert(html.indexOf("onboarding(STATE.devs, STATE.svcs);") >= 0, "banner atualiza apos cada acao")
+    // proposito e idempotente: innerHTML sobrescreve, nada acumula), e as
+    // duas passam a lista de presenca que o mesmo carregamento ja buscou.
+    assert(html.indexOf("onboarding(devs, svcs, online);") >= 0, "banner recebe a presenca ao carregar")
+    assert(html.indexOf("onboarding(STATE.devs, STATE.svcs, online);") >= 0, "banner recebe a presenca no recarregar")
     assert(html.indexOf("el.innerHTML = '';") >= 0, "some quando a conta esta no ar")
 }
 
@@ -489,11 +494,14 @@ test "painel: diagnostico le as rotas que o doctor consulta (F12 s3)", "panel-ac
 }
 
 test "painel: banner de onboarding acompanha o estado real da conta (F12 s3)", "panel-actions" {
-    // O banner deriva o passo do que a pagina busca: /v1/devices e
-    // /v1/services. O e2e percorre os estados na ordem do onboarding —
-    // conta nova (passo 1), device registrado (passo 2), servico publicado
-    // (banner some) — provando que os dados que alimentam a decisao evoluem
-    // como o HTML espera.
+    // O banner deriva o passo do que a pagina busca: /v1/devices,
+    // /v1/services e /v1/presence. O e2e percorre os estados na ordem do
+    // onboarding — conta nova (passo 1), device registrado sem tunel
+    // (maquina desconectada — o connect aponta mesmo SEM servico), servico
+    // publicado com tunel fora (ainda desconectada, em vez de sumir) —
+    // provando que os dados que alimentam a decisao evoluem como o HTML
+    // espera. A presenca e a fonte de verdade do Edge: nenhum agente
+    // conecta neste teste, entao a lista nunca contem o device.
     var controlPort = 19937
     var registry = Registry("/tmp/kofcloud-pa7-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
@@ -515,16 +523,24 @@ test "painel: banner de onboarding acompanha o estado real da conta (F12 s3)", "
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var svcs1 = httpGetToken(controlPort, "/v1/services", token)
     assert(bodyOf(svcs1) == "[]", "sem servicos — passo 2")
+    var pres1 = httpGetToken(controlPort, "/v1/presence", token)
+    assert(statusOf(pres1) == 200, "presence 200")
+    assert(bodyOf(pres1).indexOf(deviceId) < 0, "sem sessao — o banner acusa a maquina desconectada")
 
-    // Estado 3: servico publicado — o banner some.
+    // Estado 3: servico publicado com o tunel fora do ar — o banner segue
+    // acusando a maquina desconectada em vez de dar a conta por no ar.
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
     assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "servico publicado")
     var svcs2 = httpGetToken(controlPort, "/v1/services", token)
-    assert(bodyOf(svcs2).indexOf("\"name\":\"site\"") >= 0, "conta no ar — banner some")
+    assert(bodyOf(svcs2).indexOf("\"name\":\"site\"") >= 0, "servico publicado — tunel fora, banner nao some")
+    var pres2 = httpGetToken(controlPort, "/v1/presence", token)
+    assert(statusOf(pres2) == 200, "presence 200")
+    assert(bodyOf(pres2).indexOf(deviceId) < 0, "sem sessao — banner segue acusando")
 
-    // E a pagina servida carrega o banner e as duas fontes de decisao.
+    // E a pagina servida carrega o banner com as tres fontes de decisao.
     var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
     assert(bodyOf(page).indexOf("id=\"onboarding\"") >= 0, "banner no ar")
+    assert(bodyOf(page).indexOf("function onboarding(devs, svcs, online)") >= 0, "banner le a presenca")
 }
 
 test "painel: fluxo guiado acompanha o fluxo completo no control plane (F12 s3)", "panel-actions" {
