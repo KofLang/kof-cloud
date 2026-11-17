@@ -880,11 +880,26 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   pública responde quando o `kof cloud connect` estiver rodando); com
   serviço, a conta está no ar e o banner some. O banner se atualiza no
   carregamento inicial e após cada ação (idempotente: `innerHTML`
-  sobrescreve, nada acumula). O fluxo guiado de 3 telas segue pendente —
-  este passo costura os que já existem. Prova:
-  `tests/panel_actions_test.kf` (trava do banner e das duas chamadas +
-  e2e que percorre os três estados da conta — `[]` → device → serviço
-  publicado; mutação removendo a chamada do carregamento quebra).
+  sobrescreve, nada acumula). Prova: `tests/panel_actions_test.kf`
+  (trava do banner e das duas chamadas + e2e que percorre os três estados
+  da conta — `[]` → device → serviço publicado; mutação removendo a
+  chamada do carregamento quebra).
+
+  **Fluxo guiado ✅ (as 3 telas, opt-in).** A seção "Começar" liga o modo
+  passo a passo: Tela 1 (conta — criar ou colar token e Carregar), Tela 2
+  (máquina — registrar + adotar com `kof cloud login --device <nome>` e
+  `kof cloud connect` rodando; o painel não instala nada: o cliente é o
+  próprio kof) e Tela 3 (primeiro serviço — publicar com o serviço
+  rodando na máquina; o diagnóstico confirma o túnel). A tela atual é
+  derivada do estado real que a página já tem — `pronto` só vira
+  verdadeiro no sucesso do Carregar, depois devices, depois serviços —
+  sem estado inventado, sem endpoint novo e sem formulário duplicado:
+  cada tela reusa as seções e funções existentes, com `Verificar`
+  (`carregarListas`) e `diagnostico()` embutidos por camada. O Sair
+  reseta o fluxo (o token da próxima sessão revalida). Prova:
+  `tests/panel_actions_test.kf` (trava da derivação `if(!STATE.pronto)`
+  + contagem das 3 re-renderizações; mutação do `pronto` quebra; e2e
+  percorre o fluxo completo num control plane de teste).
 
   **Higiene travada (fonte única da renderização).** As três tabelas eram
   renderizadas por código duplicado (carregamento inicial × recarregar

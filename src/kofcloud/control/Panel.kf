@@ -15,7 +15,7 @@ package kofcloud.control
 
 // Versao do painel (aparece no rodape; ajuda a saber o que esta no ar).
 String panelVersion() {
-    return "8"
+    return "9"
 }
 
 // O HTML e uma constante: um unico lugar para revisar. Nenhum dado de conta
@@ -47,6 +47,9 @@ footer{padding:16px 24px;color:#5b606a;font-size:12px}
 <header><h1>KofCloud</h1><span class=\"tag\">painel</span></header>
 <main>
 <div id=\"onboarding\"></div>
+<section><h2>Comecar</h2>
+  <div class=\"row\"><button onclick=\"iniciarFluxo()\">Iniciar o fluxo guiado</button><span class=\"muted\">3 telas: conta, maquina, primeiro servico</span></div>
+  <div id=\"fluxo\"></div></section>
 <section>
   <h2>Conta</h2>
   <input id=\"tok\" type=\"password\" placeholder=\"cole aqui o token da conta\" autocomplete=\"off\">
@@ -93,7 +96,7 @@ footer{padding:16px 24px;color:#5b606a;font-size:12px}
 <footer>KofCloud painel v" + panelVersion() + " — usa /v1/accounts, /v1/devices, /v1/presence, /v1/services, /v1/domains, /v1/services/token, /v1/domains/{add,verify,remove}, /v1/devices/{revoke,suspend,unsuspend}, /v1/services/{suspend,unsuspend}, /v1/audit/verify, /v1/tokens/revoke</footer>
 <script>
 var TOKEN = '';  // so na memoria da aba; nunca persistido
-var STATE = {svcs: [], devs: []};
+var STATE = {svcs: [], devs: [], pronto: false};
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>\"']/g, function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]; }); }
 function api(path, metodo, corpo){
@@ -152,10 +155,12 @@ function carregar(){
       var devs = r[0], online = r[1], svcs = r[2], doms = r[3];
       STATE.devs = devs;
       STATE.svcs = svcs;
+      STATE.pronto = true;
       preencherDevices(devs);
       renderListas(devs, online, svcs, doms);
       document.getElementById('msg').textContent = '';
       onboarding(devs, svcs);
+      fluxoPasso();
     })
     .catch(function(e){ TOKEN=''; erro('falha: ' + e.message); });
 }
@@ -183,11 +188,13 @@ function limparAba(){
   document.getElementById('tok').value = '';
   STATE.svcs = [];
   STATE.devs = [];
+  STATE.pronto = false;
   document.getElementById('devs').innerHTML = '';
   document.getElementById('svcs').innerHTML = '';
   document.getElementById('doms').innerHTML = '';
   preencherDevices([]);
   document.getElementById('onboarding').innerHTML = '';
+  document.getElementById('fluxo').innerHTML = '';
   document.getElementById('diag').innerHTML = '';
   document.getElementById('secret').innerHTML = '';
   document.getElementById('novaconta').innerHTML = '';
@@ -228,6 +235,35 @@ function onboarding(devs, svcs){
     el.innerHTML = '<div class=\"passo\"><b>Quase la</b> — publique o primeiro servico na secao Servicos abaixo (nome, porta e o dispositivo): a rota publica aparece na tabela e responde quando o <code>kof cloud connect</code> estiver rodando na maquina.</div>';
   } else {
     el.innerHTML = '';
+  }
+}
+// Fluxo guiado (Fase 12 s3, terceiro passo): as 3 telas prometidas — conta,
+// maquina, primeiro servico — costuradas num modo passo a passo opt-in. A
+// tela atual e DERIVADA do estado real que a pagina ja tem (token validado
+// pelo Carregar, devices e servicos buscados) — sem estado inventado e sem
+// endpoint novo; cada tela reusa as secoes e funcoes que ja existem. O que
+// o navegador nao pode fazer fica honesto no texto: o cliente (kof)
+// instala-se e adota-se na maquina, nunca na pagina.
+var FLUXO = false;
+function iniciarFluxo(){
+  FLUXO = true;
+  fluxoPasso();
+}
+function encerrarFluxo(){
+  FLUXO = false;
+  document.getElementById('fluxo').innerHTML = '';
+}
+function fluxoPasso(){
+  var el = document.getElementById('fluxo');
+  if(!FLUXO){ el.innerHTML = ''; return; }
+  if(!STATE.pronto){
+    el.innerHTML = '<div class=\"passo\"><b>Tela 1 de 3 — Conta</b>: crie a conta no formulario abaixo (ou cole o token do <code>kof cloud login</code>) e clique <b>Carregar</b> — o fluxo acompanha sozinho.</div>';
+  } else if(!STATE.devs || STATE.devs.length == 0){
+    el.innerHTML = '<div class=\"passo\"><b>Tela 2 de 3 — Maquina</b>: registre o dispositivo com o botao <b>Registrar</b> (secao Dispositivos) e adote o nome na maquina — <code>kof cloud login --device &lt;nome&gt;</code> com o <code>kof cloud connect</code> rodando. O painel nao instala nada: o cliente e o proprio kof. <button onclick=\"carregarListas()\">Verificar</button> <button onclick=\"diagnostico()\">diagnostico</button></div>';
+  } else if(!STATE.svcs || STATE.svcs.length == 0){
+    el.innerHTML = '<div class=\"passo\"><b>Tela 3 de 3 — Primeiro servico</b>: publique na secao Servicos — nome, porta local e o dispositivo — com o servico rodando na maquina; a rota publica aparece na tabela e o diagnostico confirma o tunel. <button onclick=\"carregarListas()\">Verificar</button> <button onclick=\"diagnostico()\">diagnostico</button></div>';
+  } else {
+    el.innerHTML = '<div class=\"passo\"><b>Fluxo concluido</b> — conta no ar, rotas nas tabelas acima. <button onclick=\"encerrarFluxo()\">encerrar o fluxo</button></div>';
   }
 }
 function acao(tipo){
@@ -323,6 +359,7 @@ function carregarListas(){
     STATE.devs = devs;
     renderListas(devs, online, svcs, doms);
     onboarding(STATE.devs, STATE.svcs);
+    fluxoPasso();
   });
 }
 // Diagnostico da conta (primeiro passo do onboarding, Fase 12 s3): as

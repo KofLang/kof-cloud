@@ -344,6 +344,47 @@ test "painel: banner de onboarding aponta o proximo passo (F12 s3)", "panel-acti
     assert(html.indexOf("el.innerHTML = '';") >= 0, "some quando a conta esta no ar")
 }
 
+test "painel: fluxo guiado de 3 telas deriva a tela do estado real (F12 s3)", "panel-actions-unit" {
+    // Terceiro passo do onboarding guiado (slice 3): as 3 telas prometidas —
+    // conta, maquina, primeiro servico — costuradas num modo passo a passo
+    // opt-in. A tela atual e derivada do que a pagina JA TEM (token validado
+    // pelo Carregar, devices e servicos buscados): sem estado inventado, sem
+    // endpoint novo, sem formulario duplicado — cada tela reusa as secoes e
+    // funcoes existentes. O navegador nao instala nada: a adocao acontece na
+    // maquina, honesto no texto.
+    var html = panelHtml()
+    assert(html.indexOf("id=\"fluxo\"") >= 0, "div do fluxo existe")
+    assert(html.indexOf("onclick=\"iniciarFluxo()\"") >= 0, "botao inicia o fluxo")
+    assert(html.indexOf("Tela 1 de 3") >= 0, "tela da conta")
+    assert(html.indexOf("Tela 2 de 3") >= 0, "tela da maquina")
+    assert(html.indexOf("Tela 3 de 3") >= 0, "tela do servico")
+    assert(html.indexOf("Fluxo concluido") >= 0, "tela final existe")
+    assert(html.indexOf("onclick=\"encerrarFluxo()\"") >= 0, "fluxo tem saida")
+    // A tela 1 so sai depois do Carregar validar o token (derivacao honesta,
+    // nao cosmetica): pronto so vira true no sucesso do carregar e o sair o
+    // reseta (o token da proxima sessao precisa revalidar).
+    assert(html.indexOf("if(!STATE.pronto)") >= 0, "tela 1 ate o token ser validado")
+    assert(html.indexOf("STATE.pronto = true;") >= 0, "pronto so no sucesso do carregar")
+    assert(html.indexOf("STATE.pronto = false;") >= 0, "sair reseta o pronto")
+    // Tela 2 orienta a adocao na maquina (o painel nao instala nada); as
+    // telas 2 e 3 embutem o diagnostico por camada e o Verificar que
+    // re-renderiza o fluxo nos dois caminhos de atualizacao.
+    assert(html.indexOf("kof cloud login --device") >= 0, "adocao na maquina")
+    assert(html.indexOf("kof cloud connect") >= 0, "tunel na maquina")
+    var chamadas = 0
+    var c = html.indexOf("fluxoPasso();")
+    while (c >= 0) {
+        chamadas = chamadas + 1
+        c = html.indexOf("fluxoPasso();", c + 1)
+    }
+    assert(chamadas == 3, "iniciar + carregar + recarregar re-renderizam")
+    // Seguranca/regras do painel preservadas em todo o incremento: nenhum
+    // token embutido, nada persistido, vocabulario velho fora.
+    assert(html.indexOf("kfc_") < 0, "sem token no HTML")
+    assert(html.indexOf("localStorage") < 0, "sem persistencia")
+    assert(html.indexOf("ACTIVE") < 0, "sem vocabulario velho")
+}
+
 test "painel s2: registrar device funciona pela rota e a maquina adota", "panel-actions" {
     // Corpo exato que o botao "Registrar" envia: reserva o NOME. A maquina
     // adota com `login --device <nome>` — o re-registro com a chave dela
@@ -463,4 +504,48 @@ test "painel: banner de onboarding acompanha o estado real da conta (F12 s3)", "
     // E a pagina servida carrega o banner e as duas fontes de decisao.
     var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
     assert(bodyOf(page).indexOf("id=\"onboarding\"") >= 0, "banner no ar")
+}
+
+test "painel: fluxo guiado acompanha o fluxo completo no control plane (F12 s3)", "panel-actions" {
+    // A prova do slice 3: o fluxo completo num control plane de teste —
+    // conta (tela 1), device reservado pelo painel + adotado pela maquina
+    // (tela 2), primeiro servico publicado (tela 3). Sao exatamente as
+    // transicoes que a derivacao do fluxoPasso observa pela API.
+    var controlPort = 19938
+    var registry = Registry("/tmp/kofcloud-pa8-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    control.enablePanel()
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    // Tela 1 -> 2: conta criada; o token autentica (e o que o Carregar do
+    // painel usa para buscar devices/servicos) e a conta nasce sem devices.
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    assert(statusOf(created) == 200, "conta criada")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    assert(bodyOf(httpGetToken(controlPort, "/v1/devices", token)) == "[]", "sem devices — tela 2")
+
+    // Tela 2: o painel reserva o nome; a maquina adota com a chave dela
+    // (mesmo id — o contrato que a tela 2 orienta) e os servicos seguem
+    // vazios (falta a tela 3).
+    var reserved = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"aguardando-maquina\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(reserved)), "deviceId")
+    var adopted = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"chave-real-da-maquina\"}", token)
+    assert(statusOf(adopted) == 200, "maquina adota")
+    assert(mapField(json.decode<Map<String, String>>(bodyOf(adopted)), "deviceId") == deviceId, "mesmo dispositivo")
+    assert(bodyOf(httpGetToken(controlPort, "/v1/services", token)) == "[]", "sem servicos — tela 3")
+
+    // Tela 3: primeiro servico publicado; a listagem muda e a derivacao
+    // chega ao fim do fluxo.
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "primeiro servico publicado")
+    assert(bodyOf(httpGetToken(controlPort, "/v1/services", token)).indexOf("\"name\":\"site\"") >= 0, "conta no ar — fluxo concluido")
+
+    // Diagnostico embutido das telas: as camadas que ele confirma pela API.
+    assert(statusOf(httpGetToken(controlPort, "/v1/presence", token)) == 200, "presence da camada tunel")
+    assert(statusOf(httpGetToken(controlPort, "/v1/audit/verify", token)) == 200, "verify da camada auditoria")
+
+    // E a pagina servida traz o fluxo (botao + div).
+    var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
+    assert(bodyOf(page).indexOf("id=\"fluxo\"") >= 0, "fluxo no ar")
 }
