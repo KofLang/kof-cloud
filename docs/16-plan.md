@@ -1388,13 +1388,15 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   PEM ✅ — aviso de expiração em 30 dias no `doctor --tls-cert` (Fase 9 s3)
   e no `scan --tls-cert`; kill-switch ✅ documentado; WORM ✅ parcial no
   slice 4 — espelho append-only + verify; storage separado pendente).
-* **Slice 2 — varredura contínua (parcial: scan do manifesto ✅).**
+* **Slice 2 — varredura contínua (parcial: manifesto + ambiente + PEM ✅; dependências pendente).**
   `kof cloud scan [--file]` lê o manifesto e acusa `kfs_`/`kfc_`/password
   literal (exit 1 com achado, 0 limpo) — sem login, sem rede, para rodar
   no CI a cada push. Pura `scanManifestSecrets` (nomeia o serviço sem
   vazar o valor). Prova: `tests/deploy_test.kf` (`deploy-scan`) + trava
-  da ajuda. Pendente: dependências e `kfs_` sem TTL em serviço crítico
-  (exigem rede/conta).
+  da ajuda. Pendente: dependências (exigem rede para resolver `kofdeps`).
+  O item "`kfs_` sem TTL em serviço crítico" pousou como Higiene de
+  credenciais abaixo (`kof cloud service tokens` / `POST
+  /v1/services/token-hygiene`).
 
   **Complemento ✅:** o `scan` agora também olha o **ambiente** (lista curada
   de nomes sensíveis — o Kof não enumera env, `config.env(nome)` lê um por
@@ -1402,7 +1404,9 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   operador** (`--tls-cert`: expirado ou expirando em 30 dias, via
   `openssl x509 -checkend`). Nunca imprime valor, só o nome. Prova:
   `tests/scan_extra_test.kf` (5). **Pendente:** dependências (exige resolver
-  `kofdeps`/rede) e `kfs_` sem TTL em serviço crítico (exige conta).
+  `kofdeps`/rede). O "`kfs_` sem TTL em serviço crítico" está fechado pela
+  Higiene de credenciais abaixo — quem lista é o `service tokens`, não o
+  `scan` (o scan continua local: sem conta, sem rede).
 
   **Higiene de credenciais ✅:** `kof cloud service tokens` (e
   `POST /v1/services/token-hygiene`) lista os serviços da conta com `kfs_`
