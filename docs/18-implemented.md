@@ -267,12 +267,11 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 * **DNS** como serviço — o wildcard por conta é configuração externa de DNS
   (ver `11-dns.md`); o KofCloud já emite o hostname correto.
 * **WebSocket** público, **HTTP/2/3**, **domínio próprio automatizado**,
-  **deploy com artefato transferível**, **painel: onboarding guiado completo**
-  (slices 1–2 da Fase 12 existem; do slice 3 existem o diagnóstico embutido
-  e o banner do próximo passo — o fluxo guiado de primeira publicação em
-  3 telas não), **daemon: tray + auto-update** (slices 2–3 da Fase 13).
-* **Múltiplos nós** de control plane/edge (sem consenso; registro único em
-  memória + arquivo).
+  **deploy com artefato transferível**, **daemon: tray + auto-update**
+  (slices 2–3 da Fase 13).
+* **Múltiplos nós** de control plane/edge (Fase 16) — slice 1 parcial ✅
+  (carga explícita + `migrate --dry-run`); o resto pendente: sem consenso,
+  registro único em memória + arquivo.
 * **TLS/HTTPS na borda (Fase 9)** — slice 1 parcial: control plane HTTPS
   via `serve --tls-cert/--tls-key` (`listenSecure` 3-arg, JVM) + HSTS (vem
   do runtime do Kof) + **fluxo real da CLI provado sobre HTTPS**
@@ -283,17 +282,17 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   ACME automático: ES256/JWS pousou no lab do Kof, ainda fora do jar
   pinado. **Ressalva:** o cliente `kof.http` é trust-all — cifra, mas não
   autentica o servidor (ver `12-tls.md` e `17-limitations.md`).
-* **WAF + proteção da aplicação (Fase 10)** — slices: assinaturas mínimas
-  (detectar antes de bloquear), teto de corpo/timeout por rota, allowlist
-  por serviço. Regra: nunca logar conteúdo, nunca quebrar o legítimo.
 * **PQC no túnel (Fase 11)** — híbrido ML-KEM+X25519 com fallback clássico;
   bloqueado no primitivo do stdlib (só X25519/Ed25519 hoje).
-* **Gestão web (Fase 12)** — painel somente-leitura → gestão completa →
-  onboarding guiado; consome só a API `/v1` pública, nunca mostra `kfs_`.
-* **Desktop client (Fase 13)** — instalador por SO + tray com estado +
-  sincronização do manifesto + auto-update com assinatura Ed25519.
-* **Baixa latência (Fase 14)** — medir (p50/p99) → relay regional →
-  caminho de bytes O(n); sem número antes/depois, sem otimização.
+* **Desktop client (Fase 13)** — slice 1 ✅ (instalador por SO:
+  systemd/launchd/Windows, ativação manual); tray com estado,
+  sincronização do manifesto e auto-update com assinatura Ed25519
+  pendentes.
+* **Baixa latência (Fase 14)** — slices 1–2 ✅ (faixas de latência por
+  tamanho de resposta; ranking de Edges com drift visível no runtime log);
+  pendentes: p50/p99 por hostname (deliberado — regra de privacidade, sem
+  cardinalidade por cliente), troca automática de sessão e caminho de
+  bytes O(n).
 * **E2EE real (Fase 15)** — slice 1 (modelo de visibilidade em
   `docs/20-visibility.md`: quem vê o quê hoje vs alvo corpo-opaco) ✅;
   corpo opaco (slice 2) e SNI mínimo (slice 3) pendentes; tensão honesta
@@ -302,6 +301,10 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   → control ativo-passivo → células; mesma API, fail-closed, rollback.
 * **Resposta a incidentes (Fase 17)** — detecção com severidade → `freeze`
   reversível → status page + webhook assinado + post-mortem; game-day.
+  **Completa ✅** (detecção incl. em lote e expiração de credenciais,
+  `freeze` service/device/account com marcas por alvo, status page sem
+  login, webhook HMAC — Ed25519 ficou preso no stdlib — e template em
+  `docs/incidents/`); game-day de exercício é ritmo, não código.
 * **Integrações de mercado (Fase 18)** — DNS/cert, OIDC/SSO+SCIM, CI/CD
   com `--plan`, OTel/billing, segredos externos; sem lock-in, dry-run.
 * **Segurança contínua (Fase 19)** — SBOM + `security.txt`, scan no CI,

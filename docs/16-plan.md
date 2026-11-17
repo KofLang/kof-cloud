@@ -771,7 +771,7 @@ domínios/tokens pelo terminal afasta quem não é técnico — e gestão visual
   origem em `web.app()` — e força bruta dirigida a uma conta é o ataque que
   importa aqui. Prova: `tests/login_limit_test.kf` (2).
 
-**Estado: slices 1 e 2 ✅; slice 3 pendente.** Desenho fatiado (cada slice é
+**Estado: slices 1, 2 e 3 ✅ implementados.** Desenho fatiado (cada slice é
 um incremento testável; o painel consome só a API pública `/v1` — nenhum
 endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
 
