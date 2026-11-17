@@ -57,6 +57,16 @@ test "idle: touch so em frame util; PING nao renova", "idle" {
     // Polling do stopFile: Edge vigia o listener parado no accept (passo
     // curto), Agent vigia a sessao viva (passo um pouco maior) — valores
     // distintos de proposito, cada lado na sua fonte (last sleep cru).
+    // Recuo em fonte pura (medido): `time.sleep` com negativo LANCA
+    // IllegalArgumentException — o watcher morre na primeira passada e o
+    // `disconnect` deixa de funcionar. Zero tambem recai (passo 0 gira sem
+    // parar, gastando checagens de arquivo sem utilidade).
+    assert(stopFilePollMsFrom(0) == 100, "edge poll zero recai no default")
+    assert(stopFilePollMsFrom(-1) == 100, "edge poll negativo recai no default")
+    assert(stopFilePollMsFrom(50) == 50, "edge poll positivo passa")
+    assert(agentStopPollMsFrom(0) == 250, "agent poll zero recai no default")
+    assert(agentStopPollMsFrom(-10) == 250, "agent poll negativo recai no default")
+    assert(agentStopPollMsFrom(500) == 500, "agent poll positivo passa")
     assert(stopFilePollMs() == 100, "poll do stopFile no Edge 100 ms")
     assert(agentStopPollMs() == 250, "poll do stopFile no Agent 250 ms")
     var session = TunnelSession("s1", "d1", "a1", "")

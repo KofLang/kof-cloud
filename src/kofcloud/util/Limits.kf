@@ -595,8 +595,20 @@ Int receiveChunkBytes() {
 // se o stopFile apareceu e fecha o listener (o `accept` lanca e o serve
 // encerra). Curto porque a parada pedida pelo `disconnect` deve ser
 // percebida rapido; o custo e uma checagem de arquivo por passo.
+//
+// Recuo em fonte pura (medido): `time.sleep` com negativo LANCA
+// `IllegalArgumentException: timeout value is negative` — o watcher morre
+// na primeira passada e a parada pedida nunca e percebida (o `disconnect`
+// deixa de funcionar). Zero/zao recai no default; positivo passa.
+Int stopFilePollMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 100
+    }
+    return configured
+}
+
 Int stopFilePollMs() {
-    return config.int("kofcloud.limits.stopFilePollMs", 100)
+    return stopFilePollMsFrom(config.int("kofcloud.limits.stopFilePollMs", 100))
 }
 
 // Passo do polling do arquivo-sentinela no Agent (ms): o watchdog verifica
@@ -604,8 +616,16 @@ Int stopFilePollMs() {
 // backoff). Separado do passo do Edge de proposito: o Edge vigia um
 // listener parado no `accept` (passo curto e barato), o Agent vigia uma
 // sessao viva com mais tarefas concorrentes (passo um pouco maior).
+// Recuo pelo mesmo motivo do Edge (sleep negativo lanca e mata o watchdog).
+Int agentStopPollMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 250
+    }
+    return configured
+}
+
 Int agentStopPollMs() {
-    return config.int("kofcloud.limits.agentStopPollMs", 250)
+    return agentStopPollMsFrom(config.int("kofcloud.limits.agentStopPollMs", 250))
 }
 
 // Limiar do detector de recusas do Edge (Fase 17 slice 1): quantas recusas
