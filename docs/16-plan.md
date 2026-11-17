@@ -808,7 +808,7 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   campo após configurar, remover pede `confirm()`, e o carregamento é
   separado do Carregar porque `show` sem nada é `404 KCF130` por desenho
   (vira placeholder, nunca erro que impediria as listas). Prova:
-  `tests/panel_actions_test.kf` (18: o HTML expõe cada ação, o e2e
+  `tests/panel_actions_test.kf` (19: o HTML expõe cada ação, o e2e
   publica/suspende/emite/remove pelas rotas que o painel usa, o contrato do
   "Adicionar domínio", o "Criar conta"/registrar device pela mesma rota da
   CLI, o webhook com entrega real num receptor, o Diagnóstico, o banner e o

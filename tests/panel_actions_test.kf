@@ -676,3 +676,45 @@ test "painel: webhook funciona pelas rotas que o botao chama", "panel-actions" {
     assert(bodyOf(page).indexOf("id=\"wb\"") >= 0, "secao no ar")
     assert(bodyOf(page).indexOf("/v1/webhook") >= 0, "usa a rota do CLI")
 }
+
+test "painel: diagnostico tem a camada de higiene de kfs_ (HTML + e2e)", "panel-hygiene" {
+    // Medido: o diagnostico do painel cobria 5 camadas (credencial da conta,
+    // dispositivo, tunel, auditoria, servico suspenso) mas nao a HIGIENE de
+    // kfs_ — credenciais validas sem expiracao, o mesmo sinal que o
+    // `service tokens` da CLI acusa via `/v1/services/token-hygiene`.
+    var port = 19880
+    var registry = Registry("/tmp/kofcloud-panelhig-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    control.enablePanel()
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control no ar")
+
+    // A pagina anuncia a camada (o texto da secao Diagnostico).
+    var page = httpGetRaw(port, "/panel", "127.0.0.1")
+    assert(statusOf(page) == 200, "panel 200")
+    assert(bodyOf(page).indexOf("higiene de kfs_") >= 0, "camada anunciada na secao")
+
+    // e2e: conta com kfs_ SEM TTL — o hygiene endpoint acusa e o painel tem
+    // a rota que o alimenta.
+    var created = httpPostJson(port, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var dev = httpPostJson(port, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(dev)), "deviceId")
+    var pub = httpPostJson(port, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", token)
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(pub)), "id")
+    assert(statusOf(httpPostJson(port, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "kfs_ sem TTL emitido")
+
+    var hyg = httpPostJson(port, "/v1/services/token-hygiene", "{}", token)
+    assert(statusOf(hyg) == 200, "hygiene 200")
+    var hygBody = json.decode<Map<String, String>>(bodyOf(hyg))
+    assert(mapField(hygBody, "count") == "1", "higiene acusa 1 sem TTL")
+
+    // Rotacionar com TTL emite a nova com prazo, mas a ANTIGA sem TTL
+    // continua valida (overlap sem downtime; revogacao de credencial sem
+    // expiracao nunca e silenciosa) — a higiene segue acusando a antiga,
+    // que so sai com revoke explicito. Prova do comportamento real, nao de
+    // um "limpa apos rotate" que violaria o desenho.
+    assert(statusOf(httpPostJson(port, "/v1/services/rotate", "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"24\"}", token)) == 200, "rotacionou com TTL")
+    var hyg2 = httpPostJson(port, "/v1/services/token-hygiene", "{}", token)
+    assert(mapField(json.decode<Map<String, String>>(bodyOf(hyg2)), "count") == "1", "antiga sem TTL segue acusada apos rotate")
+}
