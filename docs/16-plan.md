@@ -1309,10 +1309,16 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   SHA-256 do corpo com o segredo compartilhado, comparado em tempo constante
   no receptor). URL https (http só em loopback, sem credencial na URL) e
   segredo ≥16 chars validados; o segredo **nunca** volta pela API/CLI (só o
-  prefixo). Falha de entrega não impede o incidente de existir. **Divergência
-  registrada:** o desenho pedia Ed25519, mas o stdlib não expõe par Ed25519
+  prefixo). Falha de entrega não impede o incidente de existir — e agora tem
+  **prazo explícito** (`Limits.limitWebhookTimeoutSec`, 5 s, recuo seguro): a
+  entrega roda inline no caminho do incidente e o default do stdlib
+  (`http.timeout`, 15 s por pedido) deixaria um receptor que aceita e não
+  responde pendurar o sweeper e handlers por 3x mais que o necessário; o
+  e2e usa o mesmo fixture de socket cru do timeout de upstream e separa os
+  dois mundos por uma borda de 12 s. **Divergência registrada:** o desenho
+  pedia Ed25519, mas o stdlib não expõe par Ed25519
   utilizável (SECN014, `13-kof-apis.md` L17). Prova:
-  `tests/webhook_test.kf` (8).
+  `tests/webhook_test.kf` (10).
 **Regras:** contenção sempre reversível; comunicação sempre antes do
 fix secreto (avisa o impacto, depois corrige); todo incidente vira teste
 novo (se não tem regressão, não fechou).

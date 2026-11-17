@@ -781,3 +781,25 @@ Int wormMirrorBytesFrom(Int configured) {
 Int limitWormMirrorBytes() {
     return wormMirrorBytesFrom(config.int("kofcloud.limits.wormMirrorBytes", 8388608))
 }
+
+// Prazo da entrega do webhook em SEGUNDOS (a unidade do `http.timeout`).
+// A entrega e SINCRONA no caminho do incidente: `Registry.raiseIncident`
+// entrega inline depois de salvar, no laço do sweeper e em handlers do
+// control plane (`POST /v1/webhook` com `action=test` inclusive). Um
+// receptor que aceita e nunca responde penduraria esses pontos pelo default
+// silencioso do stdlib (15 s por pedido — medida do `13-kof-apis.md`).
+// O incidente JA ESTA salvo antes da entrega, entao falhar rapido nao
+// perde sinal (entrega best-effort por desenho) — 5 s bastam ao receptor
+// honesto e devolvem o controle ~3x antes do default. Recuo seguro: 0/
+// negativo recai no default (`http.timeout` com <= 0 quebraria TODA entrega
+// e o `catch` do postWebhook viraria o caminho comum).
+Int webhookTimeoutSecFrom(Int configured) {
+    if (configured <= 0) {
+        return 5
+    }
+    return configured
+}
+
+Int limitWebhookTimeoutSec() {
+    return webhookTimeoutSecFrom(config.int("kofcloud.limits.webhookTimeoutSec", 5))
+}

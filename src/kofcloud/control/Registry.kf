@@ -2264,8 +2264,14 @@ Long parseLongSafe(String text, Long fallback) {
 // POST assinado (I/O na borda do Registry; o desenho aceita porque o Registry
 // ja faz I/O de arquivo). Headers documentados no help/webhook: o receptor
 // verifica `X-KofCloud-Signature: sha256=<hex>` e `X-KofCloud-Event`.
+// Prazo EXPLICITO (`Limits.limitWebhookTimeoutSec`, 5 s): a entrega roda
+// inline no caminho do incidente e o default do stdlib (`http.timeout`,
+// 15 s por pedido) deixaria um receptor que aceita e nao responde pendurar
+// o sweeper e handlers do control plane por 3x mais que o necessario — o
+// incidente ja esta salvo, entao desistir cedo nao perde sinal.
 Int postWebhook(String url, String payload, String signature) {
     try {
+        http.timeout(limitWebhookTimeoutSec())
         var headers = "Content-Type: application/json\nX-KofCloud-Event: incident.opened\nX-KofCloud-Signature: " + signature
         var response = http.post(url, payload, headers)
         return 200

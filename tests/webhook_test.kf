@@ -67,6 +67,13 @@ test "webhook: payload nao carrega dado sensivel", "webhook-unit" {
     assert(parsed.get("event") != null, "event presente")
 }
 
+test "webhook: prazo de entrega com recuo seguro (fonte unica)", "webhook-unit" {
+    assert(webhookTimeoutSecFrom(0) == 5, "zero recai no default")
+    assert(webhookTimeoutSecFrom(-3) == 5, "negativo recai no default")
+    assert(webhookTimeoutSecFrom(10) == 10, "positivo passa")
+    assert(limitWebhookTimeoutSec() == 5, "default travado em 5 s")
+}
+
 test "webhook: cadastro, leitura sem segredo e remocao", "webhook-unit" {
     var registry = Registry(webhookPath("crud"))
     var account = registry.createAccount("mel", "m@e.com", "segredo")
@@ -157,6 +164,55 @@ test "webhook: incidente da conta dispara entrega assinada de verdade", "webhook
     assert(bodyOf(testResult).indexOf("\"delivered\":\"200\"") >= 0, "entrega de teste")
 
     hook.close()
+}
+
+test "webhook: receptor mudo nao pendura a entrega (prazo explicito)", "webhook" {
+    var hookPort = 19905
+    var controlPort = 19906
+
+    // Receptor que aceita e NUNCA responde (mesmo fixture de socket cru do
+    // waf_timeout): o POST do cliente fica esperando. Com o default do stdlib
+    // (15 s) a entrega custaria ~15 s no caminho do incidente; com o prazo da
+    // fonte unica (5 s) o POST desiste antes. A borda de 12 s separa os dois
+    // mundos sem virar assert de milissegundo (medido abaixo: ~5 s).
+    var mute = net.listen(hookPort)
+    var held = listOf<Conn>()
+    var muteTask = spawn {
+        var open = true
+        while (open) {
+            try {
+                var c = mute.accept()
+                held.add(c)
+            } catch (String e) {
+                open = false
+            }
+        }
+    }
+    assert(waitForPort(hookPort, 60), "receptor mudo no ar")
+
+    var registry = Registry(webhookPath("stall"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var setBody = "{\"action\":\"set\",\"url\":\"http://127.0.0.1:" + intToString(hookPort) + "/hook\",\"secret\":\"0123456789abcdef\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/webhook", setBody, token)) == 200, "cadastrou")
+
+    var started = time.now()
+    var testResult = httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"test\"}", token)
+    var elapsed = time.now() - started
+    assert(statusOf(testResult) == 200, "rota responde")
+    assert(bodyOf(testResult).indexOf("\"delivered\":\"0\"") >= 0, "entrega desistiu (0)")
+    assert(elapsed < 12000, "voltou no prazo (" + intToString(elapsed) + " ms), nao no default de 15 s")
+
+    // Parada limpa (precedente do waf_timeout: as conexoes aceitas saem aqui,
+    // senao o processo nao sai).
+    mute.close()
+    for (var c in held) {
+        c.close()
+    }
 }
 
 test "webhook: posicional sobrando e --secret defeituoso barram na CLI", "webhook-guard" {
