@@ -10,7 +10,7 @@
 | Fases 1–3 (tunel, publish, hostname) | ✅ verde | `e2e_test.kf` |
 | Health HTTP com prazo (DEGRADED real) | ✅ verde | `health_test.kf` |
 | Fase 4 (multi-servico + limites) | ✅ verde | `e2e_multiservice_test.kf`, `limits_test.kf` |
-| Fase 5 (AUTHENTICATED kfs_ + revoke + token-list + TTL) | ✅ verde | `service_token_test.kf` (13), `e2e_authenticated_test.kf` |
+| Fase 5 (AUTHENTICATED kfs_ + revoke + token-list + TTL) | ✅ verde | `service_token_test.kf` (15), `e2e_authenticated_test.kf` |
 | Fase 6 slice 1 (dominio proprio) | ✅ verde | `domains_test.kf` (sem TLS/SNI — externo; `domain verify --tls-cert` julga o PEM localmente) |
 | Observabilidade (3 slices) | ✅ verde | `metrics_test.kf`, `agent_metrics_test.kf` |
 | Enquadramento HTTP no Edge | ✅ verde | `framing_test.kf` (14: Long, 400 KCF118/119/132/133, 1xx, query, hop-by-hop nos dois sentidos, chunked, status sem corpo, CL da resposta, upstream inválido, corpo relayado fatiado) |
@@ -53,7 +53,7 @@ o run total imprime `57 passed, 0 failed`. Falha = nome do teste + assert
 | backoff + drift de Edge | `tests/backoff_test.kf` | 4 |
 | registry | `tests/registry_test.kf` | 12 |
 | limites + passo da varredura de credenciais | `tests/limits_test.kf` | 8 |
-| service token | `tests/service_token_test.kf` | 13 |
+| service token | `tests/service_token_test.kf` | 15 |
 | erros R6 | `tests/errors_test.kf` | 11 |
 | dominios (+ certificado x hostname) | `tests/domains_test.kf` | 12 |
 | metricas | `tests/metrics_test.kf` | 13 |
@@ -104,7 +104,7 @@ o run total imprime `57 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor, booleanas sem duplicação e posicional sobrando (CLI) | `tests/value_flags_test.kf` | 4 |
 
-Total: 401 testes. Ver `15-tests.md` para a matriz.
+Total: 403 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

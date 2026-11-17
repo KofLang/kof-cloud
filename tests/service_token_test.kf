@@ -1,3 +1,4 @@
+import kofcloud.cli.Commands
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.identity.Tokens
@@ -272,4 +273,49 @@ Int metricCount(String name) {
         }
     }
     return 0
+}
+
+test "aviso de expiracao proxima do kfs_ (service token-list)", "svcwarn" {
+    // Medido: o aviso de expiracao proxima existia so para o kfc_
+    // (`tokenAccountWarningLine`); o `service token-list` mostrava
+    // "expira em <epoch>" cru — epoch nao e legivel e a janela de rotacao
+    // (default 7 dias) passava despercebida. Mesma fonte do fio
+    // (`limitTokenExpiryWarnMs`), mesmo padrao do irmao.
+    var now = 1000000000000L
+    var window = limitTokenExpiryWarnMs()
+
+    // Sem TTL ("0"): silencio (nao expira nunca).
+    assert(serviceTokenExpiryWarning("0", longToString(now)) == "", "sem TTL: silencio")
+    assert(serviceTokenExpiryWarning("", longToString(now)) == "", "sem campo: silencio")
+    // Vencida: silencio (o inventario nem lista vencida, mas o helper
+    // defende).
+    assert(serviceTokenExpiryWarning(longToString(now - 1), longToString(now)) == "", "vencida: silencio")
+    // Fora da janela: silencio.
+    assert(serviceTokenExpiryWarning(longToString(now + window + 1000), longToString(now)) == "", "fora: silencio")
+    // Dentro da janela: AVISO com a acao.
+    var warn = serviceTokenExpiryWarning(longToString(now + window - 1000), longToString(now))
+    assert(warn.indexOf("AVISO") >= 0, "avisa dentro da janela")
+    assert(warn.indexOf("service rotate") >= 0, "aponta a rotacao")
+    assert(warn.indexOf("h —") >= 0, "janela em horas legiveis")
+}
+
+test "svcwarn: cmdServiceTokenList aplica o aviso (trava de fonte)", "svcwarn" {
+    // Os puros cobrem as funcoes; a trava impede o `cmdServiceTokenList`
+    // deixar de APLICAR o aviso (o operador pediria a lista e receberia o
+    // epoch cru em silencio).
+    var raw = File("src/kofcloud/cli/Commands.kf").readText()
+    var text = ""
+    if (raw != null) {
+        text = raw
+    }
+    if (text.length == 0) {
+        return
+    }
+    var start = text.indexOf("Int cmdServiceTokenList(")
+    var end = text.indexOf("// Revoga UMA credencial kfs_", start)
+    if (end < 0) {
+        end = text.length
+    }
+    var body = text.substring(start, end)
+    assert(body.indexOf("serviceTokenExpiryWarning(") >= 0, "cmdServiceTokenList aplica o aviso")
 }
