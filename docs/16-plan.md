@@ -1468,7 +1468,7 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   limitations), então quem tem o disco pode reescrever o arquivo inteiro;
   o que o espelho compra é **sobrevivência à poda e à rescrita do estado**,
   não imutabilidade física. Prova: `tests/audit_chain_test.kf` (`worm-unit`
-  ×2 + `worm`, total 13).
+  + `worm`).
 
   **Implementado (verify do espelho):** `/v1/audit/verify` e
   `kof cloud audit --verify` cobrem também o espelho — campos ADITIVOS
@@ -1479,7 +1479,7 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   adulteração de campo, remoção do meio e linha ilegível (`parse`). A CLI
   sai 1 com o espelho comprometido (trilha redundante) e diz
   "desconhecido" contra control plane antigo, sem os campos. Prova:
-  `tests/audit_chain_test.kf` (`worm-unit` ×5 + `worm` ×2, total 17).
+  `tests/audit_chain_test.kf` (`worm-unit` + `worm`).
 
   **Implementado (teto do espelho — "rotação" sem rename):** o espelho tem
   teto em bytes (`kofcloud.limits.wormMirrorBytes`, default 8 MiB — recuo

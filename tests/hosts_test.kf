@@ -686,3 +686,124 @@ test "text: sbom cobre os 48 fontes com hash verificavel", "audit-sbom" {
         assert(sbomLine("src/kofcloud/model/Exposure.kf", probe).startsWith(crypto.sha256(probe)), "hash do disco")
     }
 }
+
+test "text: breakdowns por tag da matriz U batem com os arquivos", "u-counts" {
+    // Trava da coluna de suite do docs/15-tests.md (irma do status-counts,
+    // que so trava o TOTAL por suite): quando a linha declara
+    // "(N: `tag` ×n + ...)", o total N tem de bater com os `test "` reais
+    // do arquivo e cada ×n com as ocorrencias de `, "tag"` nele. Os drifts
+    // eram silenciosos (medido neste run: freeze-unit ×13 com 14 no
+    // arquivo, rotate-all ×2 com 1, svcdevice-unit ×3 com 4, e o breakdown
+    // do rotate omitindo uma tag — 5 contados contra 6 reais). Linhas sem
+    // grupo "(N:" — total so ("(13 testes)"), subconjunto ("(1 teste:
+    // tag)") e lista de tags — ficam fora por desenho: o total delas ja e
+    // travado no status-counts. A soma do breakdown so e exigida quando
+    // TODAS as pecas sao "tag ×n" (pecas nuas como `tag` sem × ou prosa
+    // impossibilitam a soma); omitir uma tag contavel quebra pela soma.
+    var matrix = readTextOr("docs/15-tests.md", "")
+    assert(matrix.length > 0, "matriz existe e nao e vazia")
+    var rows = 0
+    var tagChecks = 0
+    for (var line in matrix.split("\n")) {
+        if (line.startsWith("| U") == false) {
+            continue
+        }
+        var cells = tableCells(line)
+        if (cells.length < 4) {
+            continue
+        }
+        var suite = cells[3]
+        var at = suite.indexOf("`tests/")
+        if (at < 0) {
+            continue
+        }
+        var nameStart = at + 7
+        var nameEnd = suite.indexOf(".kf`", nameStart)
+        if (nameEnd < 0) {
+            continue
+        }
+        var path = suite.substring(nameStart, nameEnd + 3)
+        // O grupo de contagem tem de vir logo apos a citacao e ser "(N:" —
+        // "(13 testes)" e "(1 teste: tag)" nao sao breakdown; "(1xx..." em
+        // prosa de cobertura tambem nao (digitos seguidos de letra).
+        var cursor = suite.indexOf("(", nameEnd)
+        if (cursor < 0) {
+            continue
+        }
+        var digits = ""
+        var j = cursor + 1
+        while (j < suite.length && suite.charAt(j) >= 48 && suite.charAt(j) <= 57) {
+            digits = digits + suite.charAt(j)
+            j = j + 1
+        }
+        if (digits.length == 0 || j >= suite.length || suite.charAt(j) != 58) {
+            continue
+        }
+        var close = suite.indexOf(")", j)
+        if (close < 0) {
+            continue
+        }
+        var src = readTextOr("tests/" + path, "")
+        assert(src.length > 0, "arquivo da suite existe: tests/" + path)
+        var declaredTotal = parseIntBounded(digits, -1, 100000)
+        var realTotal = countTestDeclarations("tests/" + path)
+        assert(realTotal == declaredTotal, "tests/" + path + " declara " + intToString(declaredTotal) + " mas tem " + intToString(realTotal) + " testes")
+        rows = rows + 1
+        var allCounted = true
+        var sum = 0
+        // "+" e regex-quantifier: o split do stdlib trata o argumento como
+        // regex, entao o separador escapa ("\+" casa o + literal). Mesma
+        // licao do split("|") do tableCells acima.
+        var pieces = suite.substring(j + 1, close).split("\\+")
+        for (var piece in pieces) {
+            // Peca = tag entre crases + "×n" FORA delas
+            // ("`freeze-unit` ×14"); peca sem crase (prosa) ou tag sem ×
+            // ("`rotate`" nu) impossibilitam a soma: ficam fora (a soma so
+            // vale quando todas as pecas sao contaveis).
+            var t = piece.trim()
+            if (t.startsWith("`") == false) {
+                allCounted = false
+                continue
+            }
+            var closingTick = t.indexOf("`", 1)
+            if (closingTick < 0) {
+                allCounted = false
+                continue
+            }
+            var tag = t.substring(1, closingTick)
+            var rest = t.substring(closingTick + 1).trim()
+            if (rest.indexOf("×") < 0) {
+                allCounted = false
+                continue
+            }
+            // O numero esta no FIM da peca ("×14"; o espaco vem ANTES do ×,
+            // nunca entre × e o numero). Caminhe do fim enquanto houver
+            // digito ASCII e corte na borda: substring nunca cai dentro do
+            // × multibyte — as duas semanticas de indexacao (caractere e
+            // byte) dao o mesmo corte.
+            var dEnd = rest.length
+            var dStart = dEnd
+            while (dStart > 0 && rest.charAt(dStart - 1) >= 48 && rest.charAt(dStart - 1) <= 57) {
+                dStart = dStart - 1
+            }
+            if (dStart == dEnd) {
+                allCounted = false
+                continue
+            }
+            var n = parseIntBounded(rest.substring(dStart), -1, 100000)
+            assert(n >= 0, "contagem de " + tag + " parseia")
+            var real = src.split(", \"" + tag + "\"").length - 1
+            assert(real == n, "tests/" + path + ": tag " + tag + " declara ×" + intToString(n) + " mas tem " + intToString(real))
+            sum = sum + n
+            tagChecks = tagChecks + 1
+        }
+        if (allCounted) {
+            assert(sum == declaredTotal, "tests/" + path + ": breakdown soma " + intToString(sum) + " mas o total declarado e " + intToString(declaredTotal))
+        }
+    }
+    // Sanidade da propria trava: se o formato da coluna mudar e nada casar,
+    // ela nao pode passar em silencio (mesma regra do status-counts). Pisos
+    // proporcionais ao que a matriz tem hoje (26 breakdowns, 24 ×N).
+    assert(rows >= 20, "linhas com breakdown reconhecidas=" + intToString(rows))
+    assert(tagChecks >= 20, "tags conferidas=" + intToString(tagChecks))
+}

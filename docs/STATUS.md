@@ -46,7 +46,7 @@ o run total imprime `57 passed, 0 failed`. Falha = nome do teste + assert
 | Suite | Arquivo | Testes |
 |---|---|---|
 | framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 12 |
-| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls/audit-sbom/host-normalize/u-matrix | `tests/hosts_test.kf` | 31 |
+| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls/audit-sbom/host-normalize/u-matrix/u-counts | `tests/hosts_test.kf` | 32 |
 | identidade/cifra/tokens | `tests/identity_test.kf` | 6 |
 | forca bruta no login (F5) | `tests/login_limit_test.kf` | 2 |
 | vocabulario fechado do status (F5) | `tests/status_report_test.kf` | 2 |
@@ -104,7 +104,7 @@ o run total imprime `57 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor, booleanas sem duplicação e posicional sobrando (CLI) | `tests/value_flags_test.kf` | 4 |
 
-Total: 397 testes. Ver `15-tests.md` para a matriz.
+Total: 398 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 
