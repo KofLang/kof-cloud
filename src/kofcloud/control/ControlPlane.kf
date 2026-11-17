@@ -900,8 +900,12 @@ String incidentJson(Incident incident) {
 // o alvo e sempre a conta do token — nao existe id de conta no corpo.
 
 // Inventario: id curto do hash + emissao (+ expiracao quando houver).
-// NUNCA o valor: o kfc_ em claro so existe no instante da emissao.
-String accountTokenJson(TokenEntry entry) {
+// NUNCA o valor: o kfc_ em claro so existe no instante da emissao. O campo
+// ADITIVO `expiring` marca a credencial valida com a janela
+// `kofcloud.limits.tokenExpiryWarnMs` acabando (fonte unica
+// `nearAccountTokenExpiry`): cliente antigo que le id/createdAt/expiraAt
+// continua decodificando — e o CLI transforma o sinal na linha AVISO.
+String accountTokenJson(Registry registry, TokenEntry entry) {
     var out = mapOf()
     out.put("id", shortTokenId(entry.tokenHash))
     out.put("createdAt", longToString(entry.createdAt))
@@ -911,13 +915,16 @@ String accountTokenJson(TokenEntry entry) {
             out.put("expiresAt", longToString(expiresAt))
         }
     }
+    if (registry.nearAccountTokenExpiry(entry, time.now())) {
+        out.put("expiring", "true")
+    }
     return json.encode(out)
 }
 
-String accountTokenListJson(List<TokenEntry> entries) {
+String accountTokenListJson(Registry registry, List<TokenEntry> entries) {
     var parts = listOf<String>()
     for (var entry in entries) {
-        parts.add(accountTokenJson(entry))
+        parts.add(accountTokenJson(registry, entry))
     }
     return "[" + joinStrings(parts, ",") + "]"
 }
@@ -927,7 +934,7 @@ HttpResult handleListAccountTokens(Registry registry, String? authHeader) {
     if (account == null) {
         return HttpResult(401, errorJson(errUnauthorized()))
     }
-    return HttpResult(200, accountTokenListJson(registry.accountTokensFor(account.id)))
+    return HttpResult(200, accountTokenListJson(registry, registry.accountTokensFor(account.id)))
 }
 
 // Revoga uma credencial da conta (ex.: vazou). Corpo: `{"token": "<kfc_|id>"}`.

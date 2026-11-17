@@ -1398,6 +1398,27 @@ String tokenInventoryLine(List<ServiceTokenEntry> entries) {
     return line
 }
 
+// Aviso de expiracao proxima da credencial da CONTA (Fase 19): pura sobre
+// os epochs em texto do `/v1/tokens` (nunca o valor — o inventario so tem
+// id curto). Sem TTL (`""`/`0`) ou vencida/restante fora da janela = "";
+// dentro da janela = linha AVISO com a acao. A mesma janela do fio
+// (`kofcloud.limits.tokenExpiryWarnMs`) em fonte unica — fio e CLI nunca
+// divergem sobre quem merece o aviso.
+String tokenAccountWarningLine(String expiresAt, String now) {
+    var at = parseLongSafe(expiresAt, 0L)
+    if (at <= 0L) {
+        return ""
+    }
+    var rest = at - parseLongSafe(now, 0L)
+    if (rest <= 0L) {
+        return ""
+    }
+    if (rest > limitTokenExpiryWarnMs()) {
+        return ""
+    }
+    return "AVISO: esta credencial expira em menos de " + intToString((limitTokenExpiryWarnMs() / 3600000L) as Int) + "h — rode: kof cloud token rotate --ttl <horas>"
+}
+
 Int cmdServiceTokenList(List<String> args) {
     var session = loadSession()
     if (session == null) {
@@ -1653,12 +1674,18 @@ Int cmdTokenList(List<String> args) {
         }
         for (var entry in entries) {
             var line = entry.id + "  emitida em " + entry.createdAt
+            var expiredAt = "0"
             if (entry.expiresAt != null) {
                 line = line + "  expira em " + entry.expiresAt
+                expiredAt = entry.expiresAt
             } else {
                 line = line + "  sem expiracao"
             }
             println(line)
+            var warn = tokenAccountWarningLine(expiredAt, longToString(time.now()))
+            if (warn.length > 0) {
+                println(warn)
+            }
         }
         println("")
         println("Revogar: kof cloud token revoke <id|kfc_...>")

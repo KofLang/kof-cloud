@@ -690,6 +690,28 @@ class Registry {
         return nowMs >= expiresAt
     }
 
+    // Credencial de conta PERTO de vencer (Fase 19): valida, mas com menos
+    // janela que `kofcloud.limits.tokenExpiryWarnMs` restante. O inventario
+    // (`token list` / `/v1/tokens`) marca essas — o operador rotaciona antes
+    // de a sessao morrer. Sem TTL (`null`/<=0) nunca avisa (vale para
+    // sempre); VENCIDA nunca avisa — e delicado porque as vencidas saem do
+    // inventario (a pergunta "expira quando?" nao faz sentido para o que ja
+    // caiu), entao ele delega no MESMO predicado da expiracao (fonte unica)
+    // para a dedup nunca divergir por interpretacao paralela.
+    Bool nearAccountTokenExpiry(TokenEntry entry, Long nowMs) {
+        var expiresAt = entry.expiresAt
+        if (expiresAt == null) {
+            return false
+        }
+        if (expiresAt <= 0) {
+            return false
+        }
+        if (this.accountTokenExpired(entry, nowMs)) {
+            return false
+        }
+        return expiresAt - nowMs <= limitTokenExpiryWarnMs()
+    }
+
     String issueToken(String accountId) {
         return this.issueToken(accountId, 0)
     }

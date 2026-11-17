@@ -803,3 +803,22 @@ Int webhookTimeoutSecFrom(Int configured) {
 Int limitWebhookTimeoutSec() {
     return webhookTimeoutSecFrom(config.int("kofcloud.limits.webhookTimeoutSec", 5))
 }
+
+// Aviso de expiracao proxima das credenciais de CONTA (kfc_, Fase 19):
+// `token list` marca a credencial quando falta menos que esta janela (ms)
+// para vencer. O kfc_ autoriza tudo na conta — o operador sem aviso
+// descobre a perda quando a sessao morre no meio do trabalho. Fonte unica
+// de `Registry.nearAccountTokenExpiry` (o fio `/v1/tokens` e o CLI leem o
+// sinal da mesma decisao). Janela em ms como o resto da familia (7 dias
+// cabe em Int); recuo seguro: zerada/negativa recai no default — janela
+// zerada nunca avisaria, e 0 aqui nao significa "sem aviso".
+Long tokenExpiryWarnMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 604800000L
+    }
+    return configured as Long
+}
+
+Long limitTokenExpiryWarnMs() {
+    return tokenExpiryWarnMsFrom(config.int("kofcloud.limits.tokenExpiryWarnMs", 604800000))
+}

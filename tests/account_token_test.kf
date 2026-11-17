@@ -65,6 +65,42 @@ test "credencial de conta: TTL, expiracao e poda preguicosa", "atok-unit" {
     assert(registry.accountByToken(longLived) != null, "kfc_ de 30 dias nasce valido")
 }
 
+test "credencial de conta: aviso de expiracao proxima so para valida na janela", "atok-unit" {
+    // Pura, sem rede nem HOME (precedente: logoutDisposition): o inventario
+    // marca a credencial que vence em menos de
+    // `kofcloud.limits.tokenExpiryWarnMs` (7 dias) — o kfc_ autoriza tudo e
+    // o operador sem aviso descobre a perda quando a sessao morre. Fonte
+    // unica: a mesma decisao alimenta o fio (`expiring`) e o CLI (AVISO).
+    var registry = Registry(accountTokenPath("warn"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var window = limitTokenExpiryWarnMs()
+    var now = time.now()
+    assert(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h1", now, null), now) == false, "sem TTL nunca avisa")
+    assert(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h2", now, 0L), now) == false, "expira 0 nunca avisa")
+    assert(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h3", now, now + window - 1), now), "dentro da janela avisa")
+    assert(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h4", now, now + window), now), "na borda avisa")
+    assert(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h5", now, now + window + 1), now) == false, "fora da janela nao avisa")
+    // Vencida nao avisa: ela ja saiu do inventario — o aviso e para "ainda
+    // da tempo". Delega no MESMO predicado da expiracao (fonte unica); se a
+    // dedup um dia divergir, este assert quebra antes do operador ver lixo.
+    assert(registry.accountTokenExpired(TokenEntry(account.id, "h6", now, now - 1), now), "pre-condicao: vencida expira")
+    assert(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h6", now, now - 1), now) == false, "vencida nao avisa")
+    // Janela em fonte unica com recuo seguro (mesma familia de Limits):
+    // zerada/negativa recai no default — janela zerada nunca avisaria.
+    assert(window == tokenExpiryWarnMsFrom(0), "default = recuo de 0")
+    assert(tokenExpiryWarnMsFrom(-5) == window, "negativo recai no default")
+    assert(tokenExpiryWarnMsFrom(123) == 123, "valor configurado vale")
+    // A linha do CLI: sem campo/sem TTL/vencida/fora = silencio; dentro =
+    // orientacao acionavel com a mesma janela do fio.
+    assert(tokenAccountWarningLine("", "0") == "", "sem campo: silencio")
+    assert(tokenAccountWarningLine("0", "0") == "", "sem TTL: silencio")
+    assert(tokenAccountWarningLine(longToString(now - 1), longToString(now)) == "", "vencida: silencio")
+    assert(tokenAccountWarningLine(longToString(now + window + 1000), longToString(now)) == "", "fora: silencio")
+    var inside = tokenAccountWarningLine(longToString(now + 3600000), longToString(now))
+    assert(inside.indexOf("token rotate") >= 0, "dentro: orienta o rotate")
+    assert(inside.indexOf(intToString((window / 3600000L) as Int) + "h") >= 0, "dentro: janela em horas legiveis")
+}
+
 test "credencial de conta: revogar por valor e por id curto, escopo por conta", "atok-unit" {
     var registry = Registry(accountTokenPath("revoke"))
     var mel = registry.createAccount("mel", "m@e.com", "segredo")
@@ -180,6 +216,46 @@ test "credencial de conta: HTTP lista sem valores, revoga e rotaciona", "atok" {
     var status = httpPostJson(controlPort, "/v1/tokens/rotation", "{}", fresh)
     assert(statusOf(status) == 200, "rotation 200")
     assert(bodyOf(status).indexOf("\"pending\":\"1\"") >= 0, "uma credencial valida")
+
+    // Aviso de expiracao proxima no FIO: a nova (TTL 24 h) cai dentro da
+    // janela (7 d) e o inventario traz o campo ADITIVO `expiring`; a sem TTL
+    // (rotate sem prazo) nao traz. Campo parte do corpo sem o valor — o kfc_
+    // nunca viaja (regra de privacidade do audit/worm, travada em
+    // worm-privacy); cliente antigo que le id/createdAt/expiresAt continua
+    // decodificando.
+    var rotatedForever = httpPostJson(controlPort, "/v1/tokens/rotate", "{}", fresh)
+    assert(statusOf(rotatedForever) == 200, "rotate sem ttl 200")
+    var forever = mapField(json.decode<Map<String, String>>(bodyOf(rotatedForever)), "token")
+    assert(fresh != forever, "valor diferente")
+    var listed2 = httpGetToken(controlPort, "/v1/tokens", fresh)
+    assert(statusOf(listed2) == 200, "lista as duas")
+    var freshId = shortTokenId(tokenHash(fresh))
+    var freshAt = bodyOf(listed2).indexOf(freshId)
+    assert(freshAt >= 0, "nova no inventario")
+    // O id e o ULTIMO campo do objeto (a serializacao ordena createdAt/
+    // expiresAt/expiring antes): ande para tras ate o "{" da entrada — a
+    // lista e plana (objetos sem aninhamento), entao o primeiro "}" depois
+    // do "{" e o fim da entrada certa.
+    var freshStart = freshAt
+    while (freshStart > 0 && bodyOf(listed2).charAt(freshStart) != 123) {
+        freshStart = freshStart - 1
+    }
+    assert(freshStart < freshAt, "inicio do objeto da nova achado")
+    var freshEnd = bodyOf(listed2).indexOf("}", freshStart)
+    assert(freshEnd > freshAt, "objeto da nova fecha")
+    var freshChunk = bodyOf(listed2).substring(freshStart, freshEnd + 1)
+    assert(freshChunk.indexOf("\"expiring\":\"true\"") >= 0, "nova (TTL 24h) marcada expiring")
+    assert(freshChunk.indexOf("kfc_") < 0, "fatia da nova nao vaza valor")
+    var foreverId = shortTokenId(tokenHash(forever))
+    var foreverAt = bodyOf(listed2).indexOf(foreverId)
+    assert(foreverAt >= 0, "sem-ttl no inventario")
+    var foreverStart = foreverAt
+    while (foreverStart > 0 && bodyOf(listed2).charAt(foreverStart) != 123) {
+        foreverStart = foreverStart - 1
+    }
+    var foreverEnd = bodyOf(listed2).indexOf("}", foreverStart)
+    var foreverChunk = bodyOf(listed2).substring(foreverStart, foreverEnd + 1)
+    assert(foreverChunk.indexOf("expiring") < 0, "sem TTL nao e marcada")
 
     // Auto-revogacao do `logout` POR ULTIMO (a sessao morre aqui): revogar
     // o proprio token da sessao pelo valor completo — e o que o logout faz

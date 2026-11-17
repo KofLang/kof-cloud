@@ -92,7 +92,7 @@ o run total imprime `57 passed, 0 failed`. Falha = nome do teste + assert
 | ranking de Edges (F14 s2) | `tests/edge_select_test.kf` | 5 |
 | porta do Edge sem wrap (F14 s2) | `tests/edge_select_test.kf` + `tests/webhook_test.kf` | +13 asserts |
 | carga explícita + migrate (F16 s1) | `tests/migrate_test.kf` | 5 |
-| credencial da conta com ciclo de vida (F19 s3) | `tests/account_token_test.kf` | 8 |
+| credencial da conta com ciclo de vida (F19 s3) | `tests/account_token_test.kf` | 9 |
 | health HTTP com prazo (F4) | `tests/health_test.kf` | 4 |
 | teto de resposta + cabeçalho + leitura (F14 s3 parcial) | `tests/relay_limit_test.kf` | 4 |
 | profundidade de fila por stream (F4) | `tests/queue_depth_test.kf` | 3 |
@@ -104,7 +104,7 @@ o run total imprime `57 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor, booleanas sem duplicação e posicional sobrando (CLI) | `tests/value_flags_test.kf` | 4 |
 
-Total: 400 testes. Ver `15-tests.md` para a matriz.
+Total: 401 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

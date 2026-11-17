@@ -1423,7 +1423,7 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   (antigas só caem depois do TTL; sem TTL nada é revogado em silêncio).
   CLI: `kof cloud token list|revoke|rotate|rotation`; o `rotate` grava a
   nova credencial na sessão local antes de imprimir. Prova:
-  `tests/account_token_test.kf` (8: TTL/poda/legado, revoke por valor e id
+  `tests/account_token_test.kf` (9: TTL/poda/legado, revoke por valor e id
   curto com escopo por conta, ambiguidade, overlap, HTTP fim a fim).
   **TTL longo (30 dias) não estourava por acaso:** `ttlHours * 3600000` era
   aritmética de `Int` (32 bits), que estoura acima de 596 h — `--ttl 720`
@@ -1435,7 +1435,7 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   credencial vazada de um login antigo vale para sempre. `POST
   /v1/tokens/prune` + `kof cloud token prune` mantêm apenas a da sessão atual
   e revogam o resto (escopo por conta; sem token → 401; idempotente). Prova:
-  `tests/account_token_test.kf` (8). PEM com 30 dias de antecedência ✅
+  `tests/account_token_test.kf` (9). PEM com 30 dias de antecedência ✅
   (`doctor --tls-cert`, Fase 9 s3, e `scan --tls-cert` no slice 2);
   kill-switch ✅ documentado (`docs/SECURITY.md` ## Contenção) e
   automatizado pelo `freeze` de um comando da Fase 17 slice 2.
