@@ -52,7 +52,7 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | vocabulario fechado do status (F5) | `tests/status_report_test.kf` | 2 |
 | backoff + drift de Edge | `tests/backoff_test.kf` | 4 |
 | registry | `tests/registry_test.kf` | 12 |
-| limites | `tests/limits_test.kf` | 7 |
+| limites + passo da varredura de credenciais | `tests/limits_test.kf` | 8 |
 | service token | `tests/service_token_test.kf` | 13 |
 | erros R6 | `tests/errors_test.kf` | 11 |
 | dominios (+ certificado x hostname) | `tests/domains_test.kf` | 12 |
@@ -80,7 +80,7 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | painel somente-leitura | `tests/panel_test.kf` | 3 |
 | rotacao de kfs_ (Fase 19 s3) | `tests/rotate_test.kf` | 6 |
 | `security.txt` + `SECURITY.md` (Fase 19 s1 parcial) | `tests/security_test.kf` | 3 |
-| incidentes (Fase 17 s1 + template pós-mortem s3) | `tests/incidents_test.kf` | 16 |
+| incidentes (Fase 17 s1 + template pós-mortem s3) | `tests/incidents_test.kf` | 17 |
 | contenção (Fase 17 s2) | `tests/freeze_test.kf` | 17 |
 | status page (Fase 17 s3 parcial) | `tests/status_page_test.kf` | 5 |
 | publish com allowlist pela CLI (F10 s3) | `tests/publish_allow_test.kf` | 4 |
@@ -104,7 +104,7 @@ o run total imprime `56 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor, booleanas sem duplicação e posicional sobrando (CLI) | `tests/value_flags_test.kf` | 4 |
 
-Total: 388 testes. Ver `15-tests.md` para a matriz.
+Total: 390 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

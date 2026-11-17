@@ -191,3 +191,14 @@ test "rate limit: a janela em ms vira SEGUNDOS para o stdlib", "ratelimit-unit" 
     assert(served == limitHttpRequests(), "construtor delega na fonte unica")
     assert(defaultState.checkHttpLimit(probeHost) == false, "cota do default esgota")
 }
+
+test "limits: passo da varredura periodica de credenciais com recuo seguro", "limits-expiry-sweep" {
+    // Fonte unica do laco do serve (`Commands.credentialExpirySweeper`): o
+    // comando passa `limitExpirySweepMs()` e o laco so dorme nesse valor.
+    // Recuo em fonte pura (familia `idleSweepMsFrom`): 0/negativo recaem no
+    // default porque `time.sleep(0)` giraria sem parar (busy-loop).
+    assert(expirySweepMsFrom(0) == 60000, "zero recai no default")
+    assert(expirySweepMsFrom(-1) == 60000, "negativo recai no default")
+    assert(expirySweepMsFrom(250) == 250, "positivo passa")
+    assert(limitExpirySweepMs() == 60000, "default travado em 60 s")
+}

@@ -1200,7 +1200,21 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   (`kofcloud.limits.massTokenExpiryThreshold/WindowMs`, recuo seguro).
   Prova: `incident-expiry` (puro: limiar, janela vencida, contas isoladas) e
   `incident-expiry-sweep` (varredura real: atribuição à conta certa, sem
-  misturar contas). **Pendente (deliberadamente):** pico de 429 por hostname
+  misturar contas).
+
+  **Implementado (varredura periódica):** o detector herdava a janela da
+  poda preguiçosa — numa conta ociosa ninguém valida e o vencimento passava
+  sem sinal. O `serve` agora roda um laço próprio
+  (`Commands.credentialExpirySweeper`, passo `kofcloud.limits.expirySweepMs`,
+  default 60 s com recuo seguro `expirySweepMsFrom`; para no stopFile da
+  plataforma) sobre o MESMO núcleo de poda (`Registry.sweepExpiredCredentials`
+  → `sweepServiceTokensExpired`, fonte única dos dois caminhos): `kfs_`
+  vencidas saem com a métrica e a sonda da conta dona, `kfc_` entra na poda
+  de sempre, nada vira "revoked". Prova: `incident-expiry-idle` (laco real
+  em processo: poda sem validação, mantém válidas, abre o incidente da dona,
+  idempotente, para no stopFile; mutação laco-sem-varrer quebra) e
+  `limits-expiry-sweep` (recuo seguro do passo). **Pendente
+  (deliberadamente):** pico de 429 por hostname
   — o rate limit já conta por hostname, mas abrir incidente por hostname
   violaria a regra de não ter cardinalidade por cliente.
 

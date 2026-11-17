@@ -620,3 +620,65 @@ test "incidente: suspensao em lote abre bulk_suspensions (WARN)", "incident-susp
     var ana = registry.createAccount("ana", "ana@e.com", "segredo")
     assert(bulkSuspensionIncident(registry, ana.id) == null, "outra conta intocada")
 }
+
+// Varredura PERIODICA (laco do serve): numa conta ociosa ninguem valida,
+// entao a poda preguicosa (`serviceByServiceToken`) nunca roda. O laco tem
+// que podar sem validacao, abrir o incidente da conta dona e parar no
+// stopFile da plataforma — o mesmo `credentialExpirySweeper` do comando.
+test "incidentes: varredura periodica poda credenciais ociosas e abre o incidente", "incident-expiry-idle" {
+    var registry = Registry(incidentsPath("expiryswl"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var ana = registry.createAccount("ana", "a@e.com", "segredo")
+    var melDev = registry.registerDevice(mel, "nb", "pk")
+    var anaDev = registry.registerDevice(ana, "nb", "pk")
+    var melSvc = registry.publishService(mel, melDev.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
+    var anaSvc = registry.publishService(ana, anaDev.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
+
+    // Vencidas construidas no passado (sem dormir TTL); hash so — o valor
+    // em claro nunca e persistido. mel tem 3 (fecha o limiar), ana 1.
+    var past = time.now() - 1000
+    var stale = time.now() - 1
+    registry.serviceTokens.add(ServiceToken(melSvc.id, mel.id, tokenHash("kfs_mel_1"), past, stale))
+    registry.serviceTokens.add(ServiceToken(melSvc.id, mel.id, tokenHash("kfs_mel_2"), past, stale))
+    registry.serviceTokens.add(ServiceToken(melSvc.id, mel.id, tokenHash("kfs_mel_3"), past, stale))
+    registry.serviceTokens.add(ServiceToken(anaSvc.id, ana.id, tokenHash("kfs_ana_1"), past, stale))
+    // Credenciais VALIDAS (kfs_ e kfc_) nao podem sair na varredura.
+    registry.serviceTokens.add(ServiceToken(melSvc.id, mel.id, tokenHash("kfs_mel_viva"), past, time.now() + 60000))
+    registry.tokens.add(TokenEntry(ana.id, tokenHash("kfc_viva"), past, time.now() + 60000))
+    registry.tokens.add(TokenEntry(ana.id, tokenHash("kfc_morta"), past, stale))
+
+    // O laco real, em processo, com intervalo curto (o comando passa
+    // `limitExpirySweepMs()`; aqui o valor vem como parametro).
+    var stop = "/tmp/kofcloud-inc-expiryswl-stop-" + crypto.randomHex(4) + ".txt"
+    File(stop).delete()
+    var loop = spawn { credentialExpirySweeper(registry, stop, 40) }
+    var tries = 0
+    while (registry.serviceTokens.size > 1 && tries < 100) {
+        time.sleep(20)
+        tries = tries + 1
+    }
+    assert(registry.serviceTokens.size == 1, "laco podou as vencidas e manteve a valida")
+    assert(registry.pruneExpiredAccountTokens() == 0, "kfc_ vencida ja saiu no laco")
+    assert(registry.tokens.size == 1, "kfc_ valida fica")
+
+    // O sinal chega na conta dona SEM nenhuma validacao (conta ociosa):
+    // mel tinha 3 vencidas na janela, ana 1.
+    var melIncidents = registry.incidentsForAccount(mel.id, false)
+    assert(melIncidents.size == 1, "laco abre o incidente da conta ociosa")
+    if (melIncidents.size == 1) {
+        assert(melIncidents.get(0).kind == incidentMassTokenExpiry(), "sinal certo")
+        assert(melIncidents.get(0).severity == "WARN", "WARN")
+        // Privacidade: nem credencial, nem servico, nem handle no resumo.
+        assert(melIncidents.get(0).summary.indexOf("kfs_") < 0, "sem credencial no resumo")
+        assert(melIncidents.get(0).summary.indexOf("site") < 0, "sem servico no resumo")
+        assert(melIncidents.get(0).summary.indexOf("mel") < 0, "sem handle no resumo")
+    }
+    assert(registry.incidentsForAccount(ana.id, false).size == 0, "uma vencida nao abre")
+    // Idempotente: segunda varredura nao acha nada nem duplica incidente.
+    assert(registry.sweepExpiredCredentials() == 0, "segunda varredura nao acha nada")
+    assert(registry.incidentsForAccount(mel.id, false).size == 1, "sem duplicar")
+
+    // O laco para no stopFile (mesma sentenca do serve).
+    writeTextTo(stop, "pare")
+    await loop
+}

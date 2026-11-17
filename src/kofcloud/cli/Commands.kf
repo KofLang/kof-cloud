@@ -2838,8 +2838,27 @@ Int cmdServe(List<String> args) {
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, tunnelSecret, platformStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, maxBytes, platformStop) }
+    var expiryTask = spawn { credentialExpirySweeper(registry, platformStop, limitExpirySweepMs()) }
     await controlTask
     return 0
+}
+
+// Laco da varredura periodica de credenciais vencidas (serve): a poda
+// preguicosa (`serviceByServiceToken`/`accountByToken`) so roda quando
+// alguem valida — conta ociosa acumula kfs_/kfc_ vencidos no estado sem
+// sinal ate la. O laco poda e alimenta a sonda de expiracao em massa sem
+// validacao, no passo de `limitExpirySweepMs()`. Mesma sentenca dos demais
+// lacos (para no stopFile da plataforma; o Kof nao tem relogio por task).
+void credentialExpirySweeper(Registry registry, String platformStop, Int intervalMs) {
+    var running = true
+    while (running) {
+        time.sleep(intervalMs)
+        if (File(platformStop).exists()) {
+            running = false
+        } else {
+            registry.sweepExpiredCredentials()
+        }
+    }
 }
 
 void appendLog(String message) {

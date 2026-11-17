@@ -214,10 +214,16 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   a menos. Contadores internos usam `Map<String, String>` porque
   `Map<String, Int>` como campo de classe quebra o verificador JVM
   (VerifyError medido; sem issue aberta no Kof ainda).
-* **A expiração de `kfc_` e `kfs_` é preguiçosa.** Credencial vencida só é
-  podada quando alguma validação passa por ela (`accountByToken` /
-  `serviceByServiceToken`). Numa conta ociosa, credenciais vencidas ficam no
-  estado até a próxima validação — não há varredura periódica. `logout`
+* **A expiração de `kfc_` e `kfs_` é imediata nas validações e periódica no
+  `serve`.** Credencial vencida é podada na hora quando alguma validação
+  passa por ela (`accountByToken` / `serviceByServiceToken`) E pelo laço
+  próprio do `serve` (`credentialExpirySweeper` → `sweepExpiredCredentials`,
+  `kofcloud.limits.expirySweepMs`, default 60 s — o mesmo núcleo de poda,
+  fonte única: `sweepServiceTokensExpired`), então conta ociosa não acumula
+  vencidas sem sinal. O laço é por processo (morre com o `serve`, sem
+  coordenação entre nós) e é mais um escritor concorrente do estado — mesma
+  aproximação do L3 (check-then-act sem lock, save com a mesma granularidade
+  dos demais caminhos). `logout`
   agora tenta auto-revogar a credencial da sessão no servidor antes de apagar
   o local (falha de rede/control fora do ar vira aviso explícito e a
   credencial sobrevive — o operador revoga com `kof cloud token revoke`).
@@ -249,14 +255,14 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   ou device REVOKED, cujo unfreeze já responde 404/409 sem ler a marca); se
   todas forem vivas, o teto cede — congelar NUNCA falha por limite de
   marcas, e apagar marca viva perderia o status anterior do unfreeze.
-* **A expiração de `kfs_` é preguiçosa — e o incidente também.** Credencial
-  vencida só é podada quando alguma validação de token passa por
-  `serviceByServiceToken` (o que acontece a cada request AUTHENTICATED no
-  Edge, mas não em conta ociosa). Numa conta sem tráfego, credenciais vencidas
-  acumulam no estado sem sinal até a próxima validação; o detector de
-  expiração em massa herda a mesma janela (não há varredura periódica no
-  control plane). Os incidentes são efêmeros no processo: reiniciar o control
-  plane zera as sondas (o incidente já aberto fica no arquivo de estado).
+* **O incidente de expiração em massa enxerga conta ociosa.** O detector
+  (`mass_token_expiry`) é alimentado pelos DOIS caminhos da mesma fonte —
+  a validação (`serviceByServiceToken`, a cada request AUTHENTICATED) e o
+  laço periódico do `serve` — então numa conta sem tráfego o sinal chega
+  mesmo assim (3 vencidas na janela abrem o incidente da conta dona, sem
+  token/serviço/handle no resumo). Os incidentes são efêmeros no processo:
+  reiniciar o control plane zera as sondas (o incidente já aberto fica no
+  arquivo de estado).
 * **A resposta do serviço local tem teto (`kofcloud.maxResponseBytes`, 16 MiB).**
   Acima dele o Edge responde `502 KCF115` e cancela o stream — antes o
   excedente era **cortado em silêncio** e o cliente recebia 200 com corpo

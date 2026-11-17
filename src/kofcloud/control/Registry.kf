@@ -1102,31 +1102,29 @@ class Registry {
         return token
     }
 
-    // Resolve o servico dono de um token de servico; null se invalido OU
-    // expirado. Expirado e podado na hora (preguicoso): nao acumula lixo e o
-    // proximo `list` ja nao mostra.
-    Service? serviceByServiceToken(String token) {
-        if (token.length == 0) {
-            return null
-        }
+    // Nucleo UNICO das varreduras de `kfs_` vencidas: poda, salva se algo
+    // saiu, conta a metrica e alimenta a sonda da conta dona (expiracao em
+    // massa, Fase 17 slice 1). Dois chamadores, uma regra: o caminho
+    // preguicoso (`serviceByServiceToken`, a cada validacao) e o laco
+    // periodico do `serve` (`sweepExpiredCredentials`) — numa conta ociosa
+    // ninguem valida, e o laco e quem da o sinal. `matchToken` e o kfs_
+    // procurado pela validacao (hash a hash, contra as VALIDAS); o laco
+    // passa "". Devolve o serviceId casado ("" se nenhum).
+    String sweepServiceTokensExpired(String matchToken) {
         var now = time.now()
         var kept = listOf<ServiceToken>()
-        // Guarda as vencidas (tipado) para atribuir por conta depois da poda.
-        // Mapa local nao serve: `mapOf()` sem tipo devolve `Object` no `get` e
-        // o verificador JVM recusa (VerifyError medido).
+        // Vencidas (somente tipado) para atribuir por conta depois da poda.
+        // Mapa local nao serve: `mapOf()` sem tipo devolve `Object` no `get`
+        // e o verificador JVM recusa (VerifyError medido).
         var expiredEntries = listOf<ServiceToken>()
-        var expiredAccounts = listOf<String>()
         var matchedServiceId = ""
         for (var entry in this.serviceTokens) {
             if (serviceTokenExpired(entry, now)) {
                 expiredEntries.add(entry)
-                if (expiredAccounts.contains(entry.accountId) == false) {
-                    expiredAccounts.add(entry.accountId)
-                }
                 continue
             }
             kept.add(entry)
-            if (matchedServiceId.length == 0 && tokenMatches(entry.tokenHash, token)) {
+            if (matchedServiceId.length == 0 && matchToken.length > 0 && tokenMatches(entry.tokenHash, matchToken)) {
                 matchedServiceId = entry.serviceId
             }
         }
@@ -1139,10 +1137,16 @@ class Registry {
             noteServiceTokenExpired()
             i = i + 1
         }
-        // Sinal de expiracao em massa (Fase 17 slice 1): cada varredura que
-        // podou credencial alimenta a sonda da CONTA dona — varias vencendo
-        // na janela e rotacao quebrada, nao rotina. Roda depois da poda para
-        // o incidente nunca atrasar a autenticacao que veio antes.
+        var expiredAccounts = listOf<String>()
+        for (var gone in expiredEntries) {
+            if (expiredAccounts.contains(gone.accountId) == false) {
+                expiredAccounts.add(gone.accountId)
+            }
+        }
+        // Cada varredura que podou credencial alimenta a sonda da CONTA
+        // dona — varias vencendo na janela e rotacao quebrada, nao rotina.
+        // Roda depois da poda para o incidente nunca atrasar a autenticacao
+        // que veio antes.
         for (var owner in expiredAccounts) {
             var tally = 0
             for (var gone in expiredEntries) {
@@ -1152,10 +1156,32 @@ class Registry {
             }
             this.detectMassTokenExpiry(owner, now, tally)
         }
-        if (matchedServiceId.length == 0) {
+        return matchedServiceId
+    }
+
+    // Resolve o servico dono de um token de servico; null se invalido OU
+    // expirado. Expirado e podado na hora (preguicoso): nao acumula lixo e o
+    // proximo `list` ja nao mostra.
+    Service? serviceByServiceToken(String token) {
+        if (token.length == 0) {
             return null
         }
-        return this.serviceById(matchedServiceId)
+        var matched = this.sweepServiceTokensExpired(token)
+        if (matched.length == 0) {
+            return null
+        }
+        return this.serviceById(matched)
+    }
+
+    // Varredura periodica do `serve` (Commands.credentialExpirySweeper):
+    // vencidas saem do estado mesmo sem nenhuma validacao passando por
+    // elas, e a sonda de expiracao em massa agora enxerga conta ociosa.
+    // `kfc_` vencidas entram na mesma poda de sempre (a funcao ja so salva
+    // quando remove). Devolve quantas credenciais (kfs_ + kfc_) sairam.
+    Int sweepExpiredCredentials() {
+        var before = this.serviceTokens.size
+        this.sweepServiceTokensExpired("")
+        return (before - this.serviceTokens.size) + this.pruneExpiredAccountTokens()
     }
 
     // Inventario das credenciais de UM servico (para `service token list`).

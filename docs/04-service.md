@@ -113,8 +113,10 @@ kof cloud service token-revoke secret <kfs_…>   # revoga UMA (vazou, rotacao)
 
 Detalhes honestos: sem `--ttl`, a credencial vale para sempre; com
 `--ttl <horas>`, expirado vira `401` (como revogado) e some do inventário
-na próxima validação (poda preguiçosa, contada em
-`kofcloud_control_service_tokens_expired_total`). O inventário nunca
+na próxima validação (poda imediata) **e** na varredura periódica do
+`serve` (laço próprio, `kofcloud.limits.expirySweepMs`, default 60 s —
+conta ociosa também poda, sem esperar tráfego), contada em
+`kofcloud_control_service_tokens_expired_total`. O inventário nunca
 devolve o valor — só id curto (8 hex do hash) + emissão (+ expiração).
 Revogar credencial inexistente/alheia devolve o mesmo `404` opaco de
 recurso inexistente (sem oráculo entre contas).

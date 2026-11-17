@@ -171,6 +171,23 @@ Int limitIdleSweepMs() {
     return idleSweepMsFrom(config.int("kofcloud.limits.idleSweepMs", 5000))
 }
 
+// Passo da varredura periodica de credenciais vencidas (ms): o serve
+// reaproveita SOZINHO o que a poda preguicosa deixou para tras (conta
+// ociosa acumula kfs_/kfc_ vencidos sem sinal ate alguem validar).
+//
+// Recuo em fonte pura (familia `idleSweepMsFrom`): com 0/negativo o laco
+// viraria `time.sleep(0)` e giraria sem parar. Zerado recai no default.
+Int expirySweepMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 60000
+    }
+    return configured
+}
+
+Int limitExpirySweepMs() {
+    return expirySweepMsFrom(config.int("kofcloud.limits.expirySweepMs", 60000))
+}
+
 // Intervalo do health check local do Agent (ms): a cada passo o Agent
 // reconecta TCP nos servicos e reporta mudanca ao Edge; o refresher da
 // tabela re-busca os servicos a cada 6 passos. Fonte unica para que o
