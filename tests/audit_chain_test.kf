@@ -512,3 +512,33 @@ test "worm: Registry poda o espelho pelo teto e o anel fica intacto", "worm" {
     assert(verified.brokenAt == "", "podado integra (raiz desconhecida)")
     assert(verified.events == 1, "um evento no espelho: " + intToString(verified.events))
 }
+
+test "worm: o espelho nunca carrega segredo (sem kfs_/kfc_/password no jsonl)", "worm-privacy" {
+    // Medido: o espelho WORM (`<estado>.worm.jsonl`) cresce para sempre e o
+    // `audit --sbom`/`scan` do CI podem acabar lendo o diretorio do estado.
+    // Se algum dia um `kfs_`/`kfc_`/password escapasse para o evento, o
+    // segredo ficaria preservado em claro num arquivo append-only — o
+    // contrario do proposito (o anel guarda so metadados). Trava que le a
+    // SERIE de eventos reais e proibe padrao de segredo em qualquer campo.
+    var registry = Registry(chainPath("wormpriv"))
+    var account = registry.createAccount("mel", "mel@e.com", "segredo-123")
+    var token = registry.issueToken(account.id)
+    var device = registry.registerDevice(account, "nb", "pk")
+    var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    // Emissao real de kfs_: o valor em claro existe aqui, mas nao pode
+    // vazar para o espelho.
+    var kfs = registry.issueServiceToken(account.id, service.id)
+    assert(kfs.startsWith("kfs_"), "kfs emitido")
+    // E uma revocacao com o valor completo (o pior caso de vazamento).
+    assert(registry.revokeServiceToken(account.id, service.id, kfs), "kfs revogado")
+
+    var mirrorPath = registry.path + ".worm.jsonl"
+    var mirror = readTextOr(mirrorPath, "")
+    assert(mirror.length > 0, "espelho existe e tem eventos")
+    assert(mirror.indexOf("kfs_") < 0, "sem kfs_ no espelho")
+    assert(mirror.indexOf("kfc_") < 0, "sem kfc_ no espelho")
+    assert(mirror.indexOf("segredo-123") < 0, "sem senha no espelho")
+    assert(mirror.indexOf(kfs) < 0, "sem o valor do kfs no espelho")
+    assert(mirror.indexOf(token) < 0, "sem o valor do kfc no espelho")
+
+}
