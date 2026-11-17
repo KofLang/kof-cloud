@@ -28,7 +28,7 @@
 ```bash
 export PATH=/home/mel/tools/jdk-25/bin:$PATH
 KOF=/home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar
-java -jar $KOF test --target jvm --timeout 150   # 56 suites, 0 falhas
+java -jar $KOF test --target jvm --timeout 150   # 57 suites, 0 falhas
 java -jar $KOF build --output /tmp/kofcloud-check # compila sem erro
 ```
 

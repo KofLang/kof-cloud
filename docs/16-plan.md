@@ -675,7 +675,12 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   dois arquivos ficam fora por desenho; sanidade exige ≥40 linhas
   conferidas). Cells são parseadas com `indexOf`, nunca `split("|")` — o
   `split` do stdlib trata o argumento como regex e `|` divide por caractere
-  (medido; mesma lição do separador `;` em `Registry.expiryProbes`).
+  (medido; mesma lição do separador `;` em `Registry.expiryProbes`). A prosa
+  fora da tabela viajava defasada do mesmo jeito: README e STATUS diziam
+  "56 suites" com a suite real em 57. Corrigido e a trava derivou os números
+  em prosa AO VIVO — `Total: N testes` = soma real dos arquivos (não o
+  declarado na tabela), `# N suites` do STATUS e `(N suites)` do README =
+  linhas reconhecidas; sanidade exige suites > 50.
 * **Slice 2b — timeout de upstream ✅.** `kofcloud.limits.tunnelIdleMs`
   (default 120 s) limita a espera de resposta. `receive` bloqueia e o Kof não
   tem recv com prazo, então o mecanismo é o mesmo do sweeper de idle: uma task

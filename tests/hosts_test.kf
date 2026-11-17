@@ -213,6 +213,7 @@ test "text: contagem por suite no STATUS bate com os arquivos", "status-counts" 
     var status = readTextOr("docs/STATUS.md", "")
     assert(status.length > 0, "STATUS existe")
     var checked = 0
+    var sumReal = 0
     for (var line in status.split("\n")) {
         if (line.startsWith("|") == false || line.startsWith("| `tests/")) {
             continue
@@ -242,10 +243,31 @@ test "text: contagem por suite no STATUS bate com os arquivos", "status-counts" 
         var real = countTestDeclarations(path)
         assert(real == declared, path + " declara " + intToString(declared) + " no STATUS mas tem " + intToString(real) + " testes")
         checked = checked + 1
+        sumReal = sumReal + real
     }
     // Sanidade da propria trava: se o formato da tabela mudar e nada casar,
     // ela nao pode passar em silencio.
     assert(checked >= 40, "tabela do STATUS reconhecida; linhas conferidas=" + intToString(checked))
+    // Total e contadores de suites em PROSA, derivados ao vivo — nunca
+    // hardcoded. A mesma mentira silenciosa que a tabela punia existia fora
+    // dela: README e STATUS diziam "56 suites" com a suite real em 57 (drift
+    // silencioso do contador, medido neste run). `suites` = linhas
+    // reconhecidas acima (uma por arquivo de teste); o total = soma dos
+    // testes REAIS dos arquivos listados (nunca o numero declarado na tabela).
+    // Sanidade: uma linha em prosa fora do formato esperado nao pode passar.
+    var suites = checked
+    var totalIdx = status.indexOf("Total: ")
+    assert(totalIdx >= 0, "STATUS declara o total")
+    var testesIdx = status.indexOf(" testes", totalIdx)
+    assert(testesIdx > totalIdx + 7, "formato do total no STATUS")
+    var declaredTotal = parseIntBounded(status.substring(totalIdx + 7, testesIdx), -1, 1000000)
+    assert(declaredTotal == sumReal, "STATUS declara Total: " + intToString(declaredTotal) + " mas os arquivos somam " + intToString(sumReal))
+    var suiteMark = "# " + intToString(suites) + " suites"
+    assert(status.indexOf(suiteMark) >= 0, "STATUS cita " + suiteMark)
+    var readme = readTextOr("README.md", "")
+    var readmeMark = "(" + intToString(suites) + " suites)"
+    assert(readme.indexOf(readmeMark) >= 0, "README cita " + intToString(suites) + " suites")
+    assert(suites > 50, "sanidade da trava de suites=" + intToString(suites))
 }
 
 test "text: tailLines devolve as ultimas linhas", "logs-tail" {
