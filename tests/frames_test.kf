@@ -44,6 +44,13 @@ test "frames: encodeChunks fatia e recompoe", "frames" {
     // numero de chamadas por linha, nunca a corretude. O relay local
     // (16384, socket do servico) fica de fora de proposito.
     assert(receiveChunkBytes() == 8192, "bloco de leitura 8 KiB")
+    // Recuo em fonte pura: o bloco alimenta os 7 `conn.receive(n)` do fio.
+    // Com 0/negativo o comportamento do receive com teto nao-positivo nao e
+    // contrato do runtime — e a LEITURA DO TUNEL inteira que depende dele.
+    // Zerado recai no default; positivo passa.
+    assert(receiveChunkBytesFrom(0) == 8192, "bloco zero recai no default")
+    assert(receiveChunkBytesFrom(-1) == 8192, "bloco negativo recai no default")
+    assert(receiveChunkBytesFrom(16384) == 16384, "bloco positivo passa")
 
     // 1.5 MiB = 2 chunks (1 MiB + 0.5 MiB). Maior que isso e o proprio
     // bytesToString (O(n^2), ver 17-limitations) domina o tempo do teste.

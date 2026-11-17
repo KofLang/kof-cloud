@@ -586,8 +586,20 @@ Int limitHealthResponseHeadBytes() {
 // exigiria caçar os 6 literais `8192` espalhados. Fora do alcance de
 // proposito: o `local.receive(16384)` do relay (socket do servico local,
 // nao o fio) continua proprio — bloco maior ali favorece resposta local.
+//
+// Recuo em fonte pura: o bloco alimenta 7 `conn.receive(n)` do fio (tunel,
+// HTTP publico e sonda de health). Com 0/negativo o comportamento do
+// `receive` com teto nao-positivo nao e contrato do runtime — e a leitura
+// do tunel inteiro que depende dele. Zerado recai no default.
+Int receiveChunkBytesFrom(Int configured) {
+    if (configured <= 0) {
+        return 8192
+    }
+    return configured
+}
+
 Int receiveChunkBytes() {
-    return config.int("kofcloud.limits.receiveChunkBytes", 8192)
+    return receiveChunkBytesFrom(config.int("kofcloud.limits.receiveChunkBytes", 8192))
 }
 
 // Passo do polling do arquivo-sentinela no Edge (ms): o `serve` nao tem
