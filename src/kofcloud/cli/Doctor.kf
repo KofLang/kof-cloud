@@ -5,6 +5,7 @@ import kofcloud.cli.Deploy
 import kofcloud.cli.Local
 import kofcloud.model.Errors
 import kofcloud.model.Device
+import kofcloud.util.Limits
 import kofcloud.util.Text
 import kofcloud.store.Store
 
@@ -88,6 +89,58 @@ String doctorAuditLine(String verifyRaw, String fetchError) {
         return doctorOkLine("auditoria integra (" + events + " eventos na cadeia" + mirror + ")")
     }
     return doctorFailLine("auditoria", "cadeia quebrada no evento " + mapField(fields, "brokenAt") + " de " + events + " — alguem alterou ou removeu um evento da trilha; investigue antes de confiar nela (detalhes: kof cloud audit --verify)")
+}
+
+// Linha da camada da credencial da conta a partir do corpo de /v1/tokens ja
+// buscado (ou do erro da busca): pura, sem rede nem HOME — testavel sem
+// control plane (mesmo padrao de doctorAuditLine).
+//
+// O doctor autentica COM o kfc_ e era o unico ativo sem camada propria — a
+// sessao podia morrer em dias com diagnostico todo verde. Aqui o doctor le o
+// MESMO sinal do fio que o `token list` (campo aditivo `expiring`, fonte
+// unica `nearAccountTokenExpiry` no control plane): nunca re-deriva com
+// relogio proprio. Leitura por substring e honesta aqui porque o fio e um
+// vetor plano de objetos planos e o sinal e uma chave literal com valor
+// literal; evita `json.decode<List<Map<...>>>`, que a stdlib nao suporta
+// (JSN004: colecoes aninhadas — descoberto ao compilar esta camada). Mesma
+// decisao do PEM (30 dias): expira em breve = FALHA com a acao — e a janela
+// citada vem do mesmo Limits do aviso do CLI. Contagem por ocorrencia do
+// sinal; o valor do kfc_ nunca aparece (so o contador).
+String doctorAccountTokenLine(String tokensRaw, String fetchError) {
+    if (fetchError.length > 0) {
+        return doctorFailLine("credencial", "inventario indisponivel (" + fetchError + ")")
+    }
+    var expiring = countTokenExpiring(tokensRaw)
+    if (expiring < 0) {
+        return doctorFailLine("credencial", "resposta inesperada de /v1/tokens")
+    }
+    if (expiring > 0) {
+        var hours = intToString((limitTokenExpiryWarnMs() / 3600000L) as Int)
+        return doctorFailLine("credencial", intToString(expiring) + " credencial(is) expiram em menos de " + hours + "h — rode: kof cloud token rotate --ttl <horas>")
+    }
+    return doctorOkLine("credencial da conta (sem expiracao proxima)")
+}
+
+// Contador do sinal `expiring` no corpo de /v1/tokens (vetor plano de
+// objetos planos, chave e valor literais): -1 quando o corpo nao parece uma
+// lista JSON. Pura. O `"false"` nao casa com `"expiring":"true"` porque o
+// prefixo inclui as aspas de abertura da chave — `x"expiring":"true"` nao
+// ocorre dentro de `"expiring":"false"`.
+Int countTokenExpiring(String tokensRaw) {
+    var trimmed = tokensRaw.trim()
+    if (trimmed.startsWith("[") == false) {
+        return -1
+    }
+    var count = 0
+    var rest = tokensRaw
+    var mark = "\"expiring\":\"true\""
+    var at = rest.indexOf(mark)
+    while (at >= 0) {
+        count = count + 1
+        rest = rest.substring(at + mark.length, rest.length)
+        at = rest.indexOf(mark)
+    }
+    return count
 }
 
 // Nota do espelho para a linha ok da auditoria: "" quando integra,
@@ -199,6 +252,24 @@ DoctorReport doctorCheckWith(String manifestPath, String tlsCertPath) {
         return DoctorReport(false, lines)
     }
     lines.add(doctorOkLine("control plane (" + session.controlUrl + ")"))
+
+    // 2a. Ciclo de vida da credencial da conta (Fase 19): o doctor autentica
+    // COM o kfc_ mas esta era a unica camada sem olhar para ele — a sessao
+    // podia morrer em dias com diagnostico todo verde. A decisao vive em
+    // doctorAccountTokenLine (pura, com teste); aqui so busca (o endpoint
+    // existe no control plane atual; num antigo a camada reporta
+    // "indisponivel", nao inventa ok).
+    var tokenLine = ""
+    try {
+        var tokensRaw = requireOk(http.get(session.controlUrl + "/v1/tokens", authHeader(session.token)))
+        tokenLine = doctorAccountTokenLine(tokensRaw, "")
+    } catch (String e) {
+        tokenLine = doctorAccountTokenLine("", e)
+    }
+    lines.add(tokenLine)
+    if (tokenLine.startsWith("FALHA")) {
+        failed = true
+    }
 
     // 3. Dispositivo conhecido pelo control plane.
     var devices = listOf<Device>()

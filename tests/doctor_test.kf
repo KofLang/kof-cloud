@@ -395,3 +395,60 @@ test "doctor: camada da auditoria contra o endpoint real", "doctor-audit" {
     assert(after.indexOf("espelho comprometido") >= 0, "nomeia o espelho")
     assert(after.indexOf("parse") >= 0, "diz o indice de parse")
 }
+
+test "doctor: camada da credencial da conta decide sem rede nem HOME", "doctor-cred" {
+    // Pura, sem rede nem HOME (precedente: doctorAuditLine): o doctor le o
+    // MESMO sinal do fio que o `token list` (campo aditivo `expiring`,
+    // fonte unica `nearAccountTokenExpiry` no control plane) — nunca
+    // re-deriva com relogio proprio. Expira em breve e FALHA com a acao
+    // (mesmo padrao do PEM a 30 dias); a janela citada vem do mesmo Limits
+    // do aviso do CLI, derivada — nao copiada.
+    assert(doctorAccountTokenLine("", "boom").indexOf("indisponivel") >= 0, "busca falha: indisponivel")
+    assert(doctorAccountTokenLine("lixo {", "").indexOf("inesperada") >= 0, "resposta ilegivel")
+    var okLine = doctorAccountTokenLine("[{\"id\":\"a1\",\"createdAt\":\"1\"},{\"id\":\"b2\",\"createdAt\":\"1\",\"expiresAt\":\"9\"}]", "")
+    assert(okLine.startsWith("ok"), "sem expiring: ok: " + okLine)
+    assert(okLine.indexOf("kfc_") < 0, "linha ok nao vaza valor")
+    var hours = intToString((limitTokenExpiryWarnMs() / 3600000L) as Int)
+    var warn = doctorAccountTokenLine("[{\"id\":\"a1\",\"createdAt\":\"1\",\"expiresAt\":\"2\",\"expiring\":\"true\"}]", "")
+    assert(warn.startsWith("FALHA"), "expirando: FALHA: " + warn)
+    assert(warn.indexOf("token rotate") >= 0, "orienta o rotate: " + warn)
+    assert(warn.indexOf(hours + "h") >= 0, "janela derivada da fonte unica: " + warn)
+    assert(warn.indexOf("kfc_") < 0, "FALHA nao vaza valor")
+    var two = doctorAccountTokenLine("[{\"id\":\"a\",\"createdAt\":\"1\",\"expiring\":\"true\"},{\"id\":\"b\",\"createdAt\":\"1\",\"expiring\":\"true\"}]", "")
+    assert(two.indexOf("2 credencial") >= 0, "conta as duas: " + two)
+    var mixed = doctorAccountTokenLine("[{\"id\":\"a\",\"createdAt\":\"1\"},{\"id\":\"b\",\"createdAt\":\"1\",\"expiresAt\":\"2\",\"expiring\":\"true\"}]", "")
+    assert(mixed.startsWith("FALHA"), "uma expirando basta: " + mixed)
+    assert(mixed.indexOf("1 credencial") >= 0, "conta so a expirando: " + mixed)
+    assert(doctorAccountTokenLine("[]", "").startsWith("ok"), "lista vazia nao inventa FALHA")
+    var forever = doctorAccountTokenLine("[{\"id\":\"a\",\"createdAt\":\"1\",\"expiresAt\":\"2524608000000\"}]", "")
+    assert(forever.startsWith("ok"), "longa fora da janela segue ok: " + forever)
+}
+
+test "doctor: camada da credencial contra o endpoint real", "doctor-cred" {
+    // Fio real (precedente: doctor-audit e2e): rotaciona com TTL curto para
+    // a nova credencial cair na janela e a camada acusar — sem isso, seria
+    // so teste de string. A conta antiga do teste (sem TTL) segue ok.
+    var controlPort = 19965
+    var registry = Registry("/tmp/kofcloud-doctor-cred-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    assert(statusOf(httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pubkey\"}", accountToken)) == 200, "device criado")
+    var longList = bodyOf(httpGetToken(controlPort, "/v1/tokens", accountToken))
+    assert(countTokenExpiring(longList) == 0, "sem TTL: nenhum sinal: " + longList)
+    assert(doctorAccountTokenLine(longList, "").startsWith("ok"), "sem TTL: ok")
+
+    var rotated = httpPostJson(controlPort, "/v1/tokens/rotate", "{\"ttlHours\":\"24\"}", accountToken)
+    assert(statusOf(rotated) == 200, "rotate 200")
+    var fresh = mapField(json.decode<Map<String, String>>(bodyOf(rotated)), "token")
+    var listed = bodyOf(httpGetToken(controlPort, "/v1/tokens", fresh))
+    // O fio real carrega o sinal na entrada nova (TTL 24h < janela de 7
+    // dias), mas nao na antiga (sem TTL): a camada conta exatamente uma.
+    assert(countTokenExpiring(listed) == 1, "uma expirando no fio real: " + listed)
+    var line = doctorAccountTokenLine(listed, "")
+    assert(line.startsWith("FALHA"), "fio real com TTL curto: FALHA: " + line)
+    assert(line.indexOf("1 credencial") >= 0, "conta so a nova: " + line)
+}
