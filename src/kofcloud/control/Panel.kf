@@ -89,7 +89,7 @@ footer{padding:16px 24px;color:#5b606a;font-size:12px}
   <button onclick=\"acao('domain-verify')\">Verificar DNS</button>
   <button class=\"danger\" onclick=\"acao('domain-remove')\">Remover</button></div></section>
 <section><h2>Diagnostico</h2>
-  <div class=\"row\"><button onclick=\"diagnostico()\">Rodar</button><span class=\"muted\">mesmas camadas do <code>doctor</code> que a pagina enxerga pela API: dispositivo, tunel, auditoria</span></div>
+  <div class=\"row\"><button onclick=\"diagnostico()\">Rodar</button><span class=\"muted\">mesmas camadas do <code>doctor</code> que a pagina enxerga pela API: credencial da conta, dispositivo, tunel, auditoria</span></div>
   <p class=\"muted\">O que depende da sua maquina (portas locais, DNS da sua rede) segue no <code>kof cloud doctor</code>.</p>
   <div id=\"diag\"></div></section>
 </main>
@@ -363,15 +363,22 @@ function carregarListas(){
   });
 }
 // Diagnostico da conta (primeiro passo do onboarding, Fase 12 s3): as
-// camadas do doctor que a pagina enxerga pela API publica — ciclo de vida
-// do dispositivo, tunel confirmado pelo Edge e cadeia de auditoria — com o
-// mesmo vocabulario ok/FALHA do CLI. Busca sozinha (nao depende de Carregar)
-// e nao inventa camada de maquina local: isso segue no kof cloud doctor.
+// camadas do doctor que a pagina enxerga pela API publica — credencial da
+// conta, ciclo de vida do dispositivo, tunel confirmado pelo Edge e cadeia
+// de auditoria — com o mesmo vocabulario ok/FALHA do CLI. Busca sozinha (nao
+// depende de Carregar) e nao inventa camada de maquina local: isso segue no
+// kof cloud doctor. A credencial julga o MESMO sinal do fio que o doctor e o
+// token list (campo aditivo expiring do /v1/tokens; inventario sem valores,
+// so contagem) — FALHA com o rotate, igual ao doctor.
 function diagnostico(){
-  Promise.all([api('/v1/devices'), api('/v1/presence'), api('/v1/audit/verify')]).then(function(r){
-    var devs=r[0], online=r[1], aud=r[2];
+  Promise.all([api('/v1/devices'), api('/v1/presence'), api('/v1/audit/verify'), api('/v1/tokens')]).then(function(r){
+    var devs=r[0], online=r[1], aud=r[2], toks=r[3];
     STATE.devs = devs;
     var linhas = [];
+    var expirando = 0;
+    toks.forEach(function(t){ if(t.expiring === 'true'){ expirando = expirando + 1; } });
+    if(expirando > 0){ linhas.push(['FALHA', 'credencial da conta: ' + expirando + ' expira(m) dentro da janela — rode: kof cloud token rotate --ttl <horas>']); }
+    else { linhas.push(['ok', 'credencial da conta (sem expiracao proxima)']); }
     devs.forEach(function(d){
       var st = d.status || '';
       if(st === 'REVOKED'){ linhas.push(['FALHA', 'dispositivo ' + d.name + ': revogado — registre de novo: kof cloud login --device ' + d.name]); }

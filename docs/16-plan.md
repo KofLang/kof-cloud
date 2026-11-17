@@ -873,9 +873,16 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   (`/v1/audit/verify`: cadeia quebrada e espelho comprometido = FALHA,
   integra = ok com contagem de eventos) — mesmo vocabulário ok/FALHA da
   CLI. Limite honesto na página: o que depende da máquina do usuário
-  (portas locais, DNS da sua rede) segue no `kof cloud doctor`. Prova:
-  `tests/panel_actions_test.kf` (trava do HTML + e2e das três rotas no
-  estado que o painel renderiza; mutação da rota de auditoria quebra).
+  (portas locais, DNS da sua rede) segue no `kof cloud doctor`. **Quarta
+  camada (credencial da conta): o Diagnóstico julga o MESMO sinal do fio
+  que o `doctor` e o `token list` (campo aditivo `expiring` do `/v1/tokens`,
+  inventário sem valores — só a contagem vira texto, nunca o `kfc_`) e vira
+  FALHA com `token rotate --ttl` antes de a sessão morrer em dias; sem TTL,
+  nenhuma entrada marca e a camada é ok.** Prova:
+  `tests/panel_actions_test.kf` (trava do HTML + e2e das quatro rotas no
+  estado que o painel renderiza, incluindo rotate com TTL 24h que marca só
+  a entrada nova; mutação da rota de auditoria quebra, mutação que tira o
+  `/v1/tokens` do `diagnostico()` quebra).
 
   **Segundo passo ✅ (banner do próximo passo).** O painel agora aponta o
   que falta na conta, derivado do que a página JÁ buscou (devices e

@@ -306,18 +306,25 @@ test "painel: secao Diagnostico usa as camadas do doctor pela API (F12 s3)", "pa
     // Primeiro passo do onboarding guiado (slice 3): o diagnostico embutido
     // — as camadas do doctor que a pagina enxerga pela API publica (ciclo
     // de vida do dispositivo, tunel confirmado pelo Edge, cadeia de
-    // auditoria), no vocabulario ok/FALHA da CLI. Sem endpoint novo: as
-    // mesmas rotas publicas que o doctor consulta.
+    // auditoria, mais a credencial da conta), no vocabulario ok/FALHA da
+    // CLI. Sem endpoint novo: as mesmas rotas publicas que o doctor
+    // consulta. A credencial julga o MESMO sinal do fio que o doctor e o
+    // token list (campo aditivo expiring do /v1/tokens) — nunca relogio
+    // proprio, nunca o valor.
     var html = panelHtml()
     assert(html.indexOf("Diagnostico") >= 0, "secao existe")
     assert(html.indexOf("onclick=\"diagnostico()\"") >= 0, "botao roda o diagnostico")
     assert(html.indexOf("/v1/devices'), api('/v1/presence'), api('/v1/audit/verify')") >= 0, "compoe as tres camadas pela API")
+    assert(html.indexOf("api('/v1/audit/verify'), api('/v1/tokens')") >= 0, "quarta camada: le o inventario da credencial pela API")
+    assert(html.indexOf("t.expiring === 'true'") >= 0, "julga o sinal do fio, nao o valor")
+    assert(html.indexOf("credencial da conta") >= 0, "camada nomeada no texto")
     assert(html.indexOf("kof cloud doctor") >= 0, "limite honesto: maquina local segue no doctor")
     // Vocabulario igual ao do doctor: FALHA com orientacao, ok confirma.
     assert(html.indexOf("sem sessao no Edge") >= 0, "tunel orienta o connect")
     assert(html.indexOf("device unsuspend") >= 0, "suspenso orienta o unsuspend")
     assert(html.indexOf("cadeia quebrada") >= 0, "cadeia quebrada e FALHA")
     assert(html.indexOf("espelho comprometido") >= 0, "espelho comprometido e FALHA")
+    assert(html.indexOf("token rotate") >= 0, "credencial expirando orienta o rotate")
     // Seguranca/regras do painel preservadas em todo o incremento: nenhum
     // token embutido, nada persistido, vocabulario velho fora.
     assert(html.indexOf("kfc_") < 0, "sem token no HTML")
@@ -428,8 +435,8 @@ test "painel s2: registrar device funciona pela rota e a maquina adota", "panel-
 
 test "painel: diagnostico le as rotas que o doctor consulta (F12 s3)", "panel-actions" {
     // O diagnostico() do painel compoe /v1/devices + /v1/presence +
-    // /v1/audit/verify com o token da aba. O e2e prova que as tres
-    // respondem no estado que o painel renderiza (incluindo o limite
+    // /v1/audit/verify + /v1/tokens com o token da aba. O e2e prova que as
+    // quatro respondem no estado que o painel renderiza (incluindo o limite
     // honesto: conta recem-criada tem cadeia integra e tunel ausente).
     var controlPort = 19936
     var registry = Registry("/tmp/kofcloud-pa6-" + crypto.randomHex(4) + ".json")
@@ -461,10 +468,24 @@ test "painel: diagnostico le as rotas que o doctor consulta (F12 s3)", "panel-ac
     var listed = httpGetToken(controlPort, "/v1/devices", token)
     assert(bodyOf(listed).indexOf("\"status\":\"ACTIVE\"") >= 0, "camada de dispositivo legivel")
 
-    // E a pagina servida expoe a secao e os tres endpoints.
+    // Quarta camada (credencial da conta): sem TTL nenhum sinal no fio;
+    // apos o rotate com TTL, o inventario marca SO a entrada nova (a da
+    // sessao segue sem expiracao) e segue sem valores — o mesmo estado que
+    // o painel julga para renderizar FALHA com o rotate.
+    var semTtl = bodyOf(httpGetToken(controlPort, "/v1/tokens", token))
+    assert(semTtl.indexOf("expiring") < 0, "sem TTL: nenhum sinal")
+    var rotated = httpPostJson(controlPort, "/v1/tokens/rotate", "{\"ttlHours\":\"24\"}", token)
+    assert(statusOf(rotated) == 200, "rotate 200")
+    var fresh = mapField(json.decode<Map<String, String>>(bodyOf(rotated)), "token")
+    var inventario = bodyOf(httpGetToken(controlPort, "/v1/tokens", fresh))
+    assert(inventario.indexOf("\"expiring\":\"true\"") >= 0, "fio marca a nova com TTL")
+    assert(inventario.indexOf("kfc_") < 0, "inventario segue sem valores")
+
+    // E a pagina servida expoe a secao e os quatro endpoints.
     var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
     assert(bodyOf(page).indexOf("id=\"diag\"") >= 0, "secao no ar")
     assert(bodyOf(page).indexOf("/v1/audit/verify") >= 0, "usa a rota do doctor")
+    assert(bodyOf(page).indexOf("/v1/tokens") >= 0, "usa a rota da credencial")
 }
 
 test "painel: banner de onboarding acompanha o estado real da conta (F12 s3)", "panel-actions" {
