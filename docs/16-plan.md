@@ -268,7 +268,8 @@ mandando blocos de `sendChunkBytes` enquanto o receptor recusaria linha
 acima de 4096, quebrando o relay no meio em silêncio). Prova:
 `tests/frames_test.kf` (4 testes: fatiamento +
 recomposição byte-idêntica, codec fail-closed, HELLO gigante fecha sem
-WELCOME, 1.5 MiB fim a fim).
+WELCOME, 1.5 MiB fim a fim — mais os asserts do recuo do bloco de leitura
+na mesma suite).
 
 **Estado (idle timeout): ✅ implementado.** `lastActivityMs` por sessão
 (renovado só por frame útil — PING/PONG não contam) + varredura a cada 5 s

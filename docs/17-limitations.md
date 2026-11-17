@@ -35,16 +35,21 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 * CDN, edge distribuído, relay regional.
 * Domínio próprio: registro + verificação + rota (Fase 6 slice 1) ✅; sem
   TLS por SNI e sem automação por provedor (Cloudflare/Route53).
-* Deploy (`kof cloud deploy`).
+* Deploy com **artefato transferível** — o deploy declarativo (`kof cloud
+  deploy`) existe (Fase 7), mas o build roda na máquina do usuário e só o
+  publish atravessa a rede.
 * Daemon: **artefato por SO gerado** (systemd/launchd/Windows, Fase 13 s1) e
   ativação sempre manual; o core não depende deles. Tray/estado visível e
   auto-update assinado seguem pendentes (slices 2 e 3).
-* Auto-update do Agent com verificação de assinatura. (A rotação de `kfs_`
-  por serviço existe — `service rotate` com overlap — mas `rotate --all`,
-  rotação programada de PEM e kill-switch global seguem pendentes.)
-* Painel web **completo** — só o slice 1 existe (somente leitura via
-  `serve --panel`); criar/alterar pelo navegador (slice 2) e onboarding
-  guiado (slice 3) seguem pendentes.
+* Auto-update do Agent com verificação de assinatura. (Rotação de `kfs_`
+  existe — `service rotate` com overlap, inclusive `rotate --all`, que
+  grava cada credencial em arquivo em vez de imprimir o valor; rotação
+  programada de PEM segue pendente; a contenção manual está documentada
+  em `docs/SECURITY.md` ## Contenção.)
+* Painel em **tempo real** (WebSocket) — o painel de gestão existe
+  (`serve --panel`, slices 1–3: leitura, ações e fluxo guiado; prova em
+  `tests/panel_actions_test.kf`); o que segue fora do MVP é a página se
+  atualizar sozinha.
 * Object storage, banco gerenciado, VPS, Kubernetes.
 
 ## Limites do MVP implementado
