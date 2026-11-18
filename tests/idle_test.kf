@@ -249,6 +249,45 @@ test "idle: stream preso leva RESET sem derrubar a sessao", "idle-reset" {
     assert(stale.size == 1 && stale.get(0) == a, "preso detectado")
     // O RESET do protocolo e decidido pelo chamador; aqui so a deteccao.
     assert(session.streamCount() == 1, "sessao intacta")
+
+    // O sweeper local deixou de ser mudo: palavra de derrubada diz
+    // "localmente" (a do Edge diz o mesmo do lado dele) e o reset de
+    // streams e contado em lote, nunca nomeado — contagem, nao conteudo.
+    var drop = agentIdleDropLine(123000)
+    assert(drop == "sessao ociosa derrubada localmente (123000ms sem frame util)", "formato da palavra de derrubada: " + drop)
+    var resets = agentStreamResetLine(2)
+    assert(resets == "2 stream(s) preso(s) resetado(s) por ociosidade", "formato da palavra de reset: " + resets)
+    assert(drop.indexOf("kfc_") < 0 && resets.indexOf("kfc_") < 0, "sem credencial nas palavras")
+    // A marca vive so em memoria: nasce falsa e o fim do connectAndServe
+    // le ela para jogar a verdade em vez de acusar o Edge pelo EOF que foi
+    // decisao daqui. Trava com ANCORa de indentacao no wiring (o sweeper
+    // marca antes de fechar; o throw honesto vem antes do generico) —
+    // dead-code wrap re-indenta e fica vermelho (tecnica do c330b8c).
+    assert(session.idleDropped == false, "marca nasce falsa")
+    var agentSrc = File("src/kofcloud/agent/Agent.kf").readText()
+    var text = ""
+    if (agentSrc != null) {
+        text = agentSrc
+    }
+    assert(text.length > 0, "le o Agent.kf")
+    var sweepStart = text.indexOf("void agentIdleSweeper(")
+    assert(sweepStart >= 0, "acha o sweeper")
+    var sweepEnd = text.indexOf("// Reavalia o health", sweepStart)
+    assert(sweepEnd > sweepStart, "acha o fim do sweeper")
+    var sweep = text.substring(sweepStart, sweepEnd)
+    assert(sweep.indexOf("\n                agentEvent(\"warn\", agentIdleDropLine(idle))") >= 0, "derrubada emite a palavra no nivel do if")
+    assert(sweep.indexOf("\n                session.idleDropped = true") >= 0, "marca antes de fechar")
+    assert(sweep.indexOf("\n                session.close()") >= 0, "fecha apos a marca")
+    assert(sweep.indexOf("\n                if (stale.size > 0) {") >= 0, "palavra de reset so com vitimas")
+    assert(sweep.indexOf("\n                    agentEvent(\"warn\", agentStreamResetLine(stale.size))") >= 0, "palavra de reset no nivel do if")
+    var serveStart = text.indexOf("void connectAndServe(")
+    assert(serveStart >= 0, "acha o connectAndServe")
+    var serveEnd = text.indexOf("Bool handleAgentFrame(", serveStart)
+    assert(serveEnd > serveStart, "acha o fim do connectAndServe")
+    var serve = text.substring(serveStart, serveEnd)
+    assert(serve.indexOf("\n    if (session.idleDropped) {") >= 0, "throw honesto no nivel do corpo")
+    assert(serve.indexOf("sessao derrubada localmente por ociosidade") >= 0, "mensagem diz localmente")
+    assert(serve.indexOf("throw \"edge closed connection\"") >= 0, "EOF de peer continua com a mensagem de sempre")
 }
 
 test "edge: stop envia GOAWAY e o agent sai limpo (sem erro nem reconnect)", "shutdown" {

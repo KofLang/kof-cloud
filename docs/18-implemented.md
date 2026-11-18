@@ -150,6 +150,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | fundação KCF111 (allowlist slice 3) | construtor `errWafAllowDenied()` + Hint (métrica `_waf_allow_denied`) + sufixo em `noteHttpFinished` + matcher `wafAllowCheck` puro; enforcement no HttpFront (linha 51) | `errors_test.kf` (`errors-hint`, `errors-hint-all`: 59 construtores (inclui KCF115-KCF119 do Edge, KCF125-KCF130 de contencao/webhook e KCF131-KCF139); camada 3 compara a lista canonica com os construtores) + `metrics_test.kf` + `waf_detect_test.kf` (`wafallow-unit`) |
 | eventos do Agent | `agent/Events.kf`: `agentEvent` emite para `log.*` **e** `agent-runtime.log` (teto 256 KiB); `logs --runtime` | `agent_events_test.kf` |
 | eventos do Edge (`logs --edge`) | `edge/Events.kf`: `edgeEvent` emite para `log.*` **e** `edge-runtime.log` (mesmo teto, mesmo contrato sem segredo/hostname) nos pontos que decidem o destino da conexão: recusa de túnel com o motivo do protocolo (inclusive o fail-closed do HELLO gigante, que fecha sem welcome e emite LINE_OVERFLOW) e os desfechos upstream do caminho público (teto de resposta, tempo esgotado, teto de streams, rota pendente, falha de túnel, vazia, não-HTTP — palavra fixa sem conteúdo nem erro do relay), túnel aceito, queda por ociosidade, teto de conexões públicas (503) e parada limpa (GOAWAY SHUTDOWN); `kof cloud logs --edge` lê o arquivo (mutuamente exclusivo com `--runtime`); o `serve` não tinha palavra nenhuma depois do banner | `edge_events_test.kf` |
+| eventos do Agent (sweeper de ociosidade) | o sweeper LOCAL emite `agentIdleDropLine` ("derrubada localmente (Nms...)") e marca `idleDropped` na sessão ANTES de fechar; o fim do `connectAndServe` joga a verdade ("sessao derrubada localmente por ociosidade") em vez de acusar o peer com "edge closed connection" (que continua para queda real); reset de streams presos vira palavra em lote ("N stream(s) preso(s) resetado(s)"), contagem nunca conteúdo | `idle_test.kf` |
 | idle timeout (tunel + stream) | `lastActivityMs` + sweepers Edge/Agent, EOF limpo vira throw (reconecta) | `idle_test.kf` |
 
 ## Comportamentos provados
@@ -185,7 +186,10 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   conexão é liberada (`waf_timeout_test.kf`).
 * **Observabilidade local do Agent**: os eventos reais do túnel ficam
   consultáveis depois do processo terminar (`logs --runtime`), sem depender de
-  stdout — e sem gravar segredo (`agent_events_test.kf`).
+  stdout — e sem gravar segredo (`agent_events_test.kf`); a queda por
+  ociosidade é decisão LOCAL e agora diz isso — o sweeper emite a palavra com
+  o tempo ocioso e o fim da sessão joga "derrubada localmente" em vez de
+  acusar o Edge (`idle_test.kf`).
 * **Observabilidade local do Edge**: o mesmo padrão do lado da plataforma — recusas de túnel (com motivo), quedas por ociosidade, saturação de conexões e parada limpa ficam consultáveis em `edge-runtime.log` via `logs --edge`, sem hostname nem credencial (`edge_events_test.kf`).
 * **Domínio próprio (Fase 6, slice 1)**: hostname externo registrado como
   PENDING com instrução CNAME, verificado por `net.resolve` contra os destinos

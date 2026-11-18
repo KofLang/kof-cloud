@@ -191,6 +191,18 @@ Bool isFatal(String reason) {
     return reason == "DEVICE_REVOKED" || reason == "DEVICE_SUSPENDED" || reason == "AUTH_FAILED" || reason == "DEVICE_UNKNOWN" || reason == "VERSION_UNSUPPORTED"
 }
 
+// Linhas do sweeper local (puras, fonte unica): a sessao derrubada AQUI
+// avisa com "localmente" para nao se confundir com a palavra do Edge
+// (que diz a mesma coisa do lado dele, em `logs --edge`). Reset de
+// streams e contado em lote, nunca nomeado — contagem, nao conteudo.
+String agentIdleDropLine(Long idleMs) {
+    return "sessao ociosa derrubada localmente (" + longToString(idleMs) + "ms sem frame util)"
+}
+
+String agentStreamResetLine(Int count) {
+    return intToString(count) + " stream(s) preso(s) resetado(s) por ociosidade"
+}
+
 void connectAndServe(AgentConfig config) {
     var endpoint = fetchEdge(config)
     agentEvent("info", "edge " + endpoint.host + ":" + intToString(endpoint.port) + " with " + intToString(endpoint.services.size) + " service(s)")
@@ -285,6 +297,11 @@ void connectAndServe(AgentConfig config) {
     if (config.stopFile.length > 0 && File(config.stopFile).exists()) {
         agentEvent("info", "stopped by request")
         return
+    }
+    // Quem derrubou por ociosidade foi o sweeper LOCAL (a marca vem dele):
+    // dizer "edge closed connection" acusaria o peer pela decisao daqui.
+    if (session.idleDropped) {
+        throw "sessao derrubada localmente por ociosidade"
     }
     throw "edge closed connection"
 }
@@ -395,11 +412,22 @@ void agentIdleSweeper(TunnelSession session) {
         if (session.open == false) {
             open = false
         } else {
-            if (session.idleMs() > limitTunnelIdleMs()) {
+            var idle = session.idleMs()
+            if (idle > limitTunnelIdleMs()) {
+                // Marca ANTES de fechar: o fim do connectAndServe le a marca
+                // e joga a verdade ("derrubada localmente") em vez de acusar
+                // o Edge pelo EOF que ele mesmo vai receber.
+                agentEvent("warn", agentIdleDropLine(idle))
+                session.idleDropped = true
                 session.close()
                 open = false
             } else {
-                for (var streamId in session.idleStreams(limitStreamIdleMs())) {
+                var stale = session.idleStreams(limitStreamIdleMs())
+                // Uma palavra por varredura com vitimas — nunca por stream.
+                if (stale.size > 0) {
+                    agentEvent("warn", agentStreamResetLine(stale.size))
+                }
+                for (var streamId in stale) {
                     session.send(resetFrame(streamId, "IDLE_TIMEOUT"))
                     session.closeStream(streamId)
                 }

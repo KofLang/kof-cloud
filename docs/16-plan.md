@@ -377,6 +377,23 @@ gigante acima do teto fecha SEM responder e deixa "tunel recusado:
 LINE_OVERFLOW" sem vazar o conteúdo, a parada limpa deixa o GOAWAY — e
 caminhos separados dos outros dois logs).
 
+**Estado (eventos legíveis do AGENT — o outro lado conta a sua verdade):
+✅ implementado.** O inventário de palavras do Edge expôs o espelho mudo: o
+sweeper de ociosidade do AGENT derrubava a sessão sem palavra nenhuma e o
+fim do `connectAndServe` jogava "edge closed connection" — acusando o peer
+pelo que foi decisão daqui. Agora o sweeper emite `agentIdleDropLine`
+("sessao ociosa derrubada localmente (Nms sem frame util)") e marca
+`idleDropped` na sessão (somente em memória — nunca no fio nem no estado)
+ANTES de fechar; o fim do `connectAndServe` lê a marca e joga "sessao
+derrubada localmente por ociosidade", preservando "edge closed connection"
+para queda real do peer. Reset de streams presos é contado em lote, uma
+palavra por varredura ("N stream(s) preso(s) resetado(s) por ociosidade") —
+contagem, nunca conteúdo. Prova: `tests/idle_test.kf` (`idle-reset`
+estendido: formato das linhas puras, sem credencial, marca nasce falsa,
+travas com ÂNCORA de indentação no wiring do sweeper e no throw honesto —
+técnica do c330b8c; 3 mutações — throw, palavra de derrubada, palavra de
+reset — ficam vermelhas e foram revertidas).
+
 ## Fase 8 — produto multiplataforma
 
 Linux → Windows → macOS → Android. O core é compartilhado; só daemon,
