@@ -9,6 +9,49 @@ import testkit.Support
 // MESMA rota /v1 da CLI. O teste prova (a) que o HTML expoe cada acao e a
 // confirmacao das destrutivas, e (b) que as rotas que ele chama funcionam.
 
+test "painel: rodape anuncia exatamente as rotas que a pagina usa (fonte unica)", "panel-actions-unit" {
+    // O rodape era escrito a mao e estava em drift nos dois sentidos: 5
+    // rotas reais nao constavam (services/remove, services/token/revoke,
+    // services/tokens, services/token-hygiene e o /v1/tokens da camada de
+    // credencial do diagnostico) e ele citava um fantasma /v1/domains/add
+    // (adicionar dominio e POST /v1/domains; nao existe /v1/domains/add).
+    // Agora o rodape e DERIVADO de panelRoutes() — a mesma lista que a trava
+    // abaixo compara com o HTML. Nos dois sentidos:
+    //  1. cada ocorrencia de /v1 no HTML servido consta na lista;
+    //  2. cada entrada da lista aparece no HTML.
+    var html = panelHtml()
+    var lista = panelRoutes()
+    // Direcao 1: percorre o HTML extraindo o token de rota em cada /v1
+    // (letras/digitos/-//) e exige a lista como fonte.
+    var pos = html.indexOf("/v1")
+    var vistas = 0
+    while (pos >= 0) {
+        var end = pos
+        while (end < html.length && isRouteChar(html.charAt(end))) {
+            end = end + 1
+        }
+        var rota = html.substring(pos, end)
+        assert(lista.indexOf(rota) >= 0, "rota usada pela pagina consta na fonte: " + rota)
+        vistas = vistas + 1
+        pos = html.indexOf("/v1", end)
+    }
+    assert(vistas >= 21, "pagina usa pelo menos as 21 rotas do inventario (" + intToString(vistas) + ")")
+    // Direcao 2: nenhuma rota inventada — cada entrada da fonte existe no HTML.
+    var entradas = lista.split(", ")
+    assert(entradas.length == 21, "fonte lista exatamente 21 rotas")
+    for (var i = 0; i < entradas.length; i++) {
+        assert(html.indexOf(entradas[i]) >= 0, "rota da fonte aparece na pagina: " + entradas[i])
+    }
+    // O rodape usa a fonte (nao uma copia): a string avaliada esta no rodape
+    // e nenhuma copia manual de lista ficou para tras.
+    assert(html.indexOf("<footer>KofCloud painel v") >= 0 && html.indexOf(" — usa " + lista + "</footer>") >= 0, "rodape deriva da fonte")
+    assert(html.indexOf("/v1/domains/add") < 0, "rota fantasma do rodape antigo fora")
+}
+
+Bool isRouteChar(Char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '/' || c == '-'
+}
+
 test "painel s2: HTML expoe as acoes da gestao completa", "panel-actions-unit" {
     var html = panelHtml()
     // Acoes de servico.

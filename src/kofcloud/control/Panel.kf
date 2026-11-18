@@ -15,7 +15,20 @@ package kofcloud.control
 
 // Versao do painel (aparece no rodape; ajuda a saber o que esta no ar).
 String panelVersion() {
-    return "10"
+    return "11"
+}
+
+// As rotas /v1 que a pagina chama — UMA fonte so, para o rodape anunciar
+// exatamente o que a pagina usa. O rodape escrito a mao ja estava em drift
+// nos dois sentidos: 5 rotas reais nao constavam (services/remove,
+// services/token/revoke, services/tokens, services/token-hygiene e o
+// /v1/tokens da camada de credencial do diagnostico) e ele citava um
+// fantasma /v1/domains/add (adicionar dominio e POST /v1/domains). A trava
+// no teste percorre TODAS as ocorrencias de /v1 no HTML servido e exige cada
+// uma nesta lista — e o contrario: cada entrada da lista tem de aparecer no
+// HTML. Rota nova no painel sem entrar aqui quebra o teste.
+String panelRoutes() {
+    return "/v1/accounts, /v1/devices, /v1/devices/revoke, /v1/devices/suspend, /v1/devices/unsuspend, /v1/presence, /v1/services, /v1/services/remove, /v1/services/suspend, /v1/services/unsuspend, /v1/services/token, /v1/services/token/revoke, /v1/services/tokens, /v1/services/token-hygiene, /v1/domains, /v1/domains/verify, /v1/domains/remove, /v1/audit/verify, /v1/tokens, /v1/tokens/revoke, /v1/webhook"
 }
 
 // O HTML e uma constante: um unico lugar para revisar. Nenhum dado de conta
@@ -100,7 +113,7 @@ footer{padding:16px 24px;color:#5b606a;font-size:12px}
   <p class=\"muted\">O que depende da sua maquina (portas locais, DNS da sua rede) segue no <code>kof cloud doctor</code>.</p>
   <div id=\"diag\"></div></section>
 </main>
-<footer>KofCloud painel v" + panelVersion() + " — usa /v1/accounts, /v1/devices, /v1/presence, /v1/services, /v1/domains, /v1/services/token, /v1/domains/{add,verify,remove}, /v1/devices/{revoke,suspend,unsuspend}, /v1/services/{suspend,unsuspend}, /v1/audit/verify, /v1/tokens/revoke, /v1/webhook</footer>
+<footer>KofCloud painel v" + panelVersion() + " — usa " + panelRoutes() + "</footer>
 <script>
 var TOKEN = '';  // so na memoria da aba; nunca persistido
 var STATE = {svcs: [], devs: [], pronto: false};
