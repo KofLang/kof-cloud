@@ -63,7 +63,7 @@ o run total imprime `57 passed, 0 failed`. Falha = nome do teste + assert
 | frames | `tests/frames_test.kf` | 4 |
 | idle + shutdown limpo do Edge | `tests/idle_test.kf` | 5 |
 | conexoes | `tests/conns_test.kf` | 2 |
-| deploy + scan | `tests/deploy_test.kf` | 13 |
+| deploy + scan | `tests/deploy_test.kf` | 14 |
 | daemon | `tests/daemon_test.kf` | 13 |
 | doctor | `tests/doctor_test.kf` | 15 |
 | hot-reload | `tests/reload_test.kf` | 1 |
@@ -104,7 +104,7 @@ o run total imprime `57 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor, booleanas sem duplicação e posicional sobrando (CLI) | `tests/value_flags_test.kf` | 4 |
 
-Total: 411 testes. Ver `15-tests.md` para a matriz.
+Total: 412 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

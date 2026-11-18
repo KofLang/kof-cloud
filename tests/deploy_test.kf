@@ -1,9 +1,11 @@
+import kofcloud.cli.Commands
 import kofcloud.protocol.Bytes
 import kofcloud.cli.Deploy
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.model.Service
 import kofcloud.store.Store
+import kofcloud.util.Limits
 import testkit.Support
 
 // Fase 7 slice 1 — deploy declarativo: publica o que esta no manifesto e
@@ -922,4 +924,69 @@ test "deploy: check acusa servico SUSPENSO com a dica do unsuspend", "deploy-che
     assert(statusOf(httpPostJson(controlPort, "/v1/services/unsuspend", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "liberado")
     assert(verifyDeploymentFor(controlUrl, token, wanted, deviceId).size == 0, "liberado: tudo saudavel")
     listener.close()
+}
+test "deploy: check avisa kfs_ perto do fim (mesmo predicado do token-list)", "deploy-kfswarn" {
+    var window = limitTokenExpiryWarnMs()
+    var now = 1000000000000L
+    var agora = longToString(now)
+    var calm = listOf<ServiceTokenEntry>()
+    calm.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", longToString(now + window + 86400000L)))
+    assert(kfsExpiryCheckLine("api", calm, agora) == "", "fora da janela: silencio")
+    var expired = listOf<ServiceTokenEntry>()
+    expired.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", longToString(now - 1)))
+    assert(kfsExpiryCheckLine("api", expired, agora) == "", "vencida: silencio")
+    var hot = listOf<ServiceTokenEntry>()
+    hot.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", null))
+    hot.add(ServiceTokenEntry("svc", "e5f6a7b8", "1700000000000", longToString(now + window - 1000L)))
+    var line = kfsExpiryCheckLine("api", hot, agora)
+    assert(line.indexOf("api:") >= 0, "nomeia o servico: " + line)
+    assert(line.indexOf("1 credencial(is)") >= 0, "conta so a perto do fim: " + line)
+    assert(line.indexOf("service rotate api") >= 0, "orienta a rotacao: " + line)
+    assert(line.indexOf("a1b2c3d4") < 0, "nao vaza nem o id curto")
+
+    var raw = File("src/kofcloud/cli/Deploy.kf").readText()
+    var text = ""
+    if (raw != null) {
+        text = raw
+    }
+    if (text.length == 0) {
+        return
+    }
+    var startCheck = text.indexOf("Int cmdDeploy(")
+    assert(startCheck >= 0, "acha o cmdDeploy")
+    var endCheck = text.indexOf("Int cmdDown(", startCheck)
+    assert(endCheck > startCheck, "acha o fim do cmdDeploy")
+    var bodyCheck = text.substring(startCheck, endCheck)
+    assert(bodyCheck.indexOf("kfsExpiryWarningsFor(session.controlUrl, session.token, services, identity.deviceId, now)") >= 0, "check consulta os avisos")
+    assert(bodyCheck.indexOf("check: aviso: ") >= 0, "check imprime o aviso sem mudar o exit")
+
+    var controlPort = 19881
+    var path = "/tmp/kofcloud-depkfswarn-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pub = httpPostJson(controlPort, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"api\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19882\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}", token)
+    assert(statusOf(pub) == 200, "servico AUTHENTICATED publicado")
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(pub)), "id")
+    var wanted = parseManifest("{\"services\":[{\"name\":\"api\",\"port\":19882,\"exposure\":\"AUTHENTICATED\"}]}")
+    var controlUrl = "http://127.0.0.1:" + intToString(controlPort)
+    var fioNow = longToString(time.now())
+    assert(kfsExpiryWarningsFor(controlUrl, token, wanted, deviceId, fioNow).size == 0, "sem kfs_: silencio")
+
+    var issue = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"1\"}", token)
+    assert(statusOf(issue) == 200, "kfs_ de 1h emitida")
+    var warnings = kfsExpiryWarningsFor(controlUrl, token, wanted, deviceId, fioNow)
+    assert(warnings.size == 1, "um aviso: " + intToString(warnings.size))
+    assert(warnings.get(0).indexOf("api:") >= 0, "nomeia o servico: " + warnings.get(0))
+    assert(warnings.get(0).indexOf("service rotate api") >= 0, "orienta a rotacao: " + warnings.get(0))
+
+    var pub2 = httpPostJson(controlPort, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19883\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", token)
+    assert(statusOf(pub2) == 200, "servico PUBLIC publicado")
+    var wantedPublic = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":19883}]}")
+    assert(kfsExpiryWarningsFor(controlUrl, token, wantedPublic, deviceId, fioNow).size == 0, "PUBLIC nao tem kfs_: silencio")
 }

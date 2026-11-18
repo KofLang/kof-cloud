@@ -7,6 +7,7 @@ import kofcloud.model.Errors
 import kofcloud.model.Exposure
 import kofcloud.model.Service
 import kofcloud.util.Hosts
+import kofcloud.util.Limits
 import kofcloud.util.Text
 import kofcloud.store.Store
 
@@ -338,6 +339,68 @@ List<String> verifyDeploymentFor(String controlUrl, String token, List<ManifestS
         }
     }
     return problems
+}
+
+// Aviso de credencial kfs_ perto do fim no `deploy --check` (mesmo sinal do
+// fio `expiring` e do `service status`, outra superficie): um servico
+// AUTHENTICATED com a credencial vencendo segue "publicado e respondendo"
+// no check e morre em 401 para o cliente honesto logo depois — o check e
+// o momento de rodar `service rotate --ttl` antes da queda.
+// Pura sobre as entradas ja buscadas, com o MESMO predicado do `token-list`
+// e do `service status` (`serviceTokenExpiryWarning` — mesma janela do
+// fio, relogio do chamador). Aviso, nunca problema: rotacao e rotina, nao
+// outage — nao entra na lista que decide o exit code. "" sem sinal.
+String kfsExpiryCheckLine(String name, List<ServiceTokenEntry> entries, String now) {
+    var expiring = 0
+    for (var entry in entries) {
+        if (entry.expiresAt != null) {
+            if (serviceTokenExpiryWarning(entry.expiresAt, now).length > 0) {
+                expiring = expiring + 1
+            }
+        }
+    }
+    if (expiring == 0) {
+        return ""
+    }
+    var hours = intToString((limitTokenExpiryWarnMs() / 3600000L) as Int)
+    return name + ": " + intToString(expiring) + " credencial(is) kfs_ expira(m) em menos de " + hours + "h — rotacione: kof cloud service rotate " + name + " --ttl <horas>"
+}
+
+// Avisos de kfs_ por servico do manifesto publicado NESTE device. So
+// servico cuja exposicao pede credencial (`exposureRequiresAuth`) tem kfs_;
+// PUBLIC nao tem o que vencer. Melhor-esforco: nao publicado aqui nao e
+// avisado (o problema proprio ja acusa) e falha de busca de um servico nao
+// derruba os outros nem o check (o dado primario — publicado/resposta —
+// sai do verifyDeployment). Nunca expoce valores: a linha conta, nao cita
+// id nem segredo.
+List<String> kfsExpiryWarningsFor(String controlUrl, String token, List<ManifestService> wanted, String deviceId, String now) {
+    var warnings = listOf<String>()
+    var live = listOf<Service>()
+    try {
+        live = fetchServices(controlUrl, token)
+    } catch (String e) {
+        return warnings
+    }
+    for (var service in wanted) {
+        if (exposureRequiresAuth(service.exposure) == false) {
+            continue
+        }
+        if (serviceIdOnDevice(live, service.name, deviceId).length == 0) {
+            continue
+        }
+        try {
+            var body = mapOf()
+            body.put("serviceId", serviceIdOnDevice(live, service.name, deviceId))
+            var raw = requireOk(http.post(controlUrl + "/v1/services/tokens", json.encode(body), jsonHeader(token)))
+            var entries = json.decode<List<ServiceTokenEntry>>(raw)
+            var line = kfsExpiryCheckLine(service.name, entries, now)
+            if (line.length > 0) {
+                warnings.add(line)
+            }
+        } catch (String inner) {
+        }
+    }
+    return warnings
 }
 
 // Parse com erros honestos de CLI (mensagem + uso, sem codigo KCF — KCF e
@@ -799,6 +862,12 @@ Int cmdDeploy(List<String> args) {
         return 0
     }
     var problems = verifyDeploymentFor(session.controlUrl, session.token, services, identity.deviceId)
+    // Aviso de kfs_ perto do fim (Fase 19): mesmo sinal do fio, nunca muda
+    // o exit code — impresso antes do veredito, ok ou problemas.
+    var now = longToString(time.now())
+    for (var warn in kfsExpiryWarningsFor(session.controlUrl, session.token, services, identity.deviceId, now)) {
+        println("check: aviso: " + warn)
+    }
     if (problems.size == 0) {
         println("check ok: " + intToString(services.size) + " servico(s) publicados e respondendo")
         return 0

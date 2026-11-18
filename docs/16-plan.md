@@ -212,7 +212,10 @@ stderr (ou stdout): `build falhou (exit N) — <linha>`; só o código obrigava 
 operador a reproduzir o comando à mão. Uma linha só, nunca o comando — o
 detalhe vai ao terminal do usuário. `deploy --check` verifica publicado +
 respondendo + artefato (aviso `artefato ausente`, nunca bloqueio; sem
-rollback); `deploy --plan` mostra o diff sem aplicar (com `(build)`/
+rollback) e AVISA credenciais `kfs_` perto do fim nos serviços
+AUTHENTICATED do manifesto (`kfsExpiryCheckLine`, mesmo predicado do
+`token-list`; `check: aviso:` nunca muda o exit — rotação é rotina,
+não outage); `deploy --plan` mostra o diff sem aplicar (com `(build)`/
 `(artifact)` inclusive no igual).
 
 **Estado (slice 3 — daemon user-level): ✅ implementado.** `kof cloud daemon
