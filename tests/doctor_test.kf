@@ -1,4 +1,5 @@
 import kofcloud.protocol.Bytes
+import kofcloud.cli.Commands
 import kofcloud.cli.Daemon
 import kofcloud.cli.Deploy
 import kofcloud.cli.Doctor

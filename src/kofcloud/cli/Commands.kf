@@ -572,6 +572,18 @@ Int cmdStatus(List<String> args) {
     } catch (String e) {
         println("Servicos:     indisponivel (" + e + ")")
     }
+    // Credencial da conta perto do fim (mesmo sinal do fio que o
+    // `token list`/`doctor`/painel; detalhes no comentario da funcao).
+    // Best-effort: falha de busca nao derruba o status (as linhas de cima
+    // ja mostram o control fora do ar) e nunca ha valor de kfc_ aqui.
+    try {
+        var tokensRaw = requireOk(http.get(session.controlUrl + "/v1/tokens", authHeader(session.token)))
+        var credWarn = statusCredentialWarning(tokensRaw)
+        if (credWarn.length > 0) {
+            println(credWarn)
+        }
+    } catch (String e) {
+    }
     return 0
 }
 
@@ -1417,6 +1429,50 @@ String tokenAccountWarningLine(String expiresAt, String now) {
         return ""
     }
     return "AVISO: esta credencial expira em menos de " + intToString((limitTokenExpiryWarnMs() / 3600000L) as Int) + "h — rode: kof cloud token rotate --ttl <horas>"
+}
+
+// Contador do sinal `expiring` no corpo de /v1/tokens (vetor plano de
+// objetos planos, chave e valor literais): -1 quando o corpo nao parece uma
+// lista JSON. Pura. O `"false"` nao casa com `"expiring":"true"` porque o
+// prefixo inclui as aspas de abertura da chave — `x"expiring":"true"` nao
+// ocorre dentro de `"expiring":"false"`. Morava no Doctor.kf; veio para
+// ca (import kofcloud.cli.Commands ja o alcanca de la, sem ciclo) quando
+// o `status` passou a ler o MESMO sinal.
+// Aviso de expiracao proxima no `status`: o MESMO sinal do fio que o
+// `token list` (AVISO por entrada), o doctor (camada da credencial) e o
+// painel (camada do Diagnostico) ja mostram — o status era o comando de
+// rotina que ficava cego, e o operador que so roda `status` descobria a
+// perda da sessao nos 401. Pura sobre o corpo de /v1/tokens (busca a
+// `countTokenExpiring` abaixo): nunca re-deriva com relogio proprio.
+// Conta por entrada como o doctor (o inventario nao diz QUAL entrada e a
+// da sessao — sem valor no fio), entao o texto e da conta. "" quando nao ha
+// o que avisar (busca falhou = o status ja mostra as outras linhas cair;
+// corpo ilegivel = -1; nenhuma na janela = 0): aviso sem sinal seria
+// inventado. A janela citada vem do mesmo Limits do fio — fonte unica.
+Int countTokenExpiring(String tokensRaw) {
+    var trimmed = tokensRaw.trim()
+    if (trimmed.startsWith("[") == false) {
+        return -1
+    }
+    var count = 0
+    var rest = tokensRaw
+    var mark = "\"expiring\":\"true\""
+    var at = rest.indexOf(mark)
+    while (at >= 0) {
+        count = count + 1
+        rest = rest.substring(at + mark.length, rest.length)
+        at = rest.indexOf(mark)
+    }
+    return count
+}
+
+String statusCredentialWarning(String tokensRaw) {
+    var expiring = countTokenExpiring(tokensRaw)
+    if (expiring <= 0) {
+        return ""
+    }
+    var hours = intToString((limitTokenExpiryWarnMs() / 3600000L) as Int)
+    return "AVISO: " + intToString(expiring) + " credencial(is) da conta expiram em menos de " + hours + "h — rode: kof cloud token rotate --ttl <horas>"
 }
 
 // Aviso de expiracao proxima da credencial de SERVICO (kfs_), no mesmo

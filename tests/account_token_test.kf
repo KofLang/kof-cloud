@@ -343,3 +343,80 @@ test "credencial de conta: HTTP prune revoga as antigas e mantem a sessao", "ato
     assert(statusOf(again) == 200, "idempotente")
     assert(bodyOf(again).indexOf("\"revoked\":\"0\"") >= 0, "zero revogadas")
 }
+
+test "credencial de conta: o status mostra o aviso do mesmo sinal do fio", "atok-unit" {
+    // Pura, sem rede nem HOME (precedente: doctorAccountTokenLine): o
+    // `status` le o MESMO sinal `expiring` do fio que o `token list` (AVISO
+    // por entrada), o doctor (camada da credencial) e o painel (4a camada
+    // do Diagnostico) — era o comando de rotina que ficava cego, e quem so
+    // roda `status` descobria a perda da sessao nos 401. Nao re-deriva com
+    // relogio proprio: sem TTL ou fora do fio nao ha sinal, e aviso sem
+    // sinal seria inventado. "" = nada a avisar (inclui busca falhada e
+    // corpo ilegivel, que o countTokenExpiring devolve -1).
+    var window = limitTokenExpiryWarnMs()
+    var hours = intToString((window / 3600000L) as Int)
+    assert(statusCredentialWarning("") == "", "corpo vazio: silencio")
+    assert(statusCredentialWarning("lixo {") == "", "ilegivel: silencio")
+    assert(statusCredentialWarning("[]") == "", "vazia: silencio")
+    assert(statusCredentialWarning("[{\"id\":\"a1\",\"createdAt\":\"1\"},{\"id\":\"b2\",\"createdAt\":\"1\",\"expiresAt\":\"9\"}]") == "", "sem expiring: silencio")
+    // TTL longo fora da janela no corpo sem o sinal: o status segue o FIO
+    // (campo aditivo), nao o epoch — re-derivar aqui divergiria do doctor.
+    assert(statusCredentialWarning("[{\"id\":\"a1\",\"createdAt\":\"1\",\"expiresAt\":\"2524608000000\"}]") == "", "longa sem sinal: silencio")
+    var warn = statusCredentialWarning("[{\"id\":\"a1\",\"createdAt\":\"1\",\"expiresAt\":\"2\",\"expiring\":\"true\"}]")
+    assert(warn.indexOf("1 credencial") >= 0, "uma expirando: conta: " + warn)
+    assert(warn.indexOf("token rotate") >= 0, "uma expirando: orienta o rotate: " + warn)
+    assert(warn.indexOf(hours + "h") >= 0, "janela derivada da fonte unica: " + warn)
+    assert(warn.indexOf("kfc_") < 0, "aviso nunca vaza valor")
+    var two = statusCredentialWarning("[{\"id\":\"a\",\"createdAt\":\"1\",\"expiring\":\"true\"},{\"id\":\"b\",\"createdAt\":\"1\",\"expiring\":\"true\"}]")
+    assert(two.indexOf("2 credencial") >= 0, "conta as duas: " + two)
+    var mixed = statusCredentialWarning("[{\"id\":\"a\",\"createdAt\":\"1\"},{\"id\":\"b\",\"createdAt\":\"1\",\"expiresAt\":\"2\",\"expiring\":\"true\"}]")
+    assert(mixed.indexOf("1 credencial") >= 0, "conta so a expirando: " + mixed)
+
+    // Trava de fonte: o cmdStatus busca /v1/tokens e delega na funcao (sem
+    // captura de stdout no runner). Best-effort: a chamada vive em try e a
+    // impressao so sai quando ha aviso.
+    var raw = File("src/kofcloud/cli/Commands.kf").readText()
+    var text = ""
+    if (raw != null) {
+        text = raw
+    }
+    var start = text.indexOf("Int cmdStatus(")
+    var end = text.indexOf("Int cmdDeviceList(", start)
+    if (end < 0) {
+        end = text.length
+    }
+    var body = text.substring(start, end)
+    assert(body.indexOf("/v1/tokens") >= 0, "status busca o inventario")
+    assert(body.indexOf("statusCredentialWarning(tokensRaw)") >= 0, "status delega na funcao pura")
+    assert(body.indexOf("credWarn.length > 0") >= 0, "status so imprime quando ha aviso")
+}
+
+test "credencial de conta: aviso do status contra o fio real", "atok" {
+    // Fio real (precedente: doctor-cred e2e): rotaciona com TTL curto para
+    // a nova entrada cair na janela e o corpo de /v1/tokens carregar o
+    // sinal — e sobre ESSE corpo que o `status` decide o aviso.
+    var controlPort = 20177
+    var registry = Registry(accountTokenPath("status"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 20178)
+    var controlTask = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var before = bodyOf(httpGetToken(controlPort, "/v1/tokens", accountToken))
+    assert(statusCredentialWarning(before) == "", "sem TTL: status calmo")
+
+    var rotated = httpPostJson(controlPort, "/v1/tokens/rotate", "{\"ttlHours\":\"24\"}", accountToken)
+    assert(statusOf(rotated) == 200, "rotate 200")
+    var fresh = mapField(json.decode<Map<String, String>>(bodyOf(rotated)), "token")
+    // Apos o rotate (TTL 24h < janela de 7 dias) o inventario da conta
+    // carrega o sinal na entrada nova — qualquer credencial valida da
+    // conta le o mesmo aviso (o sinal e por conta, como no doctor).
+    var listedOld = bodyOf(httpGetToken(controlPort, "/v1/tokens", accountToken))
+    var listedNew = bodyOf(httpGetToken(controlPort, "/v1/tokens", fresh))
+    assert(statusCredentialWarning(listedOld).indexOf("1 credencial") >= 0, "antiga ve o aviso da conta")
+    var warn = statusCredentialWarning(listedNew)
+    assert(warn.indexOf("1 credencial") >= 0, "nova ve o aviso: " + warn)
+    assert(warn.indexOf("token rotate") >= 0, "orienta o rotate")
+    assert(warn.indexOf("kfc_") < 0, "aviso nao vaza valor")
+}

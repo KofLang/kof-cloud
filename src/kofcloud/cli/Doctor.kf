@@ -121,28 +121,6 @@ String doctorAccountTokenLine(String tokensRaw, String fetchError) {
     return doctorOkLine("credencial da conta (sem expiracao proxima)")
 }
 
-// Contador do sinal `expiring` no corpo de /v1/tokens (vetor plano de
-// objetos planos, chave e valor literais): -1 quando o corpo nao parece uma
-// lista JSON. Pura. O `"false"` nao casa com `"expiring":"true"` porque o
-// prefixo inclui as aspas de abertura da chave — `x"expiring":"true"` nao
-// ocorre dentro de `"expiring":"false"`.
-Int countTokenExpiring(String tokensRaw) {
-    var trimmed = tokensRaw.trim()
-    if (trimmed.startsWith("[") == false) {
-        return -1
-    }
-    var count = 0
-    var rest = tokensRaw
-    var mark = "\"expiring\":\"true\""
-    var at = rest.indexOf(mark)
-    while (at >= 0) {
-        count = count + 1
-        rest = rest.substring(at + mark.length, rest.length)
-        at = rest.indexOf(mark)
-    }
-    return count
-}
-
 // Nota do espelho para a linha ok da auditoria: "" quando integra,
 // " — espelho nao reportado" contra control plane antigo (campos aditivos
 // no fio). Espelho adulterado nao passa por aqui — vira FALHA dedicada na
