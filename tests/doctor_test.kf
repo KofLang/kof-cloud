@@ -490,8 +490,13 @@ test "doctor: aviso de kfs_ perto do fim por servico (mesma fonte do --check)", 
     var end = raw.indexOf("Int cmdDoctor(", start)
     assert(end > start, "acha o fim do doctorCheckWith")
     var body = raw.substring(start, end)
-    assert(body.indexOf("kfsExpiryWarningsFor(session.controlUrl, session.token, wanted, identity.deviceId, now)") >= 0, "doctor consulta os avisos")
+    // Ancora de indentacao (mesma tecnica do deploy-kfswarn): o laco do
+    // aviso corre INCONDICIONALMENTE no nivel do corpo (4 espacos) e a
+    // linha AVISO entra antes das ok — dead-code wrap re-indenta e a
+    // trava fica vermelha (lacuna real do 2af856a, agora coberta).
+    assert(body.indexOf("\n    for (var warn in kfsExpiryWarningsFor(session.controlUrl, session.token, wanted, identity.deviceId, now)) {") >= 0, "doctor consulta os avisos no nivel do corpo")
     assert(body.indexOf("doctorWarnLine(\"servico\", warn)") >= 0, "doctor imprime a linha de aviso")
+    assert(body.indexOf("doctorWarnLine(\"servico\", warn)") < body.indexOf("doctorOkLine(service.name"), "aviso antes das linhas ok")
 
     // Fio real (precedente doctor-cred e2e): AUTHENTICATED com kfs_ de 1h
     // vira AVISO; PUBLIC mesmo com token alheio na conta nao tem o que

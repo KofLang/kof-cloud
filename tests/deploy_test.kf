@@ -957,13 +957,22 @@ test "deploy: check avisa kfs_ perto do fim (mesmo predicado do token-list)", "d
     var endCheck = text.indexOf("Int cmdDown(", startCheck)
     assert(endCheck > startCheck, "acha o fim do cmdDeploy")
     var bodyCheck = text.substring(startCheck, endCheck)
-    assert(bodyCheck.indexOf("kfsExpiryWarningsFor(session.controlUrl, session.token, services, identity.deviceId, now)") >= 0, "check consulta os avisos")
+    // Ancora de indentacao (nao so presenca): o laco do check corre
+    // INCONDICIONALMENTE no nivel do corpo (4 espacos). Um dead-code wrap
+    // (`if (falso) { laco }`) re-indenta e a trava fica vermelha — lacuna
+    // real: esse wrap passou sem ficar vermelho no commit 2af856a.
+    var loopCall = "for (var warn in kfsExpiryWarningsFor(session.controlUrl, session.token, services, identity.deviceId, now)) {"
+    assert(bodyCheck.indexOf("\n    " + loopCall) >= 0, "check consulta os avisos no nivel do corpo")
     assert(bodyCheck.indexOf("check: aviso: ") >= 0, "check imprime o aviso sem mudar o exit")
+    assert(bodyCheck.indexOf("check: aviso: ") < bodyCheck.indexOf("check ok: "), "aviso sai antes do veredito")
     // O --plan descreve o que o deploy faria; o aviso do que o deploy NAO
     // conserta (credencial vencendo) tem de aparecer la tambem, com o
-    // MESMO busca (a 2a chamada no corpo — a 1a e do --check).
+    // MESMO busca (a 2a chamada no corpo — a 1a e do --check), no nivel
+    // do bloco --plan (12 espacos; wrap re-indenta e quebra).
     assert(bodyCheck.indexOf("kfsExpiryWarningsFor(session.controlUrl, session.token, services, identity.deviceId, now)", bodyCheck.indexOf("kfsExpiryWarningsFor(session.controlUrl, session.token, services, identity.deviceId, now)") + 1) >= 0, "plan consulta os avisos (2a chamada)")
-    assert(bodyCheck.indexOf("plan: aviso: ") >= 0, "plan imprime o aviso antes do diff")
+    assert(bodyCheck.indexOf("\n            " + loopCall) >= 0, "plan consulta os avisos no nivel do bloco --plan")
+    assert(bodyCheck.indexOf("plan: aviso: ") >= 0, "plan imprime o aviso")
+    assert(bodyCheck.indexOf("plan: aviso: ") < bodyCheck.indexOf("var plan = diffDeploymentFor"), "aviso sai antes do diff")
 
     var controlPort = 19881
     var path = "/tmp/kofcloud-depkfswarn-" + crypto.randomHex(4) + ".json"
