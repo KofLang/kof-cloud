@@ -119,9 +119,9 @@ Total: 424 testes. Ver `15-tests.md` para a matriz.
   compartilhado entre tasks vive em objeto (classe), nao em Map solto.
 - `web.app()` fecha conexao para corpo de ~1.5 MiB (testes usam TCP cru).
 - Processo fantasma de run travado prende portas (kill -9).
-- `kof cloud logs` le so marcos de sessao da CLI; eventos do tunel vivem
-  no processo do Agent (observabilidade/stdout) — sem fio entre os dois
-  (ver `17-limitations.md`).
+- Eventos do tunel vivem no processo do Agent (`logs --runtime`) e os do
+  Edge no processo do `serve` (`logs --edge`) — arquivos locais, sem fio
+  entre nos (ver `17-limitations.md`).
 
 Ver `17-limitations.md` para a lista completa e `13-kof-apis.md` para as
 medicoes do runtime.
