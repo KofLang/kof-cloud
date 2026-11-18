@@ -366,8 +366,10 @@ credencial ou corpo. Leitura: `kof cloud logs --edge` (mutuamente exclusivo
 com `--runtime` — mundos distintos: Agent local × Edge da plataforma).
 Prova: `tests/edge_events_test.kf` (5: linha com nível, teto que corta o
 início com carga real, contrato sem segredo/hostname, e2e — HELLO inválido
-num Edge real deixa "tunel recusado: DEVICE_UNKNOWN" no arquivo e a parada
-limpa deixa o GOAWAY — e caminhos separados dos outros dois logs).
+num Edge real deixa "tunel recusado: DEVICE_UNKNOWN" no arquivo, HELLO
+gigante acima do teto fecha SEM responder e deixa "tunel recusado:
+LINE_OVERFLOW" sem vazar o conteúdo, a parada limpa deixa o GOAWAY — e
+caminhos separados dos outros dois logs).
 
 ## Fase 8 — produto multiplataforma
 

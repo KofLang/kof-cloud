@@ -2,6 +2,7 @@ package kofcloud.edge
 
 import kofcloud.control.Registry
 import kofcloud.control.ControlPlane
+import kofcloud.edge.Events
 import kofcloud.edge.Metrics
 import kofcloud.identity.Keys
 import kofcloud.model.Device
@@ -67,8 +68,12 @@ void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
         } else {
             codec.feed(chunk)
             if (codec.overflowed()) {
-                // HELLO gigante: fecha sem responder (fail-closed).
+                // HELLO gigante: fecha sem responder (fail-closed). Mesma
+                // linha prometida pelo plano que o refuseTunnel emite para
+                // os outros motivos — aqui direto, sem welcome (o frame
+                // NUNCA sai, so a palavra no edge-runtime.log/stdout).
                 conn.close()
+                edgeEvent("warn", "tunel recusado: LINE_OVERFLOW")
                 noteTunnelRefused("LINE_OVERFLOW")
                 return
             }

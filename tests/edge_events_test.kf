@@ -108,10 +108,38 @@ test "edge-eventos: e2e — recusa de tunel real cai no arquivo", "edge-events" 
     var text = readTextOr(edgeRuntimeLogPath(), "")
     assert(text.indexOf("tunel recusado: DEVICE_UNKNOWN") >= 0, "recusa com motivo no arquivo: " + text)
     assert(text.indexOf("kfc_") < 0, "o frame invalido nao vaza para o arquivo")
+
+    // HELLO gigante (acima do teto de linha): fail-closed fecha SEM responder
+    // — e o unico destino de conexao que contava metrica sem dizer palavra
+    // (o plano ja prometia a linha; o codigo nao a emitia). A palavra entra
+    // sem welcome: o frame de recusa NUNCA sai para um peer hostil.
+    // Construcao por dobras: concatenar 1 a 1 ate 2 MiB seria O(n2) e
+    // travaria a suite; 64 KiB dobrados 6x passam de 4 MiB em tempo linear.
+    var flood = ""
+    var f = 0
+    while (f < 65536) {
+        flood = flood + "x"
+        f = f + 1
+    }
+    var d = 0
+    while (d < 6) {
+        flood = flood + flood
+        d = d + 1
+    }
+    var connBig = net.connect("127.0.0.1", tunnelPort)
+    connBig.send(bytesFromString(flood + "\n"))
+    time.sleep(500)
+    var echo = connBig.receive(receiveChunkBytes())
+    assert(echo.length == 0, "fail-closed fecha sem responder: " + intToString(echo.length))
+    connBig.close()
+
     // Parada limpa tambem deixa marco (GOAWAY SHUTDOWN).
     File(stop).writeText("stop")
     time.sleep(500)
-    assert(readTextOr(edgeRuntimeLogPath(), "").indexOf("GOAWAY SHUTDOWN") >= 0, "marco da parada limpa")
+    var afterBig = readTextOr(edgeRuntimeLogPath(), "")
+    assert(afterBig.indexOf("tunel recusado: LINE_OVERFLOW") >= 0, "overflow gigante deixa a linha prometida pelo plano")
+    assert(afterBig.indexOf("xxxxxxxxxx") < 0, "o conteudo do HELLO gigante nunca vai para o arquivo")
+    assert(afterBig.indexOf("GOAWAY SHUTDOWN") >= 0, "marco da parada limpa")
 }
 
 test "edge-eventos: caminho separado dos outros dois logs", "edge-events" {
