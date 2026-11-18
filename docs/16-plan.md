@@ -1009,7 +1009,7 @@ CLI); nunca loga corpo/token; é estático + `fetch`, sem framework pesado
 unit systemd manual no Linux. Usuário real quer instalar, logar uma vez e
 esquecer — com tray, reconexão visível e update assistido.
 
-**Estado: slice 1 ✅; slices 2 e 3 pendentes (base: daemon user-level + doctor).**
+**Estado: slice 1 ✅; slice 2 (tray + auto-update) e slice 3 (sincronização ✅ via `deploy --watch`, auto-update pendente) parciais.**
 Desenho fatiado:
 
 * **Slice 1 — instalador por SO ✅.** `daemonKind()` (config
