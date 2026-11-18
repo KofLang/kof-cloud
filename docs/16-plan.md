@@ -350,6 +350,25 @@ seus contadores vivem no próprio processo (sem protocolo novo no MVP).
 Prova: `tests/agent_metrics_test.kf` (3 testes: contadores puros, fluxo
 real via túnel, recusa fatal por motivo).
 
+**Estado (eventos legíveis do Edge — mesmos fatos, formato humano): ✅
+implementado.** O Edge contava recusas e quedas em métrica/anel, mas não
+tinha PALAVRA nenhuma: o `serve` imprime só o banner e o operador da
+plataforma não via POR QUE um túnel foi recusado. Agora `edge/Events.kf`
+emite uma linha (stdout via `log.*` **e** `~/.kofcloud/edge-runtime.log`):
+túnel recusado (com o MOTIVO do protocolo — DEVICE_UNKNOWN, AUTH_FAILED,
+DEVICE_REVOKED/SUSPENDED, VERSION_UNSUPPORTED, LINE_OVERFLOW), tunel
+aceito (com contagem de sessões vivas), sessão derrubada por ociosidade
+(com o teto em ms), teto de conexões públicas atingido (com o limite —
+503) e parada limpa (GOAWAY SHUTDOWN). Mesmo contrato do agent-runtime
+(teto `kofcloud.limits.logBytes`, corta o início; falha de IO nunca derruba
+o Edge): motivo do protocolo e contagens, **nunca** hostname, device,
+credencial ou corpo. Leitura: `kof cloud logs --edge` (mutuamente exclusivo
+com `--runtime` — mundos distintos: Agent local × Edge da plataforma).
+Prova: `tests/edge_events_test.kf` (5: linha com nível, teto que corta o
+início com carga real, contrato sem segredo/hostname, e2e — HELLO inválido
+num Edge real deixa "tunel recusado: DEVICE_UNKNOWN" no arquivo e a parada
+limpa deixa o GOAWAY — e caminhos separados dos outros dois logs).
+
 ## Fase 8 — produto multiplataforma
 
 Linux → Windows → macOS → Android. O core é compartilhado; só daemon,

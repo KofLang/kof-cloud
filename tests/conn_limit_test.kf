@@ -1,5 +1,6 @@
 import kofcloud.control.Registry
 import kofcloud.edge.EdgeState
+import kofcloud.edge.Events
 import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
 import kofcloud.model.Errors

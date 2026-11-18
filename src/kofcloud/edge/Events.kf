@@ -1,0 +1,58 @@
+package kofcloud.edge
+
+import kofcloud.cli.Local
+import kofcloud.util.Limits
+import kofcloud.util.Text
+import kofcloud.store.Store
+
+// Eventos do Edge: o mesmo padrao do Agent (agent/Events.kf), agora para o
+// lado da plataforma. O Edge tinha metricas (edge/Metrics.kf) e sondas de
+// incidente (Tunnel.kf), mas ZERO palavra sobre POR QUE recusou um tunel
+// ou caiu por ociosidade: o `noteTunnelRefused` contava o fato em memoria e
+// no anel (a partir do limiar), e o operador da plataforma nao tinha nem
+// stdout — `serve` imprime so o banner. Agora os pontos que decidem o
+// destino de uma conexao emitem uma linha legivel: recusa (com o MOTIVO do
+// protocolo), queda por ociosidade, GOAWAY de parada limpa, saturacao do
+// teto de conexoes publicas. O arquivo (`edge-runtime.log`, teto igual ao
+// dos logs do Agent) e lido por `kof cloud logs --edge`.
+//
+// Nunca entra aqui conteudo de requisicao, credencial, chave, hostname,
+// device ou contagem por cliente: so o motivo do protocolo e o numero do
+// teto (docs/17-limitations.md; mesmo contrato do agent-runtime).
+
+String edgeRuntimeLogPath() {
+    return kofcloudHome() + "/edge-runtime.log"
+}
+
+// `level`: "info" | "warn" | "error". `message` ja vem sem segredo.
+void edgeEvent(String level, String message) {
+    if (level == "error") {
+        log.error("edge: " + message)
+    } else if (level == "warn") {
+        log.warn("edge: " + message)
+    } else {
+        log.info("edge: " + message)
+    }
+    appendEdgeRuntimeLine(level, message)
+}
+
+// Grava uma linha no arquivo de runtime, com teto anti-crescimento (corta o
+// inicio, mantendo o recente — mesmo contrato do agent-runtime). Falha de
+// escrita nunca derruba o Edge: o evento ja foi para o stdout e a sonda de
+// incidente segue viva; o arquivo e a consulta depois, nunca a fonte.
+void appendEdgeRuntimeLine(String level, String message) {
+    appendEdgeRuntimeLineTo(edgeRuntimeLogPath(), level, message)
+}
+
+// Variante com caminho explicito: a de processo delega aqui (fonte unica da
+// linha e do teto) e o teste usa o caminho proprio em vez de sujar o
+// edge-runtime.log real do host. Mesma receita do agent/Events.kf.
+void appendEdgeRuntimeLineTo(String path, String level, String message) {
+    var line = longToString(time.now()) + " " + level + " " + message + "\n"
+    try {
+        var existing = readTextOr(path, "")
+        writeTextTo(path, trimLogHead(existing + line, limitLogBytes()))
+    } catch (String e) {
+        // Sem filesystem gravavel: o stdout continua sendo a fonte.
+    }
+}

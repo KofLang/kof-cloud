@@ -1,0 +1,123 @@
+import kofcloud.edge.Events
+import kofcloud.edge.EdgeState
+import kofcloud.cli.Commands
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.util.Limits
+import kofcloud.util.Text
+import kofcloud.store.Store
+import testkit.Support
+
+// Eventos do Edge: o mesmo padrao do Agent (agent/Events.kf, testado em
+// agent_events_test.kf), agora para o lado da plataforma. O `serve` nao
+// tinha nem stdout depois do banner; recusas de tunel e quedas por
+// ociosidade contavam so em metrica/anel. Agora o mesmo ponto que decide
+// o destino da conexao emite uma linha em edge-runtime.log (lido por
+// `logs --edge`), com teto e sem segredo.
+
+String eventsEdgePath(String name) {
+    return "/tmp/kofcloud-edge-ev-" + name + "-" + crypto.randomHex(4) + ".log"
+}
+
+test "edge-eventos: linha persiste com nivel e mensagem", "edge-events" {
+    var path = eventsEdgePath("basic")
+    appendEdgeRuntimeLineTo(path, "warn", "tunel recusado: AUTH_FAILED")
+    var text = readTextOr(path, "")
+    assert(text.length > 0, "arquivo criado")
+    assert(text.indexOf("warn tunel recusado: AUTH_FAILED") >= 0, "nivel + mensagem")
+    assert(text.endsWith("\n"), "linha terminada")
+}
+
+test "edge-eventos: teto corta o inicio e mantem o recente", "edge-events" {
+    var path = eventsEdgePath("cap")
+    var limit = limitLogBytes()
+    // O teto default (256 KiB) e folgado: 40 linhas curtas nunca o alcancam
+    // (o mesmo teste do Agent passa porque o arquivo ja vem cheio de outros
+    // testes). Aqui enche de verdade: linha de ~limit/10 bytes, 15 vezes.
+    var filler = ""
+    var i = 0
+    while (i < limit / 10 - 30) {
+        filler = filler + "x"
+        i = i + 1
+    }
+    var j = 0
+    while (j < 15) {
+        appendEdgeRuntimeLineTo(path, "info", "enchimento " + intToString(j) + " " + filler)
+        j = j + 1
+    }
+    var text = readTextOr(path, "")
+    assert(text.length <= limit, "respeita o teto")
+    assert(text.indexOf("enchimento 14") >= 0, "mantem o mais recente")
+    assert(text.indexOf("enchimento 0 ") < 0, "corta o inicio")
+}
+
+test "edge-eventos: nunca grava segredo nem hostname (contrato do modulo)", "edge-events" {
+    // O contrato e o mesmo do agent-runtime: quem chama passa so metadados
+    // (motivo do protocolo, contagens). Trava a forma das mensagens emitidas
+    // pelo Tunnel/HttpFront: sem kfc_/kfs_/kft_, sem hostname, sem device.
+    var path = eventsEdgePath("secrets")
+    appendEdgeRuntimeLineTo(path, "warn", "tunel recusado: DEVICE_REVOKED")
+    appendEdgeRuntimeLineTo(path, "warn", "sessao derrubada por ociosidade (120000ms sem frame util)")
+    appendEdgeRuntimeLineTo(path, "warn", "teto de conexoes publicas atingido (1024) — 503")
+    appendEdgeRuntimeLineTo(path, "info", "tunel aceito (1 sessao(oes) vivas)")
+    var text = readTextOr(path, "")
+    assert(text.indexOf("kfc_") < 0, "sem token de conta")
+    assert(text.indexOf("kfs_") < 0, "sem token de servico")
+    assert(text.indexOf("kft_") < 0, "sem token de tunel")
+    assert(text.indexOf("kofcloud.io") < 0, "sem hostname")
+}
+
+test "edge-eventos: e2e — recusa de tunel real cai no arquivo", "edge-events" {
+    // Edge real (precedente: incident-auth-e2e): HELLO com dispositivo
+    // inexistente vira recusa DEVICE_UNKNOWN; a mesma recusa que alimenta a
+    // metrica e a sonda de incidente agora deixa linha legivel no arquivo.
+    // O Tunnel real grava em edgeRuntimeLogPath() — o teste limpa o arquivo
+    // do host antes (mesmo precedente do agent_events_test) e le o caminho
+    // fixo; os testes puros acima usam a variante `_To` com caminho proprio.
+    File(edgeRuntimeLogPath()).delete()
+    var registry = Registry("/tmp/kofcloud-edge-ev-reg-" + crypto.randomHex(4) + ".json")
+    var controlPort = 20270
+    var tunnelPort = 20271
+    var httpPort = 20272
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var server = spawn { control.start() }
+    var edgeState = EdgeState(registry)
+    var stop = "/tmp/kofcloud-edge-ev-stop-" + crypto.randomHex(4) + ".txt"
+    File(stop).delete()
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", stop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), stop) }
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+
+    // HELLO invalido: dispositivo inexistente -> DEVICE_UNKNOWN (antes de
+    // qualquer auth; mesmo frame que um Agent real mandaria).
+    var conn = net.connect("127.0.0.1", tunnelPort)
+    var hello = mapOf()
+    hello.put("kind", "HELLO")
+    hello.put("v", intToString(protocolVersion()))
+    hello.put("deviceId", "dev-inexistente")
+    hello.put("token", "kfc_nao")
+    hello.put("clientPub", "")
+    conn.send(bytesFromString(json.encode(hello) + "\n"))
+    time.sleep(300)
+    conn.close()
+
+    assert(waitForPort(httpPort, 60), "http no ar")
+    // O mesmo evento que o Tunnel emitiu: a linha com o motivo do protocolo.
+    var text = readTextOr(edgeRuntimeLogPath(), "")
+    assert(text.indexOf("tunel recusado: DEVICE_UNKNOWN") >= 0, "recusa com motivo no arquivo: " + text)
+    assert(text.indexOf("kfc_") < 0, "o frame invalido nao vaza para o arquivo")
+    // Parada limpa tambem deixa marco (GOAWAY SHUTDOWN).
+    File(stop).writeText("stop")
+    time.sleep(500)
+    assert(readTextOr(edgeRuntimeLogPath(), "").indexOf("GOAWAY SHUTDOWN") >= 0, "marco da parada limpa")
+}
+
+test "edge-eventos: caminho separado dos outros dois logs", "edge-events" {
+    assert(edgeRuntimeLogPath() != logPath(), "edge != marcos da CLI")
+    assert(edgeRuntimeLogPath() != agentRuntimeLogPath(), "edge != runtime do Agent")
+    assert(edgeRuntimeLogPath().endsWith("/edge-runtime.log"), "nome do arquivo")
+    assert(logPath().endsWith("/agent.log"), "marcos continuam em agent.log")
+    assert(agentRuntimeLogPath().endsWith("/agent-runtime.log"), "runtime do Agent inalterado")
+}

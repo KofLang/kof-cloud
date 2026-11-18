@@ -1,5 +1,6 @@
 import kofcloud.control.Registry
 import kofcloud.edge.EdgeState
+import kofcloud.edge.Events
 import kofcloud.edge.Tunnel
 import kofcloud.protocol.Session
 import kofcloud.util.Limits

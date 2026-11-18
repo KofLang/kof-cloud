@@ -202,14 +202,18 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   escapa. A memória do Edge fica limitada a cerca de `maxBytes` por conexão
   (mais o bloco de `receive`), não ao declarado; o que continua fora da
   garantia é o custo de CPU do `bytesConcat` O(n²) nesse caminho.
-* **Logs em dois arquivos, por desenho (débito quitado).** `kof cloud logs`
+* **Logs em três arquivos, por desenho (débito quitado).** `kof cloud logs`
   lê `~/.kofcloud/agent.log` (marcos de sessão gravados pela CLI: `connect`,
   `disconnect`). `kof cloud logs --runtime` lê
   `~/.kofcloud/agent-runtime.log`, onde o Agent grava os eventos reais
   (connect, reconnect, recusa fatal, mudança de health, GOAWAY, parada) pelo
-  mesmo ponto que emite para o stdout (`agent/Events.kf`). Cada arquivo tem
-  teto próprio (256 KiB, corta o início). Nenhum dos dois recebe conteúdo de
-  requisição, credencial ou chave.
+  mesmo ponto que emite para o stdout (`agent/Events.kf`). `kof cloud logs
+  --edge` lê `~/.kofcloud/edge-runtime.log`, com os eventos do lado da
+  plataforma (recusa de túnel com o motivo do protocolo, túnel aceito, queda
+  por ociosidade, teto de conexões públicas, parada limpa) pelo mesmo padrão
+  (`edge/Events.kf`). Cada arquivo tem teto próprio (256 KiB, corta o
+  início). Nenhum dos três recebe conteúdo de requisição, credencial, chave
+  ou hostname.
 * **Os contadores de conexão são aproximados sob corrida** (check-then-act
   sem lock, L3). Vale para as conexões públicas simultâneas (1024) e para as
   conexões por serviço (64): o pior caso estoura por poucas unidades, nunca

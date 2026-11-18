@@ -176,6 +176,8 @@ test "flags: booleana repetida barra antes de qualquer efeito", "boolean-dup" {
     // 2) Comandos locais sem sessao nem rede: unico passa, repetida barra.
     assert(cmdLogs(listOf("--runtime")) == 0, "--runtime unico passa")
     assert(cmdLogs(listOf("--runtime", "--runtime")) == 1, "--runtime repetido barra")
+    assert(cmdLogs(listOf("--edge", "--edge")) == 1, "--edge repetido barra")
+    assert(cmdLogs(listOf("--runtime", "--edge")) == 1, "--runtime com --edge barra (mundos distintos)")
     assert(cmdServe(listOf("--panel", "--panel")) == 1, "--panel repetido barra")
     assert(cmdServe(listOf("--status-page", "--status-page")) == 1, "--status-page repetido barra")
 

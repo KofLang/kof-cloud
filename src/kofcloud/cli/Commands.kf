@@ -6,6 +6,7 @@ import kofcloud.cli.Local
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.edge.EdgeState
+import kofcloud.edge.Events
 import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
 import kofcloud.identity.Keys
@@ -75,7 +76,7 @@ String resolveWafMode(String flagRaw) {
 }
 
 String usoLogsLine() {
-    return "uso: kof cloud logs [--tail <linhas>]"
+    return "uso: kof cloud logs [--tail <linhas>] [--runtime|--edge]"
 }
 
 String usoDomainAddLine() {
@@ -2531,23 +2532,35 @@ Int cmdStateBackup(List<String> args) {
 }
 
 Int cmdLogs(List<String> args) {
-    // --runtime repetido seguia normal: `hasFlag` leria o primeiro e o
-    // comando rodaria como se fosse um so (mesma regra do --tail abaixo).
+    // --runtime/--edge repetidos seguiam normal: `hasFlag` leria o primeiro e
+    // o comando rodaria como se fosse um so (mesma regra do --tail abaixo).
     // `logs` nao tem posicional: `logs lixo` lia o log e ignorava o token
     // (typo silencioso). Barra antes de ler o arquivo.
-    if (flagDuplicated(args, "--runtime") || extraPositional(args, 0)) {
+    if (flagDuplicated(args, "--runtime") || flagDuplicated(args, "--edge") || extraPositional(args, 0)) {
         println(usoLogsLine())
         return 1
     }
     var runtime = hasFlag(args, "--runtime")
+    var edge = hasFlag(args, "--edge")
+    // Mutuamente exclusivos por desenho: os dois seriam "eventos reais" de
+    // processos diferentes (Agent local x Edge da plataforma); ler os dois
+    // de uma vez misturaria mundos sem dizer qual linha vem de qual.
+    if (runtime && edge) {
+        println(usoLogsLine())
+        return 1
+    }
     var path = logPath()
     if (runtime) {
         path = agentRuntimeLogPath()
+    } else if (edge) {
+        path = edgeRuntimeLogPath()
     }
     var text = readTextOr(path, "")
     if (text.length == 0) {
         if (runtime) {
             println("sem eventos de runtime (o Agent ainda nao rodou neste host)")
+        } else if (edge) {
+            println("sem eventos do Edge (o serve ainda nao rodou neste host)")
         } else {
             println("sem logs")
         }
@@ -2581,7 +2594,7 @@ record AuditEntry(String at, String actor, String action, String target, String 
 // na composicao: SBOM de verdade passa root + conteudos; File.readText
 // vive no cmdAudit (precedente: loadManifestFile separa parse de IO).
 List<String> sbomModules() {
-    return listOf("src/kofcloud/agent/Agent.kf", "src/kofcloud/agent/Backoff.kf", "src/kofcloud/agent/Events.kf", "src/kofcloud/agent/Health.kf", "src/kofcloud/agent/Metrics.kf", "src/kofcloud/agent/Relay.kf", "src/kofcloud/cli/Cli.kf", "src/kofcloud/cli/Commands.kf", "src/kofcloud/cli/Daemon.kf", "src/kofcloud/cli/Deploy.kf", "src/kofcloud/cli/Doctor.kf", "src/kofcloud/cli/Local.kf", "src/kofcloud/cli/Usage.kf", "src/kofcloud/control/ControlPlane.kf", "src/kofcloud/control/Metrics.kf", "src/kofcloud/control/Panel.kf", "src/kofcloud/control/Registry.kf", "src/kofcloud/control/StatusPage.kf", "src/kofcloud/edge/EdgeState.kf", "src/kofcloud/edge/HttpFront.kf", "src/kofcloud/edge/Http.kf", "src/kofcloud/edge/Metrics.kf", "src/kofcloud/edge/Relay.kf", "src/kofcloud/edge/Tunnel.kf", "src/kofcloud/identity/Keys.kf", "src/kofcloud/identity/Tokens.kf", "src/kofcloud/model/Account.kf", "src/kofcloud/model/Audit.kf", "src/kofcloud/model/CustomDomain.kf", "src/kofcloud/model/Device.kf", "src/kofcloud/model/Errors.kf", "src/kofcloud/model/Exposure.kf", "src/kofcloud/model/Incident.kf", "src/kofcloud/model/Service.kf", "src/kofcloud/model/StateCopy.kf", "src/kofcloud/model/Webhook.kf", "src/kofcloud/protocol/Bytes.kf", "src/kofcloud/protocol/Frame.kf", "src/kofcloud/protocol/LineCodec.kf", "src/kofcloud/protocol/Payload.kf", "src/kofcloud/protocol/Session.kf", "src/kofcloud/protocol/Tunnel.kf", "src/kofcloud/protocol/Version.kf", "src/kofcloud/store/Store.kf", "src/kofcloud/util/Hosts.kf", "src/kofcloud/util/Limits.kf", "src/kofcloud/util/Text.kf", "src/Main.kf")
+    return listOf("src/kofcloud/agent/Agent.kf", "src/kofcloud/agent/Backoff.kf", "src/kofcloud/agent/Events.kf", "src/kofcloud/agent/Health.kf", "src/kofcloud/agent/Metrics.kf", "src/kofcloud/agent/Relay.kf", "src/kofcloud/cli/Cli.kf", "src/kofcloud/cli/Commands.kf", "src/kofcloud/cli/Daemon.kf", "src/kofcloud/cli/Deploy.kf", "src/kofcloud/cli/Doctor.kf", "src/kofcloud/cli/Local.kf", "src/kofcloud/cli/Usage.kf", "src/kofcloud/control/ControlPlane.kf", "src/kofcloud/control/Metrics.kf", "src/kofcloud/control/Panel.kf", "src/kofcloud/control/Registry.kf", "src/kofcloud/control/StatusPage.kf", "src/kofcloud/edge/EdgeState.kf", "src/kofcloud/edge/Events.kf", "src/kofcloud/edge/HttpFront.kf", "src/kofcloud/edge/Http.kf", "src/kofcloud/edge/Metrics.kf", "src/kofcloud/edge/Relay.kf", "src/kofcloud/edge/Tunnel.kf", "src/kofcloud/identity/Keys.kf", "src/kofcloud/identity/Tokens.kf", "src/kofcloud/model/Account.kf", "src/kofcloud/model/Audit.kf", "src/kofcloud/model/CustomDomain.kf", "src/kofcloud/model/Device.kf", "src/kofcloud/model/Errors.kf", "src/kofcloud/model/Exposure.kf", "src/kofcloud/model/Incident.kf", "src/kofcloud/model/Service.kf", "src/kofcloud/model/StateCopy.kf", "src/kofcloud/model/Webhook.kf", "src/kofcloud/protocol/Bytes.kf", "src/kofcloud/protocol/Frame.kf", "src/kofcloud/protocol/LineCodec.kf", "src/kofcloud/protocol/Payload.kf", "src/kofcloud/protocol/Session.kf", "src/kofcloud/protocol/Tunnel.kf", "src/kofcloud/protocol/Version.kf", "src/kofcloud/store/Store.kf", "src/kofcloud/util/Hosts.kf", "src/kofcloud/util/Limits.kf", "src/kofcloud/util/Text.kf", "src/Main.kf")
 }
 
 // Linha do SBOM: "sha256  caminho" (formato do sha256sum, verificavel por

@@ -41,6 +41,7 @@ void serveTunnel(EdgeState state, Int port, String tunnelSecret, String stopFile
     // SHUTDOWN antes do socket morrer — contrato do fio, o Agent encerra sem
     // throw e sem reconectar para um Edge morto. Sem isso o stop derruba os
     // tuneis com EOF e cada Agent registra erro + backoff inutil.
+    edgeEvent("info", "parada limpa: GOAWAY SHUTDOWN para " + intToString(state.onlineCount()) + " sessao(oes)")
     state.goawayAll("SHUTDOWN")
 }
 
@@ -123,6 +124,7 @@ void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
     var session = TunnelSession(sessionId, deviceId, account.id, sessionKey)
     state.bind(deviceId, session)
     state.registry.touchDevice(deviceId)
+    edgeEvent("info", "tunel aceito (" + intToString(state.onlineCount()) + " sessao(oes) vivas)")
 
     conn.send(bytesFromString(encodeFrame(welcomeFrame(true, "", sessionId, serverPub, limitHeartbeatMs()))))
     session.send(servicesFrame(serviceListJson(state.registry.servicesForDevice(deviceId))))
@@ -175,6 +177,7 @@ void tunnelIdleSweeper(EdgeState state, TunnelSession session, String deviceId, 
             open = false
         } else {
             if (session.idleMs() > state.tunnelIdleMs) {
+                edgeEvent("warn", "sessao derrubada por ociosidade (" + longToString(state.tunnelIdleMs) + "ms sem frame util)")
                 state.unbind(deviceId, sessionId)
                 session.close()
                 noteTunnelRefused("IDLE_TIMEOUT")
@@ -260,6 +263,7 @@ void tunnelWriter(Conn conn, TunnelSession session) {
 }
 
 void refuseTunnel(EdgeState state, Conn conn, String reason) {
+    edgeEvent("warn", "tunel recusado: " + reason)
     conn.send(bytesFromString(encodeFrame(welcomeFrame(false, reason, "", "", 0))))
     conn.close()
     noteTunnelRefused(reason)

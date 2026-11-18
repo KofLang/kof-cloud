@@ -567,7 +567,7 @@ test "text: notFoundLine trava mensagens da CLI", "not-found-line" {
     // unica): cada helper abaixo cobre 2 call sites (flag + args).
     assert(usoServiceTokenLine() == "uso: kof cloud service token <nome> [--ttl <horas>]", "uso token")
     assert(usoServeLine().indexOf("kof cloud serve") >= 0, "uso serve")
-    assert(usoLogsLine() == "uso: kof cloud logs [--tail <linhas>]", "uso logs")
+    assert(usoLogsLine() == "uso: kof cloud logs [--tail <linhas>] [--runtime|--edge]", "uso logs")
     assert(usoDomainAddLine() == "uso: kof cloud domain add <hostname> --service <nome>", "uso domain add")
 }
 
@@ -692,12 +692,12 @@ test "text: resolveStatePath apara e cai no default", "serve-state" {
     assert(flagDuplicated(listOf("--state", "a"), "--state") == false, "state unico ok")
 }
 
-test "text: sbom cobre os 48 fontes com hash verificavel", "audit-sbom" {
+test "text: sbom cobre os 49 fontes com hash verificavel", "audit-sbom" {
     // Puras (precedente: serve-tls): lista curada em fonte unica (trava
     // quebra se adicionarem modulo — mesmo padrao do errors-hint-all),
     // linha no formato sha256sum, UNREADABLE honesto em vez de hash falso.
     var modules = sbomModules()
-    assert(modules.size == 48, "48 fontes: " + intToString(modules.size))
+    assert(modules.size == 49, "49 fontes (edge/Events entra): " + intToString(modules.size))
     assert(modules.get(0) == "src/kofcloud/agent/Agent.kf", "primeiro modulo")
     assert(modules.get(modules.size - 1) == "src/Main.kf", "ultimo modulo")
     assert(sbomLine("a/b.kf", "") == "UNREADABLE  a/b.kf", "ilegivel nao vira hash")

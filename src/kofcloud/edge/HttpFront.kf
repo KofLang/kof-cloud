@@ -32,6 +32,7 @@ void serveHttp(EdgeState state, Int port, Int maxBytes, String stopFile) {
             // rajada de conexoes abertas e ociosas consome uma task e um
             // socket por conexao ate exaurir a maquina.
             if (state.tryAcquirePublicConn() == false) {
+                edgeEvent("warn", "teto de conexoes publicas atingido (" + intToString(state.publicConnLimitValue()) + ") — 503")
                 refusePublicConnection(conn)
                 notePublicConnRefused()
             } else {

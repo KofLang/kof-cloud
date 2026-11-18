@@ -149,6 +149,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 | flag WAF no serve (slice 1-flag) | `serve --waf detectar|enforce` (`resolveWafMode` pura + fail-fast: solta/repetida/lixo barra; fio no EdgeState; linha `waf:` no banner) | `hosts_test.kf` (`serve-waf`) + locks ajuda (`daemon_test.kf`) |
 | fundação KCF111 (allowlist slice 3) | construtor `errWafAllowDenied()` + Hint (métrica `_waf_allow_denied`) + sufixo em `noteHttpFinished` + matcher `wafAllowCheck` puro; enforcement no HttpFront (linha 51) | `errors_test.kf` (`errors-hint`, `errors-hint-all`: 59 construtores (inclui KCF115-KCF119 do Edge, KCF125-KCF130 de contencao/webhook e KCF131-KCF139); camada 3 compara a lista canonica com os construtores) + `metrics_test.kf` + `waf_detect_test.kf` (`wafallow-unit`) |
 | eventos do Agent | `agent/Events.kf`: `agentEvent` emite para `log.*` **e** `agent-runtime.log` (teto 256 KiB); `logs --runtime` | `agent_events_test.kf` |
+| eventos do Edge (`logs --edge`) | `edge/Events.kf`: `edgeEvent` emite para `log.*` **e** `edge-runtime.log` (mesmo teto, mesmo contrato sem segredo/hostname) nos pontos que decidem o destino da conexão: recusa de túnel com o motivo do protocolo, túnel aceito, queda por ociosidade, teto de conexões públicas (503) e parada limpa (GOAWAY SHUTDOWN); `kof cloud logs --edge` lê o arquivo (mutuamente exclusivo com `--runtime`); o `serve` não tinha palavra nenhuma depois do banner | `edge_events_test.kf` |
 | idle timeout (tunel + stream) | `lastActivityMs` + sweepers Edge/Agent, EOF limpo vira throw (reconecta) | `idle_test.kf` |
 
 ## Comportamentos provados
@@ -185,6 +186,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 * **Observabilidade local do Agent**: os eventos reais do túnel ficam
   consultáveis depois do processo terminar (`logs --runtime`), sem depender de
   stdout — e sem gravar segredo (`agent_events_test.kf`).
+* **Observabilidade local do Edge**: o mesmo padrão do lado da plataforma — recusas de túnel (com motivo), quedas por ociosidade, saturação de conexões e parada limpa ficam consultáveis em `edge-runtime.log` via `logs --edge`, sem hostname nem credencial (`edge_events_test.kf`).
 * **Domínio próprio (Fase 6, slice 1)**: hostname externo registrado como
   PENDING com instrução CNAME, verificado por `net.resolve` contra os destinos
   esperados do Edge (comparação exata; NXDOMAIN/falha = `KCF124` opaco), rota
