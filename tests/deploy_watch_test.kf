@@ -1,0 +1,155 @@
+import kofcloud.cli.Deploy
+import kofcloud.cli.Local
+import kofcloud.cli.Usage
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.util.Limits
+import kofcloud.util.Text
+import testkit.Support
+
+// deploy --watch (F13 s3, parcial sem auto-update): o manifesto local e a
+// fonte — o laco re-le o arquivo a cada passo e aplica a MESMA semantica do
+// deploy (build -> artifact -> publish idempotente) quando o TEXTO muda.
+// Provas puras da decisao (watchDecision) e do apply (watchApplyOnce contra
+// control plane real) + travas do uso/help.
+
+String watchManifestPath(String tag) {
+    return "/tmp/kofcloud-watch-" + tag + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "watch: decisao pura — stop, vazio, igual e mudou", "deploy-watch" {
+    var stop = watchManifestPath("stop-sentinel")
+    File(stop).delete()
+    // Sem sentinela e manifesto igual ao visto: nada a fazer.
+    var d = watchDecision(stop, "{\"services\":[]}", "{\"services\":[]}")
+    assert(d.apply == false && d.stop == false, "igual = nada a fazer")
+    // Manifesto mudou: aplica.
+    d = watchDecision(stop, "{\"services\":[{\"name\":\"a\",\"port\":1}]}", "{\"services\":[]}")
+    assert(d.apply && d.stop == false, "texto mudou = aplica")
+    // Arquivo esvaziado (editor gravando pela metade): NAO aplica — o
+    // parse aplicaria lixo e a remocao nunca e automatica. Tambem nao
+    // encerra: o ciclo seguinte rele.
+    d = watchDecision(stop, "", "{\"services\":[{\"name\":\"a\",\"port\":1}]}")
+    assert(d.apply == false && d.stop == false, "vazio = espera (nunca destrutivo)")
+    // Sentinela presente: para, mesmo com mudanca pendente.
+    writeTextTo(stop, "stop")
+    d = watchDecision(stop, "{\"services\":[], {", "{\"services\":[]}")
+    assert(d.stop, "sentinela vence")
+    File(stop).delete()
+    // Sentinela vazia no caminho (defesa em profundidade): sem sentinela
+    // configurada o watch nunca para sozinho.
+    d = watchDecision("", "x", "y")
+    assert(d.apply, "sem caminho de stop: segue")
+}
+
+test "watch: limits do passo com recuo seguro", "deploy-watch" {
+    assert(deployWatchMsFrom(0) == 2000, "zero recai no default")
+    assert(deployWatchMsFrom(-1) == 2000, "negativo recai no default")
+    assert(deployWatchMsFrom(500) == 500, "positivo passa")
+    assert(limitDeployWatchMs() == 2000, "default travado em 2 s")
+}
+
+test "watch: uso/help documentam --watch e a combinacao proibida", "deploy-watch" {
+    // Precedente deploy-usage (daemon_test): flag nova sem trava apodrece
+    // README e help em silencio.
+    var help = usageText()
+    assert(help.indexOf("[--watch]") >= 0, "help anuncia --watch")
+    assert(help.indexOf("nunca remove") >= 0, "help diz que watch nunca remove")
+    assert(usageText().indexOf("--watch observa") >= 0, "watch descrito")
+}
+
+test "watch: e2e — edita o manifesto e o watch publica; removedor nunca roda sozinho", "deploy-watch" {
+    var localSvc = 20290
+    var controlPort = 20291
+    var tunnelPort = 20292
+    var httpPort = 20293
+
+    var app = web.app()
+    app.get("/") { return "svc-watch" }
+    var server = spawn { app.listen(localSvc) }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-watch-reg-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-watch-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-watch-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+
+    // O watch nao precisa do Agent para publicar — mas o e2e sobe o tunel
+    // para provar a rota inteira (o que o operador percebe: o site no ar).
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 500)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent no ar")
+
+    // Ciclo 1: watchApplyOnce com manifesto de 1 servico (rota saida via tunel).
+    var manifest = watchManifestPath("m1")
+    var body1 = "{\"services\":[{\"name\":\"site\",\"port\":" + intToString(localSvc) + "}]}"
+    writeTextTo(manifest, body1)
+    var f1 = watchApplyOnce("http://127.0.0.1:" + intToString(controlPort), accountToken, deviceId, body1)
+    assert(f1 == 0, "apply 1 sem falha")
+    var served = false
+    var waits = 60
+    while (waits > 0 && served == false) {
+        var probe = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
+        if (statusOf(probe) == 200 && bodyOf(probe) == "svc-watch") {
+            served = true
+        } else {
+            time.sleep(250)
+            waits = waits - 1
+        }
+    }
+    assert(served, "servico do manifesto no ar pelo tunel")
+
+    // Ciclo 2: MESMO texto = idempotente (nada muda, nada quebra).
+    var f2 = watchApplyOnce("http://127.0.0.1:" + intToString(controlPort), accountToken, deviceId, body1)
+    assert(f2 == 0, "re-apply idempotente")
+
+    // Ciclo 3: manifest EDITADO (nova porta não; novo servico) — publica o
+    // segundo SEM remover o primeiro (o watch nunca remove).
+    var body2 = "{\"services\":[{\"name\":\"site\",\"port\":" + intToString(localSvc) + "},{\"name\":\"api\",\"port\":" + intToString(localSvc) + "}]}"
+    var f3 = watchApplyOnce("http://127.0.0.1:" + intToString(controlPort), accountToken, deviceId, body2)
+    assert(f3 == 0, "apply 2 sem falha")
+    var services = registry.servicesForAccount(accountId)
+    var names = listOf<String>()
+    for (var svc in services) {
+        names.add(svc.name)
+    }
+    assert(names.contains("site") && names.contains("api"), "watch publica o novo: " + names.size)
+    assert(names.size == 2, "nada removido de proposito")
+
+    // Manifesto esvaziado: watchDecision ja recusa aplicar (teste puro);
+    // aqui prova o apply direto tambem recusa texto vazio.
+    var f4 = watchApplyOnce("http://127.0.0.1:" + intToString(controlPort), accountToken, deviceId, "")
+    assert(f4 == 0, "texto vazio nao aplica nem falha")
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1200)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(800)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}

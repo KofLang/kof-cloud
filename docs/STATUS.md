@@ -28,7 +28,7 @@
 ```bash
 export PATH=/home/mel/tools/jdk-25/bin:$PATH
 KOF=/home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar
-java -jar $KOF test --target jvm --timeout 150   # 59 suites, 0 falhas
+java -jar $KOF test --target jvm --timeout 150   # 60 suites, 0 falhas
 java -jar $KOF build --output /tmp/kofcloud-check # compila sem erro
 ```
 
@@ -39,7 +39,7 @@ Ver `13-kof-apis.md` e `14-modules.md`.
 ## Marcadores por area (goldens)
 
 Cada suite imprime `PASS <nome>` por teste e `0 failed of N tests` no fim;
-o run total imprime `59 passed, 0 failed`. Falha = nome do teste + assert
+o run total imprime `60 passed, 0 failed`. Falha = nome do teste + assert
 + abort sem cleanup (listeners presos ate o `--timeout` matar — ver
 `15-tests.md` sobre sentinelas).
 
@@ -105,8 +105,8 @@ o run total imprime `59 passed, 0 failed`. Falha = nome do teste + assert
 | flags com valor, booleanas sem duplicação e posicional sobrando (CLI) | `tests/value_flags_test.kf` | 4 |
 | eventos do Edge (`logs --edge`) | `tests/edge_events_test.kf` | 6 |
 | SERVICES empurrado (F14 s3) | `tests/services_push_test.kf` | 2 |
-
-Total: 424 testes. Ver `15-tests.md` para a matriz.
+| deploy --watch (F13 s3 parcial) | `tests/deploy_watch_test.kf` | 4 |
+Total: 428 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

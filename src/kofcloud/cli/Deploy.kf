@@ -115,6 +115,13 @@ ManifestLoad loadManifestFile(String path) {
     if (raw.length == 0) {
         return ManifestLoad(false, "manifesto nao encontrado: " + path, listOf<ManifestService>())
     }
+    return loadManifestText(raw, path)
+}
+
+// Variante para o watch (F13 s3): o texto JA foi lido pelo laco — o parse
+// e o mesmo (fonte unica), so muda quem le. Erro cita o caminho para o
+// deploy explicito continuar dizendo "manifesto invalido (<path>)".
+ManifestLoad loadManifestText(String raw, String path) {
     try {
         return ManifestLoad(true, "", parseManifest(raw))
     } catch (String e) {
@@ -762,11 +769,110 @@ String manifestField(String entry, String key) {
     return num
 }
 
+// Intervalo do watch (ms): com que passo o manifesto e re-lido e comparado.
+// Recuo seguro na familia `*MsFrom`: 0/negativo virariam busy-loop lendo e
+// parseando o arquivo — volta ao default. `kofcloud.limits.deployWatchMs`.
+Int deployWatchMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 2000
+    }
+    return configured
+}
+
+Int limitDeployWatchMs() {
+    return deployWatchMsFrom(config.int("kofcloud.limits.deployWatchMs", 2000))
+}
+
+// Arquivo de parada do watch: separado do stopFile do Agent (`disconnect`
+// e do tunel/redeploy), porque o watch e um processo proprio — encerra-lo
+// nao pode parar o connect de alguem. Mesmo padrao de sentinela observada
+// por polling (L3: sem sinal nem watch do SO).
+String deployWatchStopPath() {
+    return kofcloudHome() + "/deploy-watch-stop"
+}
+
+// Telefone do watch (pura): decides se o ciclo aplica o manifesto lido.
+// Arquivo ilegivel (removido no meio) NAO aplica nem encerra: o editor pode
+// ter esvaziado o arquivo na hora da gravacao (parse de arquivo parcial
+// aplicaria lixo); o ciclo seguinte rele. Texto igual = nada a fazer
+// (comparacao do texto cru evita hash/fingerprint — o arquivo e pequeno).
+// Manifesto invalido (parse falhou) tb nao aplica: os erros dele so saem
+// no deploy explicito, onde o operador esta olhando.
+ record WatchDecision(Bool apply, Bool stop)
+
+WatchDecision watchDecision(String stopPath, String rawText, String seenText) {
+    if (stopPath.length > 0 && File(stopPath).exists()) {
+        return WatchDecision(false, true)
+    }
+    if (rawText.length == 0) {
+        return WatchDecision(false, false)
+    }
+    if (rawText == seenText) {
+        return WatchDecision(false, false)
+    }
+    return WatchDecision(true, false)
+}
+
+// Um ciclo de apply do watch: parseia o texto e publica cada servico com a
+// MESMA semantica do deploy (build -> artifact -> publish idempotente).
+// Falha isolada por servico: os demais seguem; o resumo impresso conta.
+// Nunca remove: o watch NAO poda o que saiu do manifesto (remocao e
+// destrutiva; trollfeed de editor pode apagar servicos por acidente) —
+// o `down --prune` continua sendo o comando explicito para isso.
+Int watchApplyOnce(String controlUrl, String token, String deviceId, String rawText) {
+    var loaded = loadManifestText(rawText, "kofcloud.json (watch)")
+    if (loaded.ok == false) {
+        return 0
+    }
+    var failures = 0
+    for (var wanted in loaded.services) {
+        if (wanted.build.trim().length > 0) {
+            var built = runServiceBuild(wanted.build)
+            if (built.ok == false) {
+                log.error("watch: build de " + wanted.name + " falhou: " + built.detail)
+                failures = failures + 1
+                continue
+            }
+            println("watch: build ok: " + wanted.name)
+        }
+        var missing = artifactProblem(wanted.name, wanted.artifact)
+        if (missing.length > 0) {
+            log.error("watch: artefato de " + wanted.name + " sumiu: " + wanted.artifact)
+            failures = failures + 1
+            continue
+        }
+        var body = mapOf()
+        body.put("deviceId", deviceId)
+        body.put("name", wanted.name)
+        body.put("localAddress", wanted.address)
+        body.put("localPort", intToString(wanted.port))
+        body.put("protocol", wanted.protocol)
+        body.put("exposure", wanted.exposure)
+        body.put("allowMethods", wanted.allowMethods)
+        body.put("allowPaths", wanted.allowPaths)
+        try {
+            requireOk(http.post(controlUrl + "/v1/services", json.encode(body), jsonHeader(token)))
+            println("watch: publicado: " + wanted.name)
+        } catch (String e) {
+            log.error("watch: falha ao publicar " + wanted.name + ": " + e)
+            failures = failures + 1
+        }
+    }
+    return failures
+}
+
 Int cmdDeploy(List<String> args) {
     // Booleanas repetidas tambem barram: `hasFlag` leria a primeira e o
     // operador repetiria a flag sem saber (mesma regra do --file).
-    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file") || flagDuplicated(args, "--check") || flagDuplicated(args, "--plan")) {
-        println("uso: kof cloud deploy [--file <caminho>] [--check] [--plan]")
+    // --watch (F13 s3): polling do manifesto + apply da mesma idempotencia.
+    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file") || flagDuplicated(args, "--check") || flagDuplicated(args, "--plan") || flagDuplicated(args, "--watch")) {
+        println("uso: kof cloud deploy [--file <caminho>] [--check] [--plan] [--watch]")
+        return 1
+    }
+    // --watch nao combina com --check/--plan: o watch aplica, os outros
+    // so olham — misturar deixaria ambiguo o que o laco faz a cada ciclo.
+    if (hasFlag(args, "--watch") && (hasFlag(args, "--check") || hasFlag(args, "--plan"))) {
+        println("uso: kof cloud deploy [--file <caminho>] [--check] [--plan] [--watch]  (--watch nao combina com --check/--plan)")
         return 1
     }
     var session = loadSession()
@@ -790,6 +896,43 @@ Int cmdDeploy(List<String> args) {
         return 1
     }
     var services = loaded.services
+    // --watch (F13 s3, parcial sem auto-update): o manifesto e a fonte; a
+    // cada passo (deployWatchMs) o arquivo e relido e, se o TEXTO mudou,
+    // aplicado com a mesma semantica do deploy (build -> artifact ->
+    // publish idempotente). O primeiro apply e imediato (o operador que
+    // rodou `deploy --watch` espera o estado do manifesto no ar, nao so
+    // "observando"). Stop: sentinela propria (`deploy-watch-stop`) —
+    // encerrar o watch NAO pode parar o `connect` de alguem. Nunca remove:
+    // remocao e destrutiva e o editor pode apagar por acidente; o comando
+    // explicito para isso e `down --prune`.
+    if (hasFlag(args, "--watch")) {
+        var watchStop = deployWatchStopPath()
+        File(watchStop).delete()
+        var step = limitDeployWatchMs()
+        var seen = ""
+        println("watch: observando " + path + " (passo " + intToString(step) + "ms; pare com: touch " + watchStop + ")")
+        var open = true
+        while (open) {
+            time.sleep(step)
+            var raw = readTextOr(path, "")
+            var decision = watchDecision(watchStop, raw, seen)
+            if (decision.stop) {
+                open = false
+            } else if (decision.apply) {
+                // Primeiro apply: seen vazio com manifesto nao-vazio ja e
+                // mudanca — aplica na hora, sem esperar uma segunda edicao.
+                var failures = watchApplyOnce(session.controlUrl, session.token, identity.deviceId, raw)
+                if (failures == 0) {
+                    println("watch: manifesto aplicado")
+                } else {
+                    log.error("watch: aplicado com " + intToString(failures) + " falha(s); o ciclo seguinte re-publica o que falhou (publish e idempotente)")
+                }
+                seen = raw
+            }
+        }
+        println("watch: encerrado")
+        return 0
+    }
     // --plan: mostra o diff sem aplicar nada (como `terraform plan`).
     // Puro depois do fetch: nenhuma escrita, nenhum publish.
     if (hasFlag(args, "--plan")) {

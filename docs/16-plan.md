@@ -1035,6 +1035,28 @@ Desenho fatiado:
   assinatura Ed25519 (chave embutida, nunca baixada junto) e troca no
   próximo restart. Prova: e2e de update com assinatura válida/inválida.
 
+  **Implementado (sincronização — `deploy --watch`; auto-update pendente):**
+  o manifesto local é a fonte — `kof cloud deploy --watch` re-lê o arquivo a
+  cada passo (`kofcloud.limits.deployWatchMs`, default 2 s, recuo seguro
+  `deployWatchMsFrom` — 0/negativo viraria busy-loop lendo/parseando) e,
+  quando o TEXTO muda, aplica com a MESMA semantica do deploy (build →
+  artifact → publish idempotente), serviço a serviço com falha isolada; o
+  primeiro apply é imediato. O que o watch NÃO faz, por desenho: **nunca
+  remove** (remoção é destrutiva e um editor pode apagar por acidente — o
+  `down --prune` continua sendo o comando explícito) e não aplica arquivo
+  vazio/ilegível (editor gravando pela metade não vira estado). Stop:
+  sentinela própria `~/.kofcloud/deploy-watch-stop` (separada do stopFile
+  do Agent — encerrar o watch não pode parar o `connect` de alguém), mesma
+  técnica de polling (L3: sem watch do SO). Decisão pura `watchDecision`
+  (stop vence, vazio espera, igual não aplica, mudou aplica). **Junto,
+  fatoração:** `loadManifestFile` delega na nova `loadManifestText` (o parse
+  é um só; o watch parseia o texto que já leu). `--watch` não combina com
+  `--check`/`--plan` (o watch aplica; os outros só olham). Auto-update
+  assinado segue pendente (Ed25519 utilizável continua preso no stdlib, L17).
+  Prova: `tests/deploy_watch_test.kf` (4: decisão pura, recuo do passo,
+  travas do help, e2e com tunel real — publica, re-aplica idempotente,
+  publica o novo SEM remover o velho).
+
 **Regras:** enable/start sempre com consentimento explícito (como hoje);
 nunca auto-update silencioso sem assinatura válida; segredos ficam no
 keychain do SO quando houver (fallback: `~/.kofcloud` com permissão
