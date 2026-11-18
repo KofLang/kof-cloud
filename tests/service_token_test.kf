@@ -318,4 +318,14 @@ test "svcwarn: cmdServiceTokenList aplica o aviso (trava de fonte)", "svcwarn" {
     }
     var body = text.substring(start, end)
     assert(body.indexOf("serviceTokenExpiryWarning(") >= 0, "cmdServiceTokenList aplica o aviso")
+    // O resumo do `service status` tambem conta as perto do fim: passa o
+    // relogio do chamador e usa o mesmo predicado — sem isso, o status
+    // voltava a contar "com expiracao" sem dizer qual estava no fim.
+    var startStatus = text.indexOf("Int cmdServiceStatus(")
+    var endStatus = text.indexOf("Int cmdServiceSuspend(", startStatus)
+    if (endStatus < 0) {
+        endStatus = text.length
+    }
+    var bodyStatus = text.substring(startStatus, endStatus)
+    assert(bodyStatus.indexOf("tokenInventoryLine(entries, longToString(time.now()))") >= 0, "cmdServiceStatus resume o inventario com o relogio do chamador")
 }

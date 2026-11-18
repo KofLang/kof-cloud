@@ -1083,12 +1083,15 @@ Int cmdServiceStatus(List<String> args) {
                 // Inventario de credenciais junto do status: o operador ve
                 // de relance se ha kfs_ com prazo a vigiar (só AUTHENTICATED
                 // usa; nos demais, a lista vem vazia e nada e impresso).
+                // O resumo conta as perto do fim com o MESMO predicado do
+                // `token-list` (mesma janela, mesmo relogio) — o status era
+                // quem contava "com expiracao" sem dizer qual estava no fim.
                 try {
                     var tokenBody = mapOf()
                     tokenBody.put("serviceId", service.id)
                     var tokenRaw = requireOk(http.post(session.controlUrl + "/v1/services/tokens", json.encode(tokenBody), jsonHeader(session.token)))
                     var entries = json.decode<List<ServiceTokenEntry>>(tokenRaw)
-                    var inventory = tokenInventoryLine(entries)
+                    var inventory = tokenInventoryLine(entries, longToString(time.now()))
                     if (inventory.length > 0) {
                         println(inventory)
                     }
@@ -1393,19 +1396,30 @@ record ServiceTokenEntry(String serviceId, String id, String createdAt, String? 
 // nao ha credenciais). Conta com e sem expiracao separadas para o operador
 // saber que ha prazo a vigiar (`token-list` mostra cada uma). Nunca vaza
 // valor de token (as entradas so tem id curto, por desenho da API).
-String tokenInventoryLine(List<ServiceTokenEntry> entries) {
+// As perto do fim sao contadas com o MESMO predicado do aviso por entrada
+// do `token-list` (`serviceTokenExpiryWarning` — mesma janela do fio), com
+// o `now` do chamador: o que o status conta e exatamente o que a lista
+// marcara, sem relogio nem janela propios.
+String tokenInventoryLine(List<ServiceTokenEntry> entries, String now) {
     if (entries.size == 0) {
         return ""
     }
     var withTtl = 0
+    var expiring = 0
     for (var entry in entries) {
         if (entry.expiresAt != null) {
             withTtl = withTtl + 1
+            if (serviceTokenExpiryWarning(entry.expiresAt, now).length > 0) {
+                expiring = expiring + 1
+            }
         }
     }
     var line = "Credenciais: " + intToString(entries.size) + " emitida(s)"
     if (withTtl > 0) {
         line = line + " (" + intToString(withTtl) + " com expiracao — veja: kof cloud service token-list)"
+        if (expiring > 0) {
+            line = line + "\nAVISO: " + intToString(expiring) + " expira(m) em menos de " + intToString((limitTokenExpiryWarnMs() / 3600000L) as Int) + "h — rotacione: kof cloud service rotate <nome> --ttl <horas>"
+        }
     }
     return line
 }

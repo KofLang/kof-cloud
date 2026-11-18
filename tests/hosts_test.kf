@@ -5,6 +5,7 @@ import kofcloud.model.Exposure
 import kofcloud.model.Service
 import kofcloud.store.Store
 import kofcloud.util.Hosts
+import kofcloud.util.Limits
 import kofcloud.util.Text
 
 test "hostname: monta e valida" {
@@ -324,22 +325,49 @@ test "text: trimLogHead corta o inicio em linhas inteiras", "logs-cap" {
 
 test "text: tokenInventoryLine resume credenciais sem vazar valor", "token-status" {
     // Pura, sem rede nem HOME (precedente: doctorTunnelLine): o status
-    // chama com o que a API ja devolve (id curto + expiracao opcional).
+    // chama com o que a API ja devolve (id curto + expiracao opcional) e o
+    // relogio do chamador. As perto do fim sao contadas com o MESMO
+    // predicado do aviso por entrada do `token-list`.
+    var now = 1000000000000L
+    var agora = longToString(now)
     var empty = listOf<ServiceTokenEntry>()
-    assert(tokenInventoryLine(empty) == "", "sem credenciais, sem linha")
+    assert(tokenInventoryLine(empty, agora) == "", "sem credenciais, sem linha")
     var plain = listOf<ServiceTokenEntry>()
     plain.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", null))
-    var one = tokenInventoryLine(plain)
+    var one = tokenInventoryLine(plain, agora)
     assert(one.indexOf("1 emitida(s)") >= 0, "conta uma")
     assert(one.indexOf("a1b2c3d4") < 0, "nao vaza nem o id curto")
     assert(one.indexOf("expiracao") < 0, "sem TTL, sem aviso")
     var mixed = listOf<ServiceTokenEntry>()
     mixed.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", null))
     mixed.add(ServiceTokenEntry("svc", "e5f6a7b8", "1700000000000", "1730000000000"))
-    var two = tokenInventoryLine(mixed)
+    var two = tokenInventoryLine(mixed, agora)
     assert(two.indexOf("2 emitida(s)") >= 0, "conta duas")
     assert(two.indexOf("1 com expiracao") >= 0, "aponta que ha prazo")
     assert(two.indexOf("token-list") >= 0, "orienta o proximo passo")
+    // Perto do fim: contagem com o mesmo predicado/janela do `token-list`.
+    var longe = longToString(now + limitTokenExpiryWarnMs() + 86400000L)
+    var calmo = listOf<ServiceTokenEntry>()
+    calmo.add(ServiceTokenEntry("svc", "e5f6a7b8", "1700000000000", longe))
+    var semAviso = tokenInventoryLine(calmo, agora)
+    assert(semAviso.indexOf("com expiracao") >= 0, "prazo fora da janela segue contado")
+    assert(semAviso.indexOf("AVISO") < 0, "fora da janela: silencio")
+    var perto = longToString(now + limitTokenExpiryWarnMs() - 1000L)
+    var alerta = listOf<ServiceTokenEntry>()
+    alerta.add(ServiceTokenEntry("svc", "e5f6a7b8", "1700000000000", perto))
+    var comAviso = tokenInventoryLine(alerta, agora)
+    assert(comAviso.indexOf("AVISO") >= 0, "dentro da janela: avisa")
+    assert(comAviso.indexOf("1 expira(m)") >= 0, "conta quantas estao perto")
+    assert(comAviso.indexOf("service rotate") >= 0, "aponta a rotacao")
+    var vencida = listOf<ServiceTokenEntry>()
+    vencida.add(ServiceTokenEntry("svc", "e5f6a7b8", "1700000000000", longToString(now - 1L)))
+    assert(tokenInventoryLine(vencida, agora).indexOf("AVISO") < 0, "vencida nao avisa (mesmo predicado da lista)")
+    var duas = listOf<ServiceTokenEntry>()
+    duas.add(ServiceTokenEntry("svc", "e5f6a7b8", "1700000000000", perto))
+    duas.add(ServiceTokenEntry("svc", "c9d8e7f6", "1700000000000", longe))
+    var mistas = tokenInventoryLine(duas, agora)
+    assert(mistas.indexOf("2 com expiracao") >= 0, "as duas com prazo seguem no resumo")
+    assert(mistas.indexOf("1 expira(m)") >= 0, "conta so as da janela")
 }
 
 test "text: validatePublishLocal barra exposure/address ruins sem rede", "publish-local" {
