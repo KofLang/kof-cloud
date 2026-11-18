@@ -370,12 +370,16 @@ relay (o `e` do catch fica fora do arquivo). Mesmo contrato do agent-runtime
 o Edge): motivo do protocolo e contagens, **nunca** hostname, device,
 credencial ou corpo. Leitura: `kof cloud logs --edge` (mutuamente exclusivo
 com `--runtime` — mundos distintos: Agent local × Edge da plataforma).
-Prova: `tests/edge_events_test.kf` (5: linha com nível, teto que corta o
+Prova: `tests/edge_events_test.kf` (6: linha com nível, teto que corta o
 início com carga real, contrato sem segredo/hostname, e2e — HELLO inválido
 num Edge real deixa "tunel recusado: DEVICE_UNKNOWN" no arquivo, HELLO
 gigante acima do teto fecha SEM responder e deixa "tunel recusado:
 LINE_OVERFLOW" sem vazar o conteúdo, a parada limpa deixa o GOAWAY — e
-caminhos separados dos outros dois logs).
+caminhos separados dos outros dois logs). Paridade do fail-closed
+mid-sessão: sessão ACEITA que mandar linha acima do teto fecha com a
+palavra "sessao fechada: linha gigante acima do teto (LINE_OVERFLOW)" +
+métrica no balde `_line_overflow` — antes era o único desfecho de sessão
+em silêncio; decisão do Edge não alimenta a sonda de tuneis perdidos.
 
 **Estado (eventos legíveis do AGENT — o outro lado conta a sua verdade):
 ✅ implementado.** O inventário de palavras do Edge expôs o espelho mudo: o

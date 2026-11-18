@@ -142,6 +142,114 @@ test "edge-eventos: e2e — recusa de tunel real cai no arquivo", "edge-events" 
     assert(afterBig.indexOf("GOAWAY SHUTDOWN") >= 0, "marco da parada limpa")
 }
 
+// Paridade do fail-closed mid-sessao: o HELLO gigante tinha palavra e
+// metrica, mas uma SESSAO ACEITA que mandasse linha acima do teto depois
+// do handshake fechava em silencio. Precedente de fixture: incident-loss-e2e
+// (HELLO valido por socket cru) + flood por dobras do teste acima.
+test "edge-eventos: linha gigante mid-sessao fecha com palavra e sem perda", "edge-events" {
+    var controlPort = 20312
+    var tunnelPort = 20313
+    var httpPort = 20314
+
+    var registry = Registry("/tmp/kofcloud-edge-ev-mid-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var stop = "/tmp/kofcloud-edge-ev-mid-stop-" + crypto.randomHex(4) + ".txt"
+    File(stop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", stop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), stop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+
+    // O Tunnel real grava em edgeRuntimeLogPath(): limpa antes do HELLO para
+    // a palavra ser prova deste teste (precedente do teste acima).
+    File(edgeRuntimeLogPath()).delete()
+
+    var hello = mapOf()
+    hello.put("kind", "HELLO")
+    hello.put("v", intToString(protocolVersion()))
+    hello.put("deviceId", deviceId)
+    hello.put("token", accountToken)
+    hello.put("clientPub", "")
+    var conn = net.connect("127.0.0.1", tunnelPort)
+    conn.send(bytesFromString(json.encode(hello) + "\n"))
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "sessao aceita antes do flood")
+
+    // Linha gigante DEPOIS do handshake (4 MiB por dobras — acima do teto
+    // de linha e em tempo linear, mesmo precedente).
+    var flood = ""
+    var f = 0
+    while (f < 65536) {
+        flood = flood + "x"
+        f = f + 1
+    }
+    var d = 0
+    while (d < 6) {
+        flood = flood + flood
+        d = d + 1
+    }
+    conn.send(bytesFromString(flood + "\n"))
+    var offline = false
+    var waits = 100
+    while (waits > 0 && offline == false) {
+        offline = edgeState.isOnline(deviceId) == false
+        if (offline == false) {
+            time.sleep(50)
+            waits = waits - 1
+        }
+    }
+    assert(offline, "fail-closed derruba a sessao")
+
+    // A palavra existe e diz o motivo; conteudo, device e token ficam fora.
+    var text = readTextOr(edgeRuntimeLogPath(), "")
+    assert(text.indexOf("sessao fechada: linha gigante acima do teto (LINE_OVERFLOW)") >= 0, "fail-closed mid-sessao deixa palavra: " + text)
+    assert(text.indexOf("xxxxxxxxxx") < 0, "o conteudo da linha nunca vai para o arquivo")
+    assert(text.indexOf(deviceId) < 0, "o device nao vaza para o arquivo")
+    assert(text.indexOf("kfc_") < 0, "nenhum token vaza para o arquivo")
+
+    // Decisao do proprio Edge nao e perda abrupta: a sonda de tuneis
+    // perdidos fica intoca (a marca da sessao nem e lida neste caminho —
+    // o overflow sai pelo fim do handler, nunca pelo ramo de perda).
+    assert(edgeState.tunnelLossProbe.count == 0, "protocolo violado nao conta como perda")
+
+    // Trava com ANCORA de indentacao: palavra e metrica no nivel do corpo
+    // do `if (reader.overflowed())`, dentro do handler (tecnica do c330b8c).
+    var tunnelSrc = File("src/kofcloud/edge/Tunnel.kf").readText()
+    var tunnelText = ""
+    if (tunnelSrc != null) {
+        tunnelText = tunnelSrc
+    }
+    assert(tunnelText.length > 0, "le o Tunnel.kf")
+    var connStart = tunnelText.indexOf("void handleTunnelConnection(")
+    assert(connStart >= 0, "acha o handler da conexao")
+    var connEnd = tunnelText.indexOf("void tunnelIdleSweeper(", connStart)
+    assert(connEnd > connStart, "acha o fim do handler")
+    var connBody = tunnelText.substring(connStart, connEnd)
+    assert(connBody.indexOf("\n                    edgeEvent(\"warn\", \"sessao fechada: linha gigante acima do teto (LINE_OVERFLOW)\")") >= 0, "palavra no nivel do if do overflow")
+    assert(connBody.indexOf("\n                    noteTunnelRefused(\"LINE_OVERFLOW\")") >= 0, "metrica no nivel do if do overflow")
+
+    // Parada limpa para o teardown (o watcher fecha o listener; sem sessoes
+    // vivas o GOAWAY nao mexe em nada aqui).
+    writeTextTo(stop, "stop")
+    assert(waitForPort(controlPort, 60), "encerra")
+    conn.close()
+}
+
 test "edge-eventos: caminho separado dos outros dois logs", "edge-events" {
     assert(edgeRuntimeLogPath() != logPath(), "edge != marcos da CLI")
     assert(edgeRuntimeLogPath() != agentRuntimeLogPath(), "edge != runtime do Agent")

@@ -152,6 +152,13 @@ void handleTunnelConnection(EdgeState state, Conn conn, String tunnelSecret) {
             } else {
                 reader.feed(chunk)
                 if (reader.overflowed()) {
+                    // Paridade com o HELLO gigante e com o sweeper de
+                    // ociosidade: fail-closed do proprio Edge tem palavra
+                    // e metrica. Nao e recusa (a sessao ja existia) nem
+                    // perda (decisao do Edge, sai pelo fim do handler)
+                    // — e protocolo violado, contado no mesmo balde.
+                    edgeEvent("warn", "sessao fechada: linha gigante acima do teto (LINE_OVERFLOW)")
+                    noteTunnelRefused("LINE_OVERFLOW")
                     open = false
                 } else {
                     while (reader.hasLine()) {
