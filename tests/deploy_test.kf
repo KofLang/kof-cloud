@@ -959,6 +959,11 @@ test "deploy: check avisa kfs_ perto do fim (mesmo predicado do token-list)", "d
     var bodyCheck = text.substring(startCheck, endCheck)
     assert(bodyCheck.indexOf("kfsExpiryWarningsFor(session.controlUrl, session.token, services, identity.deviceId, now)") >= 0, "check consulta os avisos")
     assert(bodyCheck.indexOf("check: aviso: ") >= 0, "check imprime o aviso sem mudar o exit")
+    // O --plan descreve o que o deploy faria; o aviso do que o deploy NAO
+    // conserta (credencial vencendo) tem de aparecer la tambem, com o
+    // MESMO busca (a 2a chamada no corpo — a 1a e do --check).
+    assert(bodyCheck.indexOf("kfsExpiryWarningsFor(session.controlUrl, session.token, services, identity.deviceId, now)", bodyCheck.indexOf("kfsExpiryWarningsFor(session.controlUrl, session.token, services, identity.deviceId, now)") + 1) >= 0, "plan consulta os avisos (2a chamada)")
+    assert(bodyCheck.indexOf("plan: aviso: ") >= 0, "plan imprime o aviso antes do diff")
 
     var controlPort = 19881
     var path = "/tmp/kofcloud-depkfswarn-" + crypto.randomHex(4) + ".json"

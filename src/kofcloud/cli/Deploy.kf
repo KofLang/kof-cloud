@@ -795,6 +795,14 @@ Int cmdDeploy(List<String> args) {
     if (hasFlag(args, "--plan")) {
         try {
             var live = fetchServices(session.controlUrl, session.token)
+            // Aviso de kfs_ perto do fim (Fase 19, mesma fonte do --check):
+            // o plan descreve o que o deploy faria — o aviso do que o
+            // deploy NAO conserta (credencial vencendo) pertence aqui tb.
+            // Impresso antes do diff, `plan: aviso:`, nunca muda o exit.
+            var now = longToString(time.now())
+            for (var warn in kfsExpiryWarningsFor(session.controlUrl, session.token, services, identity.deviceId, now)) {
+                println("plan: aviso: " + warn)
+            }
             var plan = diffDeploymentFor(live, services, identity.deviceId)
             if (plan.size == 0) {
                 println("plan: nada a fazer (manifesto vazio não chega aqui — parse recusaria)")
