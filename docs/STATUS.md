@@ -105,7 +105,7 @@ o run total imprime `58 passed, 0 failed`. Falha = nome do teste + assert
 | flags com valor, booleanas sem duplicação e posicional sobrando (CLI) | `tests/value_flags_test.kf` | 4 |
 | eventos do Edge (`logs --edge`) | `tests/edge_events_test.kf` | 5 |
 
-Total: 414 testes. Ver `15-tests.md` para a matriz.
+Total: 418 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 
