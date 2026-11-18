@@ -319,6 +319,7 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
             var tooLarge = errorResponse(502, errResponseTooLarge())
             conn.send(tooLarge)
             conn.close()
+            edgeEvent("warn", "upstream: resposta acima do teto (" + intToString(responseCap) + " bytes) — 502")
             noteHttpFinished("upstream_error", "KCF115", raw.length, tooLarge.length, time.now() - started)
             return
         }
@@ -333,12 +334,14 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
                 var partial = sanitizeResponse(relayed.bytes, request.method)
                 conn.send(partial)
                 conn.close()
+                edgeEvent("warn", "upstream: tempo esgotado (" + longToString(state.upstreamTimeoutMs()) + "ms) — corpo curto entregue")
                 noteHttpFinished("upstream_error", "KCF105", raw.length, partial.length, time.now() - started)
                 return
             }
             var timedOut = errorResponse(504, errUpstreamTimeout())
             conn.send(timedOut)
             conn.close()
+            edgeEvent("warn", "upstream: tempo esgotado (" + longToString(state.upstreamTimeoutMs()) + "ms) — 504")
             noteHttpFinished("upstream_error", "KCF112", raw.length, timedOut.length, time.now() - started)
             return
         }
@@ -349,6 +352,7 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
             var limited = errorResponse(429, errTooManyStreams())
             conn.send(limited)
             conn.close()
+            edgeEvent("warn", "upstream: teto de streams em aberto atingido — 429")
             noteHttpFinished("denied", "KCF106", raw.length, limited.length, time.now() - started)
         } else if (e.indexOf("OPEN_REJECTED") == 0) {
             // Agent nao conhece o servico (ex. publicado apos o connect, antes
@@ -357,11 +361,13 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
             var rejected = errorResponse(502, errTunnel("agent does not serve this route yet"))
             conn.send(rejected)
             conn.close()
+            edgeEvent("warn", "upstream: agente nao conhece a rota ainda (refresh pendente) — 502")
             noteHttpFinished("upstream_error", "", raw.length, rejected.length, time.now() - started)
         } else {
             var failed = errorResponse(502, errTunnel(e))
             conn.send(failed)
             conn.close()
+            edgeEvent("warn", "upstream: falha no tunel — 502")
             noteHttpFinished("upstream_error", "", raw.length, failed.length, time.now() - started)
         }
         return
@@ -371,6 +377,7 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         var empty = errorResponse(502, errEmptyUpstream())
         conn.send(empty)
         conn.close()
+        edgeEvent("warn", "upstream: resposta vazia do servico local — 502")
         noteHttpFinished("upstream_error", "", raw.length, empty.length, time.now() - started)
         return
     }
@@ -381,6 +388,7 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         var badUpstream = errorResponse(502, errInvalidUpstreamResponse())
         conn.send(badUpstream)
         conn.close()
+        edgeEvent("warn", "upstream: resposta que nao e HTTP — 502")
         noteHttpFinished("upstream_error", "KCF131", raw.length, badUpstream.length, time.now() - started)
         return
     }

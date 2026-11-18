@@ -2,6 +2,7 @@ import kofcloud.agent.Agent
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.edge.EdgeState
+import kofcloud.edge.Events
 import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
 import kofcloud.model.Errors
@@ -103,6 +104,10 @@ test "relay limite: resposta acima do teto vira 502 KCF115, nunca 200 truncado",
     assert(online, "agent online")
 
     var host = "site.mel.kofcloud.io"
+    // O desfecho upstream_error agora deixa palavra (familia do LINE_OVERFLOW):
+    // o arquivo do host e limpo antes do gatilho para a assercao valer para
+    // ESTA execucao (precedente do edge_events e2e; o runner e sequencial).
+    File(edgeRuntimeLogPath()).delete()
     var oversized = httpGetRaw(httpPort, "/", host)
     assert(statusOf(oversized) == 502, "resposta grande -> 502 (nao 200 truncado)")
     assert(bodyOf(oversized).indexOf("KCF115") >= 0, "KCF115 no corpo")
@@ -115,6 +120,9 @@ test "relay limite: resposta acima do teto vira 502 KCF115, nunca 200 truncado",
     assert(statusOf(again) == 502, "segundo pedido tambem 502 (vaga liberada)")
 
     assert(metricValue(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_response_too_large") >= 1, "recusa contada")
+    var afterBig = readTextOr(edgeRuntimeLogPath(), "")
+    assert(afterBig.indexOf("upstream: resposta acima do teto (1024 bytes) — 502") >= 0, "palavra do teto de resposta no arquivo")
+    assert(afterBig.indexOf("xxxx") < 0, "o corpo do servico nunca vai para o arquivo")
 
     // Parada limpa.
     writeTextTo(agentStop, "stop")

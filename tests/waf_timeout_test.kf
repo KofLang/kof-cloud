@@ -2,6 +2,7 @@ import kofcloud.agent.Agent
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.edge.EdgeState
+import kofcloud.edge.Events
 import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
 import kofcloud.model.Errors
@@ -81,6 +82,9 @@ test "waf timeout: servico mudo vira 504 KCF112 e libera a vaga", "waftimeout" {
 
     var host = "site.mel.kofcloud.io"
     var started = time.now()
+    // Mesma tecnica do relaylimit e2e: o arquivo do host e limpo antes do
+    // gatilho para a assercao valer para ESTA execucao.
+    File(edgeRuntimeLogPath()).delete()
     var timedOut = httpGetRaw(httpPort, "/", host)
     var elapsed = time.now() - started
     assert(statusOf(timedOut) == 504, "servico mudo -> 504")
@@ -93,6 +97,8 @@ test "waf timeout: servico mudo vira 504 KCF112 e libera a vaga", "waftimeout" {
     assert(statusOf(again) == 504, "segundo pedido tambem 504 (vaga liberada)")
 
     assert(metricValue(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_timeout") >= 1, "timeout contado")
+    var afterSlow = readTextOr(edgeRuntimeLogPath(), "")
+    assert(afterSlow.indexOf("upstream: tempo esgotado (400ms) — 504") >= 0, "palavra do timeout no arquivo")
 
     // Parada limpa.
     writeTextTo(agentStop, "stop")

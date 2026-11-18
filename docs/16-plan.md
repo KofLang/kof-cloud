@@ -356,10 +356,16 @@ tinha PALAVRA nenhuma: o `serve` imprime só o banner e o operador da
 plataforma não via POR QUE um túnel foi recusado. Agora `edge/Events.kf`
 emite uma linha (stdout via `log.*` **e** `~/.kofcloud/edge-runtime.log`):
 túnel recusado (com o MOTIVO do protocolo — DEVICE_UNKNOWN, AUTH_FAILED,
-DEVICE_REVOKED/SUSPENDED, VERSION_UNSUPPORTED, LINE_OVERFLOW), tunel
+DEVICE_REVOKED/SUSPENDED, VERSION_UNSUPPORTED, LINE_OVERFLOW), túnel
 aceito (com contagem de sessões vivas), sessão derrubada por ociosidade
 (com o teto em ms), teto de conexões públicas atingido (com o limite —
-503) e parada limpa (GOAWAY SHUTDOWN). Mesmo contrato do agent-runtime
+503), parada limpa (GOAWAY SHUTDOWN) e agora a **família upstream do
+caminho público**: os 8 desfechos de relay (`upstream_error` + teto de
+streams) deixam palavra — resposta acima do teto (com o número), tempo
+esgotado (com o prazo; corpo curto quando há parcial), teto de streams,
+rota que o agente ainda não conhece, falha no túnel, resposta vazia e
+resposta que não é HTTP. Palavra fixa, nunca o conteúdo nem o erro do
+relay (o `e` do catch fica fora do arquivo). Mesmo contrato do agent-runtime
 (teto `kofcloud.limits.logBytes`, corta o início; falha de IO nunca derruba
 o Edge): motivo do protocolo e contagens, **nunca** hostname, device,
 credencial ou corpo. Leitura: `kof cloud logs --edge` (mutuamente exclusivo
