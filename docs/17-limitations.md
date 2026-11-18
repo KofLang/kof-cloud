@@ -206,11 +206,16 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   lê `~/.kofcloud/agent.log` (marcos de sessão gravados pela CLI: `connect`,
   `disconnect`). `kof cloud logs --runtime` lê
   `~/.kofcloud/agent-runtime.log`, onde o Agent grava os eventos reais
-  (connect, reconnect, recusa fatal, mudança de health, GOAWAY, parada) pelo
-  mesmo ponto que emite para o stdout (`agent/Events.kf`). `kof cloud logs
-  --edge` lê `~/.kofcloud/edge-runtime.log`, com os eventos do lado da
-  plataforma (recusa de túnel com o motivo do protocolo, túnel aceito, queda
-  por ociosidade, teto de conexões públicas, parada limpa) pelo mesmo padrão
+  (connect, reconnect, recusa fatal, mudança de health, GOAWAY, parada,
+  derrubada local por ociosidade, reset de streams presos) pelo mesmo ponto
+  que emite para o stdout (`agent/Events.kf`). `kof cloud logs --edge` lê
+  `~/.kofcloud/edge-runtime.log`, com os eventos do lado da plataforma
+  (recusa de túnel com o motivo do protocolo — inclusive o fail-closed do
+  HELLO gigante; túnel aceito; queda por ociosidade; sessão fechada por linha
+  gigante no meio da sessão; túnel perdido — EOF do agent, abre incidente;
+  teto de conexões públicas; parada limpa; e os desfechos upstream do caminho
+  público — teto de resposta, tempo esgotado, teto de streams, rota pendente,
+  falha de túnel, resposta vazia, resposta não-HTTP) pelo mesmo padrão
   (`edge/Events.kf`). Cada arquivo tem teto próprio (256 KiB, corta o
   início). Nenhum dos três recebe conteúdo de requisição, credencial, chave
   ou hostname.
