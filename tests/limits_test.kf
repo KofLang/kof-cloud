@@ -203,3 +203,14 @@ test "limits: passo da varredura periodica de credenciais com recuo seguro", "li
     assert(expirySweepMsFrom(250) == 250, "positivo passa")
     assert(limitExpirySweepMs() == 60000, "default travado em 60 s")
 }
+
+test "limits: passo do pusher de SERVICES com recuo seguro", "limits-push" {
+    // Fonte unica do laco do Edge (`tunnelServicesPusher`): o push so dorme
+    // nesse valor. Recuo em fonte pura (mesma familia do expiry-sweep):
+    // 0/negativo virariam busy-loop serializando a lista de cada device a
+    // cada iteracao — volta ao default 2000 ms.
+    assert(servicesPushMsFrom(0) == 2000, "zero recai no default")
+    assert(servicesPushMsFrom(-1) == 2000, "negativo recai no default")
+    assert(servicesPushMsFrom(500) == 500, "positivo passa")
+    assert(limitServicesPushMs() == 2000, "default travado em 2 s")
+}

@@ -1,0 +1,147 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.model.Service
+import kofcloud.protocol.Session
+import kofcloud.store.Store
+import kofcloud.util.Limits
+import kofcloud.util.Text
+import testkit.Support
+
+// SERVICES empurrado (F14 s3, caminho hot do hot-reload): o Edge compara a
+// lista do device com a ultima enviada e manda SERVICES pelo tunel quando
+// muda; o Agent aplica na tabela da sessao. O refresher HTTP continua como
+// fallback (Agent antigo, rede do control plane). Provas: a aplicacao e
+// pura e testavel sem tunel; o e2e publica DEPOIS do connect e roteia bem
+// antes do primeiro ciclo do refresher (healthMs alto -> refresh = 6x).
+
+String pushSvcJson(String name, Int port) {
+    var svc = Service("id-" + name, "a1", "d1", name, "127.0.0.1", port, "http", name + ".mel.kofcloud.io", "PUBLIC", "UNKNOWN", 1, "", "")
+    return json.encode(svc)
+}
+
+test "services-push: aplicacao do frame e pura e troca a tabela", "services-push" {
+    var session = TunnelSession("s1", "d1", "a1", "")
+    assert(currentServiceNames(session).size == 0, "tabela vazia antes")
+    applyServicesFrame(session, "[" + pushSvcJson("site", 8080) + "]")
+    var names = currentServiceNames(session)
+    assert(names.size == 1 && names.get(0) == "site", "SERVICES aplicado: " + names.size)
+
+    // Segundo push com OUTRO servico: substitui (nao mesga) — mesma semantica
+    // do setServices que o refresher usava; removido sai.
+    applyServicesFrame(session, "[" + pushSvcJson("late", 9090) + "]")
+    names = currentServiceNames(session)
+    assert(names.size == 1 && names.get(0) == "late", "substitui a tabela inteira")
+
+    // Lista vazia (device sem servico): esvazia — OPEN futuro vira
+    // SERVICE_UNKNOWN, igual ao comportamento do refresher.
+    applyServicesFrame(session, "[]")
+    assert(currentServiceNames(session).size == 0, "lista vazia esvazia")
+
+    // Corpo ilegivel: tabela atual segue valendo (fail-open para o proximo
+    // push; nunca derruba o tunel por causa da lista).
+    applyServicesFrame(session, "[{lixo")
+    assert(currentServiceNames(session).size == 0, "ilegivel nao aplica nem quebra")
+    applyServicesFrame(session, "")
+    assert(currentServiceNames(session).size == 0, "vazio e no-op")
+}
+
+test "services-push: e2e — publish depois do connect roteia pelo tunel", "services-push" {
+    // Edge real + Agent real. healthMs=60000 (refresh = 6x = 6 min): o
+    // refresher NAO roda dentro da janela do teste, entao o roteamento que
+    // aparece aqui veio pelo SERVICES empurrado, nao por re-busca HTTP.
+    var localSvc = 20280
+    var controlPort = 20281
+    var tunnelPort = 20282
+    var httpPort = 20283
+
+    var app = web.app()
+    app.get("/") { return "svc-push" }
+    var server = spawn { app.listen(localSvc) }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-push-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-push-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-push-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+
+    // connect ANTES de publicar: tabela vazia.
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 60000)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent registrado no edge")
+
+    // Publica DEPOIS: o pusher do Edge (default 2 s) manda SERVICES; o
+    // refresher (6 min) nao entra na conta. Poll com teto de 15 s.
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"late\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "publicado depois")
+    var served = false
+    var waits = 60
+    while (waits > 0 && served == false) {
+        var probe = httpGetRaw(httpPort, "/", "late.mel.kofcloud.io")
+        if (statusOf(probe) == 200 && bodyOf(probe) == "svc-push") {
+            served = true
+        } else {
+            time.sleep(250)
+            waits = waits - 1
+        }
+    }
+    assert(served, "publish depois do connect roteia pelo SERVICES empurrado")
+
+    // Remocao tambem viaja empurrada: rota some sem reconnect (404 opaco).
+    var services = registry.servicesForAccount(accountId)
+    var target = ""
+    for (var service in services) {
+        if (service.name == "late") {
+            target = service.id
+        }
+    }
+    var removeBody = "{\"serviceId\":\"" + target + "\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", removeBody, accountToken)) == 200, "removido")
+    var gone = false
+    var waits2 = 40
+    while (waits2 > 0 && gone == false) {
+        if (statusOf(httpGetRaw(httpPort, "/", "late.mel.kofcloud.io")) == 404) {
+            gone = true
+        } else {
+            time.sleep(250)
+            waits2 = waits2 - 1
+        }
+    }
+    assert(gone, "remocao roteia fora pelo push")
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}

@@ -353,9 +353,36 @@ Bool handleAgentFrame(TunnelSession session, String line) {
         session.deliver(frameField(frame, "s"), streamResetMarker())
         return true
     }
-    // PONG, SERVICES e desconhecidos: ignorados (PONG nem renovou o idle).
-    // GOAWAY nunca chega aqui (tratado no reader, que encerra sem throw).
+    // SERVICES: o Edge empurra a lista do device quando ela muda no
+    // Registry (F14 s3) — o Agent aplica na TABELA DA SESSAO (o mesmo
+    // objeto que o handler do OPEN consulta). Nao renova o idle: a lista
+    // pode mudar num tunel ocioso, e renovar por controle transformaria
+    // tudo em traffic-that-never-idles (a mesma mentira do PING).
+    // PONG e desconhecidos seguem ignorados. GOAWAY nunca chega aqui
+    // (tratado no reader, que encerra sem throw).
+    if (kind == "SERVICES") {
+        applyServicesFrame(session, frameField(frame, "services"))
+        return true
+    }
+    // PONG e desconhecidos: ignorados (PONG nem renovou o idle).
     return true
+}
+
+// Aplica a lista JSON de `services[]` na tabela da sessao. A separacao
+// existe para o teste decidir sem tunel (json.decode precisa de IO zero;
+// a decisao de WHERE aplicada vive no frame handler). Lista ilegivel
+// (nunca deve acontecer — o Edge serializa com a mesma fonte) e ignorada:
+// a tabela atual segue valendo, fail-open para o proximo push.
+void applyServicesFrame(TunnelSession session, String servicesJson) {
+    if (servicesJson.length == 0) {
+        return
+    }
+    try {
+        var services = json.decode<List<Service>>(servicesJson)
+        session.setServices(services)
+    } catch (String e) {
+        // mantem a tabela atual; o proximo SERVICES (ou o refresher) corrige
+    }
 }
 
 void agentWriter(Conn conn, TunnelSession session) {
@@ -544,14 +571,22 @@ String edgeDriftLine(String currentHost, Int currentPort, EdgeProbe best, Bool o
 
 void agentRefresher(TunnelSession session, AgentConfig config, Int refreshMs) {
     var gap = limitRefreshMs(refreshMs)
+    var step = limitRefreshPollMs()
     var open = true
+    var waited = 0
     var currentHost = ""
     var currentPort = 0
     while (open) {
-        time.sleep(gap)
+        // O gap dorme em passos com checagem de session.open: um sleep unico
+        // mantinha a task viva (e a JVM) minutos apos a sessao morrer — com
+        // healthMs grande o `--timeout` dos testes matava o processo no
+        // meio (medido no services-push). O fetch continua no ritmo do gap.
+        time.sleep(step)
+        waited = waited + step
         if (session.open == false) {
             open = false
-        } else {
+        } else if (waited >= gap) {
+            waited = 0
             try {
                 var endpoint = fetchEdge(config)
                 session.setServices(endpoint.services)

@@ -269,6 +269,14 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   troca a tabela da sessão (objeto compartilhado — Map nao atravessa
   `spawn`); handshake OPENED antes de DATA, OPEN recusado = 502 imediato
   em vez de relay travado (`reload_test.kf`, OPENED em `protocol_test.kf`).
+  **SERVICES empurrado (F14 s3, caminho hot)**: o Edge manda SERVICES pelo
+  túnel quando a lista do device muda (`tunnelServicesPusher`, passo 2 s
+  afinável); o Agent aplica na mesma tabela (`applyServicesFrame`) sem
+  renovar o idle — o refresher HTTP continua como fallback; publish/remoção
+  roteiam em até um ciclo do pusher, sem o Agent pagar HTTP
+  (`services_push_test.kf`). Junto: o refresher dormia o gap inteiro num
+  `time.sleep` e segurava a JVM após a sessão morrer; agora dorme em passos
+  checando `session.open`.
 
 ## Não implementado (honesto)
 

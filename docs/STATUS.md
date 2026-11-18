@@ -28,7 +28,7 @@
 ```bash
 export PATH=/home/mel/tools/jdk-25/bin:$PATH
 KOF=/home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar
-java -jar $KOF test --target jvm --timeout 150   # 58 suites, 0 falhas
+java -jar $KOF test --target jvm --timeout 150   # 59 suites, 0 falhas
 java -jar $KOF build --output /tmp/kofcloud-check # compila sem erro
 ```
 
@@ -39,7 +39,7 @@ Ver `13-kof-apis.md` e `14-modules.md`.
 ## Marcadores por area (goldens)
 
 Cada suite imprime `PASS <nome>` por teste e `0 failed of N tests` no fim;
-o run total imprime `58 passed, 0 failed`. Falha = nome do teste + assert
+o run total imprime `59 passed, 0 failed`. Falha = nome do teste + assert
 + abort sem cleanup (listeners presos ate o `--timeout` matar — ver
 `15-tests.md` sobre sentinelas).
 
@@ -52,7 +52,7 @@ o run total imprime `58 passed, 0 failed`. Falha = nome do teste + assert
 | vocabulario fechado do status (F5) | `tests/status_report_test.kf` | 2 |
 | backoff + drift de Edge | `tests/backoff_test.kf` | 4 |
 | registry | `tests/registry_test.kf` | 12 |
-| limites + passo da varredura de credenciais | `tests/limits_test.kf` | 8 |
+| limites + varredura + push de SERVICES | `tests/limits_test.kf` | 9 |
 | service token | `tests/service_token_test.kf` | 15 |
 | erros R6 | `tests/errors_test.kf` | 11 |
 | dominios (+ certificado x hostname) | `tests/domains_test.kf` | 12 |
@@ -104,8 +104,9 @@ o run total imprime `58 passed, 0 failed`. Falha = nome do teste + assert
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor, booleanas sem duplicação e posicional sobrando (CLI) | `tests/value_flags_test.kf` | 4 |
 | eventos do Edge (`logs --edge`) | `tests/edge_events_test.kf` | 5 |
+| SERVICES empurrado (F14 s3) | `tests/services_push_test.kf` | 2 |
 
-Total: 418 testes. Ver `15-tests.md` para a matriz.
+Total: 421 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

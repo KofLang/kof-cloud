@@ -57,8 +57,8 @@ congelava TODO cadastro novo em TODA conta**), `kofcloud.limits.services` (por d
 `kofcloud.limits.streams` (por túnel, default 128, **zero/inválido recaem no
 default via `streamLimitFrom` pura — 0 recusaria todo OPEN**, com
 `429`/`RESET LIMIT_EXCEEDED`).
-Prova: `tests/limits_test.kf` (8 testes: limites + recuo seguro do passo
-da varredura de credenciais) + `tests/e2e_multiservice_test.kf`
+Prova: `tests/limits_test.kf` (9 testes: limites + recuo seguro do passo
+da varredura de credenciais e do pusher de SERVICES) + `tests/e2e_multiservice_test.kf`
 (3 serviços no mesmo túnel, com isolamento de falha).
 
 **Presença visível no `device list` (parte do contrato de `03-device.md`).**
@@ -1132,6 +1132,30 @@ sem mudar formato público):
   com vaga liberada e métrica, 431 KCF116, 413 de leitura com `Content-Length`
   acima e abaixo do real). **Pendente:** o ganho O(n) de verdade
   (base64/slice sobre bytes no stdlib) e o handshake comprimido.
+
+  **Implementado (SERVICES empurrado — caminho hot do hot-reload):** o
+  hot-reload pagava uma requisição HTTP ao control plane a cada ciclo
+  (`agentRefresher` → `POST /v1/connect`, a cada 6×healthMs), mesmo sem
+  mudança nenhuma. Agora o Edge compara a lista do device com a última
+  enviada (serialização única `serviceListJson`) e manda SERVICES pelo
+  PRÓPRIO túnel quando muda (`tunnelServicesPusher`, passo
+  `kofcloud.limits.servicesPushMs`, default 2 s, recuo seguro); o Agent
+  aplica com `applyServicesFrame` (pura; lista ilegível é fail-open para o
+  próximo push, nunca derruba o túnel; **não renova o idle** — frame de
+  controle não é tráfego, a mesma mentira que o PING já evita). Publish,
+  unpublish, suspensão e mudança de config aparecem no Agent em até um
+  ciclo do pusher, sem o Agent falar com o control plane. O refresher HTTP
+  continua como **fallback** (control plane antigo, Edge sem pusher) — os
+  dois caminhos escrevem na MESMA tabela da sessão (`setServices`), então a
+  ordem não importa. **Junto, bug real do refresher:** dormia o gap inteiro
+  (6×healthMs) num único `time.sleep` e mantinha a task (e a JVM dos testes)
+  viva minutos após a sessão morrer; agora dorme em passos
+  (`kofcloud.limits.refreshPollMs`, default 1 s, recuo seguro) checando
+  `session.open`, com o fetch no ritmo do gap. Prova:
+  `tests/services_push_test.kf` (2 testes: aplicação pura + e2e com
+  healthMs=60000 — o refresher não roda na janela do teste, então o
+  publish/remoção que roteia veio pelo push) e `limits-push` em
+  `tests/limits_test.kf` (9 testes).
 
 **Teto da sonda de health na fonte unica.** `limitHealthHeadBytes()` era o
 ultimo literal numerico do caminho de health (16384 em `agent/Health.kf`);

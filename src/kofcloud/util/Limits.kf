@@ -234,6 +234,40 @@ Int limitRefreshMs(Int healthMs) {
     return healthMs * 6
 }
 
+// Passo de.poll do refresher do Agent (ms): o refresher dorme o gap
+// (`limitRefreshMs`) em passos deste tamanho, checando session.open — um
+// sleep unico de 6xhealthMs (30 s default, mais com healthMs grande em
+// teste) mantinha a JVM viva minutos apos a sessao morrer. Recuo seguro na
+// mesma familia: 0/negativo recai no default (busy-loop de checagem).
+Int refreshPollMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 1000
+    }
+    return configured
+}
+
+Int limitRefreshPollMs() {
+    return refreshPollMsFrom(config.int("kofcloud.limits.refreshPollMs", 1000))
+}
+
+// Intervalo do pusher de SERVICES no Edge (ms): o Edge compara a lista do
+// device com a ultima enviada e empurra SERVICES quando muda (F14 s3) — o
+// caminho hot do hot-reload. Passo curto de proposito (2 s default): publicar
+// pelo painel/CLI aparece no Agent em ate um ciclo, sem o Agent pagar HTTP.
+// Recuo seguro na mesma familia: com 0/negativo o laco vira busy-loop que
+// serializa a lista de cada device a cada iteracao sem parar — volta ao
+// default (mesma receita de healthMsFrom).
+Int servicesPushMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 2000
+    }
+    return configured
+}
+
+Int limitServicesPushMs() {
+    return servicesPushMsFrom(config.int("kofcloud.limits.servicesPushMs", 2000))
+}
+
 Int sendChunkBytes() {
     var size = config.int("kofcloud.limits.sendChunkBytes", 16384)
     if (size <= 0) {
