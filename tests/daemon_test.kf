@@ -1,6 +1,7 @@
 import kofcloud.cli.Daemon
 import kofcloud.cli.Deploy
 import kofcloud.cli.Usage
+import kofcloud.store.Store
 import kofcloud.util.Hosts
 import kofcloud.util.Text
 
@@ -96,6 +97,16 @@ test "daemon: ajuda reconciliada com os comandos reais", "usage-parity" {
     assert(help.indexOf("audit [--sbom] [--verify] [--action <acao>] [--tail <n>]") >= 0, "audit anuncia --action/--tail")
     assert(help.indexOf("logs [--tail <linhas>] [--runtime|--edge]") >= 0, "logs anuncia --edge")
     assert(help.indexOf("scan [--file <caminho>] [--tls-cert <pem>]") >= 0, "scan anuncia flags")
+    // A lane do --watch (F13 s3) atualizou o help e deixou os dois
+    // documentos do operador para tras (mesmo padrao do drift acima):
+    // o README tem --watch no paragrafo de testes mas nao nas duas linhas
+    // de comando, e o passo do flows §3.2 nao sabia da flag. Precedente
+    // da trava cruzada em arquivo: status-counts le o README do disco.
+    var readme = readTextOr("README.md", "")
+    assert(readme.indexOf("[--watch]   # publica (+ verifica; --plan so mostra; --watch observa") >= 0, "README espelha --watch no quick-start")
+    assert(readme.indexOf("[--watch]  (roda build + publica + verifica; --plan so mostra o diff; --watch observa") >= 0, "README espelha --watch na linha de referencia")
+    var flows = readTextOr("docs/09-flows.md", "")
+    assert(flows.indexOf("kof cloud deploy [--file kofcloud.json] [--check] [--plan] [--watch]") >= 0, "flows §3.2 anuncia --watch")
 }
 
 test "daemon: paths ficam no espaco do usuario", "daemon-paths" {

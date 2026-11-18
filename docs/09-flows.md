@@ -111,7 +111,13 @@ medido, `"echo hi"` falhava com exit -1. Quando falha, o relatório traz
 `build falhou (exit N) — <última linha>` (stderr, com stdout como
 alternativa): só o código obrigava o operador a reproduzir o comando à mão.
 
- 1. usuário: kof cloud deploy [--file kofcloud.json] [--check] [--plan]
+ 1. usuário: kof cloud deploy [--file kofcloud.json] [--check] [--plan] [--watch]
+    com `--watch`: relê o arquivo a cada passo e aplica a MESMA semântica
+    do deploy quando o TEXTO muda (build → artifact → publish idempotente,
+    falha isolada por serviço); NUNCA remove (remoção é destrutiva — segue
+    sendo `down --prune` explícito), não aplica arquivo vazio/ilegível, e
+    para com a sentinela própria (que não para o `connect`); não combina
+    com `--check`/`--plan`
     com `--plan`: só mostra o diff (`+ novo`, `~ atualiza`, `= igual`,
     `! conflito` — nome já usado noutro dispositivo, que o deploy recusaria
     com 409; `- fora do manifesto`, só do dispositivo atual), com
