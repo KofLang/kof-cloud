@@ -64,7 +64,7 @@ o run total imprime `60 passed, 0 failed`. Falha = nome do teste + assert
 | idle + shutdown limpo do Edge | `tests/idle_test.kf` | 5 |
 | conexoes | `tests/conns_test.kf` | 2 |
 | deploy + scan | `tests/deploy_test.kf` | 14 |
-| daemon | `tests/daemon_test.kf` | 13 |
+| daemon | `tests/daemon_test.kf` | 14 |
 | doctor | `tests/doctor_test.kf` | 16 |
 | hot-reload | `tests/reload_test.kf` | 1 |
 | control plane | `tests/control_test.kf` | 6 |
@@ -106,7 +106,8 @@ o run total imprime `60 passed, 0 failed`. Falha = nome do teste + assert
 | eventos do Edge (`logs --edge`) | `tests/edge_events_test.kf` | 6 |
 | SERVICES empurrado (F14 s3) | `tests/services_push_test.kf` | 2 |
 | deploy --watch (F13 s3 parcial) | `tests/deploy_watch_test.kf` | 4 |
-Total: 428 testes. Ver `15-tests.md` para a matriz.
+
+Total: 429 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 

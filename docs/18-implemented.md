@@ -263,7 +263,7 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   o artefato do SO (`daemonUnitText` systemd no Linux, `daemonLaunchdPlist`
   no macOS, `daemonWindowsScript` no Windows; mesmo `connect`,
   `Restart=always`, `NoNewPrivileges`, enable/ativacao manual); `status`/
-  `uninstall`; erro honesto sem systemd (`daemon_test.kf`, 13 testes).
+  `uninstall`; erro honesto sem systemd (`daemon_test.kf`, 14 testes).
 * **Parada limpa** do agente (`disconnect` via arquivo-sentinela) e da
   plataforma (`serve`, via fechamento do `Listener`).
 * **Hot-reload de serviço (debito quitado)**: refresher via `/v1/connect`

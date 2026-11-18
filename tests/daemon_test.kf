@@ -83,6 +83,21 @@ test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
     assert(help.indexOf("unfreeze account") >= 0, "unfreeze account documentado")
 }
 
+test "daemon: ajuda reconciliada com os comandos reais", "usage-parity" {
+    // Auditoria README x help x realidade: o help parou no systemd do
+    // slice user-level (a Fase 13 s1 trocou por artefato por SO), e o
+    // README arrastava `audit`/`logs` de epocas anteriores e nunca ganhou
+    // `service tokens`. O help e a interface que o binario mostra; o
+    // README o espelha. Puro, sem rede.
+    var help = usageText()
+    assert(help.indexOf("daemon install|status|uninstall   (artefato por SO") >= 0, "help documenta artefato por SO")
+    assert(help.indexOf("systemd --user, sem root") < 0, "texto stale do systemd sai do help")
+    assert(help.indexOf("service tokens   (credenciais validas SEM expiracao na conta)") >= 0, "service tokens documentado")
+    assert(help.indexOf("audit [--sbom] [--verify] [--action <acao>] [--tail <n>]") >= 0, "audit anuncia --action/--tail")
+    assert(help.indexOf("logs [--tail <linhas>] [--runtime|--edge]") >= 0, "logs anuncia --edge")
+    assert(help.indexOf("scan [--file <caminho>] [--tls-cert <pem>]") >= 0, "scan anuncia flags")
+}
+
 test "daemon: paths ficam no espaco do usuario", "daemon-paths" {
     assert(daemonUnitName() == "kofcloud-agent.service", "nome da unit")
     assert(daemonUnitPath().endsWith("/.config/systemd/user/kofcloud-agent.service"), "path user-level")

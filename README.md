@@ -113,7 +113,8 @@ service suspend <nome>       (fora da rota, nada removido)
 service unsuspend <nome>
 service token <nome> [--ttl <horas>]  (credencial kfs_ para AUTHENTICATED; ex.: --ttl 24)
 service token-list <nome>   (inventario, sem valores)
-service token-revoke <nome> <kfs_|id>
+service token-revoke <nome> <kfs_|id>  (revoga UMA credencial; id curto se unico)
+service tokens   (credenciais validas SEM expiracao na conta)
 service rotate (<nome>|--all) [--ttl <horas>] [--prune]  (credencial nova; revoga as antigas SO depois do TTL)
 service rotation <nome>  (quantas credenciais ainda valem)
 domain list
@@ -124,8 +125,8 @@ deploy [--file kofcloud.json] [--check] [--plan]  (roda build + publica + verifi
 down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove orfaos)
 daemon install|status|uninstall   (artefato por SO — systemd/launchd/Windows — sem root, ativação manual)
 doctor [--file kofcloud.json] [--tls-cert <pem>]  (diagnostico: login, control, device, tunel, auditoria, tls, servicos)
-audit [--sbom] [--verify]               (trilha de auditoria da conta; --sbom = inventario local dos fontes)
-scan [--file <caminho>] [--tls-cert <pem>]      (varredura local de segredos no manifesto; exit 1 com achado)
+audit [--sbom] [--verify] [--action <acao>] [--tail <n>]   (trilha da conta; --sbom = inventario local; --action filtra, --tail corta)
+scan [--file <caminho>] [--tls-cert <pem>]   (segredos no manifesto/ambiente, PEM expirando e .kfs commitado no repo; exit 1 com achado)
 webhook set <url> --secret <s> | show | remove | test
 freeze service|device <nome|id> | account
 unfreeze service|device <nome|id> | account
@@ -133,7 +134,7 @@ incidents [--all] [--resolve <id>]
 migrate --from <estado.json> [--to <destino.json>] [--dry-run]
 state-backup [--file <estado.json>]
 token list|revoke <id|kfc_...>|rotate [--ttl <horas>]|rotation|prune   (prune: revoga as antigas, mantém a da sessão)
-logs [--tail <linhas>] [--runtime]   (marcos de sessao; --runtime = eventos reais do Agent; teto 256 KiB por arquivo)
+logs [--tail <linhas>] [--runtime|--edge]   (marcos de sessao; --runtime = eventos do Agent; --edge = eventos do Edge; teto 256 KiB por arquivo)
 serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <arquivo>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]
 ```
 

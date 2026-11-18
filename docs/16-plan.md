@@ -223,7 +223,7 @@ install|status|uninstall`: gera `kofcloud-agent.service` (mesmo `connect`,
 `Restart=always`, `NoNewPrivileges`, enable manual de proposito), erro
 honesto sem systemd; artefato por SO na Fase 13 slice 1 (systemd continua o
 padrao no Linux). Prova:
-`tests/daemon_test.kf` (13 testes: 8 do daemon + 5 da Fase 13 slice 1 — ver U28).
+`tests/daemon_test.kf` (14 testes: 9 do daemon + 5 da Fase 13 slice 1 — ver U28).
 
 **Estado (hot-reload — debito quitado): ✅ implementado.** O Agent re-busca
 `services[]` via `/v1/connect` a cada `6×healthMs` e troca a tabela DA SESSAO
