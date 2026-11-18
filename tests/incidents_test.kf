@@ -4,11 +4,13 @@ import kofcloud.control.Registry
 import kofcloud.model.Errors
 import kofcloud.model.Incident
 import kofcloud.edge.EdgeState
+import kofcloud.edge.Events
 import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
 import kofcloud.cli.Commands
 import kofcloud.cli.Local
 import kofcloud.identity.Tokens
+import kofcloud.protocol.Session
 import kofcloud.store.Store
 import kofcloud.util.Limits
 import testkit.Support
@@ -277,6 +279,239 @@ test "incidentes: quedas por ociosidade no Edge abrem incidente próprio", "inci
     noteEdgeIdleTimeoutIncident(stale)
     assert(stale.registry.allIncidents().size == 0, "janela vencida reseta antes de contar")
 }
+
+// Tunel caindo em massa (Fase 17 slice 1, ultimo sinal do desenho sem
+// detector): sessao perdida por EOF abrupto do Agent — sem GOAWAY de
+// despedida e sem decisao do proprio Edge. Uma perda e rotina (processo
+// morto, rede instavel); varias na janela significam agentes caindo em
+// lote. A marca `edgeClosed` separa saida que e decisao do Edge (sweeper
+// de ociosidade, GOAWAY de parada) de perda de verdade.
+test "incidentes: perda abrupta de tuneis no Edge abre incidente próprio", "incident-loss" {
+    // Sinal e limites travados na fonte unica.
+    assert(incidentSeverityFor(incidentEdgeTunnelLosses()) == "WARN", "perda em massa e WARN")
+    assert(incidentSummaryFor(incidentEdgeTunnelLosses()).length > 0, "resumo presente")
+    assert(limitEdgeTunnelLossThreshold() == 5, "limiar de perda travado")
+    assert(limitEdgeTunnelLossWindowMs() == 300000, "janela de perda travada")
+    assert(incidentEdgeTunnelLosses() != incidentEdgeIdleTimeouts(), "sinal distinto da ociosidade")
+    assert(incidentSummaryFor(incidentEdgeTunnelLosses()) != incidentSummaryFor(incidentEdgeIdleTimeouts()), "resumos distintos")
+
+    var registry = Registry(incidentsPath("loss"))
+    var edgeState = EdgeState(registry)
+    edgeState.tunnelLossProbe.count = edgeTunnelLossThreshold() - 1
+    edgeState.tunnelLossProbe.windowStart = time.now()
+    noteEdgeTunnelLossIncident(edgeState)
+    var list = registry.incidentsForAccount("", true)
+    assert(list.size == 1, "limiar de perdas abre o global")
+    if (list.size == 1) {
+        assert(list.get(0).kind == incidentEdgeTunnelLosses(), "sinal de perda")
+        assert(list.get(0).accountId.length == 0, "escopo global (sem device)")
+        assert(list.get(0).severity == "WARN", "WARN")
+        // Privacidade: o sinal nao carrega device, hostname nem token.
+        assert(list.get(0).summary.indexOf(".") < 0, "sem hostname no resumo")
+        assert(list.get(0).summary.indexOf("kfs_") < 0, "sem credencial no resumo")
+    }
+
+    // Uma perda isolada nao e incidente (Agent morto e rotina).
+    var quiet = EdgeState(Registry(incidentsPath("loss2")))
+    noteEdgeTunnelLossIncident(quiet)
+    assert(quiet.registry.allIncidents().size == 0, "uma perda nao e incidente")
+
+    // Sondas independentes: perdas nao antecipam recusas, 401 nem ociosidade.
+    var shared = EdgeState(Registry(incidentsPath("loss3")))
+    shared.tunnelLossProbe.count = edgeTunnelLossThreshold() - 1
+    noteEdgeTunnelLossIncident(shared)
+    noteEdgeRefusalIncident(shared)
+    noteEdgeAuthFailureIncident(shared)
+    noteEdgeIdleTimeoutIncident(shared)
+    var kinds = shared.registry.allIncidents()
+    assert(kinds.size == 1, "so a sonda de perda abriu")
+    if (kinds.size == 1) {
+        assert(kinds.get(0).kind == incidentEdgeTunnelLosses(), "sinal de perda")
+    }
+    assert(shared.refusalProbe.count == 1, "recusas contaram na propria sonda")
+    assert(shared.authFailureProbe.count == 1, "401 contou na propria sonda")
+    assert(shared.idleTimeoutProbe.count == 1, "ociosidade contou na propria sonda")
+
+    // Janela vencida zera o contador.
+    var stale = EdgeState(Registry(incidentsPath("loss4")))
+    stale.tunnelLossProbe.count = edgeTunnelLossThreshold() - 1
+    stale.tunnelLossProbe.windowStart = time.now() - edgeTunnelLossWindowMs() - 1000
+    noteEdgeTunnelLossIncident(stale)
+    assert(stale.registry.allIncidents().size == 0, "janela vencida reseta antes de contar")
+
+    // A marca nasce falsa: saida propria do Edge e excecao, nao regra.
+    var session = TunnelSession("s1", "d1", "a1", "")
+    assert(session.edgeClosed == false, "marca de fechamento proprio nasce falsa")
+
+    // Trava com ANCORA de indentacao no wiring (tecnica do c330b8c): o EOF
+    // so conta SEM a marca, com palavra e sonda no nivel do if; sweeper e
+    // goaway marcam ANTES de fechar. Dead-code wrap re-indenta e fica
+    // vermelho.
+    var tunnelSrc = File("src/kofcloud/edge/Tunnel.kf").readText()
+    var tunnelText = ""
+    if (tunnelSrc != null) {
+        tunnelText = tunnelSrc
+    }
+    assert(tunnelText.length > 0, "le o Tunnel.kf")
+    var connStart = tunnelText.indexOf("void handleTunnelConnection(")
+    assert(connStart >= 0, "acha o handler da conexao")
+    var connEnd = tunnelText.indexOf("void tunnelIdleSweeper(", connStart)
+    assert(connEnd > connStart, "acha o fim do handler")
+    var connBody = tunnelText.substring(connStart, connEnd)
+    var firstCall = connBody.indexOf("\n                tunnelDiedAbruptly(state, session)")
+    assert(firstCall >= 0, "EOF de peer conta perda no nivel do if")
+    var catchStart = connBody.indexOf("\n        } catch (String e) {", firstCall)
+    assert(catchStart > firstCall, "leitura que lanca tem destino proprio")
+    assert(connBody.indexOf("\n            tunnelDiedAbruptly(state, session)", catchStart) > catchStart, "excecao de leitura conta perda com a mesma marca")
+    var helperStart = tunnelText.indexOf("void tunnelDiedAbruptly(")
+    assert(helperStart > connStart, "acha o helper do fim abrupto")
+    var helperEnd = tunnelText.indexOf("void noteEdgeTunnelLossIncident(", helperStart)
+    assert(helperEnd > helperStart, "acha o fim do helper")
+    var helperBody = tunnelText.substring(helperStart, helperEnd)
+    assert(helperBody.indexOf("\n    if (session.edgeClosed == false) {") >= 0, "perda so sem a marca de fechamento proprio")
+    assert(helperBody.indexOf("\n        edgeEvent(\"warn\", \"tunel perdido: EOF do agent (\" + intToString(state.onlineCount()) + \" sessao(oes) vivas)\")") >= 0, "perda deixa palavra no nivel do if")
+    assert(helperBody.indexOf("\n        noteEdgeTunnelLossIncident(state)") >= 0, "perda alimenta a sonda no nivel do if")
+    var sweepStart = tunnelText.indexOf("void tunnelIdleSweeper(")
+    assert(sweepStart > connStart, "acha o sweeper")
+    var sweepEnd = tunnelText.indexOf("Bool handleTunnelFrame(", sweepStart)
+    assert(sweepEnd > sweepStart, "acha o fim do sweeper")
+    var sweepBody = tunnelText.substring(sweepStart, sweepEnd)
+    assert(sweepBody.indexOf("\n                session.edgeClosed = true") >= 0, "sweeper marca antes de fechar")
+    var edgeSrc = File("src/kofcloud/edge/EdgeState.kf").readText()
+    var edgeText = ""
+    if (edgeSrc != null) {
+        edgeText = edgeSrc
+    }
+    assert(edgeText.length > 0, "le o EdgeState.kf")
+    var goawayStart = edgeText.indexOf("void goawayAll(")
+    assert(goawayStart >= 0, "acha o goawayAll")
+    var goawayEnd = edgeText.indexOf("Bool isOnline(", goawayStart)
+    assert(goawayEnd > goawayStart, "acha o fim do goawayAll")
+    var goawayBody = edgeText.substring(goawayStart, goawayEnd)
+    assert(goawayBody.indexOf("\n            session.edgeClosed = true") >= 0, "parada limpa marca antes de fechar")
+}
+
+// Caminho REAL: um Agent valido que some sem GOAWAY (crash, rede, processo
+// morto) conta perda e deixa palavra; parada limpa (stop -> GOAWAY) nao
+// conta. Precedente de fixture: incident-auth-e2e (mesmo trio in-process).
+test "incidentes: tunel perdido abruptamente abre incidente e deixa palavra", "incident-loss-e2e" {
+    var controlPort = 20302
+    var tunnelPort = 20303
+    var httpPort = 20304
+
+    var registry = Registry("/tmp/kofcloud-inc-loss-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-inc-loss-edge-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+
+    // A sonda e pre-carregada para UMA perda fechar o limiar (5 EOFs de
+    // verdade seriam lentos e flakys; o detector puro ja trava a contagem).
+    edgeState.tunnelLossProbe.count = edgeTunnelLossThreshold() - 1
+    edgeState.tunnelLossProbe.windowStart = time.now()
+
+    // O Tunnel real grava em edgeRuntimeLogPath(): limpa antes do HELLO para
+    // a palavra ser prova deste teste (precedente do edge_events_test).
+    File(edgeRuntimeLogPath()).delete()
+
+    var hello = mapOf()
+    hello.put("kind", "HELLO")
+    hello.put("v", intToString(protocolVersion()))
+    hello.put("deviceId", deviceId)
+    hello.put("token", accountToken)
+    hello.put("clientPub", "")
+    var conn = net.connect("127.0.0.1", tunnelPort)
+    conn.send(bytesFromString(json.encode(hello) + "\n"))
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "sessao registrada no edge")
+
+    // Queda abrupta: fecha o socket sem GOAWAY — o laço de leitura recebe
+    // EOF e, sem a marca, conta perda.
+    conn.close()
+    var offline = false
+    var waits = 100
+    while (waits > 0 && offline == false) {
+        offline = edgeState.isOnline(deviceId) == false
+        if (offline == false) {
+            time.sleep(50)
+            waits = waits - 1
+        }
+    }
+    assert(offline, "sessao desregistrada apos o EOF")
+    assert(edgeState.tunnelLossProbe.count == edgeTunnelLossThreshold(), "EOF abrupto contou na sonda")
+    var incidents = registry.allIncidents()
+    assert(incidents.size == 1, "limiar abre o global")
+    if (incidents.size == 1) {
+        assert(incidents.get(0).kind == incidentEdgeTunnelLosses(), "sinal da perda")
+        assert(incidents.get(0).accountId.length == 0, "escopo global, nao da conta")
+        assert(incidents.get(0).summary.indexOf("notebook") < 0, "sem nome de device no incidente")
+    }
+    var text = readTextOr(edgeRuntimeLogPath(), "")
+    assert(text.indexOf("tunel perdido: EOF do agent (") >= 0, "perda deixa palavra no arquivo: " + text)
+    assert(text.indexOf(deviceId) < 0, "o device da sessao perdida nao vaza para o arquivo")
+    assert(text.indexOf("kfc_") < 0, "nenhum token vaza para o arquivo")
+
+    // Parada limpa NAO e perda: segunda sessao fica viva, o stop manda
+    // GOAWAY para todas (goawayAll marca antes de fechar) e o EOF que chega
+    // depois nao alimenta a sonda nem duplica o incidente.
+    var alive = mapOf()
+    alive.put("kind", "HELLO")
+    alive.put("v", intToString(protocolVersion()))
+    alive.put("deviceId", deviceId)
+    alive.put("token", accountToken)
+    alive.put("clientPub", "")
+    var conn2 = net.connect("127.0.0.1", tunnelPort)
+    conn2.send(bytesFromString(json.encode(alive) + "\n"))
+    var online2 = false
+    var tries = 100
+    while (tries > 0 && online2 == false) {
+        online2 = edgeState.isOnline(deviceId)
+        if (online2 == false) {
+            time.sleep(50)
+            tries = tries - 1
+        }
+    }
+    assert(online2, "segunda sessao registrada")
+    var before = edgeState.tunnelLossProbe.count
+    var incidentCount = registry.allIncidents().size
+    writeTextTo(edgeStop, "stop")
+    var gone = false
+    var waits2 = 100
+    while (waits2 > 0 && gone == false) {
+        gone = edgeState.isOnline(deviceId) == false
+        if (gone == false) {
+            time.sleep(50)
+            waits2 = waits2 - 1
+        }
+    }
+    assert(gone, "GOAWAY de parada desregistra")
+    assert(edgeState.tunnelLossProbe.count == before, "GOAWAY de parada nao e perda")
+    assert(registry.allIncidents().size == incidentCount, "parada limpa nao duplica incidente")
+    conn2.close()
+
+    assert(waitForPort(controlPort, 60), "encerra")
+}
+
+// Expiracao em massa de kfs_ (Fase 17 slice 1, ultimo sinal do desenho):
 
 // Expiracao em massa de kfs_ (Fase 17 slice 1, ultimo sinal do desenho):
 // a varredura preguicosa que poda credencial vencida alimenta a sonda da

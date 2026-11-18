@@ -1343,6 +1343,24 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   já tem incidente próprio e não passa pelo detector. Prova:
   `incident-susp` em `tests/incidents_test.kf`.
 
+  **Implementado (túnel caindo em massa):** o `handleTunnelConnection` via
+  o fim do socket como silêncio — sem GOAWAY do Agent, sem fechamento
+  próprio do Edge, nada contava. Agora o fim abrupto (`EOF` do peer ou
+  leitura que lança: reset violento ou close local do writer) alimenta uma
+  quarta sonda (`tunnelLossProbe`, separada): ≥5 perdas em 300 s abrem
+  `edge_tunnel_losses` (WARN, global). A marca `edgeClosed` na sessão (só em
+  memória, como a `idleDropped` do Agent) distingue decisão do Edge de perda
+  de verdade: sweeper de ociosidade e `goawayAll` marcam ANTES de fechar, e o
+  destino compartilha um helper único (`tunnelDiedAbruptly`) — a palavra
+  ("tunel perdido: EOF do agent (N sessao(oes) vivas)", só contagem, sem
+  device/hostname/token) vive num lugar só. De brinde, o `try/catch` no laço
+  de leitura fecha um buraco de liveness: leitura que lançava matava a task
+  sem `unbind` — sessão presa em ONLINE com rota quebrada. Prova:
+  `incident-loss` (puro: limiar, isolada não abre, sondas independentes,
+  janela vencida, marca nasce falsa + travas ancoradas do helper/chamadas) e
+  `incident-loss-e2e` (Edge real: HELLO válido + close abrupto conta e abre,
+  volta a sonda, parada limpa via stopFile não conta nem duplica).
+
 * **Slice 2 — contenção em um comando.** `kof cloud freeze <alvo>`
   (conta|device|service|edge): congela tudo do alvo (suspend + revoga
   tokens vivos + derruba sessões) e gera ID de incidente; `unfreeze`

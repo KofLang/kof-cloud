@@ -58,6 +58,13 @@ class TunnelSession {
     // atravessa o fio nem o arquivo de estado.
     Bool idleDropped
 
+    // Verdade sobre QUEM fechou a sessao (lado do Edge): o sweeper de
+    // ociosidade e o GOAWAY de parada marcam ANTES de fechar. Sem a marca,
+    // o EOF que o laço de leitura recebe depois parecia perda abrupta —
+    // e a sonda de "tunel caindo em massa" contaria decisao propria como
+    // perda. Espelho da `idleDropped` do lado do Agent: somente em memoria.
+    Bool edgeClosed
+
     // Servicos que este Agent serve NESTA sessao, por nome. Vive aqui (e nao
     // num Map capturado por spawn) porque Map passado como argumento de task
     // e copiado por valor: o refresher atualiza e o handler do OPEN precisa
@@ -82,6 +89,7 @@ class TunnelSession {
         this.streamStartedMs = mapOf()
         this.servicesByName = mapOf()
         this.idleDropped = false
+        this.edgeClosed = false
     }
 
     // Troca atomica da tabela (hot-reload): limpa e preenche. Streams em voo

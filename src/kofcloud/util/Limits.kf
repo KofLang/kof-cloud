@@ -745,6 +745,29 @@ Int limitEdgeIdleTimeoutWindowMs() {
     return window
 }
 
+// Tunel caindo em massa (Fase 17 slice 1): quantas sessoes o Edge perde por
+// EOF abrupto do Agent dentro da janela ate abrir o incidente global. Uma
+// perda isolada e rotina (processo do Agent morto, rede instavel); varias
+// em sequencia significam agentes caindo em lote (bug, flap na rede do
+// Edge). Limiar baixo de proposito como o da ociosidade: cada perda e um
+// tunel que caiu na pratica, e quem olha o incidente ja distingue do ruido.
+// Mesma semantica de recuo: zerado/negativo volta ao default.
+Int limitEdgeTunnelLossThreshold() {
+    var threshold = config.int("kofcloud.limits.edgeTunnelLossThreshold", 5)
+    if (threshold <= 0) {
+        threshold = 5
+    }
+    return threshold
+}
+
+Int limitEdgeTunnelLossWindowMs() {
+    var window = config.int("kofcloud.limits.edgeTunnelLossWindowMs", 300000)
+    if (window <= 0) {
+        window = 300000
+    }
+    return window
+}
+
 // Limiar do detector de revogacao em lote (por conta, Fase 17 slice 1):
 // quantas revogacoes (device ou token) dentro da janela abrem o incidente.
 // Fonte unica do `Registry.detectBulkRevokes` — os dois ramos (device e

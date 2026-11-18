@@ -54,6 +54,15 @@ String incidentEdgeIdleTimeouts() {
     return "edge_idle_timeouts"
 }
 
+// Tunel caindo em massa: sessao perdida por EOF abrupto do Agent — sem
+// GOAWAY de despedida e sem ter sido fechada pelo proprio Edge (ociosidade
+// ou parada). Uma perda e rotina (processo morto, rede instavel); varias na
+// janela significam agentes caindo em lote. O sinal e global e agregado:
+// nunca carrega device nem hostname.
+String incidentEdgeTunnelLosses() {
+    return "edge_tunnel_losses"
+}
+
 // Expiracao em massa de `kfs_` (por conta): varias credenciais vencidas na
 // mesma janela. Um vencimento isolado e rotina; varios juntos significam
 // rotacao mal planejada (TTL curto sem re-emissao) ou relogio/estado
@@ -93,7 +102,7 @@ String incidentSeverityFor(String kind) {
     if (kind == incidentBulkTokenRevokes() || kind == incidentEdgeRefusals() || kind == incidentEdgeAuthFailures()) {
         return severityWarn()
     }
-    if (kind == incidentEdgeIdleTimeouts()) {
+    if (kind == incidentEdgeIdleTimeouts() || kind == incidentEdgeTunnelLosses()) {
         return severityWarn()
     }
     if (kind == incidentMassTokenExpiry() || kind == incidentBulkSuspensions()) {
@@ -121,6 +130,9 @@ String incidentSummaryFor(String kind) {
     }
     if (kind == incidentEdgeIdleTimeouts()) {
         return "many idle tunnel sessions dropped at the edge in a short window"
+    }
+    if (kind == incidentEdgeTunnelLosses()) {
+        return "many tunnels lost abruptly at the edge in a short window"
     }
     if (kind == incidentMassTokenExpiry()) {
         return "many service credentials expired in a short window"

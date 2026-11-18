@@ -27,13 +27,15 @@ class EdgeState {
     Int publicConns
     Int publicConnLimit
     Int upstreamWaitMs
-    // Tres sondas independentes (Fase 17 slice 1 + abuse prevention): recusas
-    // de tunel, falhas de autenticacao e quedas por ociosidade nao podem
-    // dividir contador, senao uma rajada de 401 (ou um Agent em loop de
-    // reconexao) disfarcaria as outras e vice-versa.
+    // Quatro sondas independentes (Fase 17 slice 1 + abuse prevention):
+    // recusas de tunel, falhas de autenticacao, quedas por ociosidade e
+    // perdas abruptas de tunel nao podem dividir contador, senao uma
+    // rajada de 401 (ou um Agent em loop de reconexao) disfarcaria as
+    // outras e vice-versa.
     RateProbe refusalProbe
     RateProbe authFailureProbe
     RateProbe idleTimeoutProbe
+    RateProbe tunnelLossProbe
     Bool wafEnforce
 
     constructor(registry: Registry) {
@@ -55,6 +57,7 @@ class EdgeState {
         this.refusalProbe = RateProbe()
         this.authFailureProbe = RateProbe()
         this.idleTimeoutProbe = RateProbe()
+        this.tunnelLossProbe = RateProbe()
         this.wafEnforce = false
     }
 
@@ -264,6 +267,9 @@ class EdgeState {
     // e cada Agent registra erro e volta com backoff para um Edge morto.
     void goawayAll(String code) {
         for (var session in this.liveSessions()) {
+            // A marca vem ANTES do close: o fim do laço de leitura da sessão
+            // vê `edgeClosed` e não conta a saída limpa como perda abrupta.
+            session.edgeClosed = true
             session.send(goawayFrame(code))
             session.close()
         }
