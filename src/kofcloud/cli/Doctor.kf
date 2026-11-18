@@ -28,6 +28,14 @@ String doctorFailLine(String label, String why) {
     return "FALHA " + label + ": " + why
 }
 
+// Linha de aviso do doctor: sinaliza sem falhar (exit e o veredito das
+// FALHA; rotacao de credencial e rotina, nao outage — mesmo contrato do
+// `check: aviso:` do deploy --check). Formato proprio para nunca ser
+// confundido com ok/FALHA por quem roda o doctor em script.
+String doctorWarnLine(String label, String why) {
+    return "AVISO " + label + ": " + why
+}
+
 // Linha da camada do tunel a partir do corpo de /v1/presence ja buscado
 // (ou do erro da busca): pura, sem rede nem HOME — testavel sem tunel.
 // Devolve a linha pronta; "" significa "ok, sessao viva".
@@ -376,6 +384,14 @@ DoctorReport doctorCheckWith(String manifestPath, String tlsCertPath) {
     // silencio — agora os dois caminhos acusam igual. Sem fetch proprio:
     // o verify lista sozinho e devolve os problemas ja ordenados.
     var problems = verifyDeploymentFor(session.controlUrl, session.token, wanted, identity.deviceId)
+    // Aviso de kfs_ perto do fim (Fase 19, mesma fonte do --check): linha
+    // "aviso" no doctor — nunca FALHA nem exit 1. Antes das linhas ok: o
+    // operador que le "ok site publicado e respondendo" tambem le o que
+    // vai derruba-lo em breve. Melhor-esforco: sem lista, sem aviso.
+    var now = longToString(time.now())
+    for (var warn in kfsExpiryWarningsFor(session.controlUrl, session.token, wanted, identity.deviceId, now)) {
+        lines.add(doctorWarnLine("servico", warn))
+    }
     if (problems.size == 0) {
         for (var service in wanted) {
             lines.add(doctorOkLine(service.name + " publicado e respondendo em " + service.address + ":" + intToString(service.port)))

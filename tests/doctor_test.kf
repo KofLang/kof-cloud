@@ -7,6 +7,7 @@ import kofcloud.cli.Usage
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.store.Store
+import kofcloud.util.Limits
 import testkit.Support
 
 // doctor: diagnostico somente-leitura em camadas. Nao publica, nao remove,
@@ -452,4 +453,76 @@ test "doctor: camada da credencial contra o endpoint real", "doctor-cred" {
     var line = doctorAccountTokenLine(listed, "")
     assert(line.startsWith("FALHA"), "fio real com TTL curto: FALHA: " + line)
     assert(line.indexOf("1 credencial") >= 0, "conta so a nova: " + line)
+}
+test "doctor: aviso de kfs_ perto do fim por servico (mesma fonte do --check)", "doctor-kfs" {
+    // Camada de aviso do doctor sobre a credencial de SERVICO (a camada
+    // doctor-cred cobre o kfc_ da conta): mesmo contrato do `check: aviso:`
+    // do deploy --check — linha AVISO, nunca FALHA nem exit 1. A linha e
+    // pura e delega a decisao a kfsExpiryCheckLine (o MESMO predicado do
+    // token-list/service status); o doctor so busca e imprime.
+    assert(doctorWarnLine("servico", "x").startsWith("AVISO"), "formato proprio")
+    assert(doctorWarnLine("servico", "x").indexOf("FALHA") < 0, "aviso nao e falha")
+
+    var window = limitTokenExpiryWarnMs()
+    var now = 1000000000000L
+    var calm = listOf<ServiceTokenEntry>()
+    calm.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", longToString(now + window + 86400000L)))
+    assert(kfsExpiryCheckLine("api", calm, longToString(now)) == "", "fora da janela: sem linha")
+
+    var hot = listOf<ServiceTokenEntry>()
+    hot.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", longToString(now + window - 1000L)))
+    var line = doctorWarnLine("servico", kfsExpiryCheckLine("api", hot, longToString(now)))
+    assert(line.startsWith("AVISO"), "perto do fim: AVISO: " + line)
+    assert(line.indexOf("api:") >= 0, "nomeia o servico: " + line)
+    assert(line.indexOf("service rotate api") >= 0, "orienta a rotacao: " + line)
+    assert(line.indexOf("a1b2c3d4") < 0, "nao vaza nem o id curto")
+
+    var text = File("src/kofcloud/cli/Doctor.kf").readText()
+    var raw = ""
+    if (text != null) {
+        raw = text
+    }
+    if (raw.length == 0) {
+        return
+    }
+    var start = raw.indexOf("DoctorReport doctorCheckWith(")
+    assert(start >= 0, "acha o doctorCheckWith")
+    var end = raw.indexOf("Int cmdDoctor(", start)
+    assert(end > start, "acha o fim do doctorCheckWith")
+    var body = raw.substring(start, end)
+    assert(body.indexOf("kfsExpiryWarningsFor(session.controlUrl, session.token, wanted, identity.deviceId, now)") >= 0, "doctor consulta os avisos")
+    assert(body.indexOf("doctorWarnLine(\"servico\", warn)") >= 0, "doctor imprime a linha de aviso")
+
+    // Fio real (precedente doctor-cred e2e): AUTHENTICATED com kfs_ de 1h
+    // vira AVISO; PUBLIC mesmo com token alheio na conta nao tem o que
+    // vencer e silencia. Publicado NESTE device (o varredor e por device).
+    var controlPort = 19985
+    var registry = Registry("/tmp/kofcloud-doctor-kfs-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control plane no ar")
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var authBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"api\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19986\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}"
+    var pub = httpPostJson(controlPort, "/v1/services", authBody, accountToken)
+    assert(statusOf(pub) == 200, "servico AUTHENTICATED publicado")
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(pub)), "id")
+    var controlUrl = "http://127.0.0.1:" + intToString(controlPort)
+    var fioNow = longToString(time.now())
+    var wanted = parseManifest("{\"services\":[{\"name\":\"api\",\"port\":19986,\"exposure\":\"AUTHENTICATED\"}]}")
+    assert(kfsExpiryWarningsFor(controlUrl, accountToken, wanted, deviceId, fioNow).size == 0, "sem kfs_: sem aviso")
+    var issue = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"1\"}", accountToken)
+    assert(statusOf(issue) == 200, "kfs_ de 1h emitida")
+    var warnings = kfsExpiryWarningsFor(controlUrl, accountToken, wanted, deviceId, fioNow)
+    assert(warnings.size == 1, "um aviso no fio real: " + intToString(warnings.size))
+    var wrapped = doctorWarnLine("servico", warnings.get(0))
+    assert(wrapped.startsWith("AVISO"), "fio real: AVISO: " + wrapped)
+    assert(wrapped.indexOf("api:") >= 0, "fio real nomeia o servico: " + wrapped)
+
+    var pubBody2 = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19987\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody2, accountToken)) == 200, "servico PUBLIC publicado")
+    var wantedPublic = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":19987}]}")
+    assert(kfsExpiryWarningsFor(controlUrl, accountToken, wantedPublic, deviceId, fioNow).size == 0, "PUBLIC silencia mesmo com kfs_ na conta")
 }
