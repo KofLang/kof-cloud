@@ -859,7 +859,7 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   campo após configurar, remover pede `confirm()`, e o carregamento é
   separado do Carregar porque `show` sem nada é `404 KCF130` por desenho
   (vira placeholder, nunca erro que impediria as listas). Prova:
-  `tests/panel_actions_test.kf` (20: o HTML expõe cada ação, o e2e
+  `tests/panel_actions_test.kf` (21: o HTML expõe cada ação, o e2e
   publica/suspende/emite/remove pelas rotas que o painel usa, o contrato do
   "Adicionar domínio", o "Criar conta"/registrar device pela mesma rota da
   CLI, o webhook com entrega real num receptor, o Diagnóstico, o banner, o
@@ -999,6 +999,20 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   (travas do HTML + e2e: auto-revoga 200 → a credencial morre 401; mutação
   na rota quebra).
 
+  **Contenção ✅ (F17 s2 pela API):** a última ação destrutiva que exigia
+  terminal era o `freeze` — o painel de gestão completa prometia "tudo pelo
+  painel". A seção Contenção tem `<select frztarget>` (serviços e devices
+  por id resolvido das listas que a página já buscou + "conta inteira",
+  opções via DOM como o select de devices) e chama as MESMAS rotas
+  `/v1/freeze` e `/v1/unfreeze` da CLI (nenhum endpoint privilegiado); o
+  freeze pede `confirm()` porque REVOGA as credenciais vivas (o unfreeze
+  restaura o status, nunca as credenciais — a página diz "emita novas com
+  `service rotate`"); o rodapé (`panelRoutes`) ganha as duas rotas e a
+  trava bidirecional as exige. Prova: `panel-freeze` em
+  `tests/panel_actions_test.kf` (21: freeze 200 com incidente, inventário
+  de kfs_ fica `[]`, serviço SUSPENDED fora da rota, unfreeze restaura com
+  `restored:"1"`, segundo unfreeze 409 KCF141, incidente listado na
+  `/v1/incidents`).
 **Regras:** o painel nunca mostra `kfs_` depois da emissão (mesma regra da
 CLI); nunca loga corpo/token; é estático + `fetch`, sem framework pesado
 (o Kof serve arquivo + JSON; o resto é HTML/JS simples).

@@ -28,7 +28,7 @@ String panelVersion() {
 // uma nesta lista — e o contrario: cada entrada da lista tem de aparecer no
 // HTML. Rota nova no painel sem entrar aqui quebra o teste.
 String panelRoutes() {
-    return "/v1/accounts, /v1/devices, /v1/devices/revoke, /v1/devices/suspend, /v1/devices/unsuspend, /v1/presence, /v1/services, /v1/services/remove, /v1/services/suspend, /v1/services/unsuspend, /v1/services/token, /v1/services/token/revoke, /v1/services/tokens, /v1/services/token-hygiene, /v1/domains, /v1/domains/verify, /v1/domains/remove, /v1/audit/verify, /v1/tokens, /v1/tokens/revoke, /v1/webhook"
+    return "/v1/accounts, /v1/devices, /v1/devices/revoke, /v1/devices/suspend, /v1/devices/unsuspend, /v1/presence, /v1/services, /v1/services/remove, /v1/services/suspend, /v1/services/unsuspend, /v1/services/token, /v1/services/token/revoke, /v1/services/tokens, /v1/services/token-hygiene, /v1/domains, /v1/domains/verify, /v1/domains/remove, /v1/audit/verify, /v1/tokens, /v1/tokens/revoke, /v1/webhook, /v1/freeze, /v1/unfreeze"
 }
 
 // O HTML e uma constante: um unico lugar para revisar. Nenhum dado de conta
@@ -108,6 +108,12 @@ footer{padding:16px 24px;color:#5b606a;font-size:12px}
   <button onclick=\"webhookAcao('test')\">Testar entrega</button>
   <button class=\"danger\" onclick=\"webhookAcao('remove')\">Remover</button></div>
   <p class=\"muted\">Aviso de incidente da conta por POST assinado (<code>X-KofCloud-Signature: sha256=&lt;hex&gt;</code> do corpo com o segredo). O segredo fica so no servidor e nunca volta inteiro — a pagina mostra so o prefixo.</p></section>
+<section><h2>Contencao</h2>
+  <div class=\"row\"><select id=\"frztarget\"><option value=\"\">alvo…</option></select>
+  <button class=\"danger\" onclick=\"acao('freeze')\">Congelar (contencao)</button>
+  <button onclick=\"acao('unfreeze')\">Descongelar</button></div>
+  <p class=\"muted\">Congelar suspende o alvo, REVOGA as credenciais vivas e abre incidente — reversivel pelo Descongelar, que restaura o status anterior (configuracao nunca e tocada). Servico e dispositivo aceitam nome; escolher \"conta\" congela a conta inteira (devices + servicos + kfs_). As credenciais revogadas nao voltam: emita novas com <code>service rotate</code>.</p>
+  <div id=\"frz\"></div></section>
 <section><h2>Diagnostico</h2>
   <div class=\"row\"><button onclick=\"diagnostico()\">Rodar</button><span class=\"muted\">mesmas camadas do <code>doctor</code> que a pagina enxerga pela API: credencial da conta, dispositivo, tunel, auditoria, higiene de kfs_</span></div>
   <p class=\"muted\">O que depende da sua maquina (portas locais, DNS da sua rede) segue no <code>kof cloud doctor</code>.</p>
@@ -143,6 +149,43 @@ function idPorNome(lista, nome){
 }
 function ok(m){ var el=document.getElementById('msg'); el.className='on'; el.textContent=m; }
 function erro(m){ var el=document.getElementById('msg'); el.className='err'; el.textContent=m; }
+// Select da Contencao: servicos e dispositivos por NOME (as rotas /v1/freeze
+// e /v1/unfreeze aceitam nome via resolucao do Registry? NAO — elas leem
+// `id`; entao o value da opcao e o ID resolvido das listas que a pagina ja
+// buscou, e o rotulo diz o tipo). Opcao extra de conta inteira (sem id: o
+// alvo e sempre o dono do token). Via DOM, mesmo padrao do preencherDevices.
+function preencherFreeze(devs, svcs){
+  var sel = document.getElementById('frztarget');
+  if(!sel) return;
+  var atual = sel.value;
+  while(sel.firstChild){ sel.removeChild(sel.firstChild); }
+  var vazio = document.createElement('option');
+  vazio.value = '';
+  vazio.textContent = 'alvo…';
+  sel.appendChild(vazio);
+  svcs.forEach(function(svc){
+    var o = document.createElement('option');
+    o.value = 'service/' + (svc.id || '');
+    o.textContent = 'servico: ' + svc.name;
+    sel.appendChild(o);
+  });
+  devs.forEach(function(d){
+    var o = document.createElement('option');
+    o.value = 'device/' + (d.id || d.deviceId || '');
+    o.textContent = 'device: ' + d.name;
+    sel.appendChild(o);
+  });
+  var conta = document.createElement('option');
+  conta.value = 'account/';
+  conta.textContent = 'conta inteira';
+  sel.appendChild(conta);
+  var mantem = false;
+  svcs.forEach(function(svc){ if('service/' + (svc.id || '') === atual) mantem = true; });
+  devs.forEach(function(d){ if('device/' + (d.id || d.deviceId || '') === atual) mantem = true; });
+  if(atual === 'account/') mantem = true;
+  if(mantem) sel.value = atual;
+}
+
 function preencherDevices(devs){
   var sel = document.getElementById('svcdev');
   if(!sel) return;
@@ -178,6 +221,7 @@ function carregar(){
       STATE.svcs = svcs;
       STATE.pronto = true;
       preencherDevices(devs);
+      preencherFreeze(devs, svcs);
       renderListas(devs, online, svcs, doms);
       document.getElementById('msg').textContent = '';
       onboarding(devs, svcs, online);
@@ -215,6 +259,7 @@ function limparAba(){
   document.getElementById('svcs').innerHTML = '';
   document.getElementById('doms').innerHTML = '';
   preencherDevices([]);
+  preencherFreeze([], []);
   document.getElementById('onboarding').innerHTML = '';
   document.getElementById('fluxo').innerHTML = '';
   document.getElementById('diag').innerHTML = '';
@@ -366,6 +411,17 @@ function acao(tipo){
     if(tipo === 'device-revoke' && !confirm('Revogar \"' + dn + '\"? Permanente — o dispositivo precisa ser registrado de novo.')) return;
     var rotaD = tipo === 'device-revoke' ? '/v1/devices/revoke' : (tipo === 'device-suspend' ? '/v1/devices/suspend' : '/v1/devices/unsuspend');
     p = api(rotaD,'POST',{deviceId: devId});
+  } else if(tipo === 'freeze' || tipo === 'unfreeze'){
+    var alvoF = document.getElementById('frztarget').value;
+    if(!alvoF){ erro('escolha o alvo da contencao'); return; }
+    var barra = alvoF.indexOf('/');
+    var tipoAlvo = alvoF.substring(0, barra);
+    var idAlvo = alvoF.substring(barra + 1);
+    if(tipo === 'freeze' && !confirm('Congelar ' + tipoAlvo + '? Suspende o alvo, REVOGA as credenciais vivas e abre incidente (reversivel pelo Descongelar).')) return;
+    if(tipo === 'unfreeze' && tipoAlvo === 'account' && !confirm('Descongelar a conta inteira? Restaura devices e servicos ao status anterior.')) return;
+    var corpo = {target: tipoAlvo};
+    if(tipoAlvo !== 'account'){ corpo.id = idAlvo; }
+    p = api(tipo === 'freeze' ? '/v1/freeze' : '/v1/unfreeze','POST',corpo);
   } else if(tipo === 'domain-add'){
     var h=document.getElementById('domhost').value.trim();
     var s=document.getElementById('domsvc').value.trim();

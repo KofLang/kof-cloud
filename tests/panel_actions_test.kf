@@ -38,7 +38,7 @@ test "painel: rodape anuncia exatamente as rotas que a pagina usa (fonte unica)"
     assert(vistas >= 21, "pagina usa pelo menos as 21 rotas do inventario (" + intToString(vistas) + ")")
     // Direcao 2: nenhuma rota inventada — cada entrada da fonte existe no HTML.
     var entradas = lista.split(", ")
-    assert(entradas.length == 21, "fonte lista exatamente 21 rotas")
+    assert(entradas.length == 23, "fonte lista exatamente 23 rotas (freeze/unfreeze entram)")
     for (var i = 0; i < entradas.length; i++) {
         assert(html.indexOf(entradas[i]) >= 0, "rota da fonte aparece na pagina: " + entradas[i])
     }
@@ -776,4 +776,68 @@ test "painel: diagnostico tem a camada de higiene de kfs_ (HTML + e2e)", "panel-
     assert(statusOf(httpPostJson(port, "/v1/services/rotate", "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"24\"}", token)) == 200, "rotacionou com TTL")
     var hyg2 = httpPostJson(port, "/v1/services/token-hygiene", "{}", token)
     assert(mapField(json.decode<Map<String, String>>(bodyOf(hyg2)), "count") == "1", "antiga sem TTL segue acusada apos rotate")
+}
+
+test "painel: contencao (freeze/unfreeze) pelas rotas que o botao chama", "panel-freeze" {
+    // F12 s2: o freeze (F17 s2) so existia no terminal — o painel de gestao
+    // completa prometia "tudo pelo painel". A secao Contencao chama as
+    // MESMAS rotas `/v1/freeze` e `/v1/unfreeze` da CLI (nenhum endpoint
+    // novo privilegiado), com confirm() no freeze (destroi credenciais).
+    var port = 19884
+    var registry = Registry("/tmp/kofcloud-panelfrz-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    control.enablePanel()
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control no ar")
+
+    // A pagina expoe a secao e as duas rotas (a trava do rodape ja exige
+    // as duas na fonte; aqui o texto do contrato).
+    var page = httpGetRaw(port, "/panel", "127.0.0.1")
+    assert(statusOf(page) == 200, "panel 200")
+    assert(bodyOf(page).indexOf("Contencao") >= 0, "secao anunciada")
+    assert(bodyOf(page).indexOf("Congelar (contencao)") >= 0, "botao do freeze")
+    assert(bodyOf(page).indexOf("Descongelar") >= 0, "botao do unfreeze")
+
+    // Cenario real: conta + device + servico AUTHENTICATED com kfs_.
+    var created = httpPostJson(port, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
+    var dev = httpPostJson(port, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(dev)), "deviceId")
+    var pub = httpPostJson(port, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}", token)
+    var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(pub)), "id")
+    assert(statusOf(httpPostJson(port, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "kfs_ emitido")
+
+    // freeze pela MESMA rota que o botao chama: 200 com incidente.
+    var frz = httpPostJson(port, "/v1/freeze", "{\"target\":\"service\",\"id\":\"" + serviceId + "\"}", token)
+    assert(statusOf(frz) == 200, "freeze 200: " + intToString(statusOf(frz)))
+    var frzBody = json.decode<Map<String, String>>(bodyOf(frz))
+    assert(mapField(frzBody, "frozen") == "1", "congelado")
+    var incidentId = mapField(frzBody, "incidentId")
+    assert(incidentId.length > 0, "incidente aberto")
+    // O freeze REVOGOU as credenciais vivas (prova do perigo que o confirm()
+    // avisa): a kfs_ emitida antes nao autentica mais o Edge — aqui, o
+    // inventario do servico vem vazio de credenciais validas.
+    var list = httpPostJson(port, "/v1/services/tokens", "{\"serviceId\":\"" + serviceId + "\"}", token)
+    assert(statusOf(list) == 200, "inventario apos freeze")
+    assert(bodyOf(list) == "[]", "credenciais revogadas pelo freeze: " + bodyOf(list))
+    // O servico ficou SUSPENSO (fora da rota).
+    var services = httpGetToken(port, "/v1/services", token)
+    assert(bodyOf(services).indexOf("SUSPENDED") >= 0, "servico suspenso pelo freeze")
+
+    // unfreeze restaura o status anterior (sem tocar config) — a kfs_ nao
+    // volta (o confirm() avisou; quem emite de novo e o service rotate).
+    var unf = httpPostJson(port, "/v1/unfreeze", "{\"target\":\"service\",\"id\":\"" + serviceId + "\"}", token)
+    assert(statusOf(unf) == 200, "unfreeze 200")
+    var unfBody = json.decode<Map<String, String>>(bodyOf(unf))
+    assert(mapField(unfBody, "restored") == "1", "status restaurado")
+    var services2 = httpGetToken(port, "/v1/services", token)
+    assert(bodyOf(services2).indexOf("SUSPENDED") < 0, "servico de volta a rota")
+
+    // Idempotencia do unfreeze: segundo unfreeze e 409 (nada a reverter).
+    var unf2 = httpPostJson(port, "/v1/unfreeze", "{\"target\":\"service\",\"id\":\"" + serviceId + "\"}", token)
+    assert(statusOf(unf2) == 409, "segundo unfreeze 409 KCF141")
+
+    // O incidente do freeze ficou registrado na conta (mesma API do CLI).
+    var incidents = httpPostJson(port, "/v1/incidents", "{}", token)
+    assert(bodyOf(incidents).indexOf(incidentId) >= 0, "incidente listado")
 }
