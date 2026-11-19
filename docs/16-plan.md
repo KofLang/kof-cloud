@@ -16,7 +16,10 @@ Objetivo: uma máquina estabelece um túnel persistente com o KofCloud.
 | 1.6 | `agent/Agent` — connect, heartbeat, reconexão | F1, F2 verdes (backoff U4 + E11 `idle-e2e`) |
 
 Resultado: `HELLO`/`WELCOME` estabelecidos, `PING`/`PONG` mantendo a sessão,
-reconexão com backoff.
+reconexão com backoff (passo `kofcloud.limits.backoffBaseMs/MaxMs`, default
+500/30000 ms, recuo seguro nas puras `backoffBaseLimitFrom`/
+`backoffMaxLimitFrom` — base não-positiva recai no default, teto abaixo da
+base recai na base).
 
 ## Fase 2 — Publicação HTTP
 

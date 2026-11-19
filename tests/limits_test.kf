@@ -236,5 +236,6 @@ test "limits: os planos citam as puras de passo/prazo pelo nome", "limits-docs" 
         assert(shipped.indexOf("backoffBaseLimitFrom") >= 0 && shipped.indexOf("deployWatchMsFrom") >= 0, "linha de limites do 18 lista backoff e watch")
         assert(plan.indexOf("servicesPushMsFrom") >= 0, "16-plan cita a pura do pusher")
         assert(plan.indexOf("webhookTimeoutSecFrom") >= 0, "16-plan cita a pura do prazo do webhook")
+        assert(plan.indexOf("backoffBaseLimitFrom") >= 0 && plan.indexOf("backoffMaxLimitFrom") >= 0, "16-plan cita as puras do backoff (Fase 1)")
     }
 }
