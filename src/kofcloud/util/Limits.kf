@@ -268,16 +268,23 @@ Int limitServicesPushMs() {
     return servicesPushMsFrom(config.int("kofcloud.limits.servicesPushMs", 2000))
 }
 
+// Recuo em fonte pura (precedente `receiveChunkBytesFrom`): zero/negativo
+// recaem no default porque o bloco alimenta o fatiamento de cada DATA —
+// com 0 o `encodeChunks` da pura `Payload.kf:48` nao emitiria bloco nenhum
+// e o relay pararia em silencio. O clamp do teto vive na mesma pura para
+// o teste travar os dois ramos sem tocar no frame cap real.
+Int sendChunkBytesFrom(Int configured, Int frameCap) {
+    if (configured <= 0) {
+        return 16384
+    }
+    if (frameCap > 0 && configured > frameCap) {
+        return frameCap
+    }
+    return configured
+}
+
 Int sendChunkBytes() {
-    var size = config.int("kofcloud.limits.sendChunkBytes", 16384)
-    if (size <= 0) {
-        size = 16384
-    }
-    var cap = limitFrameBytes()
-    if (cap > 0 && size > cap) {
-        size = cap
-    }
-    return size
+    return sendChunkBytesFrom(config.int("kofcloud.limits.sendChunkBytes", 16384), limitFrameBytes())
 }
 
 // Teto de uma linha do protocolo de tunel (frame JSON + base64). O base64

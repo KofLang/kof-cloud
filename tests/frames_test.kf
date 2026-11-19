@@ -51,6 +51,16 @@ test "frames: encodeChunks fatia e recompoe", "frames" {
     assert(receiveChunkBytesFrom(0) == 8192, "bloco zero recai no default")
     assert(receiveChunkBytesFrom(-1) == 8192, "bloco negativo recai no default")
     assert(receiveChunkBytesFrom(16384) == 16384, "bloco positivo passa")
+    // Fonte unica do bloco de ENVIO de cada DATA (`Payload.encodeChunks`):
+    // mesmo recuo do receive (0/negativo = sem bloco nenhum, relay parado
+    // em silencio) + clamp ao teto do frame (cap > 0 so age acima dele —
+    // com cap 0 o remetente seguiria sem clamp e o receptor recusaria:
+    // dessincronia, comentario do frameLimitFrom).
+    assert(sendChunkBytesFrom(0, 1048576) == 16384, "bloco de envio zero recai no default")
+    assert(sendChunkBytesFrom(-1, 1048576) == 16384, "bloco de envio negativo recai no default")
+    assert(sendChunkBytesFrom(16384, 1048576) == 16384, "bloco de envio dentro do teto passa")
+    assert(sendChunkBytesFrom(2097152, 1048576) == 1048576, "bloco de envio acima do teto e clampado")
+    assert(sendChunkBytesFrom(2097152, 0) == 2097152, "cap zero nao clampa (so o default recai)")
 
     // 1.5 MiB = 2 chunks (1 MiB + 0.5 MiB). Maior que isso e o proprio
     // bytesToString (O(n^2), ver 17-limitations) domina o tempo do teste.
