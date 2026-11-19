@@ -15,6 +15,7 @@ import kofcloud.model.Errors
 import kofcloud.model.Exposure
 import kofcloud.model.Service
 import kofcloud.model.StateCopy
+import kofcloud.model.Webhook
 import kofcloud.util.Hosts
 import kofcloud.util.Limits
 import kofcloud.util.Text
@@ -80,7 +81,47 @@ String usoLogsLine() {
 }
 
 String usoDomainAddLine() {
-    return "uso: kof cloud domain add <hostname> --service <nome>"
+    return "uso: kof cloud domain add <hostname> --service <nome> [--dns-webhook <url>]"
+}
+
+// Fase 18 slice 1 — webhook DNS generico. A plataforma fala o protocolo do
+// mercado (webhook HTTP), nao o contrario: o operador hospeda um receptor
+// que cria o CNAME no provedor que quiser (sem SDK proprietario). Payload
+// com fonte unica; o token NUNCA vai no corpo, na saida ou em log — so no
+// header, e vem do ambiente do operador (Kof nao enumera env).
+String dnsWebhookPayload(String hostname, String service, String target) {
+    var body = mapOf()
+    body.put("action", "create_cname")
+    body.put("hostname", hostname)
+    body.put("service", service)
+    body.put("target", target)
+    return json.encode(body)
+}
+
+// Headers do POST do webhook DNS. Sem token no ambiente segue SEM
+// Authorization (receptor local nao precisa); fonte unica para o teste
+// travar o formato sem rede e sem o valor do token no teste.
+String dnsWebhookHeaders(String token) {
+    var headers = "Content-Type: application/json"
+    var clean = token.trim()
+    if (clean.length > 0) {
+        headers = headers + "\nAuthorization: Bearer " + clean
+    }
+    return headers
+}
+
+// POST do webhook DNS com o mesmo prazo do webhook de incidentes (o comando
+// roda inline e um receptor que aceita e nao responde nao pode pendurar a
+// CLI). Falha nao propaga: o dominio ja esta registrado (PENDING) e o CNAME
+// manual continua possivel. Devolve "" quando ok.
+String dnsWebhookDeliver(String url, String payload, String headers) {
+    try {
+        http.timeout(limitWebhookTimeoutSec())
+        http.post(url, payload, headers)
+        return ""
+    } catch (String e) {
+        return e
+    }
 }
 
 String usoDomainVerifyLine() {
@@ -230,7 +271,7 @@ List<String> valueFlags() {
         "--control", "--control-port", "--tunnel-port", "--http-port",
         "--state", "--waf", "--tls-cert", "--tls-key", "--service", "--file",
         "--password", "--from", "--to", "--resolve", "--secret",
-        "--allow-method", "--allow-path", "--action"
+        "--allow-method", "--allow-path", "--action", "--dns-webhook"
     )
 }
 
@@ -2035,7 +2076,7 @@ Int cmdDomainAdd(List<String> args) {
     }
     // `--service` solto vira "" (erro generico de uso, sem apontar a
     // flag); duplicado leria a primeira em silencio. Fail-fast com o uso.
-    if (flagMissingValue(args, "--service") || flagDuplicated(args, "--service")) {
+    if (flagMissingValue(args, "--service") || flagDuplicated(args, "--service") || flagMissingValue(args, "--dns-webhook") || flagDuplicated(args, "--dns-webhook")) {
         println(usoDomainAddLine())
         return 1
     }
@@ -2044,6 +2085,19 @@ Int cmdDomainAdd(List<String> args) {
     if (hostname.length == 0 || service.length == 0 || extraPositional(args, 1)) {
         println(usoDomainAddLine())
         return 1
+    }
+    // Fail-fast local (F18 s1): URL invalida barra ANTES de registrar o
+    // dominio — mesma regra do webhook de incidentes (https, ou http so em
+    // loopback; sem credencial na URL). O dominio nao pode nascer PENDING
+    // com o assistente quebrado.
+    var dnsUrl = flagValue(args, "--dns-webhook").trim()
+    if (dnsUrl.length > 0) {
+        var urlError = webhookUrlError(dnsUrl)
+        if (urlError.length > 0) {
+            println("webhook DNS invalido: " + urlError)
+            println(usoDomainAddLine())
+            return 1
+        }
     }
     var body = mapOf()
     body.put("hostname", hostname)
@@ -2056,6 +2110,15 @@ Int cmdDomainAdd(List<String> args) {
         println("  instrucao: " + created.instruction)
         println("")
         println("Crie o CNAME e rode: kof cloud domain verify " + created.hostname)
+        if (dnsUrl.length > 0) {
+            var token = config.env("KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN").trim()
+            var err = dnsWebhookDeliver(dnsUrl, dnsWebhookPayload(hostname, service, webhookUrlHost(session.controlUrl)), dnsWebhookHeaders(token))
+            if (err.length == 0) {
+                println("webhook DNS: pedido de criacao enviado a " + dnsUrl)
+            } else {
+                println("AVISO: webhook DNS falhou (" + err + ") — crie o CNAME manualmente e rode domain verify")
+            }
+        }
         return 0
     } catch (String e) {
         printFail("falha", e)

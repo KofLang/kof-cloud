@@ -45,6 +45,54 @@ String domainFixture(Int controlPort, String path) {
     return accountToken + "|" + deviceId + "|" + serviceId
 }
 
+// Content-Length do cabecalho cru (0 quando ausente/ilegivel). Fragmento
+// honesto de HTTP: o corpo destes POSTs sempre vem declarado pelo
+// http.post do Kof, e o que a leitura espera e o que chegou pelo fio.
+Int webhookContentLengthOf(String header) {
+    var lines = header.split("\r\n")
+    var i = 0
+    while (i < lines.length) {
+        var line = lines[i]
+        var colon = line.indexOf(":")
+        if (colon > 0 && line.substring(0, colon).trim().toLowerCase() == "content-length") {
+            return parseIntSafe(line.substring(colon + 1).trim(), 0)
+        }
+        i = i + 1
+    }
+    return 0
+}
+
+// Le o pedido HTTP inteiro do receptor TCP cru: continua recebendo ate o
+// corpo declarado chegar (segmentacao TCP e real, mesmo em loopback) ou o
+// teto honesto de 64 leituras (um pedido desses e minusculo; teto nunca
+// alcancado no feliz). Fecha sem pedido (sonda do waitForPort) devolve o
+// que deu — "" entra no teste como conexao vazia e nao conta.
+String readWebhookRequest(Conn conn) {
+    var raw = ""
+    var reads = 0
+    var done = false
+    while (reads < 64 && done == false) {
+        reads = reads + 1
+        var got = ""
+        try {
+            var bytes = conn.receive(8192)
+            if (bytes.length > 0) {
+                got = bytesToString(bytes)
+            }
+        } catch (String e) {
+            done = true
+        }
+        if (got.length > 0) {
+            raw = raw + got
+        }
+        var split = raw.indexOf("\r\n\r\n")
+        if (split >= 0 && raw.length - split - 4 >= webhookContentLengthOf(raw.substring(0, split))) {
+            done = true
+        }
+    }
+    return raw
+}
+
 test "dominio: validacao de hostname externo", "domains" {
     assert(validCustomHostname("api.example.com") == true, "dominio simples")
     assert(validCustomHostname("www.loja.com.br") == true, "multi-nivel")
@@ -443,6 +491,80 @@ test "dominio: serializadores puros sem rede", "domains-serial" {
         assert(verified.verifiedAt.length > 0, "VERIFIED carrega verifiedAt")
         assert(domainJson(verified, service.hostname).indexOf("VERIFIED") >= 0, "inventario reflete VERIFIED")
     }
+    // Webhook DNS generico (F18 s1): payload de fonte unica carrega os 4
+    // campos e NUNCA o token; headers de fonte unica so levam Authorization
+    // quando ha token (vazio ou so-espacos = receptor local sem auth).
+    var whPayload = dnsWebhookPayload("api.example.com", "site", "edge.example.com")
+    var whBody = json.decode<Map<String, String>>(whPayload)
+    assert(mapField(whBody, "action") == "create_cname", "acao no payload")
+    assert(mapField(whBody, "hostname") == "api.example.com", "hostname no payload")
+    assert(mapField(whBody, "service") == "site", "servico no payload")
+    assert(mapField(whBody, "target") == "edge.example.com", "alvo no payload")
+    assert(whPayload.indexOf("Bearer") < 0, "token nunca vai no corpo")
+    assert(dnsWebhookHeaders("") == "Content-Type: application/json", "sem token: sem Authorization")
+    assert(dnsWebhookHeaders("   ") == "Content-Type: application/json", "so-espacos: sem Authorization")
+    assert(dnsWebhookHeaders("tk") == "Content-Type: application/json\nAuthorization: Bearer tk", "com token: Bearer")
+}
+
+test "dominio: webhook DNS entrega o pedido de criacao (receptor local)", "domains-dnswebhook" {
+    // F18 s1: o receptor do operador recebe o POST com o payload de fonte
+    // unica. Sem token, SEM Authorization; com token (via headers de fonte
+    // unica — a CLI le o env que o teste nao pode setar), Bearer no fio.
+    // Receptor fora = erro curto que a CLI converte em AVISO (o dominio
+    // segue PENDING; nunca throw).
+    var hookPort = 19990
+    var received = listOf<String>()
+    // Receptor TCP cru (mesmo padrao do fixture mudo do webhook): le o
+    // pedido inteiro em bytes e responde 200 na mao. A sonda do waitForPort
+    // conecta e fecha sem mandar nada — nao e pedido, nao conta, nao
+    // responde. A leitura acumula ate o corpo declarado (teto honesto de 64
+    // leituras contra segmentacao infinita).
+    var hook = net.listen(hookPort)
+    var listenerTask = spawn {
+        var open = true
+        while (open && received.size < 3) {
+            try {
+                var c = hook.accept()
+                var raw = readWebhookRequest(c)
+                if (raw.indexOf("\r\n\r\n") >= 0) {
+                    received.add(raw)
+                    c.send(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"))
+                }
+                c.close()
+            } catch (String e) {
+                open = false
+            }
+        }
+    }
+    assert(waitForPort(hookPort, 60), "receptor no ar")
+
+    var noToken = dnsWebhookDeliver("http://127.0.0.1:" + intToString(hookPort) + "/hook", dnsWebhookPayload("api.example.com", "site", "127.0.0.1"), dnsWebhookHeaders(""))
+    assert(noToken == "", "entrega ok sem token")
+    var withToken = dnsWebhookDeliver("http://127.0.0.1:" + intToString(hookPort) + "/hook", dnsWebhookPayload("loja.example.com", "site", "127.0.0.1"), dnsWebhookHeaders("segredo-teste-123"))
+    assert(withToken == "", "entrega ok com token")
+    var withCustom = dnsWebhookDeliver("http://127.0.0.1:" + intToString(hookPort) + "/hook", dnsWebhookPayload("outra.example.com", "site", "127.0.0.1"), "Content-Type: application/json\nX-Probe: 1")
+    assert(withCustom == "", "entrega ok com header customizado")
+    var attempts = 60
+    while (attempts > 0 && received.size < 3) {
+        time.sleep(250)
+        attempts = attempts - 1
+    }
+    assert(received.size == 3, "tres POSTs chegaram")
+    if (received.size == 3) {
+        var first = json.decode<Map<String, String>>(received.get(0).substring(received.get(0).indexOf("\r\n\r\n") + 4))
+        assert(mapField(first, "action") == "create_cname", "acao no fio")
+        assert(mapField(first, "hostname") == "api.example.com", "hostname no fio")
+        assert(mapField(first, "service") == "site", "servico no fio")
+        assert(mapField(first, "target") == "127.0.0.1", "alvo no fio")
+        assert(received.get(0).indexOf("Authorization") < 0, "sem token: sem Authorization")
+        assert(received.get(0).indexOf("Bearer") < 0, "token nunca no corpo")
+        var second = received.get(1)
+        assert(second.indexOf("Authorization: Bearer segredo-teste-123") >= 0, "com token: Bearer no fio")
+        assert(second.indexOf("\"hostname\":\"loja.example.com\"") >= 0, "corpo do segundo no fio")
+        assert(received.get(2).indexOf("X-Probe: 1") >= 0, "header customizado no fio")
+    }
+    var refused = dnsWebhookDeliver("http://127.0.0.1:19999/hook", dnsWebhookPayload("x.example.com", "site", "127.0.0.1"), dnsWebhookHeaders(""))
+    assert(refused.length > 0, "receptor fora devolve erro curto (vira AVISO)")
 }
 
 test "dominio: certificado cobre hostname (puro, SAN/CN/curinga)", "domains-cert" {

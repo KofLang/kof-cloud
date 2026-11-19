@@ -139,11 +139,12 @@ VERIFIED, poda junto com serviço/dispositivo. Dono verificado antes do DNS
 `domain verify [--tls-cert <pem>]`, `domain remove`; erros `KCF120`–`KCF124`
 com `Hint:`. O `--tls-cert` julga o PEM localmente antes da rede (cobre o
 hostname? expira em 30 dias?) — ver Fase 9 slice 3.
-Prova: `tests/domains_test.kf` (12 testes: validação, registro/idempotência,
-verificação sem rede, rota/poda, API com service preenchido, Edge via túnel real, Hint + serializadores, certificado × hostname puro e com openssl real).
+Prova: `tests/domains_test.kf` (13 testes: validação, registro/idempotência,
+verificação sem rede, rota/poda, API com service preenchido, Edge via túnel real, Hint + serializadores, certificado × hostname puro e com openssl real, webhook DNS no fio).
 
 Falta (fatiado de propósito): TLS por SNI no Edge (o Kof não expõe — ver
-`12-tls.md`) e automação de DNS por provedor (Cloudflare/Route53). Sem isso,
+`12-tls.md`) e automação DNS específica de provedor (Cloudflare/Route53 — o
+webhook genérico já existe, ver Fase 18 slice 1). Sem isso,
 o hostname próprio serve HTTP pela borda; o HTTPS continua dependendo de
 terminador externo.
 
@@ -1434,7 +1435,8 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   `edge` (exige coordenação multi-Edge, Fase 16).
 * **Slice 3 — comunicação e post-mortem.** Status page mínima (lê os
   incidentes globais; sem login), notificação por webhook configurável
-  (conta cadastra URL + segredo; payload assinado Ed25519), e template
+  (conta cadastra URL + segredo; payload assinado HMAC-SHA256 — o desenho
+  pedia Ed25519, mas o stdlib não expõe par utilizável, SECN014), e template
   de post-mortem no repo (`docs/incidents/AAAA-MM-DD-titulo.md`: causa,
   impacto, timeline, correção, ação preventiva com dono e prazo).
   Prova: game-day completo fecha com post-mortem publicado.
@@ -1482,7 +1484,7 @@ novo (se não tem regressão, não fechou).
 identidade e billing moram em ferramentas que o operador já usa. Cloud
 robusta pluga por padrão aberto, nunca por SDK proprietário.
 
-**Estado: ⏳ não iniciado.** Princípio único: **a KofCloud fala o protocolo
+**Estado: 🟡 parcial (slice 1 — webhook DNS genérico ✅).** Princípio único: **a KofCloud fala o protocolo
 do mercado, não o contrário.** Fatiado por conector (cada um: config por
 env, credencial nunca em log, teste com fake local + e2e opcional real):
 
@@ -1491,6 +1493,18 @@ env, credencial nunca em log, teste com fake local + e2e opcional real):
   (`domain add --dns=cloudflare`); ACME DNS-01 quando ES256 existir
   (Fase 9 slice 3). Credencial do provedor em env, escopo mínimo
   (só zona do domínio).
+  **Implementado (webhook genérico):** `domain add --dns-webhook <url>`
+  fala o protocolo do mercado (POST HTTP com `{"action":"create_cname",...}`
+  e `Authorization: Bearer` de `KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN` quando
+  setado) para um receptor hospedado pelo operador — o CNAME nasce no
+  provedor que o operador quiser, sem SDK proprietário e sem lock-in.
+  Mesma regra de URL do webhook de incidentes (`webhookUrlError`: https ou
+  http de loopback, sem credencial na URL), mesmo prazo de entrega de 5 s;
+  falha de entrega vira AVISO na CLI (exit 0) e o domínio segue PENDING —
+  o caminho manual (`domain verify`) continua sendo o caminho principal.
+  O receptor e o body são genéricos (hostname/service/alvo); o token NUNCA
+  aparece no corpo, na saída ou em log. Prova: `tests/domains_test.kf`
+  (`domains-dnswebhook`).
 * **Slice 2 — identidade e SSO.** OIDC genérico (qualquer IdP:
   Google, GitHub, Keycloak): `login` abre browser, troca code por conta
   vinculada (nunca substitui `kfc_` — vira segundo fator de emissão).
