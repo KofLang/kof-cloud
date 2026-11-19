@@ -146,6 +146,20 @@ test "registry: republicar preserva status e nao ressuscita suspenso", "republis
     var afterSuspend = registry.publishService(account, device.id, "site", "127.0.0.1", 7070, "http", "PUBLIC", "", "")
     assert(afterSuspend.status == "SUSPENDED", "suspensao preservada")
     assert(afterSuspend.localPort == 7070, "config ainda atualiza")
+
+    // Cruzamento republicar × kfs_ (deploy --watch republica em lote a cada
+    // mudanca do manifesto): o publish atualiza a CONFIG do servico e nunca
+    // toca no inventario de credenciais — as kfs_ validas (inclusive em
+    // overlap de rotacao) sobrevivem a N republicacoes. Limpar credencial e
+    // decisao de rotate/revoke, nunca de publish.
+    var kfs1 = registry.issueServiceToken(account.id, service.id)
+    var kfs2 = registry.issueServiceToken(account.id, service.id, 24)
+    assert(registry.pendingRotationCount(service.id) == 2, "duas credenciais vivas (overlap)")
+    registry.publishService(account, device.id, "site", "127.0.0.1", 6060, "http", "AUTHENTICATED", "", "")
+    registry.publishService(account, device.id, "site", "127.0.0.1", 6060, "http", "AUTHENTICATED", "", "")
+    assert(registry.serviceByServiceToken(kfs1) != null, "antiga (sem TTL) sobrevive ao republish")
+    assert(registry.serviceByServiceToken(kfs2) != null, "nova (com TTL) sobrevive ao republish")
+    assert(registry.pendingRotationCount(service.id) == 2, "overlap intacto apos republish")
 }
 
 test "registry: republicar sem mudanca nao reescreve (idempotente)", "republish-same" {
