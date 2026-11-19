@@ -567,6 +567,62 @@ test "dominio: webhook DNS entrega o pedido de criacao (receptor local)", "domai
     assert(refused.length > 0, "receptor fora devolve erro curto (vira AVISO)")
 }
 
+test "dominio: webhook DNS tem modo --dry-run honesto (puro + comando)", "domains-dnsdryrun" {
+    // Regra da Fase 18: todo conector tem modo --dry-run. O texto mostra
+    // EXATAMENTE o que seria enviado (mesmos headers de fonte unica) com o
+    // valor do token NUNCA visivel — so a mascara; sem token, a ausencia e
+    // nomeada. Sem url, a previa aponta o caminho manual em vez de inventar
+    // POST vazio.
+    var payload = dnsWebhookPayload("api.example.com", "site", "edge.example.io")
+    var semToken = dnsWebhookPreview("http://127.0.0.1:19990/hook", payload, dnsWebhookHeaders(""), false)
+    assert(semToken.indexOf("dry-run: nada foi enviado e o dominio nao foi registrado") >= 0, "aviso de nada feito")
+    assert(semToken.indexOf("POST http://127.0.0.1:19990/hook") >= 0, "url na previa")
+    assert(semToken.indexOf("\"action\":\"create_cname\"") >= 0, "corpo na previa")
+    assert(semToken.indexOf("\"target\":\"edge.example.io\"") >= 0, "alvo na previa")
+    assert(semToken.indexOf("headers: Content-Type: application/json") >= 0, "headers de verdade na previa")
+    assert(semToken.indexOf("Authorization: Bearer") < 0, "sem token: previa nao inventa header")
+    assert(semToken.indexOf("KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN ausente") >= 0, "ausencia nomeada")
+
+    var comToken = dnsWebhookPreview("http://127.0.0.1:19990/hook", payload, dnsWebhookHeaders("segredo-vivo-456"), true)
+    assert(comToken.indexOf("Authorization: Bearer *** (KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN)") >= 0, "token mascarado na previa")
+    assert(comToken.indexOf("segredo-vivo-456") < 0, "valor do token NUNCA sai na previa")
+    assert(comToken.indexOf("\"action\":\"create_cname\"") >= 0, "corpo segue na previa")
+
+    var semUrl = dnsWebhookPreview("", payload, dnsWebhookHeaders(""), false)
+    assert(semUrl.indexOf("sem --dns-webhook") >= 0, "sem url aponta o caminho manual")
+    assert(semUrl.indexOf("POST") < 0, "sem url nao inventa POST")
+
+    // Comando com --dry-run: exit 0 SEM rede (receptor fora nao trava) e
+    // SEM registrar dominio — se o caminho do dry-run tocasse o control
+    // plane da sessao, o POST a /v1/domains falharia ou registraria.
+    var priorSession = readTextOr(sessionPath(), "")
+    saveSession(LocalSession("", "mel", "kfc_dryrun_probe", "http://127.0.0.1:1"))
+    var rc = 99
+    try {
+        rc = cmdDomainAdd(listOf("api.example.com", "--service", "site", "--dns-webhook", "http://127.0.0.1:19999/hook", "--dry-run"))
+    } finally {
+        if (priorSession.length == 0) {
+            File(sessionPath()).delete()
+        } else {
+            writeTextTo(sessionPath(), priorSession)
+        }
+    }
+    assert(rc == 0, "dry-run sai 0")
+    // Duplicada barra antes de qualquer efeito (mesmo padrao das booleanas).
+    var dup = 99
+    try {
+        saveSession(LocalSession("", "mel", "kfc_dryrun_probe", "http://127.0.0.1:1"))
+        dup = cmdDomainAdd(listOf("api.example.com", "--service", "site", "--dns-webhook", "http://127.0.0.1:19999/hook", "--dry-run", "--dry-run"))
+    } finally {
+        if (priorSession.length == 0) {
+            File(sessionPath()).delete()
+        } else {
+            writeTextTo(sessionPath(), priorSession)
+        }
+    }
+    assert(dup == 1, "dry-run duplicado barra")
+}
+
 test "dominio: certificado cobre hostname (puro, SAN/CN/curinga)", "domains-cert" {
     // Fase 6/9: `domain verify --tls-cert` recusa o PEM que nao cobre o
     // hostname ANTES de tocar a rede. Tudo puro sobre a saida do openssl.

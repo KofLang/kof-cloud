@@ -37,7 +37,7 @@ String usageText() {
     out = out + "  service rotate (<nome>|--all) [--ttl <horas>] [--prune]  (credencial nova; revoga as antigas SO depois do TTL)\n"
     out = out + "  service rotation <nome>   (quantas credenciais ainda valem)\n"
     out = out + "  domain list\n"
-    out = out + "  domain add <hostname> --service <nome> [--dns-webhook <url>]  (webhook DNS: receptor do operador cria o CNAME; token via KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN)\n"
+    out = out + "  domain add <hostname> --service <nome> [--dns-webhook <url>] [--dry-run]  (webhook DNS: receptor do operador cria o CNAME; token via KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN; --dry-run mostra o pedido e nao registra nem envia)\n"
     out = out + "  domain verify <hostname> [--tls-cert <pem>]  (com o PEM, confere ANTES que ele cobre o hostname)\n"
     out = out + "  domain remove <hostname>\n"
     out = out + "  deploy [--file " + defaultManifestPath() + "] [--check] [--plan] [--watch]  (publica + verifica; --plan so mostra o diff e marca (build)/(artifact); --watch observa o manifesto e re-publica o que mudar — nunca remove; manifesto aceita build/artifact por servico; pare com o arquivo deploy-watch-stop)\n"

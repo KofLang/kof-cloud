@@ -81,7 +81,7 @@ String usoLogsLine() {
 }
 
 String usoDomainAddLine() {
-    return "uso: kof cloud domain add <hostname> --service <nome> [--dns-webhook <url>]"
+    return "uso: kof cloud domain add <hostname> --service <nome> [--dns-webhook <url>] [--dry-run]"
 }
 
 // Fase 18 slice 1 — webhook DNS generico. A plataforma fala o protocolo do
@@ -110,6 +110,17 @@ String dnsWebhookHeaders(String token) {
     return headers
 }
 
+// O Kof nao enumera env e `config.env` devolve null para nome ausente —
+// `.` direto NPE (medido: `--dns-webhook` sem o token no ambiente quebrava
+// a CLI DEPOIS de registrar o dominio). Fonte unica da leitura tolerante.
+String envOrNull(String name) {
+    var value = config.env(name)
+    if (value == null) {
+        return ""
+    }
+    return value
+}
+
 // POST do webhook DNS com o mesmo prazo do webhook de incidentes (o comando
 // roda inline e um receptor que aceita e nao responde nao pode pendurar a
 // CLI). Falha nao propaga: o dominio ja esta registrado (PENDING) e o CNAME
@@ -122,6 +133,35 @@ String dnsWebhookDeliver(String url, String payload, String headers) {
     } catch (String e) {
         return e
     }
+}
+
+// Previa do `--dry-run` (regra da Fase 18: todo conector tem modo dry-run —
+// mostra o que faria, sem registrar dominio e sem tocar a rede). Recebe os
+// MESMOS headers que seriam enviados e mascara o valor do token: com token
+// no ambiente so a PRESENCA do header sai; sem token, a ausencia e nomeada
+// para o operador saber que o receptor pode exigir credencial. Puro: o teste
+// trava o texto inteiro, inclusive que o valor nunca aparece.
+String dnsWebhookPreview(String url, String payload, String headers, Bool tokenPresent) {
+    var shown = headers
+    if (tokenPresent) {
+        var marker = "Authorization: Bearer "
+        var idx = shown.indexOf(marker)
+        if (idx >= 0) {
+            shown = shown.substring(0, idx + marker.length) + "*** (KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN)"
+        }
+    }
+    var out = "dry-run: nada foi enviado e o dominio nao foi registrado"
+    if (url.length > 0) {
+        out = out + "\n  POST " + url
+        out = out + "\n  corpo: " + payload
+        out = out + "\n  headers: " + shown
+        if (tokenPresent == false) {
+            out = out + "\n  (sem Authorization: KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN ausente)"
+        }
+    } else {
+        out = out + "\n  (sem --dns-webhook: crie o CNAME manualmente e rode domain verify)"
+    }
+    return out
 }
 
 String usoDomainVerifyLine() {
@@ -2076,7 +2116,7 @@ Int cmdDomainAdd(List<String> args) {
     }
     // `--service` solto vira "" (erro generico de uso, sem apontar a
     // flag); duplicado leria a primeira em silencio. Fail-fast com o uso.
-    if (flagMissingValue(args, "--service") || flagDuplicated(args, "--service") || flagMissingValue(args, "--dns-webhook") || flagDuplicated(args, "--dns-webhook")) {
+    if (flagMissingValue(args, "--service") || flagDuplicated(args, "--service") || flagMissingValue(args, "--dns-webhook") || flagDuplicated(args, "--dns-webhook") || flagDuplicated(args, "--dry-run")) {
         println(usoDomainAddLine())
         return 1
     }
@@ -2090,6 +2130,7 @@ Int cmdDomainAdd(List<String> args) {
     // dominio — mesma regra do webhook de incidentes (https, ou http so em
     // loopback; sem credencial na URL). O dominio nao pode nascer PENDING
     // com o assistente quebrado.
+    var dryRun = hasFlag(args, "--dry-run")
     var dnsUrl = flagValue(args, "--dns-webhook").trim()
     if (dnsUrl.length > 0) {
         var urlError = webhookUrlError(dnsUrl)
@@ -2098,6 +2139,12 @@ Int cmdDomainAdd(List<String> args) {
             println(usoDomainAddLine())
             return 1
         }
+    }
+    if (dryRun) {
+        var previewToken = envOrNull("KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN").trim()
+        var payload = dnsWebhookPayload(hostname, service, webhookUrlHost(session.controlUrl))
+        println(dnsWebhookPreview(dnsUrl, payload, dnsWebhookHeaders(previewToken), previewToken.length > 0))
+        return 0
     }
     var body = mapOf()
     body.put("hostname", hostname)
@@ -2111,7 +2158,7 @@ Int cmdDomainAdd(List<String> args) {
         println("")
         println("Crie o CNAME e rode: kof cloud domain verify " + created.hostname)
         if (dnsUrl.length > 0) {
-            var token = config.env("KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN").trim()
+            var token = envOrNull("KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN").trim()
             var err = dnsWebhookDeliver(dnsUrl, dnsWebhookPayload(hostname, service, webhookUrlHost(session.controlUrl)), dnsWebhookHeaders(token))
             if (err.length == 0) {
                 println("webhook DNS: pedido de criacao enviado a " + dnsUrl)

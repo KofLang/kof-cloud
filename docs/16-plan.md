@@ -139,8 +139,8 @@ VERIFIED, poda junto com serviço/dispositivo. Dono verificado antes do DNS
 `domain verify [--tls-cert <pem>]`, `domain remove`; erros `KCF120`–`KCF124`
 com `Hint:`. O `--tls-cert` julga o PEM localmente antes da rede (cobre o
 hostname? expira em 30 dias?) — ver Fase 9 slice 3.
-Prova: `tests/domains_test.kf` (13 testes: validação, registro/idempotência,
-verificação sem rede, rota/poda, API com service preenchido, Edge via túnel real, Hint + serializadores, certificado × hostname puro e com openssl real, webhook DNS no fio).
+Prova: `tests/domains_test.kf` (14 testes: validação, registro/idempotência,
+verificação sem rede, rota/poda, API com service preenchido, Edge via túnel real, Hint + serializadores, certificado × hostname puro e com openssl real, webhook DNS no fio e dry-run).
 
 Falta (fatiado de propósito): TLS por SNI no Edge (o Kof não expõe — ver
 `12-tls.md`) e automação DNS específica de provedor (Cloudflare/Route53 — o
@@ -1503,8 +1503,11 @@ env, credencial nunca em log, teste com fake local + e2e opcional real):
   falha de entrega vira AVISO na CLI (exit 0) e o domínio segue PENDING —
   o caminho manual (`domain verify`) continua sendo o caminho principal.
   O receptor e o body são genéricos (hostname/service/alvo); o token NUNCA
-  aparece no corpo, na saída ou em log. Prova: `tests/domains_test.kf`
-  (`domains-dnswebhook`).
+  aparece no corpo, na saída ou em log. `--dry-run` (regra dos conectores):
+  mostra o MESMO POST com o valor mascarado e não registra nem envia — e o
+  caminho pegou o NPE real do `config.env` null com a var ausente (`envOrNull`
+  fonte única; antes a CLI quebrava DEPOIS de registrar o domínio). Prova:
+  `tests/domains_test.kf` (`domains-dnswebhook`, `domains-dnsdryrun`).
 * **Slice 2 — identidade e SSO.** OIDC genérico (qualquer IdP:
   Google, GitHub, Keycloak): `login` abre browser, troca code por conta
   vinculada (nunca substitui `kfc_` — vira segundo fator de emissão).

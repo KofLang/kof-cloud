@@ -55,7 +55,7 @@ o run total imprime `60 passed, 0 failed`. Falha = nome do teste + assert
 | limites + varredura + push de SERVICES | `tests/limits_test.kf` | 9 |
 | service token | `tests/service_token_test.kf` | 15 |
 | erros R6 | `tests/errors_test.kf` | 11 |
-| dominios (+ certificado x hostname) | `tests/domains_test.kf` | 13 |
+| dominios (+ certificado x hostname) | `tests/domains_test.kf` | 14 |
 | metricas | `tests/metrics_test.kf` | 13 |
 | rate limit | `tests/ratelimit_test.kf` | 2 |
 | agent metrics | `tests/agent_metrics_test.kf` | 3 |
@@ -107,7 +107,7 @@ o run total imprime `60 passed, 0 failed`. Falha = nome do teste + assert
 | SERVICES empurrado (F14 s3) | `tests/services_push_test.kf` | 2 |
 | deploy --watch (F13 s3 parcial) | `tests/deploy_watch_test.kf` | 4 |
 
-Total: 431 testes. Ver `15-tests.md` para a matriz.
+Total: 432 testes. Ver `15-tests.md` para a matriz.
 
 ## Limites honestos (medidos, nao prometidos)
 
