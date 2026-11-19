@@ -1453,7 +1453,11 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   A marca de status anterior é **por alvo** e só é gravada se ainda não
   existir: um servidor que já estava `SUSPENDED` volta `SUSPENDED`, e um
   segundo freeze não sobrescreve o estado original (reversibilidade; o
-  mesmo guarda foi aplicado a `freezeService`/`freezeDevice`). Prova:
+  mesmo guarda foi aplicado a `freezeService`/`freezeDevice`). **Freeze
+  nunca toca na sessão:** o containment revoga as `kfs_` do alvo mas as
+  sessões `kfc_` seguem válidas — o operador não se tranca para fora no
+  meio do incidente (travado no teste de conta: `accountByToken` da conta
+  congelada segue não-nulo). Prova:
   `tests/freeze_test.kf` (`freeze-unit` ×14 + HTTP). **Pendente:** alvo
   `edge` (exige coordenação multi-Edge, Fase 16).
 * **Slice 3 — comunicação e post-mortem.** Status page mínima (lê os

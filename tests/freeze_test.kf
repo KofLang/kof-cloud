@@ -234,6 +234,11 @@ test "contencao: freeze de conta cobre devices, servicos e kfs_ e restaura cada 
     var ta = registry.issueServiceToken(account.id, a.id, 24)
     var tb = registry.issueServiceToken(account.id, b.id, 24)
     var keep = registry.issueServiceToken(other.id, foreignSvc.id, 24)
+    // Cruzamento freeze × sessao da conta: o containment revoga as kfs_ do
+    // alvo mas nunca toca nas sessoes kfc_ (senao o operador se trancaria
+    // para fora no meio do incidente — nem o unfreeze conseguiria rodar).
+    var session = registry.issueToken(account.id)
+    var otherSession = registry.issueToken(other.id)
 
     var result = registry.freezeAccount(account.id)
     assert(result.ok, "congelou a conta")
@@ -242,6 +247,8 @@ test "contencao: freeze de conta cobre devices, servicos e kfs_ e restaura cada 
     assert(registry.serviceByServiceToken(ta) == null, "kfs_ de a revogada")
     assert(registry.serviceByServiceToken(tb) == null, "kfs_ de b revogada")
     assert(registry.serviceByServiceToken(keep) != null, "kfs_ de outra conta intacta")
+    assert(registry.accountByToken(session) != null, "sessao da conta congelada segue valida")
+    assert(registry.accountByToken(otherSession) != null, "sessao da outra conta intacta")
 
     var frozenNb = registry.deviceById(nb.id)
     var frozenDesk = registry.deviceById(desk.id)
