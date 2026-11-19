@@ -568,7 +568,7 @@ test "text: notFoundLine trava mensagens da CLI", "not-found-line" {
     assert(usoServiceTokenLine() == "uso: kof cloud service token <nome> [--ttl <horas>]", "uso token")
     assert(usoServeLine().indexOf("kof cloud serve") >= 0, "uso serve")
     assert(usoLogsLine() == "uso: kof cloud logs [--tail <linhas>] [--runtime|--edge]", "uso logs")
-    assert(usoDomainAddLine() == "uso: kof cloud domain add <hostname> --service <nome> [--dns-webhook <url>] [--dry-run]", "uso domain add")
+    assert(usoDomainAddLine() == "uso: kof cloud domain add <hostname> --service <nome> [--dns-webhook <url> | --dns-cmd <cmd>] [--dry-run]", "uso domain add")
 }
 
 test "text: matchServiceName apara antes de comparar", "service-name-match" {

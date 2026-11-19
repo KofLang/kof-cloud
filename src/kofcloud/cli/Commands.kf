@@ -81,7 +81,7 @@ String usoLogsLine() {
 }
 
 String usoDomainAddLine() {
-    return "uso: kof cloud domain add <hostname> --service <nome> [--dns-webhook <url>] [--dry-run]"
+    return "uso: kof cloud domain add <hostname> --service <nome> [--dns-webhook <url> | --dns-cmd <cmd>] [--dry-run]"
 }
 
 // Fase 18 slice 1 — webhook DNS generico. A plataforma fala o protocolo do
@@ -162,6 +162,59 @@ String dnsWebhookPreview(String url, String payload, String headers, Bool tokenP
         out = out + "\n  (sem --dns-webhook: crie o CNAME manualmente e rode domain verify)"
     }
     return out
+}
+
+// F18 s1 — provedor DNS por COMANDO (Cloudflare, Route53 e qualquer outro
+// com CLI): o operador passa o comando que cria o CNAME e a plataforma roda
+// via `sh -c` (protocolo aberto do shell, sem SDK e sem lock-in — a mesma
+// regra do slice 5 dos segredos). O valor de credencial (token da Cloudflare
+// etc.) fica no ambiente do operador; NUNCA aparece no comando impresso, no
+// dry-run ou em log. O comando pode usar {hostname}, {target} e {service}:
+// a plataforma substitui antes de executar (o operador escreve o comando
+// declarativamente). Puro: o exec vive em dnsCmdRun.
+String dnsCmdError(String cmdText, String webhookUrl) {
+    if (cmdText.trim().length == 0) {
+        return ""
+    }
+    if (webhookUrl.trim().length > 0) {
+        return "informe UMA fonte de DNS (--dns-webhook ou --dns-cmd), nao as duas"
+    }
+    return ""
+}
+
+// Substitui os placeholders {hostname}/{target}/{service}. Puro (testavel
+// sem executar nada). Substituicao textual sequencial (sem regex — o
+// `String.split` do Kof trata o argumento como regex).
+String dnsCmdExpand(String cmdText, String hostname, String service, String target) {
+    var out = cmdText
+    out = out.replace("{hostname}", hostname)
+    out = out.replace("{target}", target)
+    out = out.replace("{service}", service)
+    return out
+}
+
+// Previa do `--dry-run` do comando DNS: mostra o comando EXPANDIDO e o
+// rotulo "a linha do comando NAO e ecoada inteira" nao — o comando e o que
+// o operador digitou (ele sabe); credencial deve estar no ambiente, nao no
+// comando. Puro.
+String dnsCmdPreview(String expanded) {
+    return "dry-run: nada foi executado e o dominio nao foi registrado\n  comando: " + expanded
+}
+
+// Executa o comando do provedor DNS. Falha (exit != 0 ou excecao) devolve a
+// mensagem para o AVISO (o dominio ja ficou PENDING; o caminho manual segue
+// possivel), nunca aborta. O stdout e descartado (pode conter dado do
+// provedor); so o exit code decide. "" = ok.
+String dnsCmdRun(String expanded) {
+    try {
+        var result = process.run("sh", "-c", expanded)
+        if (result.exitCode != 0) {
+            return "comando do provedor falhou (exit " + intToString(result.exitCode) + ")"
+        }
+        return ""
+    } catch (String e) {
+        return "comando do provedor nao executou (" + e + ")"
+    }
 }
 
 String usoDomainVerifyLine() {
@@ -312,7 +365,8 @@ List<String> valueFlags() {
         "--state", "--waf", "--tls-cert", "--tls-key", "--service", "--file",
         "--password", "--from", "--to", "--resolve", "--secret",
         "--allow-method", "--allow-path", "--action", "--dns-webhook",
-        "--tunnel-secret-file", "--tunnel-secret-cmd", "--tls-cert-cmd", "--tls-key-cmd"
+        "--tunnel-secret-file", "--tunnel-secret-cmd", "--tls-cert-cmd", "--tls-key-cmd",
+        "--dns-cmd"
     )
 }
 
@@ -2156,7 +2210,7 @@ Int cmdDomainAdd(List<String> args) {
     }
     // `--service` solto vira "" (erro generico de uso, sem apontar a
     // flag); duplicado leria a primeira em silencio. Fail-fast com o uso.
-    if (flagMissingValue(args, "--service") || flagDuplicated(args, "--service") || flagMissingValue(args, "--dns-webhook") || flagDuplicated(args, "--dns-webhook") || flagDuplicated(args, "--dry-run")) {
+    if (flagMissingValue(args, "--service") || flagDuplicated(args, "--service") || flagMissingValue(args, "--dns-webhook") || flagDuplicated(args, "--dns-webhook") || flagMissingValue(args, "--dns-cmd") || flagDuplicated(args, "--dns-cmd") || flagDuplicated(args, "--dry-run")) {
         println(usoDomainAddLine())
         return 1
     }
@@ -2172,6 +2226,15 @@ Int cmdDomainAdd(List<String> args) {
     // com o assistente quebrado.
     var dryRun = hasFlag(args, "--dry-run")
     var dnsUrl = flagValue(args, "--dns-webhook").trim()
+    var dnsCmd = flagValue(args, "--dns-cmd").trim()
+    // F18 s1: UMA fonte de DNS (webhook ou comando do provedor) — duas
+    // seriam escolha silenciosa.
+    var dnsCmdErr = dnsCmdError(dnsCmd, dnsUrl)
+    if (dnsCmdErr.length > 0) {
+        println(dnsCmdErr)
+        println(usoDomainAddLine())
+        return 1
+    }
     if (dnsUrl.length > 0) {
         var urlError = webhookUrlError(dnsUrl)
         if (urlError.length > 0) {
@@ -2181,6 +2244,10 @@ Int cmdDomainAdd(List<String> args) {
         }
     }
     if (dryRun) {
+        if (dnsCmd.length > 0) {
+            println(dnsCmdPreview(dnsCmdExpand(dnsCmd, hostname, service, webhookUrlHost(session.controlUrl))))
+            return 0
+        }
         var previewToken = envOrNull("KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN").trim()
         var payload = dnsWebhookPayload(hostname, service, webhookUrlHost(session.controlUrl))
         println(dnsWebhookPreview(dnsUrl, payload, dnsWebhookHeaders(previewToken), previewToken.length > 0))
@@ -2204,6 +2271,14 @@ Int cmdDomainAdd(List<String> args) {
                 println("webhook DNS: pedido de criacao enviado a " + dnsUrl)
             } else {
                 println("AVISO: webhook DNS falhou (" + err + ") — crie o CNAME manualmente e rode domain verify")
+            }
+        }
+        if (dnsCmd.length > 0) {
+            var cmdErr = dnsCmdRun(dnsCmdExpand(dnsCmd, hostname, service, webhookUrlHost(session.controlUrl)))
+            if (cmdErr.length == 0) {
+                println("provedor DNS: comando executado (confirme o CNAME e rode domain verify)")
+            } else {
+                println("AVISO: " + cmdErr + " — crie o CNAME manualmente e rode domain verify")
             }
         }
         return 0

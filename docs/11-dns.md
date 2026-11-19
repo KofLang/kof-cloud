@@ -54,10 +54,24 @@ Detalhes honestos do slice:
 ## Automação de DNS
 
 Automatizar a criação do registro exige credencial da API do provedor de DNS do
-usuário (Cloudflare, Route53, …). Isso **não** faz parte do MVP: o wildcard por
-conta elimina a necessidade para o caminho feliz. A automação entra quando o
-domínio próprio for suportado, e será um conector por provedor — não um
-acoplamento no núcleo.
+usuário (Cloudflare, Route53, …). O wildcard por conta elimina a necessidade
+para o caminho feliz.
+
+Para o domínio próprio, a plataforma **não** acopla provedor no núcleo: fala o
+protocolo aberto do mercado (Fase 18 slice 1):
+
+* `domain add api.example.com --service site --dns-webhook <url>` — o
+  operador hospeda um receptor que cria o CNAME (POST assinado opcional com
+  `KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN`);
+* `domain add api.example.com --service site --dns-cmd '<cli do provedor>'` —
+  o CLI do provedor roda via `sh -c` com `{hostname}`/`{target}`/`{service}`
+  expandidos (ex.: `cloudflare-cli`, `aws route53 change-resource-record-sets`,
+  `wrangler`). Sem SDK e sem lock-in; a credencial do provedor fica no
+  ambiente do operador.
+
+Nos dois casos `--dry-run` mostra o que seria feito sem executar, e falha do
+provedor vira AVISO — o domínio fica PENDING e o caminho manual
+(`domain verify`) continua válido.
 
 ## O que o usuário nunca precisa configurar (MVP)
 

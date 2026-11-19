@@ -1518,6 +1518,23 @@ env, credencial nunca em log, teste com fake local + e2e opcional real):
   caminho pegou o NPE real do `config.env` null com a var ausente (`envOrNull`
   fonte única; antes a CLI quebrava DEPOIS de registrar o domínio). Prova:
   `tests/domains_test.kf` (`domains-dnswebhook`, `domains-dnsdryrun`).
+
+  **Implementado (provedor por comando — Cloudflare/Route53 sem SDK):**
+  `domain add --dns-cmd '<cmd>'` roda o CLI que o operador escolher via
+  `sh -c`, com placeholders `{hostname}`/`{target}`/`{service}` expandidos
+  antes (`dnsCmdExpand`, pura) — Cloudflare (`wrangler`/`cloudflare-cli`),
+  Route53 (`aws route53 ...`) e qualquer outro entram pelo protocolo aberto
+  do shell, **sem SDK e sem lock-in**. Mesmo contrato do webhook: uma fonte
+  por vez (`--dns-webhook` × `--dns-cmd` = erro posicional), `--dry-run`
+  mostra o comando expandido e não executa, e falha do provedor vira
+  **AVISO** (o domínio já ficou PENDING e o caminho manual `domain verify`
+  continua) — nunca aborta nem esconde o motivo. A credencial do provedor
+  fica no ambiente do operador (o comando só referencia, ex.
+  `CF_API_TOKEN`), nunca no corpo/saída/log; o stdout é descartado (pode
+  conter dado do provedor), só o exit code decide. Prova:
+  `tests/dns_cmd_test.kf` (5: fonte única, expansão+previa, execução real
+  com falha honesta — inclusive o exit 127 medido de comando inexistente,
+  help, e2e com efeito observável).
 * **Slice 2 — identidade e SSO.** OIDC genérico (qualquer IdP:
   Google, GitHub, Keycloak): `login` abre browser, troca code por conta
   vinculada (nunca substitui `kfc_` — vira segundo fator de emissão).
