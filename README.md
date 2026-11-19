@@ -132,7 +132,7 @@ deploy [--file kofcloud.json] [--check] [--plan] [--watch]  (roda build + public
 down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove orfaos)
 daemon install|status|uninstall   (artefato por SO — systemd/launchd/Windows — sem root, ativação manual)
 doctor [--file kofcloud.json] [--tls-cert <pem>]  (diagnostico: login, control, device, tunel, auditoria, tls, servicos)
-usage   (uso da conta: requests e bytes roteados pelo Edge; para billing externo)
+usage [--export]   (uso da conta: requests e bytes roteados pelo Edge; --export fecha a janela — le e zera, para billing externo)
 audit [--sbom] [--verify] [--action <acao>] [--tail <n>]   (trilha da conta; --sbom = inventario local; --action filtra, --tail corta)
 scan [--file <caminho>] [--tls-cert <pem>]   (segredos no manifesto/ambiente, PEM expirando e .kfs commitado no repo; exit 1 com achado)
 webhook set <url> --secret <s> | show | remove | test

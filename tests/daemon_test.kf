@@ -112,6 +112,12 @@ test "daemon: ajuda reconciliada com os comandos reais", "usage-parity" {
     // o caminho continuou existindo na árvore combinada.
     assert(readTextOr("docs/examples/ci-pipeline.yml", "").length > 0, "exemplo de pipeline CI existe no disco")
     assert(readTextOr("docs/examples/action.yml", "").length > 0, "exemplo de action reutilizavel existe no disco")
+    // A lane do `usage --export` (F18 s4 ciclo de billing) atualizou o help
+    // (`usage [--export]`, com a janela) e deixou a linha do README no texto
+    // antigo sem a flag — mesmo padrao dos drifts acima. A varredura generica
+    // abaixo so trava o primeiro token (`usage`), entao o drift de FLAG passa
+    // pela rede: aqui a trava e da linha inteira, flag incluida.
+    assert(readme.indexOf("usage [--export]   (uso da conta: requests e bytes roteados pelo Edge; --export fecha a janela") >= 0, "README espelha usage --export com a janela")
     // Varredura generica help -> README: todo comando do help tem de ter
     // linha propria na referencia do README. Precedente real: a lane do
     // `usage` (F18 s4) atualizou o help e o paragrafo de suites e esqueceu
