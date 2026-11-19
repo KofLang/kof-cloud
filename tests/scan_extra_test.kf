@@ -8,18 +8,20 @@ import kofcloud.util.Text
 test "scan: ambiente sensivel e detectado sem vazar valor", "scan-env-unit" {
     var pairs = listOf(
         "KOFCLOUD_TOKEN=abc123",
+        "KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN=tok_dns",
         "GITHUB_TOKEN=ghp_xxx",
         "PATH=/usr/bin",
         "MINHA_VAR=tem kfs_embutido",
         "VAZIA="
     )
     var findings = scanEnvSecrets(pairs)
-    assert(findings.size == 3, "tres achados (token, github, kfs_ embutido)")
+    assert(findings.size == 4, "quatro achados (token, dns-webhook, github, kfs_ embutido)")
     var joined = ""
     for (var finding in findings) {
         joined = joined + finding + "\n"
     }
     assert(joined.indexOf("KOFCLOUD_TOKEN") >= 0, "nomeia o token")
+    assert(joined.indexOf("KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN") >= 0, "nomeia o token do webhook DNS (propria plataforma)")
     assert(joined.indexOf("GITHUB_TOKEN") >= 0, "nomeia o github")
     assert(joined.indexOf("MINHA_VAR") >= 0, "nomeia a var com kfs_")
     // Nunca o valor.
@@ -33,6 +35,7 @@ test "scan: lista de nomes sensiveis e curada e estavel", "scan-env-unit" {
     var names = sensitiveEnvNames()
     assert(names.contains("KOFCLOUD_TOKEN"), "token do kofcloud")
     assert(names.contains("KOFCLOUD_TUNNEL_SECRET"), "segredo do tunel")
+    assert(names.contains("KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN"), "token do webhook DNS (propria plataforma)")
     assert(names.contains("AWS_SECRET_ACCESS_KEY"), "aws")
     assert(names.contains("DATABASE_URL"), "banco")
     assert(names.size >= 10, "lista util")

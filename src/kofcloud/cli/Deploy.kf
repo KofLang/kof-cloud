@@ -441,10 +441,13 @@ List<String> scanManifestSecrets(String raw) {
 
 // Nomes de variavel de ambiente que, se definidos, indicam credencial no
 // ambiente do shell (o Kof nao enumera env: `config.env(nome)` le um nome
-// por vez — por isso a lista e curada, nao uma varredura de tudo).
+// por vez — por isso a lista e curada, nao uma varredura de tudo). Inclui
+// as credenciais da propria plataforma: o token do webhook DNS (F18 s1) e
+// segredo de operador como qualquer outro — o scan de CI precisa ve-lo.
 List<String> sensitiveEnvNames() {
     return listOf(
         "KOFCLOUD_TOKEN", "KOFCLOUD_SECRET", "KOFCLOUD_TUNNEL_SECRET",
+        "KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN",
         "KFS_TOKEN", "KFC_TOKEN", "GITHUB_TOKEN", "GH_TOKEN",
         "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
         "DATABASE_URL", "DB_PASSWORD", "PGPASSWORD", "MYSQL_PWD"

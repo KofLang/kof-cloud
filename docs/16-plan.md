@@ -1666,7 +1666,10 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
 
   **Complemento ✅:** o `scan` agora também olha o **ambiente** (lista curada
   de nomes sensíveis — o Kof não enumera env, `config.env(nome)` lê um por
-  vez — mais qualquer valor com `kfs_`/`kfc_`/`password`) e o **PEM do
+  vez — mais qualquer valor com `kfs_`/`kfc_`/`password`) — e a lista inclui
+  as credenciais da **própria plataforma** (`KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN`,
+  o token do webhook DNS da Fase 18 s1, que escapava da varredura porque não
+  estava na lista — mutação removendo-o quebra no assert exato) — e o **PEM do
   operador** (`--tls-cert`: expirado ou expirando em 30 dias, via
   `openssl x509 -checkend`). Nunca imprime valor, só o nome. Prova:
   `tests/scan_extra_test.kf` (5). **Pendente:** dependências (exige resolver
