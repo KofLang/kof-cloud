@@ -112,6 +112,57 @@ test "daemon: ajuda reconciliada com os comandos reais", "usage-parity" {
     // o caminho continuou existindo na árvore combinada.
     assert(readTextOr("docs/examples/ci-pipeline.yml", "").length > 0, "exemplo de pipeline CI existe no disco")
     assert(readTextOr("docs/examples/action.yml", "").length > 0, "exemplo de action reutilizavel existe no disco")
+    // Varredura generica help -> README: todo comando do help tem de ter
+    // linha propria na referencia do README. Precedente real: a lane do
+    // `usage` (F18 s4) atualizou o help e o paragrafo de suites e esqueceu
+    // a tabela de comandos. Subcomando profundo fica por conta dos asserts
+    // por linha acima — aqui a rede pega a classe inteira (comando inteiro
+    // fora da referencia). Puro, sem rede.
+    var cursor = 0
+    var checked = 0
+    while (cursor < help.length) {
+        var nl = help.indexOf("\n", cursor)
+        var lineEnd = help.length
+        if (nl >= 0) {
+            lineEnd = nl
+        }
+        var line = help.substring(cursor, lineEnd)
+        if (line.length > 2 && line.charAt(0) as Int == 32 && line.charAt(1) as Int == 32) {
+            // Primeiro token depois do indent (para em espaco, <, [ ou (
+            // por codigo de char — precedente do parseEdgeHosts).
+            var end = 2
+            var scanning = true
+            while (scanning && end < line.length) {
+                var c = line.charAt(end) as Int
+                if (c == 32 || c == 60 || c == 91 || c == 40) {
+                    scanning = false
+                } else {
+                    end = end + 1
+                }
+            }
+            var cmd = line.substring(2, end)
+            // Primeira palavra so: "device list" e "freeze account" dividem
+            // a palavra-raiz com irmãos que a tabela combina em uma linha.
+            var sp = cmd.indexOf(" ")
+            if (sp > 0) {
+                cmd = cmd.substring(0, sp)
+            }
+            if (cmd.length > 0) {
+                var found = readme.indexOf("\n" + cmd + " ") >= 0 || readme.indexOf("\n" + cmd + "\n") >= 0
+                if (readme.indexOf(cmd + " ") == 0) {
+                    found = true
+                }
+                assert(found, "README referencia tem o comando do help: " + cmd)
+                checked = checked + 1
+            }
+        }
+        if (nl < 0) {
+            cursor = help.length
+        } else {
+            cursor = nl + 1
+        }
+    }
+    assert(checked >= 30, "varredura cobriu os comandos do help: " + intToString(checked))
 }
 
 test "daemon: paths ficam no espaco do usuario", "daemon-paths" {
