@@ -1,0 +1,47 @@
+# Exemplo de pipeline CI/CD para o KofCloud (Fase 18 slice 3).
+#
+# Este arquivo e EXEMPLO, nao workflow ativo: copie para
+# .github/workflows/deploy.yml no SEU repositorio de aplicacao.
+#
+# Pre-requisito honesto: o runner tem de ser SELF-HOSTED na maquina que
+# roda `kof cloud connect` — o deploy publica e o `--check` sonda o servico
+# LOCAL desta maquina; num runner de nuvem o publish funciona, mas o check
+# nao teria o que verificar (e falharia corretamente).
+#
+# Segredos necessarios (Settings → Secrets and variables → Actions):
+#   KOF_HANDLE       handle da conta
+#   KOF_PASSWORD     senha da conta
+#   KOF_CONTROL_URL  URL do control plane (https)
+#
+# A senha nunca aparece no log (o Actions mascara segredos) e nenhum
+# comando abaixo a ecoa; o login usa o device fixo `ci` — o re-registro
+# dedupa no device vivo, entao rodar o pipeline nao gera devices novos
+# nem estoura o teto de cadastro.
+
+name: deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login (device fixo ci)
+        run: kof cloud login "$KOF_HANDLE" --password "$KOF_PASSWORD" --control "$KOF_CONTROL_URL" --device ci
+        env:
+          KOF_HANDLE: ${{ secrets.KOF_HANDLE }}
+          KOF_PASSWORD: ${{ secrets.KOF_PASSWORD }}
+          KOF_CONTROL_URL: ${{ secrets.KOF_CONTROL_URL }}
+
+      # Diff sem aplicar (como `terraform plan`): revisavel no PR.
+      - name: Plano
+        run: kof cloud deploy --plan
+
+      # Publica e verifica: build declarado por servico roda antes;
+      # falha o pipeline se algum servico divergir ou nao responder.
+      - name: Deploy + verificacao
+        run: kof cloud deploy --check

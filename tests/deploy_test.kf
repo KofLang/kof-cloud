@@ -1,4 +1,5 @@
 import kofcloud.cli.Commands
+import kofcloud.cli.Usage
 import kofcloud.protocol.Bytes
 import kofcloud.cli.Deploy
 import kofcloud.control.ControlPlane
@@ -1003,4 +1004,59 @@ test "deploy: check avisa kfs_ perto do fim (mesmo predicado do token-list)", "d
     assert(statusOf(pub2) == 200, "servico PUBLIC publicado")
     var wantedPublic = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":19883}]}")
     assert(kfsExpiryWarningsFor(controlUrl, token, wantedPublic, deviceId, fioNow).size == 0, "PUBLIC nao tem kfs_: silencio")
+}
+
+test "deploy: exemplo de pipeline CI cita so comandos reais", "deploy-ci" {
+    // F18 slice 3 — "pipeline de exemplo no repo". O exemplo e documentacao
+    // que EXECUTA: qualquer `kof cloud <cmd>` citado tem de existir no help
+    // (a interface que o binario mostra), o fluxo tem de ser o honesto
+    // (runner self-hosted na maquina do `connect`, device fixo `ci` que o
+    // re-registro dedupa — rodar o pipeline nao gera devices novos) e a
+    // senha nunca pode aparecer literal (so via segredo mascarado pelo
+    // Actions e env do passo). Mesmo padrao da trava cruzada usage-parity:
+    // o teste le o arquivo do disco.
+    var example = readTextOr("docs/examples/ci-pipeline.yml", "")
+    assert(example.length > 0, "exemplo existe e e legivel")
+    assert(example.indexOf("self-hosted") >= 0, "runner self-hosted no topo (pre-requisito honesto)")
+    assert(example.indexOf("connect") >= 0, "diz que a maquina roda o connect")
+
+    // Toda invocacao citada existe no help: extrai o primeiro token depois
+    // de "kof cloud " e confere que o help tem a linha "  <token> ".
+    // Comparacao por codigo (precedente do parseEdgeHosts): char e Int.
+    // Terminadores: espaco/quebra/aspas/backtick (citacao em prosa).
+    var help = usageText()
+    var cursor = example.indexOf("kof cloud ")
+    var cited = 0
+    while (cursor >= 0) {
+        var start = cursor + 10
+        var end = start
+        var scanning = true
+        while (scanning && end < example.length) {
+            var c = example.charAt(end) as Int
+            if (c == 32 || c == 10 || c == 34 || c == 96) {
+                scanning = false
+            } else {
+                end = end + 1
+            }
+        }
+        var cmd = example.substring(start, end)
+        assert(cmd.length > 0, "token extraido apos kof cloud")
+        assert(help.indexOf("  " + cmd + " ") >= 0 || help.indexOf("  " + cmd + "\n") >= 0, "comando citado existe no help: " + cmd)
+        cited = cited + 1
+        cursor = example.indexOf("kof cloud ", end)
+    }
+    assert(cited >= 3, "exemplo cita comandos de verdade: " + intToString(cited))
+
+    // O fluxo citado e o do slice: login com device fixo, diff sem aplicar,
+    // deploy com verificacao — as 3 fases do CI/GitOps do plano.
+    assert(example.indexOf("kof cloud login") >= 0, "login no exemplo")
+    assert(example.indexOf("--device ci") >= 0, "device fixo ci (sem girar devices a cada run)")
+    assert(example.indexOf("kof cloud deploy --plan") >= 0, "plano revisavel")
+    assert(example.indexOf("kof cloud deploy --check") >= 0, "deploy verificado")
+
+    // Credencial nunca literal: a senha vem de segredo mascarado e chega ao
+    // comando por env do passo ($KOF_PASSWORD), nunca inline no run.
+    assert(example.indexOf("secrets.KOF_PASSWORD") >= 0, "senha vem de segredo do Actions")
+    assert(example.indexOf("KOF_PASSWORD\")") >= 0 || example.indexOf("KOF_PASSWORD\"") >= 0, "senha via env do passo")
+    assert(example.indexOf("password: \"") < 0 && example.indexOf("password:adef") < 0, "sem senha literal no exemplo")
 }

@@ -80,6 +80,11 @@ kof run src/Main.kf deploy [--file kofcloud.json] [--check] [--plan] [--watch]  
 kof run src/Main.kf down [--prune]              # remove os do manifesto (+ orfaos do device)
 ```
 
+Em CI/CD, veja o exemplo de pipeline GitHub Actions em
+`docs/examples/ci-pipeline.yml` (login com device fixo `ci`,
+`deploy --plan` revisável no PR e `deploy --check` falhando o
+pipeline; exige runner self-hosted na máquina do `connect`).
+
 `connect` mantém o túnel e reconecta sozinho. Enquanto ele roda:
 
 ```bash

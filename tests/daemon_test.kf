@@ -107,6 +107,10 @@ test "daemon: ajuda reconciliada com os comandos reais", "usage-parity" {
     assert(readme.indexOf("[--watch]  (roda build + publica + verifica; --plan so mostra o diff; --watch observa") >= 0, "README espelha --watch na linha de referencia")
     var flows = readTextOr("docs/09-flows.md", "")
     assert(flows.indexOf("kof cloud deploy [--file kofcloud.json] [--check] [--plan] [--watch]") >= 0, "flows §3.2 anuncia --watch")
+    // Exemplo de pipeline CI (F18 s3): o README aponta o arquivo do disco
+    // e o teste do deploy o trava contra o help — aqui só garantimos que
+    // o caminho continuou existindo na árvore combinada.
+    assert(readTextOr("docs/examples/ci-pipeline.yml", "").length > 0, "exemplo de pipeline CI existe no disco")
 }
 
 test "daemon: paths ficam no espaco do usuario", "daemon-paths" {

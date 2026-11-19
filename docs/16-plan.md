@@ -1516,6 +1516,17 @@ env, credencial nunca em log, teste com fake local + e2e opcional real):
   lê `kofcloud.json`, publica, roda `--check`, falha o pipeline se
   quebrar; `kof cloud deploy --plan` mostra o diff sem aplicar (como
   `terraform plan`). Prova: pipeline de exemplo no repo.
+  **Implementado (exemplo executável):** `docs/examples/ci-pipeline.yml` —
+  login com device fixo `ci` (o re-registro dedupa no device vivo: rodar o
+  pipeline não gera devices novos nem estoura o teto), `deploy --plan`
+  revisável, `deploy --check` falhando o pipeline; senha só via segredo
+  mascarado pelo Actions → env do passo (nunca inline, nunca no log) e
+  pré-requisito declarado no topo: runner **self-hosted** na máquina do
+  `connect` (num runner de nuvem o `--check` não teria o que sondar).
+  Trava de realidade (`deploy-ci`): o teste lê o exemplo do disco e exige
+  que todo `kof cloud <cmd>` citado exista no help, as 3 fases do fluxo
+  estejam lá e nenhuma senha apareça literal. Action oficial reutilizável
+  pendente (o exemplo cobre o fluxo; a action empacota depois).
 * **Slice 4 — observabilidade e billing.** Export OpenTelemetry
   (traces do relay + logs estruturados) para o backend que o operador
   já tem (Grafana/Datadog); webhook de uso (requests/bytes por conta)
