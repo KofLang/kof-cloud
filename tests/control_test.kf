@@ -181,6 +181,15 @@ test "control: toda rota /v1 registrada esta documentada em docs/06", "control-d
         detail = detail + " " + route
     }
     assert(missing.size == 0, "rotas registradas e nao documentadas:" + detail)
+    // Honestidade do ciclo de billing (trava docs×codigo, padrao das travas
+    // de docs): o export fechava a janela so em memoria e um restart
+    // RE-FATURAVA — o reset passou a persistir na hora (`usageSnapshot`
+    // grava junto do zeramento) e a frase stale ("Um crash entre o
+    // snapshot...") ficou na doc. Este assert impede o regresso: exige o
+    // texto novo condizente com o codigo e proibe o velho.
+    assert(code.indexOf("usageSnapshot") >= 0, "snapshot existe no codigo")
+    assert(doc.indexOf("O reset do export persiste na hora") >= 0, "doc promete reset persistido")
+    assert(doc.indexOf("entre o snapshot e o próximo") < 0, "frase stale do re-faturamento fora")
 }
 
 test "control plane: publish em device revogado devolve 409 KCF023", "control-publish-revoked" {

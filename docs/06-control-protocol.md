@@ -210,8 +210,12 @@ X-KofCloud-Token: kfc_...
 200 {"requests":"N","bytesIn":"N","bytesOut":"N","periodEnd":"<epoch-ms>"}
 ```
 
-Um crash entre o snapshot e o próximo `save()` do estado pode re-faturar a
-janela — o consumidor deduplica por `periodEnd`.
+O reset do export persiste na hora (o `usageSnapshot` grava junto com o
+zeramento) — um restart recarrega a janela já fechada e o export repetido
+devolve zeros, sem re-faturar. Resta a honestidade do ACÚMULO: um crash
+entre os `noteUsage` e o próximo `save()` de mutação perde o intervalo sem
+mutação (nunca duplica) — o consumidor trata a lacuna como atraso de
+contagem, não como janela em aberto.
 
 ## Erros
 
