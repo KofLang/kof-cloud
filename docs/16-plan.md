@@ -57,7 +57,7 @@ congelava TODO cadastro novo em TODA conta**), `kofcloud.limits.services` (por d
 `kofcloud.limits.streams` (por túnel, default 128, **zero/inválido recaem no
 default via `streamLimitFrom` pura — 0 recusaria todo OPEN**, com
 `429`/`RESET LIMIT_EXCEEDED`).
-Prova: `tests/limits_test.kf` (9 testes: limites + recuo seguro do passo
+Prova: `tests/limits_test.kf` (10 testes: limites + recuo seguro do passo
 da varredura de credenciais e do pusher de SERVICES) + `tests/e2e_multiservice_test.kf`
 (3 serviços no mesmo túnel, com isolamento de falha).
 
@@ -1183,7 +1183,9 @@ sem mudar formato público):
   mudança nenhuma. Agora o Edge compara a lista do device com a última
   enviada (serialização única `serviceListJson`) e manda SERVICES pelo
   PRÓPRIO túnel quando muda (`tunnelServicesPusher`, passo
-  `kofcloud.limits.servicesPushMs`, default 2 s, recuo seguro); o Agent
+  `kofcloud.limits.servicesPushMs`, default 2 s, recuo seguro
+  `servicesPushMsFrom` — 0/negativo viraria busy-loop serializando a lista
+  de cada device sem parar); o Agent
   aplica com `applyServicesFrame` (pura; lista ilegível é fail-open para o
   próximo push, nunca derruba o túnel; **não renova o idle** — frame de
   controle não é tráfego, a mesma mentira que o PING já evita). Publish,
@@ -1199,7 +1201,7 @@ sem mudar formato público):
   `tests/services_push_test.kf` (2 testes: aplicação pura + e2e com
   healthMs=60000 — o refresher não roda na janela do teste, então o
   publish/remoção que roteia veio pelo push) e `limits-push` em
-  `tests/limits_test.kf` (9 testes).
+  `tests/limits_test.kf` (10 testes).
 
 **Teto da sonda de health na fonte unica.** `limitHealthHeadBytes()` era o
 ultimo literal numerico do caminho de health (16384 em `agent/Health.kf`);
@@ -1465,7 +1467,9 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   no receptor). URL https (http só em loopback, sem credencial na URL) e
   segredo ≥16 chars validados; o segredo **nunca** volta pela API/CLI (só o
   prefixo). Falha de entrega não impede o incidente de existir — e agora tem
-  **prazo explícito** (`Limits.limitWebhookTimeoutSec`, 5 s, recuo seguro): a
+  **prazo explícito** (`Limits.limitWebhookTimeoutSec`, 5 s, recuo seguro
+  `webhookTimeoutSecFrom` — 0/negativo quebraria TODA entrega e o `catch`
+  do postWebhook viraria o caminho comum): a
   entrega roda inline no caminho do incidente e o default do stdlib
   (`http.timeout`, 15 s por pedido) deixaria um receptor que aceita e não
   responde pendurar o sweeper e handlers por 3x mais que o necessário; o

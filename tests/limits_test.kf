@@ -214,3 +214,27 @@ test "limits: passo do pusher de SERVICES com recuo seguro", "limits-push" {
     assert(servicesPushMsFrom(500) == 500, "positivo passa")
     assert(limitServicesPushMs() == 2000, "default travado em 2 s")
 }
+
+test "limits: os planos citam as puras de passo/prazo pelo nome", "limits-docs" {
+    // Trava de honestidade docs×codigo (padrao `sendChunkBytesFrom` no
+    // frames_test): as puras de passo de laco e prazo existem e estao
+    // travadas aqui, mas quem afina a config precisa ENCONTRAR a fonte.
+    // O 18-implemented lista a familia na linha de limites; os trechos do
+    // 16-plan (pusher de SERVICES, webhook) citam a pura no contexto.
+    var planRaw = File("docs/16-plan.md").readText()
+    var shippedRaw = File("docs/18-implemented.md").readText()
+    var plan = ""
+    var shipped = ""
+    if (planRaw != null) {
+        plan = planRaw
+    }
+    if (shippedRaw != null) {
+        shipped = shippedRaw
+    }
+    if (plan.length > 0 && shipped.length > 0) {
+        assert(shipped.indexOf("servicesPushMsFrom") >= 0 && shipped.indexOf("webhookTimeoutSecFrom") >= 0, "linha de limites do 18 lista as puras de passo/prazo")
+        assert(shipped.indexOf("backoffBaseLimitFrom") >= 0 && shipped.indexOf("deployWatchMsFrom") >= 0, "linha de limites do 18 lista backoff e watch")
+        assert(plan.indexOf("servicesPushMsFrom") >= 0, "16-plan cita a pura do pusher")
+        assert(plan.indexOf("webhookTimeoutSecFrom") >= 0, "16-plan cita a pura do prazo do webhook")
+    }
+}
