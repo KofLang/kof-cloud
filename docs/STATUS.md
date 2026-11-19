@@ -87,7 +87,7 @@ o run total imprime `63 passed, 0 failed`. Falha = nome do teste + assert
 | webhook de incidentes (F17 s3) | `tests/webhook_test.kf` | 11 |
 | cadeia de auditoria (F19 s4) | `tests/audit_chain_test.kf` | 21 |
 | scan de ambiente e PEM (F19 s2) | `tests/scan_extra_test.kf` | 5 |
-| higiene de credenciais (F19 s2) | `tests/token_hygiene_test.kf` | 4 |
+| higiene de credenciais (F19 s2) | `tests/token_hygiene_test.kf` | 5 |
 | painel de gestão completa (F12 s2) + webhook, diagnóstico, onboarding, fluxo guiado e contenção (F12 s2/s3) | `tests/panel_actions_test.kf` | 21 |
 | ranking de Edges (F14 s2) | `tests/edge_select_test.kf` | 5 |
 | porta do Edge sem wrap (F14 s2) | `tests/edge_select_test.kf` + `tests/webhook_test.kf` | +13 asserts |
@@ -110,4 +110,4 @@ o run total imprime `63 passed, 0 failed`. Falha = nome do teste + assert
 | segredos de fonte externa (F18 s5) | `tests/secrets_test.kf` | 4 |
 | push do uso para billing (F18 s4) | `tests/usage_push_test.kf` | 4 |
 
-Total: 449 testes. Ver `15-tests.md` para a matriz.
+Total: 450 testes. Ver `15-tests.md` para a matriz.

@@ -1682,7 +1682,9 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   **válidos e sem expiração** — o item "kfs_ sem TTL em serviço crítico" do
   plano. Só leitura: a ação recomendada é `service rotate <nome> --ttl 24`.
   Escopo por conta; sem token → 401. Prova: `tests/token_hygiene_test.kf`
-  (4).
+  (5: o caso do rotate liga as lanes — rotate sem TTL deixa o serviço no
+  relatório (pendente) e rotate com TTL NÃO limpa o legado sem TTL em
+  silêncio; mutação revogando o legado quebra no assert exato).
 * **Slice 3 — resposta e rotação programada (✅ + `rotate --all`).**
   Rotação assistida (por serviço): `kof cloud service rotate
   (<nome>|--all) [--ttl H] [--prune]` emite credencial nova e **só revoga

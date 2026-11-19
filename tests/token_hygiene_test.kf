@@ -59,6 +59,33 @@ test "higiene: escopo e da conta (nao ve de outra)", "hygiene-unit" {
     assert(names.contains("site"), "ve o proprio")
 }
 
+test "higiene: rotate sem TTL deixa o servico no relatorio (pendente)", "hygiene-unit" {
+    // Cruzamento F19 s3 x F19 s2: a credencial antiga de um rotate sem
+    // --ttl "fica contada como pendente ate ser revogada a mao" — e quem
+    // a torna VISIVEL e a higiene. A antiga (sem expiracao) e a nova
+    // (sem TTL tambem) mantem o servico no relatorio; rotate com TTL
+    // seguinte nao limpa o legado em silencio (revogar credencial sem
+    // expiracao nunca e automatico) — limpar exige revoke, como no teste
+    // "revogar/rotacionar com TTL remove do relatorio".
+    var registry = Registry(hygienePath("rotate-pending"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(account, "nb", "pk")
+    var svc = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
+    registry.issueServiceToken(account.id, svc.id)
+    var rotated = registry.rotateServiceTokens(account.id, svc.id, 0)
+    assert(rotated.pending == 1, "antiga fica pendente")
+    assert(registry.pendingRotationCount(svc.id) == 2, "duas credenciais vivas")
+    var names = registry.servicesWithUnrotatedTokens(account.id)
+    assert(names.size == 1, "servico segue na higiene")
+    if (names.size == 1) {
+        assert(names.get(0) == "site", "o servico rotacionado sem TTL")
+    }
+    // Rotate com TTL: a nova tem expiracao, mas as antigas sem TTL
+    // continuam validas e sem expiracao — o servico NAO sai do relatorio.
+    registry.rotateServiceTokens(account.id, svc.id, 24)
+    assert(registry.servicesWithUnrotatedTokens(account.id).size == 1, "rotate com TTL nao limpa o legado sem TTL")
+}
+
 test "higiene: HTTP devolve servicos e contagem", "hygiene" {
     var controlPort = 19921
     var registry = Registry(hygienePath("http"))
