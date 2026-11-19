@@ -278,6 +278,22 @@ test "credencial de conta: logoutDisposition trava as quatro saidas", "atok-unit
     // O body de 401 do control plane passa pelo requireOk como texto de erro;
     // qualquer texto com KCF004 conta como "credencial ja morta".
     assert(logoutDisposition(true, false, "KCF004") == "dead", "KCF004 curto: dead")
+
+    // Cruzamento logout × sessão vencida (o aviso `expiring` avisou, o
+    // operador demorou): no FIO, um token vencido não autoriza o endpoint
+    // (401 errUnauthorized = KCF004), então o disposition cai em "dead" —
+    // nunca "warn", que mentiria "ela segue valida". Handlers diretos sobre
+    // o Registry real (sem rede): o caminho do revoke é o mesmo do fio.
+    var registry = Registry(accountTokenPath("logout-expired"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    registry.tokens.add(TokenEntry(mel.id, tokenHash("kfc_venceu-ontem"), time.now() - 90000, time.now() - 60000))
+    var expiredAuth = handleRevokeAccountToken(registry, "Bearer kfc_venceu-ontem", "{\"token\":\"kfc_venceu-ontem\"}")
+    assert(expiredAuth.code == 401, "vencida não autoriza o revoke")
+    assert(expiredAuth.body.indexOf("KCF004") >= 0, "401 com KCF004: " + expiredAuth.body)
+    assert(logoutDisposition(true, false, expiredAuth.body) == "dead", "vencida: dead, não warn")
+    var prunedExpired = handlePruneAccountTokens(registry, "Bearer kfc_venceu-ontem")
+    assert(prunedExpired.code == 401, "vencida não autoriza o prune")
+    assert(prunedExpired.body.indexOf("KCF004") >= 0, "prune: mesmo 401 KCF004")
 }
 
 test "credencial de conta: prune preserva a da sessao e revoga as antigas", "atok-unit" {

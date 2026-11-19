@@ -1728,7 +1728,11 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   nova credencial na sessão local antes de imprimir. O `status` mostra o
   aviso de expiracao do mesmo sinal `expiring` do fio (pura
   `statusCredentialWarning`; era o comando de rotina cego — o operador
-  descobria a perda da sessão nos 401). Prova:
+  descobria a perda da sessão nos 401). **Logout × sessão vencida
+  (travado):** token vencido não autoriza os endpoints (revoke/prune
+  devolvem 401 KCF004 porque passam pela mesma validação preguiçosa), então
+  o `logoutDisposition` cai em `dead` — nunca em `warn` com a mentira
+  "ela segue valida". Prova:
   `tests/account_token_test.kf` (11: TTL/poda/legado, revoke por valor e id
   curto com escopo por conta, ambiguidade, overlap, aviso no `status`,
   HTTP fim a fim).
