@@ -1,0 +1,106 @@
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.model.Webhook
+import kofcloud.store.Store
+import kofcloud.util.Limits
+import kofcloud.util.Text
+import testkit.Support
+
+// F18 s4 — push do uso para o webhook de billing: o contador de uso existia
+// (noteUsage/usageFor) e o ciclo puxado (export), mas o desenho pedia um
+// "webhook de uso (requests/bytes por conta) para billing externo" — o
+// operador recebe a JANELA no MESMO receptor dos incidentes, assinada, sem
+// gerenciar uma segunda URL/segredo. Sem webhook ou sem uso = no-op.
+
+String usagePushPath(String name) {
+    return "/tmp/kofcloud-upush-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "uso-push: payload da janela e vocabulario do export (sem credencial)", "usage-push-unit" {
+    // O payload carrega os mesmos contadores do GET /v1/usage + periodEnd do
+    // export; event distingue o tipo para o receptor rotear.
+    var p = usageWindowPayload("3", "131", "242", 1700000000000)
+    assert(p.indexOf("\"event\":\"usage.window\"") >= 0, "event nomeado: " + p)
+    assert(p.indexOf("\"requests\":\"3\"") >= 0, "requests")
+    assert(p.indexOf("\"bytesIn\":\"131\"") >= 0, "bytesIn")
+    assert(p.indexOf("\"bytesOut\":\"242\"") >= 0, "bytesOut")
+    assert(p.indexOf("\"periodEnd\":\"1700000000000\"") >= 0, "periodEnd")
+    assert(p.indexOf("kfs_") < 0 && p.indexOf("kfc_") < 0, "sem credencial")
+}
+
+test "uso-push: push so com webhook e uso; janela fecha apos sucesso", "usage-push-unit" {
+    var registry = Registry(usagePushPath("nop"))
+    var mel = registry.createAccount("mel", "mel@e.com", "segredo")
+    // Sem webhook: no-op (0), e o contador NAO zera (sem receptor, nao ha
+    // a quem faturar; a janela segue acumulando).
+    registry.noteUsage(mel.id, 100, 200)
+    assert(registry.pushUsage(mel.id) == 0, "sem webhook = no-op")
+    assert(registry.usageFor(mel.id).requests == "1", "contador intacto sem webhook")
+    // Com webhook mas sem uso: no-op (mas o webhook esta configurado).
+    var ana = registry.createAccount("ana", "ana@e.com", "segredo")
+    registry.setWebhook(ana.id, "http://127.0.0.1:1/nao-escuta", "segredo-de-16-chars")
+    assert(registry.pushUsage(ana.id) == 0, "sem uso = no-op")
+    // Webhook apontando para porta morta: a entrega falha (best-effort, nao
+    // lanca), mas a janela FOI snapshotada — o consumidor deduplica por
+    // periodEnd, entao um push repetido sem falha entrega a mesma janela uma
+    // vez so (nunca re-fatura e nunca perde: o proximo push le a nova janela).
+    registry.noteUsage(ana.id, 5, 6)
+    assert(registry.pushUsage(ana.id) == 1, "com webhook+uso: tenta push")
+    assert(registry.usageFor(ana.id).requests == "0", "janela fechada apos push")
+}
+
+test "uso-push: limits do passo com recuo seguro", "usage-push-unit" {
+    assert(usagePushMsFrom(0) == 60000, "zero recai no default")
+    assert(usagePushMsFrom(-1) == 60000, "negativo recai no default")
+    assert(usagePushMsFrom(5000) == 5000, "positivo passa")
+    assert(limitUsagePushMs() == 60000, "default travado em 1 min")
+}
+
+
+// Receptor real: lista simples capturada pela closure, o padrao que o resto
+// da suite usa (arrays `new String[1]` capturados quebram o verificador).
+String pushRecvUrl(Int port) {
+    return "http://127.0.0.1:" + intToString(port) + "/billing"
+}
+
+test "uso-push: e2e — o receptor de billing recebe a janela assinada", "usage-push-e2e" {
+    var recvPort = 19760
+    var bodies = listOf<String>()
+    var sigs = listOf<String>()
+    var app = web.app()
+    app.post("/billing") {
+        bodies.add(body())
+        var sig = header("x-kofcloud-signature")
+        if (sig == null) {
+            sig = "(nenhuma)"
+        }
+        sigs.add(sig)
+        return "ok"
+    }
+    var server = spawn { app.listen(recvPort) }
+    assert(waitForPort(recvPort, 60), "receptor no ar")
+
+    var registry = Registry(usagePushPath("e2e"))
+    var mel = registry.createAccount("mel", "mel@e.com", "segredo")
+    var secret = "segredo-de-teste-123456"
+    // setWebhook LANCA em erro (URL interna, DNS, segredo curto) e devolve
+    // "ok" no sucesso — capturado para o teste dizer o motivo exato.
+    var setErr = "ok"
+    try {
+        setErr = registry.setWebhook(mel.id, pushRecvUrl(recvPort), secret)
+    } catch (String e) {
+        setErr = "THROW: " + e
+    }
+    assert(setErr == "ok", "webhook setado: " + setErr)
+    registry.noteUsage(mel.id, 100, 200)
+    registry.noteUsage(mel.id, 50, 60)
+    var pushed: Int = registry.pushUsage(mel.id)
+    assert(pushed == 2, "duas requests na janela")
+    var received: Int = bodies.size
+    assert(received == 1, "receptor recebeu uma entrega")
+    var payload: String = bodies.get(0)
+    var signature: String = sigs.get(0)
+    assert(payload.indexOf("\"requests\":\"2\"") >= 0, "corpo com a janela: " + payload)
+    var expected: String = webhookSignatureHeader(secret, payload)
+    assert(signature == expected, "assinatura confere: " + signature)
+}

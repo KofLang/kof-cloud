@@ -234,6 +234,22 @@ Int limitRefreshMs(Int healthMs) {
     return healthMs * 6
 }
 
+// Intervalo do pusher de uso para billing (ms): o serve empurra a janela
+// acumulada de cada conta com webhook configurado para o receptor de
+// billing (F18 s4). Recuo seguro na mesma familia: 0/negativo virariam
+// busy-loop de snapshot+POST (uma entrega HTTP por iteracao sem parar) —
+// volta ao default 60000 (1 min).
+Int usagePushMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 60000
+    }
+    return configured
+}
+
+Int limitUsagePushMs() {
+    return usagePushMsFrom(config.int("kofcloud.limits.usagePushMs", 60000))
+}
+
 // Passo de.poll do refresher do Agent (ms): o refresher dorme o gap
 // (`limitRefreshMs`) em passos deste tamanho, checando session.open — um
 // sleep unico de 6xhealthMs (30 s default, mais com healthMs grande em

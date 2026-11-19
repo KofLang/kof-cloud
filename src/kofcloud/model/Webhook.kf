@@ -214,6 +214,20 @@ String webhookSignature(String secret, String payload) {
 }
 
 // Header de assinatura (padrao `sha256=<hex>`, como o do GitHub).
+// Payload do evento de uso (F18 s4, push para billing): a janela fechada
+// com o mesmo vocabulario de contadores do `GET /v1/usage` e o `periodEnd`
+// do export — um consumidor trata os dois caminhos com o mesmo parser e
+// deduplica por `periodEnd`. Nunca carrega credencial, hostname ou conta.
+String usageWindowPayload(String requests, String bytesIn, String bytesOut, Long atMs) {
+    var out = mapOf()
+    out.put("event", "usage.window")
+    out.put("requests", requests)
+    out.put("bytesIn", bytesIn)
+    out.put("bytesOut", bytesOut)
+    out.put("periodEnd", longToString(atMs))
+    return json.encode(out)
+}
+
 String webhookSignatureHeader(String secret, String payload) {
     return "sha256=" + webhookSignature(secret, payload)
 }

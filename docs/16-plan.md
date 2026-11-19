@@ -1577,11 +1577,26 @@ env, credencial nunca em log, teste com fake local + e2e opcional real):
   janela fechada e o export repetido segue zeros (não re-fatura; trava no
   reload do `usage-unit`). Resta a honestidade do ACÚMULO: um crash entre
   os `noteUsage` e o próximo `save()` de mutação perde o intervalo sem
-  mutação — nunca duplica. O **export push** (webhook de
-  uso/OTel para o backend do operador) segue pendente; o ciclo puxado já é
-  o contrato completo do billing. Prova: `tests/usage_test.kf` (6:
+  mutação — nunca duplica. Prova: `tests/usage_test.kf` (6:
   contadores+escopo+persistência, snapshot le-e-zera, e2e export com
   auditoria, help).
+
+  **Implementado (push do uso — o webhook de billing):** o `serve` roda um
+  sweeper (`usagePushSweeper`, passo `kofcloud.limits.usagePushMs`, default
+  1 min, recuo seguro `usagePushMsFrom` — 0/negativo viraria busy-loop de
+  snapshot+POST) que, para cada conta com webhook configurado e janela com
+  uso, faz snapshot (`Registry.pushUsage`) e entrega o evento
+  `usage.window` (`X-KofCloud-Event`) com a MESMA assinatura HMAC-SHA256
+  dos incidentes (`X-KofCloud-Signature`) — o operador NÃO gerencia uma
+  segunda URL/segredo, e o receptor roteia por tipo. Sem webhook ou sem uso
+  = no-op (o contador não zera por push vazio). O snapshot acontece ANTES
+  da entrega: falha de rede não perde a janela (já fechada; o consumidor
+  deduplica por `periodEnd`, como no export). Payload: requests/bytesIn/
+  bytesOut/periodEnd — o mesmo vocabulário do GET/export, sem credencial.
+  Prova: `tests/usage_push_test.kf` (4: payload, push só com webhook e uso,
+  recuo do passo com mutação, e2e — receptor real recebe `usage.window` e a
+  assinatura confere contra o segredo). O export OTel (traces) segue fora
+  (sem OTLP no stdlib, 13-kof-apis).
 * **Slice 5 — segredos e chaves.** Provedores de segredo (Vault, AWS SM,
   1Password Connect) como fonte do `tunnelSecret`/PEMs: a plataforma lê
   na partida, nunca persiste em disco; rotação por SIGHUP/reload.

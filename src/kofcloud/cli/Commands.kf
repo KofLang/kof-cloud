@@ -3269,6 +3269,7 @@ Int cmdServe(List<String> args) {
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, tunnelSecret, platformStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, maxBytes, platformStop) }
     var expiryTask = spawn { credentialExpirySweeper(registry, platformStop, limitExpirySweepMs()) }
+    var usageTask = spawn { usagePushSweeper(registry, platformStop, limitUsagePushMs()) }
     await controlTask
     return 0
 }
@@ -3279,6 +3280,24 @@ Int cmdServe(List<String> args) {
 // sinal ate la. O laco poda e alimenta a sonda de expiracao em massa sem
 // validacao, no passo de `limitExpirySweepMs()`. Mesma sentenca dos demais
 // lacos (para no stopFile da plataforma; o Kof nao tem relogio por task).
+// Pusher de uso para billing (F18 s4): a cada passo empurra a janela das
+// contas com webhook configurado (Registry.pushUsageAll — no-op sem webhook
+// ou sem uso). Mesmo padrao de sentinela/parada do sweeper de credenciais;
+// erro de entrega nunca derruba o laco (o proximo passo reempurra a janela
+// seguinte — a que falhou ja foi snapshotada e o consumidor deduplica por
+// periodEnd, como no export).
+void usagePushSweeper(Registry registry, String platformStop, Int intervalMs) {
+    var running = true
+    while (running) {
+        time.sleep(intervalMs)
+        if (File(platformStop).exists()) {
+            running = false
+        } else {
+            registry.pushUsageAll()
+        }
+    }
+}
+
 void credentialExpirySweeper(Registry registry, String platformStop, Int intervalMs) {
     var running = true
     while (running) {

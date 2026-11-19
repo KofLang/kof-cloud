@@ -635,6 +635,44 @@ class Registry {
         return entry
     }
 
+    // Push de uso para o webhook de billing (F18 s4): snapshot da conta e,
+    // se o dono configurou webhook E a janela tem uso, POST assinado do
+    // evento `usage.window` para o MESMO receptor dos incidentes (o
+    // operador nao gerencia uma segunda URL/segredo). Sem webhook ou sem
+    // uso = no-op (o contador nao zera por push vazio: uma janela sem
+    // trafego nao gera fatura nem some do acumulado). Devolve o numero de
+    // bytes/requests empurrados (0 = nada). NUNCA inclui valor de credencial.
+    // O snapshot so acontece quando ha webhook e uso — assim nao existe a
+    // janela "zerada por push que falhou": a ordem e checar, snapshotar,
+    // postar; falha de entrega ja zerou (o consumidor idempotente deduplica
+    // por periodEnd, como no export).
+    Int pushUsage(String accountId) {
+        var config = this.webhookForAccount(accountId)
+        if (config == null) {
+            return 0
+        }
+        var window = this.usageSnapshot(accountId)
+        if (window.requests == "0") {
+            return 0
+        }
+        var payload = usageWindowPayload(window.requests, window.bytesIn, window.bytesOut, time.now())
+        var header = webhookSignatureHeader(config.secret, payload)
+        postUsageWebhook(config.url, payload, header)
+        return parseIntBounded(window.requests, 0, 2147483647)
+    }
+
+    // Push para TODAS as contas com webhook e uso. Chamado pelo sweeper do
+    // serve. Devolve quantas contas tiveram janela empurrada (0 = nada).
+    Int pushUsageAll() {
+        var pushed = 0
+        for (var config in this.webhooks) {
+            if (this.pushUsage(config.accountId) > 0) {
+                pushed = pushed + 1
+            }
+        }
+        return pushed
+    }
+
     // Contagens do estado carregado (migracao --dry-run, Fase 16 s1).
     StateCounts stateCounts() {
         return StateCounts(
@@ -2400,9 +2438,20 @@ Long parseLongSafe(String text, Long fallback) {
 // o sweeper e handlers do control plane por 3x mais que o necessario — o
 // incidente ja esta salvo, entao desistir cedo nao perde sinal.
 Int postWebhook(String url, String payload, String signature) {
+    return postEventWebhook(url, "incident.opened", payload, signature)
+}
+
+// Entrega do evento de USO (F18 s4): mesmo transporte/assinatura dos
+// incidentes, `X-KofCloud-Event` distinto (`usage.window`) para o receptor
+// rotear por tipo. Prazo explicito igual (`limitWebhookTimeoutSec`).
+Int postUsageWebhook(String url, String payload, String signature) {
+    return postEventWebhook(url, "usage.window", payload, signature)
+}
+
+Int postEventWebhook(String url, String eventKind, String payload, String signature) {
     try {
         http.timeout(limitWebhookTimeoutSec())
-        var headers = "Content-Type: application/json\nX-KofCloud-Event: incident.opened\nX-KofCloud-Signature: " + signature
+        var headers = "Content-Type: application/json\nX-KofCloud-Event: " + eventKind + "\nX-KofCloud-Signature: " + signature
         var response = http.post(url, payload, headers)
         return 200
     } catch (String e) {
