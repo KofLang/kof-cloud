@@ -1593,9 +1593,18 @@ env, credencial nunca em log, teste com fake local + e2e opcional real):
   da entrega: falha de rede não perde a janela (já fechada; o consumidor
   deduplica por `periodEnd`, como no export). Payload: requests/bytesIn/
   bytesOut/periodEnd — o mesmo vocabulário do GET/export, sem credencial.
+  **Freeze × push (decisão de desenho, medida):** uma conta congelada NÃO
+  acumula uso novo (serviço SUSPENDED sai da rota antes do relay — a recusa
+  não é uso), mas a janela pendente de ANTES do freeze continua sendo
+  pushada: o webhook é o canal do próprio operador e o freeze entrega o
+  incidente pelo MESMO receptor — cortar o push calaria o operador do
+  próprio freeze. Conta e webhook vivem no mesmo Registry e não há remoção
+  de conta, logo não existe webhook órfão.
   Prova: `tests/usage_push_test.kf` (4: payload, push só com webhook e uso,
   recuo do passo com mutação, e2e — receptor real recebe `usage.window` e a
-  assinatura confere contra o segredo). O export OTel (traces) segue fora
+  assinatura confere contra o segredo; o caso do freeze trava o push pós-
+  freeze com serviço real suspenso — mutação pulando a conta congelada
+  quebra no assert exato). O export OTel (traces) segue fora
   (sem OTLP no stdlib, 13-kof-apis).
 * **Slice 5 — segredos e chaves.** Provedores de segredo (Vault, AWS SM,
   1Password Connect) como fonte do `tunnelSecret`/PEMs: a plataforma lê

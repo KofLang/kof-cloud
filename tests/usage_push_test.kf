@@ -47,6 +47,27 @@ test "uso-push: push so com webhook e uso; janela fecha apos sucesso", "usage-pu
     registry.noteUsage(ana.id, 5, 6)
     assert(registry.pushUsage(ana.id) == 1, "com webhook+uso: tenta push")
     assert(registry.usageFor(ana.id).requests == "0", "janela fechada apos push")
+    // Conta CONGELADA: o freeze suspende os servicos (nada novo roteia, logo
+    // nada novo acumula — a recusa acontece antes do relay), mas a janela
+    // pendente de ANTES do freeze continua sendo pushada: o webhook e o canal
+    // do proprio operador e o freeze entrega o incidente pelo MESMO receptor
+    // (cortar o push calaria o operador do proprio freeze). Conta e webhook
+    // vivem no mesmo Registry — sem remocao de conta, sem orfao.
+    var setErrMel = "ok"
+    try {
+        setErrMel = registry.setWebhook(mel.id, "http://127.0.0.1:1/nao-escuta", "segredo-de-16-chars")
+    } catch (String e) {
+        setErrMel = "THROW: " + e
+    }
+    assert(setErrMel == "ok", "webhook da mel setado: " + setErrMel)
+    // Servico real para o freeze ter o que suspender (a recusa de rota e o
+    // que impede uso NOVO; a janela pendente continua sendo pushada).
+    var melDevice = registry.registerDevice(mel, "nb", "pk")
+    registry.publishService(mel, melDevice.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    var froze = registry.freezeAccount(mel.id)
+    assert(froze.ok, "conta congelada")
+    assert(registry.pushUsageAll() > 0, "janela pendente pre-freeze e pushada apos o freeze")
+    assert(registry.usageFor(mel.id).requests == "0", "push pos-freeze fecha a janela")
 }
 
 test "uso-push: limits do passo com recuo seguro", "usage-push-unit" {
