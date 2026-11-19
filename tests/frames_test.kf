@@ -61,6 +61,25 @@ test "frames: encodeChunks fatia e recompoe", "frames" {
     assert(sendChunkBytesFrom(16384, 1048576) == 16384, "bloco de envio dentro do teto passa")
     assert(sendChunkBytesFrom(2097152, 1048576) == 1048576, "bloco de envio acima do teto e clampado")
     assert(sendChunkBytesFrom(2097152, 0) == 2097152, "cap zero nao clampa (so o default recai)")
+    // Trava de honestidade docs×codigo (padrao das travas de docs): os dois
+    // planos (`16-plan`, debito de limites; `18-implemented`, linha do
+    // frame) devem citar a fonte unica do bloco de envio pelo nome — sem
+    // ela, quem afina `kofcloud.limits.sendChunkBytes` nao descobre a pura
+    // nem o clamp ao teto do frame.
+    var planRaw = File("docs/16-plan.md").readText()
+    var shippedRaw = File("docs/18-implemented.md").readText()
+    var plan = ""
+    var shipped = ""
+    if (planRaw != null) {
+        plan = planRaw
+    }
+    if (shippedRaw != null) {
+        shipped = shippedRaw
+    }
+    if (plan.length > 0 && shipped.length > 0) {
+        assert(plan.indexOf("sendChunkBytesFrom") >= 0, "16-plan cita a pura do bloco de envio")
+        assert(shipped.indexOf("sendChunkBytesFrom") >= 0, "18-implemented cita a pura do bloco de envio")
+    }
 
     // 1.5 MiB = 2 chunks (1 MiB + 0.5 MiB). Maior que isso e o proprio
     // bytesToString (O(n^2), ver 17-limitations) domina o tempo do teste.
