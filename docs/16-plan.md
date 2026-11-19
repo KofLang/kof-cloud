@@ -1561,9 +1561,13 @@ env, credencial nunca em log, teste com fake local + e2e opcional real):
   sobreposição nem buraco; export repetido é zeros (idempotente — nunca
   re-fatura) e o Edge continua contando em cima do zero. O fechamento de
   janela deixa rastro (`usage.export` na trilha, vocabulário fechado).
-  CLI: `kof cloud usage --export`. Honestidade: um crash entre snapshot e o
-  próximo `save()` pode re-faturar a janela — o consumidor idempotente
-  deduplica por `periodEnd` (documentado). O **export push** (webhook de
+  CLI: `kof cloud usage --export`. O reset do export PERSISTE NA HORA
+  (padrão do `setWebhook`/`removeWebhook`): o export é mutação de contrato,
+  então o `usageSnapshot` grava o estado ao zerar — um restart recarrega a
+  janela fechada e o export repetido segue zeros (não re-fatura; trava no
+  reload do `usage-unit`). Resta a honestidade do ACÚMULO: um crash entre
+  os `noteUsage` e o próximo `save()` de mutação perde o intervalo sem
+  mutação — nunca duplica. O **export push** (webhook de
   uso/OTel para o backend do operador) segue pendente; o ciclo puxado já é
   o contrato completo do billing. Prova: `tests/usage_test.kf` (6:
   contadores+escopo+persistência, snapshot le-e-zera, e2e export com

@@ -155,6 +155,10 @@ test "usage: snapshot fecha a janela (le e zera) e o Edge continua contando", "u
     var mel = registry.createAccount("mel", "mel@e.com", "segredo")
     registry.noteUsage(mel.id, 100, 200)
     registry.noteUsage(mel.id, 50, 60)
+    // Ponto de persistencia: qualquer mutacao salva o estado (aqui
+    // explicito) — sem ele o reload nao teria a janela para comparar e o
+    // teste abaixo nao discriminaria nada.
+    registry.save()
     // Snapshot: devolve o acumulado da janela e zera o contador.
     var window1 = registry.usageSnapshot(mel.id)
     assert(window1.requests == "2", "janela 1: requests: " + window1.requests)
@@ -167,9 +171,22 @@ test "usage: snapshot fecha a janela (le e zera) e o Edge continua contando", "u
     registry.noteUsage(mel.id, 10, 20)
     var window3 = registry.usageSnapshot(mel.id)
     assert(window3.requests == "1" && window3.bytesIn == "10", "janela 2 comeca do zero")
-    // Sem entrada nunca e erro: snapshot de conta sem uso devolve zeros.
+    // Sem entrada nunca e erro: snapshot de conta sem uso devolve zeros (e
+    // NAO grava: carimbar disco em conta-parada seria I/O por export vazio;
+    // o reload abaixo continua vendo zeros porque nada mudou no disco).
     var empty = registry.usageSnapshot("sem-conta")
     assert(empty.requests == "0" && empty.bytesIn == "0", "zeros honestos")
+    // O reset do export PERSISTE NA HORA (padrao do setWebhook): reload do
+    // disco ve a janela fechada — antes o reset era so em memoria e um
+    // restart antes da proxima mutacao recarregava a janela (re-faturamento).
+    var afterExport = Registry(unitPath)
+    assert(afterExport.loadStatus == "ok", "reload status pos-export")
+    var closed = afterExport.usageFor(mel.id)
+    assert(closed.requests == "0" && closed.bytesIn == "0" && closed.bytesOut == "0", "reset do export persiste no disco")
+    // Conta sem uso no reload: zeros (o snapshot de zeros nao gravou nada —
+    // sem mutacao, sem disco).
+    var emptyReload = afterExport.usageFor("sem-conta")
+    assert(emptyReload.requests == "0", "sem-conta segue zeros no reload")
 }
 
 test "usage: export fecha a janela pelo fio com rastro de auditoria", "usage-e2e" {

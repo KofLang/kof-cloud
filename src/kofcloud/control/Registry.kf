@@ -619,15 +619,18 @@ class Registry {
     // contador — o "read-and-reset" que o consumidor de billing espera
     // (cada export cobre exatamente uma janela, sem sobreposicao nem buraco;
     // o acumulado desde o load segue disponivel porque o Edge continua
-    // contando em cima do zero). Sem mutacao de outras listas: so o mapa de
-    // uso e tocado, e o reset segue persistindo no proximo save de mutacao
-    // (mesma honestidade do noteUsage: I/O por request seria irracional —
-    // um crash entre snapshot e save pode re-faturar a janela, que o
-    // consumidor idempotente deduplica; documentado em 17-limitations).
+    // contando em cima do zero). O RESET PERSISTE NA HORA (padrao do
+    // setWebhook/removeWebhook): o export e uma mutacao de contrato — sem
+    // save aqui, um crash antes da proxima mutacao recarregava a janela
+    // fechada do disco e o export repetido RE-FATURAVA. So grava quando
+    // ha janela para fechar (zeros = sem mutacao, sem disco). O crash que
+    // resta e o do ACUMULO (noteUsage ate o proximo save de mutacao) —
+    // esse segue documentado em 17-limitations.
     UsageEntry usageSnapshot(String accountId) {
         var entry = this.usageFor(accountId)
         if (entry.requests != "0" || entry.bytesIn != "0" || entry.bytesOut != "0") {
             this.usageByAccount.remove(accountId)
+            this.save()
         }
         return entry
     }
