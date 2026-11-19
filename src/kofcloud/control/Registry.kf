@@ -42,7 +42,7 @@ record UnfreezeResult(Bool ok, Bool restored)
 // Resultado da rotacao assistida (Fase 19 slice 3).
 record RotateResult(String token, Int revoked, Int pending)
 
-record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens, List<CustomDomain> customDomains, List<AuditEvent> audit, List<Incident> incidents, List<WebhookConfig> webhooks, List<FreezeMark>? freezeMarks)
+record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens, List<CustomDomain> customDomains, List<AuditEvent> audit, List<Incident> incidents, List<WebhookConfig> webhooks, List<FreezeMark>? freezeMarks, List<UsageEntry>? usage)
 
 // Marca de freeze persistida: `<alvo>/<id>` -> status anterior. NULAVEL de
 // proposito: estado gravado antes da Fase 17 s2 nao tem a chave e o decode
@@ -51,6 +51,13 @@ record ControlState(List<Account> accounts, List<Device> devices, List<Service> 
 // for-in: desuga para bytecode de array e o verificador JVM recusa
 // (VerifyError medido); o load() copia por indice.
 record FreezeMark(String target, String status)
+
+// Uso por conta (F18 s4 — billing externo): requests + bytes de entrada e
+// de saida acumulados pelo Edge no caminho ROTEADO (recusas de plataforma
+// nao sao uso do servico). Persistido no ControlState (billing precisa
+// sobreviver ao restart); nulavel no fio — estado antigo nao tem a chave
+// (JSN004, mesmo padrao do freezeMarks). Contadores em String (L11).
+record UsageEntry(String accountId, String requests, String bytesIn, String bytesOut)
 
 class Registry {
     List<Account> accounts
@@ -97,6 +104,8 @@ class Registry {
     // `edgeOnline`). Valor `"<count>;<windowStartMs>"` porque
     // `Map<String, Int>` como campo de classe quebra o verificador JVM (L11).
     Map<String, String> expiryProbes
+    // Uso por conta: accountId -> "requests;bytesIn;bytesOut" (L11: String).
+    Map<String, String> usageByAccount
 
     constructor(path: String) {
         this.path = path
@@ -112,6 +121,7 @@ class Registry {
         this.freezeMarks = mapOf()
         this.edgeOnline = mapOf()
         this.expiryProbes = mapOf()
+        this.usageByAccount = mapOf()
         this.loginProbes = mapOf()
         this.maxDevices = limitDevices()
         this.maxServices = limitServices()
@@ -187,6 +197,15 @@ class Registry {
             // o map fica vazio e o unfreeze responde 409 KCF141 como antes.
             // Estado novo reconstrói o map. Copia por indice (nao for-in):
             // ver comentario do record FreezeMark.
+            var usage = state.usage
+            if (usage != null) {
+                var u = 0
+                while (u < usage.size) {
+                    var entry = usage.get(u)
+                    this.usageByAccount.put(entry.accountId, entry.requests + ";" + entry.bytesIn + ";" + entry.bytesOut)
+                    u = u + 1
+                }
+            }
             var marks = state.freezeMarks
             if (marks != null) {
                 var i = 0
@@ -550,6 +569,52 @@ class Registry {
         return target
     }
 
+    // Uso do servico (F18 s4): o Edge chama UMA vez por requisicao ROTEADA
+    // (recusas de plataforma — 404/429/401 — nao sao uso do servico local e
+    // nao contam; o billing externo precifica o que o dono serviu). Puro
+    // parse+incremento sobre String (L11); persiste junto com o save() das
+    // proximas mutacoes — o uso nao forca disco sozinho (numa rajada,
+    // gravar por request seria I/O por request; o padrao do estado e
+    // gravar em mutacao e o restart perde no maximo o intervalo sem
+    // mutacao, documentado).
+    void noteUsage(String accountId, Int requestBytes, Int responseBytes) {
+        if (accountId.length == 0) {
+            return
+        }
+        var raw = this.usageByAccount.get(accountId)
+        var requests = 0
+        var bytesIn = 0
+        var bytesOut = 0
+        if (raw != null) {
+            var sep1 = raw.indexOf(";")
+            var sep2 = raw.indexOf(";", sep1 + 1)
+            if (sep1 > 0 && sep2 > sep1) {
+                requests = parseIntSafe(raw.substring(0, sep1), 0)
+                bytesIn = parseIntSafe(raw.substring(sep1 + 1, sep2), 0)
+                bytesOut = parseIntSafe(raw.substring(sep2 + 1), 0)
+            }
+        }
+        var updated = intToString(requests + 1) + ";" + intToString(bytesIn + requestBytes) + ";" + intToString(bytesOut + responseBytes)
+        this.usageByAccount.put(accountId, updated)
+    }
+
+    // Entradas de uso DE UMA conta (escopo do dono — o fio nunca carrega
+    // conta alheia). Lista com no maximo uma entrada hoje; list<record>
+    // porque amanha pode ter janela/periodo. Sem entrada = zeros (a CLI
+    // imprime "sem uso registrado", nunca inventa).
+    UsageEntry usageFor(String accountId) {
+        var raw = this.usageByAccount.get(accountId)
+        if (raw == null) {
+            return UsageEntry(accountId, "0", "0", "0")
+        }
+        var sep1 = raw.indexOf(";")
+        var sep2 = raw.indexOf(";", sep1 + 1)
+        if (sep1 <= 0 || sep2 <= sep1) {
+            return UsageEntry(accountId, "0", "0", "0")
+        }
+        return UsageEntry(accountId, raw.substring(0, sep1), raw.substring(sep1 + 1, sep2), raw.substring(sep2 + 1))
+    }
+
     // Contagens do estado carregado (migracao --dry-run, Fase 16 s1).
     StateCounts stateCounts() {
         return StateCounts(
@@ -567,7 +632,18 @@ class Registry {
                 marks.add(FreezeMark(target, status))
             }
         }
-        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens, this.serviceTokens, this.customDomains, this.audit, this.incidents, this.webhooks, marks)))
+        var usage = listOf<UsageEntry>()
+        for (var accountId in this.usageByAccount.keys()) {
+            var raw = this.usageByAccount.get(accountId)
+            if (raw != null) {
+                var sep1 = raw.indexOf(";")
+                var sep2 = raw.indexOf(";", sep1 + 1)
+                if (sep1 > 0 && sep2 > sep1) {
+                    usage.add(UsageEntry(accountId, raw.substring(0, sep1), raw.substring(sep1 + 1, sep2), raw.substring(sep2 + 1)))
+                }
+            }
+        }
+        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens, this.serviceTokens, this.customDomains, this.audit, this.incidents, this.webhooks, marks, usage)))
     }
 
     // ---- contas ----

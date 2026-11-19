@@ -1531,6 +1531,20 @@ env, credencial nunca em log, teste com fake local + e2e opcional real):
   (traces do relay + logs estruturados) para o backend que o operador
   já tem (Grafana/Datadog); webhook de uso (requests/bytes por conta)
   para billing externo; Stripe como referência (nunca único).
+
+  **Implementado (uso por conta — a matéria-prima do billing):** o Edge
+  acumula `requests`/`bytesIn`/`bytesOut` por `accountId` no Registry
+  (`noteUsage`, contadores em String por L11) **só no caminho roteado** —
+  a conta vem do serviço (o Edge a conhece pelo roteamento, nunca do
+  cliente) e recusas de plataforma (404/503/429) não são uso a precificar.
+  Persistido no ControlState (`List<UsageEntry>` nulável — estado antigo
+  carrega, mesmo padrão do freezeMarks; o `noteUsage` NÃO grava disco por
+  request — o uso vai junto no próximo `save()` de mutação). Leitura:
+  `GET /v1/usage` escopado pelo token (a conta alheia não existe para o
+  fio; 401 sem token) e `kof cloud usage`. A camada de **export** (webhook
+  de uso/OTel) fica para o próximo passo — o contador já é o contrato.
+  Prova: `tests/usage_test.kf` (3: contadores+escopo+persistência, e2e com
+  relay real, help).
 * **Slice 5 — segredos e chaves.** Provedores de segredo (Vault, AWS SM,
   1Password Connect) como fonte do `tunnelSecret`/PEMs: a plataforma lê
   na partida, nunca persiste em disco; rotação por SIGHUP/reload.

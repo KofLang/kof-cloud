@@ -404,6 +404,11 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     }
     conn.send(responseBytes)
     conn.close()
+    // Uso por conta (F18 s4 — billing): so o caminho ROTEADO conta. Recusas
+    // de plataforma (404/429/401 acima) nao passam daqui: o billing externo
+    // precifica o que o dono serviu, nao o que a borda recusou. A conta vem
+    // do servico (o Edge a conhece pelo roteamento) — nunca do cliente.
+    state.registry.noteUsage(service.accountId, raw.length, responseBytes.length)
     noteHttpFinished("ok", "", raw.length, responseBytes.length, time.now() - started)
 }
 

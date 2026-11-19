@@ -85,6 +85,9 @@ Int runCli(List<String> args) {
     if (first == "logs") {
         return cmdLogs(rest)
     }
+    if (first == "usage") {
+        return cmdUsage(rest)
+    }
     if (first == "audit") {
         return cmdAudit(rest)
     }

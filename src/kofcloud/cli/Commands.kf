@@ -2012,6 +2012,33 @@ Int cmdTokenRotation(List<String> args) {
 
 // Higiene de credenciais (Fase 19 s2): servicos da conta com kfs_ validos
 // SEM expiracao. Leitura; o passo recomendado e `service rotate --ttl`.
+// Uso da conta (F18 s4 — billing externo): o que o Edge roteou para os
+// servicos deste dono, em requests e bytes. Leitura; o formato externo
+// (consumo por um billing) e a mesma resposta de GET /v1/usage.
+Int cmdUsage(List<String> args) {
+    if (extraPositional(args, 0)) {
+        println("uso: kof cloud usage")
+        return 1
+    }
+    var session = loadSession()
+    if (session == null) {
+        println(notLoggedInLine())
+        return 1
+    }
+    try {
+        var raw = requireOk(http.get(session.controlUrl + "/v1/usage", authHeader(session.token)))
+        var result = json.decode<Map<String, String>>(raw)
+        println("Uso da conta (roteado pelo Edge):")
+        println("  requests: " + mapField(result, "requests"))
+        println("  entrada:  " + mapField(result, "bytesIn") + " bytes")
+        println("  saida:    " + mapField(result, "bytesOut") + " bytes")
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
 Int cmdServiceTokens(List<String> args) {
     var session = loadSession()
     if (session == null) {

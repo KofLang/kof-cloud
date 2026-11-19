@@ -185,6 +185,21 @@ Sem túnel a lista vem vazia (ausência, não erro). `kof cloud status` mostra
 `Tunel: ONLINE/OFFLINE` confirmado pelo Edge e o `doctor` checa a camada do
 túnel antes dos serviços (roda também sem `kofcloud.json`).
 
+Uso da conta (o Edge acumula `requests`/`bytes` dos pedidos **roteados** —
+a conta vem do serviço, nunca do cliente; recusas de plataforma não são uso;
+persistido no estado):
+
+```
+GET `/v1/usage`
+X-KofCloud-Token: kfc_...
+
+200 {"requests":"N","bytesIn":"N","bytesOut":"N"}
+```
+
+Escopo do token: a conta alheia não existe para o fio (os zeros dela nunca
+aparecem). `kof cloud usage` imprime o mesmo fio — é a matéria-prima do
+billing externo (F18 s4).
+
 ## Erros
 
 Todo erro viaja como `{"error":"KCFnnn: texto"}` — códigos estáveis (R6, como

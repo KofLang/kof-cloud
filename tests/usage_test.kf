@@ -1,0 +1,150 @@
+import kofcloud.agent.Agent
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Tunnel
+import kofcloud.cli.Commands
+import kofcloud.cli.Usage
+import kofcloud.store.Store
+import kofcloud.util.Limits
+import kofcloud.util.Text
+import testkit.Support
+
+// Uso por conta (F18 s4 — billing externo): o Edge acumula requests/bytes
+// dos pedidos ROTEADOS no Registry (a conta vem do servico, nunca do
+// cliente); GET /v1/usage e `kof cloud usage` leem o total da propria
+// conta. Recusas de plataforma nao sao uso. Persistido no estado.
+
+String usagePath(String name) {
+    return "/tmp/kofcloud-usage-" + name + "-" + crypto.randomHex(4) + ".json"
+}
+
+test "usage: contadores por conta e escopo do dono", "usage-unit" {
+    // Caminho fixo na variavel: usagePath e impura (randomHex por chamada) —
+    // chamar de novo para o reload abriria OUTRO arquivo (medido: reload
+    // via status=absent).
+    var unitPath = usagePath("unit")
+    var registry = Registry(unitPath)
+    var mel = registry.createAccount("mel", "mel@e.com", "segredo")
+    var ana = registry.createAccount("ana", "ana@e.com", "segredo")
+    // Sem entrada: zeros honestos (a CLI imprime "sem uso", nunca inventa).
+    var zero = registry.usageFor(mel.id)
+    assert(zero.requests == "0" && zero.bytesIn == "0" && zero.bytesOut == "0", "sem entrada = zeros")
+    // Acumula: 3 pedidos, bytes somados.
+    registry.noteUsage(mel.id, 100, 200)
+    registry.noteUsage(mel.id, 30, 40)
+    registry.noteUsage(mel.id, 1, 2)
+    var melUsage = registry.usageFor(mel.id)
+    assert(melUsage.requests == "3", "requests somam: " + melUsage.requests)
+    assert(melUsage.bytesIn == "131", "bytesIn somam: " + melUsage.bytesIn)
+    assert(melUsage.bytesOut == "242", "bytesOut somam: " + melUsage.bytesOut)
+    // Escopo: ana ve zeros (conta alheia nao existe para o fio).
+    var anaUsage = registry.usageFor(ana.id)
+    assert(anaUsage.requests == "0", "escopo por conta")
+    // Conta vazia no id: no-op (defesa do chamador).
+    registry.noteUsage("", 999, 999)
+    var emptyUse = registry.usageFor("")
+    assert(emptyUse.requests == "0", "id vazio nao acumula: " + emptyUse.requests)
+    // Persistencia: o noteUsage nao grava disco por request (seria I/O por
+    // request); o uso vai junto no proximo save() de mutacao — aqui a
+    // gravacao e explicita e o estado recarregado ve os mesmos numeros.
+    registry.save()
+    var reloaded = Registry(unitPath)
+    var again = reloaded.usageFor(mel.id)
+    assert(reloaded.loadStatus == "ok", "reload status")
+    assert(again.requests == "3", "uso persiste requests")
+    assert(again.bytesIn == "131", "uso persiste bytesIn")
+}
+
+test "usage: e2e — relay real acumula no dono; recusa nao conta; outra conta nao ve", "usage-e2e" {
+    var localSvc = 20294
+    var controlPort = 20295
+    var tunnelPort = 20296
+    var httpPort = 20297
+
+    var app = web.app()
+    app.get("/") { return "svc-usage" }
+    var server = spawn { app.listen(localSvc) }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry(usagePath("e2e"))
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-usage-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-usage-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var token = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "publicado")
+
+    // Outra conta no mesmo control plane (escopo do fio).
+    var created2 = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
+    var anaToken = mapField(json.decode<Map<String, String>>(bodyOf(created2)), "token")
+
+    // Antes do connect: recusa 404 (KCF100) — nao pode contar como uso.
+    // Servico publicado mas sem tunel: o Edge responde 503 KCF102 (device
+    // offline) — e recusa de plataforma, sem uso a precificar.
+    assert(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 503, "sem tunel: 503 device offline")
+    var before = httpGetToken(controlPort, "/v1/usage", token)
+    assert(mapField(json.decode<Map<String, String>>(bodyOf(before)), "requests") == "0", "recusa nao e uso")
+
+    // Agent conecta e o relay roteia: 3 pedidos ok acumulam no dono.
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, token, "", agentStop, "127.0.0.1", tunnelPort, 500)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent no ar")
+    var i = 0
+    while (i < 3) {
+        assert(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 200, "relay ok " + intToString(i))
+        i = i + 1
+    }
+    var after = httpGetToken(controlPort, "/v1/usage", token)
+    var usage = json.decode<Map<String, String>>(bodyOf(after))
+    assert(mapField(usage, "requests") == "3", "3 pedidos roteados contam: " + bodyOf(after))
+    assert(parseIntBounded(mapField(usage, "bytesOut"), 0, 2147483647) > 0, "bytesOut positivo")
+
+    // Escopo: ana nunca ve o uso de mel; sem token e 401.
+    var anaView = httpGetToken(controlPort, "/v1/usage", anaToken)
+    assert(mapField(json.decode<Map<String, String>>(bodyOf(anaView)), "requests") == "0", "conta alheia ve zeros")
+    assert(statusOf(httpGetToken(controlPort, "/v1/usage", "")) == 401, "401 sem token")
+
+    // CLI: `usage` formata o mesmo fio (aqui pelo caminho puro do comando
+    // com sessao real gravada? Nao — o cmdUsage le a sessao do HOME; o fio
+    // ja foi provado acima e o formato e trivial. A trava do help cobre o
+    // anuncio.)
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1200)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(800)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}
+
+test "usage: help anuncia o comando", "usage-help" {
+    var help = usageText()
+    assert(help.indexOf("usage   (uso da conta") >= 0, "help anuncia usage")
+    assert(help.indexOf("billing externo") >= 0, "help diz para que serve")
+}

@@ -282,6 +282,23 @@ HttpResult handleListDevices(Registry registry, String? authHeader) {
 // processo. Autenticado e filtrado por conta (igual a /v1/devices): nada de
 // terceiros vaza, nem existencia. Quando control e Edge rodam separados, o
 // control responde lista vazia (sem dado errado — ausencia, nao mentira).
+// Uso da conta (F18 s4 — billing externo): requests + bytes roteados pelo
+// Edge para os servicos DESTE dono. Escopo do token (conta alheia nunca
+// aparece — a conta nao existe para o fio). Formato plano de strings:
+// o CLI decodifica com o mesmo record do resto do fio.
+HttpResult handleUsage(Registry registry, String? authHeader) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var usage = registry.usageFor(account.id)
+    var out = mapOf()
+    out.put("requests", usage.requests)
+    out.put("bytesIn", usage.bytesIn)
+    out.put("bytesOut", usage.bytesOut)
+    return HttpResult(200, json.encode(out))
+}
+
 HttpResult handlePresence(Registry registry, String? authHeader) {
     var account = registry.accountByToken(bearerToken(authHeader))
     if (account == null) {
@@ -1404,6 +1421,13 @@ class ControlPlane {
         }
         app.get("/v1/presence") {
             var result = handlePresence(reg, header("x-kofcloud-token"))
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.get("/v1/usage") {
+            var result = handleUsage(reg, header("x-kofcloud-token"))
             if (result.code == 200) {
                 return result.body
             }
