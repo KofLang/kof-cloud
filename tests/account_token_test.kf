@@ -310,6 +310,19 @@ test "credencial de conta: prune preserva a da sessao e revoga as antigas", "ato
 
     // Nada a podar: zero, sem efeito.
     assert(registry.pruneAccountTokensExcept(mel.id, t3) == 0, "idempotente")
+
+    // Cruzamento prune (kfc_) x credencial de servico (kfs_): a poda so
+    // toca o inventario da conta (this.tokens) — as kfs_ validas de servicos
+    // AUTHENTICATED sobrevivem, senao um `token prune` de rotina fecharia o
+    // acesso publico a TODOS os servicos da conta.
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var svc = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
+    var kfs = registry.issueServiceToken(mel.id, svc.id)
+    assert(registry.serviceByServiceToken(kfs) != null, "kfs_ autentica antes do prune")
+    assert(registry.pruneAccountTokensExcept(mel.id, t3) == 0, "prune nao podou nada novo")
+    assert(registry.serviceByServiceToken(kfs) != null, "kfs_ sobrevive ao prune da conta")
+    assert(registry.tokensWithoutExpiry(mel.id).size == 1, "higiene de kfs_ intacta")
+    assert(registry.accountByToken(t3) != null, "a sessao da conta segue valendo")
 }
 
 test "credencial de conta: HTTP prune revoga as antigas e mantem a sessao", "atok" {

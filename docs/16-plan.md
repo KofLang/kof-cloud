@@ -1737,7 +1737,11 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   anterior — com o TTL opcional, o inventário cresce a cada entrada e uma
   credencial vazada de um login antigo vale para sempre. `POST
   /v1/tokens/prune` + `kof cloud token prune` mantêm apenas a da sessão atual
-  e revogam o resto (escopo por conta; sem token → 401; idempotente). Prova:
+  e revogam o resto (escopo por conta; sem token → 401; idempotente).
+  **Prune × `kfs_` (travado):** a poda só toca o inventário da conta — as
+  `kfs_` válidas de serviços AUTHENTICATED sobrevivem (mutação limpando as
+  `kfs_` no prune quebra no assert exato; um prune de rotina que fechasse o
+  acesso público a todos os serviços passaria em silêncio). Prova:
   `tests/account_token_test.kf` (11). PEM com 30 dias de antecedência ✅
   (`doctor --tls-cert`, Fase 9 s3, e `scan --tls-cert` no slice 2);
   kill-switch ✅ documentado (`docs/SECURITY.md` ## Contenção) e
