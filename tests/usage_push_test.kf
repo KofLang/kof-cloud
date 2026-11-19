@@ -68,6 +68,17 @@ test "uso-push: push so com webhook e uso; janela fecha apos sucesso", "usage-pu
     assert(froze.ok, "conta congelada")
     assert(registry.pushUsageAll() > 0, "janela pendente pre-freeze e pushada apos o freeze")
     assert(registry.usageFor(mel.id).requests == "0", "push pos-freeze fecha a janela")
+    // Cruzamento export manual x pusher (a mesma fonte, usageSnapshot):
+    // o export le-e-zera a janela; o push seguinte so leva o DELTA — nunca
+    // re-fatura o que o export ja fechou, e o push nao apaga nada que o
+    // export deixou (a janela vem do mesmo mapa).
+    var exported = registry.usageSnapshot(mel.id)
+    assert(exported.requests == "0", "janela ja fechada pelo push: export e zeros")
+    registry.noteUsage(mel.id, 10, 20)
+    registry.noteUsage(mel.id, 30, 40)
+    var delta = registry.usageSnapshot(mel.id)
+    assert(delta.requests == "2", "export leva so o delta da janela nova")
+    assert(registry.usageFor(mel.id).requests == "0", "e zera (o push seguinte parte do zero)")
 }
 
 test "uso-push: limits do passo com recuo seguro", "usage-push-unit" {

@@ -1616,7 +1616,11 @@ env, credencial nunca em log, teste com fake local + e2e opcional real):
   pushada: o webhook é o canal do próprio operador e o freeze entrega o
   incidente pelo MESMO receptor — cortar o push calaria o operador do
   próprio freeze. Conta e webhook vivem no mesmo Registry e não há remoção
-  de conta, logo não existe webhook órfão.
+  de conta, logo não existe webhook órfão. **Export × push (mesma fonte,
+  travado):** os dois fecham a janela pelo mesmo `usageSnapshot`
+  (read-and-reset persistido) — o push seguinte a um export manual só leva
+  o delta da janela nova, nunca re-fatura o que o export já fechou
+  (mutação com o push lendo sem zerar quebra no assert exato).
   Prova: `tests/usage_push_test.kf` (4: payload, push só com webhook e uso,
   recuo do passo com mutação, e2e — receptor real recebe `usage.window` e a
   assinatura confere contra o segredo; o caso do freeze trava o push pós-
