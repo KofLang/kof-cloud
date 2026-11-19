@@ -1006,6 +1006,35 @@ test "deploy: check avisa kfs_ perto do fim (mesmo predicado do token-list)", "d
     assert(kfsExpiryWarningsFor(controlUrl, token, wantedPublic, deviceId, fioNow).size == 0, "PUBLIC nao tem kfs_: silencio")
 }
 
+// Fonte unica das travas de exemplo (deploy-ci/deploy-action): extrai o
+// primeiro token apos cada "kof cloud " e confere que o help tem a linha
+// "  <token> ". Comparacao por codigo de char (precedente do
+// parseEdgeHosts): char e Int. Terminadores: espaco/quebra/aspas/backtick
+// (citacao em prosa). Devolve quantas citacoes conferiu.
+Int assertCitedCommands(String text, String help, String label) {
+    var cursor = text.indexOf("kof cloud ")
+    var cited = 0
+    while (cursor >= 0) {
+        var start = cursor + 10
+        var end = start
+        var scanning = true
+        while (scanning && end < text.length) {
+            var c = text.charAt(end) as Int
+            if (c == 32 || c == 10 || c == 34 || c == 96) {
+                scanning = false
+            } else {
+                end = end + 1
+            }
+        }
+        var cmd = text.substring(start, end)
+        assert(cmd.length > 0, label + ": token extraido apos kof cloud")
+        assert(help.indexOf("  " + cmd + " ") >= 0 || help.indexOf("  " + cmd + "\n") >= 0, label + ": comando citado existe no help: " + cmd)
+        cited = cited + 1
+        cursor = text.indexOf("kof cloud ", end)
+    }
+    return cited
+}
+
 test "deploy: exemplo de pipeline CI cita so comandos reais", "deploy-ci" {
     // F18 slice 3 — "pipeline de exemplo no repo". O exemplo e documentacao
     // que EXECUTA: qualquer `kof cloud <cmd>` citado tem de existir no help
@@ -1020,31 +1049,9 @@ test "deploy: exemplo de pipeline CI cita so comandos reais", "deploy-ci" {
     assert(example.indexOf("self-hosted") >= 0, "runner self-hosted no topo (pre-requisito honesto)")
     assert(example.indexOf("connect") >= 0, "diz que a maquina roda o connect")
 
-    // Toda invocacao citada existe no help: extrai o primeiro token depois
-    // de "kof cloud " e confere que o help tem a linha "  <token> ".
-    // Comparacao por codigo (precedente do parseEdgeHosts): char e Int.
-    // Terminadores: espaco/quebra/aspas/backtick (citacao em prosa).
+    // Toda invocacao citada existe no help (fonte unica acima).
     var help = usageText()
-    var cursor = example.indexOf("kof cloud ")
-    var cited = 0
-    while (cursor >= 0) {
-        var start = cursor + 10
-        var end = start
-        var scanning = true
-        while (scanning && end < example.length) {
-            var c = example.charAt(end) as Int
-            if (c == 32 || c == 10 || c == 34 || c == 96) {
-                scanning = false
-            } else {
-                end = end + 1
-            }
-        }
-        var cmd = example.substring(start, end)
-        assert(cmd.length > 0, "token extraido apos kof cloud")
-        assert(help.indexOf("  " + cmd + " ") >= 0 || help.indexOf("  " + cmd + "\n") >= 0, "comando citado existe no help: " + cmd)
-        cited = cited + 1
-        cursor = example.indexOf("kof cloud ", end)
-    }
+    var cited = assertCitedCommands(example, help, "pipeline")
     assert(cited >= 3, "exemplo cita comandos de verdade: " + intToString(cited))
 
     // O fluxo citado e o do slice: login com device fixo, diff sem aplicar,
@@ -1059,4 +1066,33 @@ test "deploy: exemplo de pipeline CI cita so comandos reais", "deploy-ci" {
     assert(example.indexOf("secrets.KOF_PASSWORD") >= 0, "senha vem de segredo do Actions")
     assert(example.indexOf("KOF_PASSWORD\")") >= 0 || example.indexOf("KOF_PASSWORD\"") >= 0, "senha via env do passo")
     assert(example.indexOf("password: \"") < 0 && example.indexOf("password:adef") < 0, "sem senha literal no exemplo")
+}
+
+test "deploy: exemplo de action reutilizavel cita so comandos reais", "deploy-action" {
+    // Fecha o "Action oficial reutilizavel pendente" do slice 3: o exemplo
+    // da action composite segue a MESMA regra da documentacao que executa —
+    // todo `kof cloud <cmd>` citado existe no help, o pre-requisito
+    // self-hosted esta no topo e a senha nunca aparece literal (input do
+    // composite alimentado de secrets.*, chegando por env do passo).
+    var action = readTextOr("docs/examples/action.yml", "")
+    assert(action.length > 0, "exemplo da action existe e e legivel")
+    assert(action.indexOf("self-hosted") >= 0, "runner self-hosted no topo (pre-requisito honesto)")
+    assert(action.indexOf("connect") >= 0, "diz que a maquina roda o connect")
+    assert(action.indexOf("using: 'composite'") >= 0, "action composite (sem imagem proprietaria)")
+
+    var help = usageText()
+    var cited = assertCitedCommands(action, help, "action")
+    assert(cited >= 3, "action cita comandos de verdade: " + intToString(cited))
+
+    assert(action.indexOf("kof cloud login") >= 0, "login na action")
+    assert(action.indexOf("kof cloud deploy --plan") >= 0, "plano revisavel")
+    assert(action.indexOf("kof cloud deploy --check") >= 0, "deploy verificado")
+    assert(action.indexOf("default: 'ci'") >= 0, "device fixo ci por default")
+
+    // Credencial nunca literal: input obrigatorio com dica de segredo e
+    // consumo por env do passo, nunca inline no run.
+    assert(action.indexOf("inputs.password") >= 0, "senha vem de input do composite")
+    assert(action.indexOf("KOF_PASSWORD: ${{ inputs.password }}") >= 0, "senha via env do passo")
+    assert(action.indexOf("secrets.") >= 0, "dica de alimentar o input de secrets.*")
+    assert(action.indexOf("password: \"") < 0 && action.indexOf("password:adef") < 0, "sem senha literal na action")
 }

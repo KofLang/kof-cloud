@@ -1525,8 +1525,20 @@ env, credencial nunca em log, teste com fake local + e2e opcional real):
   `connect` (num runner de nuvem o `--check` não teria o que sondar).
   Trava de realidade (`deploy-ci`): o teste lê o exemplo do disco e exige
   que todo `kof cloud <cmd>` citado exista no help, as 3 fases do fluxo
-  estejam lá e nenhuma senha apareça literal. Action oficial reutilizável
-  pendente (o exemplo cobre o fluxo; a action empacota depois).
+  estejam lá e nenhuma senha apareça literal.
+  **Implementado (action de exemplo):** `docs/examples/action.yml` — a
+  action composite que o desenho chama de `kofcloud/deploy@v1`, pronta para
+  copiar para um repositório próprio e referenciar com `uses:`: inputs
+  (`handle`/`password`/`control-url`/`device` com default `ci`), três passos
+  (login por env do passo, `--plan`, `--check`) e o MESMO pré-requisito
+  honesto no topo (vale para o workflow que a usa: self-hosted na máquina
+  do `connect`). A senha entra como input alimentado de `secrets.*`
+  (mascarado pelo Actions) e chega ao comando por env, nunca literal.
+  Trava de realidade (`deploy-action`): o teste lê a action do disco e exige
+  `using: 'composite'`, que todo `kof cloud <cmd>` citado exista no help, as
+  3 fases, o default `ci` e nenhuma senha literal — o laço de extração é
+  fonte única do `deploy-ci` (`assertCitedCommands`). Exemplo cobre o fluxo;
+  a publicação num repositório oficial segue externa (infra, não código).
 * **Slice 4 — observabilidade e billing.** Export OpenTelemetry
   (traces do relay + logs estruturados) para o backend que o operador
   já tem (Grafana/Datadog); webhook de uso (requests/bytes por conta)

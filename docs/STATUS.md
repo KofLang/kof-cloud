@@ -63,7 +63,7 @@ o run total imprime `61 passed, 0 failed`. Falha = nome do teste + assert
 | frames | `tests/frames_test.kf` | 4 |
 | idle + shutdown limpo do Edge | `tests/idle_test.kf` | 5 |
 | conexoes | `tests/conns_test.kf` | 2 |
-| deploy + scan | `tests/deploy_test.kf` | 15 |
+| deploy + scan | `tests/deploy_test.kf` | 16 |
 | daemon | `tests/daemon_test.kf` | 14 |
 | doctor | `tests/doctor_test.kf` | 16 |
 | hot-reload | `tests/reload_test.kf` | 1 |
@@ -108,22 +108,4 @@ o run total imprime `61 passed, 0 failed`. Falha = nome do teste + assert
 | deploy --watch (F13 s3 parcial) | `tests/deploy_watch_test.kf` | 4 |
 | uso por conta (F18 s4 parcial) | `tests/usage_test.kf` | 3 |
 
-Total: 436 testes. Ver `15-tests.md` para a matriz.
-
-## Limites honestos (medidos, nao prometidos)
-
-- Rate limit e por processo; sem consenso entre nos.
-- Contador por servico e aproximado sob corrida (sem lock no Kof).
-- `bytesToString` e O(n2): payloads grandes sao lentos (fatiado em 16 KiB).
-- `Map<String, Int>` como campo quebra o verificador JVM (usar String).
-- `await` com valor de retorno quebra o verificador JVM.
-- Map passado como argumento de `spawn` e copiado por valor: estado
-  compartilhado entre tasks vive em objeto (classe), nao em Map solto.
-- `web.app()` fecha conexao para corpo de ~1.5 MiB (testes usam TCP cru).
-- Processo fantasma de run travado prende portas (kill -9).
-- Eventos do tunel vivem no processo do Agent (`logs --runtime`) e os do
-  Edge no processo do `serve` (`logs --edge`) — arquivos locais, sem fio
-  entre nos (ver `17-limitations.md`).
-
-Ver `17-limitations.md` para a lista completa e `13-kof-apis.md` para as
-medicoes do runtime.
+Total: 437 testes. Ver `15-tests.md` para a matriz.

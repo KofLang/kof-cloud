@@ -111,6 +111,7 @@ test "daemon: ajuda reconciliada com os comandos reais", "usage-parity" {
     // e o teste do deploy o trava contra o help — aqui só garantimos que
     // o caminho continuou existindo na árvore combinada.
     assert(readTextOr("docs/examples/ci-pipeline.yml", "").length > 0, "exemplo de pipeline CI existe no disco")
+    assert(readTextOr("docs/examples/action.yml", "").length > 0, "exemplo de action reutilizavel existe no disco")
 }
 
 test "daemon: paths ficam no espaco do usuario", "daemon-paths" {
