@@ -1555,8 +1555,19 @@ env, credencial nunca em log, teste com fake local + e2e opcional real):
   `GET /v1/usage` escopado pelo token (a conta alheia não existe para o
   fio; 401 sem token) e `kof cloud usage`. A camada de **export** (webhook
   de uso/OTel) fica para o próximo passo — o contador já é o contrato.
-  Prova: `tests/usage_test.kf` (3: contadores+escopo+persistência, e2e com
-  relay real, help).
+  **Implementado (ciclo de billing — o export):** `POST /v1/usage/export`
+  devolve a janela acumulada com `periodEnd` e **zera** o contador
+  (`Registry.usageSnapshot`): cada export cobre exatamente uma janela, sem
+  sobreposição nem buraco; export repetido é zeros (idempotente — nunca
+  re-fatura) e o Edge continua contando em cima do zero. O fechamento de
+  janela deixa rastro (`usage.export` na trilha, vocabulário fechado).
+  CLI: `kof cloud usage --export`. Honestidade: um crash entre snapshot e o
+  próximo `save()` pode re-faturar a janela — o consumidor idempotente
+  deduplica por `periodEnd` (documentado). O **export push** (webhook de
+  uso/OTel para o backend do operador) segue pendente; o ciclo puxado já é
+  o contrato completo do billing. Prova: `tests/usage_test.kf` (6:
+  contadores+escopo+persistência, snapshot le-e-zera, e2e export com
+  auditoria, help).
 * **Slice 5 — segredos e chaves.** Provedores de segredo (Vault, AWS SM,
   1Password Connect) como fonte do `tunnelSecret`/PEMs: a plataforma lê
   na partida, nunca persiste em disco; rotação por SIGHUP/reload.

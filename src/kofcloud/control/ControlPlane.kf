@@ -291,12 +291,36 @@ HttpResult handleUsage(Registry registry, String? authHeader) {
     if (account == null) {
         return HttpResult(401, errorJson(errUnauthorized()))
     }
-    var usage = registry.usageFor(account.id)
+    var usage = usageJson(registry.usageFor(account.id))
+    return HttpResult(200, usage)
+}
+
+// Corpo do fio do uso: os mesmos tres contadores, com a marca do periodo
+// (`periodEnd` = agora; o consumidor de billing grava o marco e pede o
+// proximo lote de grademente). Never-fail: uma conta sem uso devolve zeros,
+// nao erro.
+String usageJson(UsageEntry usage) {
     var out = mapOf()
     out.put("requests", usage.requests)
     out.put("bytesIn", usage.bytesIn)
     out.put("bytesOut", usage.bytesOut)
-    return HttpResult(200, json.encode(out))
+    out.put("periodEnd", longToString(time.now()))
+    return json.encode(out)
+}
+
+// Snapshot para o ciclo de billing (POST): le e ZERA em uma chamada — cada
+// export cobre exatamente uma janela (o GET continua apenas leitura —
+// leitura, sem efeito colateral). Escopo do token: o snapshot e sempre da
+// conta do token (id de terceiro nunca escolhe). Registro de auditoria:
+// export que fecha faturamento merece rastro (dump.usage_export, ator).
+HttpResult handleUsageExport(Registry registry, String? authHeader) {
+    var account = registry.accountByToken(bearerToken(authHeader))
+    if (account == null) {
+        return HttpResult(401, errorJson(errUnauthorized()))
+    }
+    var usage = registry.usageSnapshot(account.id)
+    registry.audit(auditActorAccount(account.handle), auditUsageExport(), account.id)
+    return HttpResult(200, usageJson(usage))
 }
 
 HttpResult handlePresence(Registry registry, String? authHeader) {
@@ -1428,6 +1452,13 @@ class ControlPlane {
         }
         app.get("/v1/usage") {
             var result = handleUsage(reg, header("x-kofcloud-token"))
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
+        }
+        app.post("/v1/usage/export") {
+            var result = handleUsageExport(reg, header("x-kofcloud-token"))
             if (result.code == 200) {
                 return result.body
             }

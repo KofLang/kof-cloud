@@ -200,6 +200,19 @@ Escopo do token: a conta alheia não existe para o fio (os zeros dela nunca
 aparecem). `kof cloud usage` imprime o mesmo fio — é a matéria-prima do
 billing externo (F18 s4).
 
+Ciclo de billing — o export fecha a janela (lê e **zera**; cada export cobre
+exatamente uma janela, idempotente, com rastro `usage.export` na trilha):
+
+```
+POST `/v1/usage/export`
+X-KofCloud-Token: kfc_...
+
+200 {"requests":"N","bytesIn":"N","bytesOut":"N","periodEnd":"<epoch-ms>"}
+```
+
+Um crash entre o snapshot e o próximo `save()` do estado pode re-faturar a
+janela — o consumidor deduplica por `periodEnd`.
+
 ## Erros
 
 Todo erro viaja como `{"error":"KCFnnn: texto"}` — códigos estáveis (R6, como

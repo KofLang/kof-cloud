@@ -2013,11 +2013,12 @@ Int cmdTokenRotation(List<String> args) {
 // Higiene de credenciais (Fase 19 s2): servicos da conta com kfs_ validos
 // SEM expiracao. Leitura; o passo recomendado e `service rotate --ttl`.
 // Uso da conta (F18 s4 — billing externo): o que o Edge roteou para os
-// servicos deste dono, em requests e bytes. Leitura; o formato externo
-// (consumo por um billing) e a mesma resposta de GET /v1/usage.
+// servicos deste dono, em requests e bytes. Leitura por default; `--export`
+// fecha a janela (le e zera no servidor — POST /v1/usage/export, com rastro
+// de auditoria), o ciclo que o consumidor de billing espera.
 Int cmdUsage(List<String> args) {
-    if (extraPositional(args, 0)) {
-        println("uso: kof cloud usage")
+    if (extraPositional(args, 0) || flagDuplicated(args, "--export")) {
+        println("uso: kof cloud usage [--export]")
         return 1
     }
     var session = loadSession()
@@ -2026,9 +2027,20 @@ Int cmdUsage(List<String> args) {
         return 1
     }
     try {
-        var raw = requireOk(http.get(session.controlUrl + "/v1/usage", authHeader(session.token)))
+        var raw = ""
+        if (hasFlag(args, "--export")) {
+            if (flagMissingValue(args, "--x") == false) {
+            }
+            raw = requireOk(http.post(session.controlUrl + "/v1/usage/export", "{}", jsonHeader(session.token)))
+        } else {
+            raw = requireOk(http.get(session.controlUrl + "/v1/usage", authHeader(session.token)))
+        }
         var result = json.decode<Map<String, String>>(raw)
-        println("Uso da conta (roteado pelo Edge):")
+        if (hasFlag(args, "--export")) {
+            println("Janela de uso fechada (o contador zera; o proximo export cobre a janela seguinte):")
+        } else {
+            println("Uso da conta (roteado pelo Edge):")
+        }
         println("  requests: " + mapField(result, "requests"))
         println("  entrada:  " + mapField(result, "bytesIn") + " bytes")
         println("  saida:    " + mapField(result, "bytesOut") + " bytes")

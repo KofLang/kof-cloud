@@ -615,6 +615,23 @@ class Registry {
         return UsageEntry(accountId, raw.substring(0, sep1), raw.substring(sep1 + 1, sep2), raw.substring(sep2 + 1))
     }
 
+    // Ciclo de billing (F18 s4): devolve o acumulado do periodo e ZERA o
+    // contador — o "read-and-reset" que o consumidor de billing espera
+    // (cada export cobre exatamente uma janela, sem sobreposicao nem buraco;
+    // o acumulado desde o load segue disponivel porque o Edge continua
+    // contando em cima do zero). Sem mutacao de outras listas: so o mapa de
+    // uso e tocado, e o reset segue persistindo no proximo save de mutacao
+    // (mesma honestidade do noteUsage: I/O por request seria irracional —
+    // um crash entre snapshot e save pode re-faturar a janela, que o
+    // consumidor idempotente deduplica; documentado em 17-limitations).
+    UsageEntry usageSnapshot(String accountId) {
+        var entry = this.usageFor(accountId)
+        if (entry.requests != "0" || entry.bytesIn != "0" || entry.bytesOut != "0") {
+            this.usageByAccount.remove(accountId)
+        }
+        return entry
+    }
+
     // Contagens do estado carregado (migracao --dry-run, Fase 16 s1).
     StateCounts stateCounts() {
         return StateCounts(

@@ -177,6 +177,10 @@ String auditAccountUnfrozen() {
 // mutam a configuracao da conta e precisam de rastro como as demais
 // mutacoes. O segredo NUNCA entra (regra do modelo): o evento carrega
 // so acao e conta; a URL segue visivel pelo proprio `webhook show`.
+String auditUsageExport() {
+    return "usage.export"
+}
+
 String auditWebhookSet() {
     return "webhook.set"
 }

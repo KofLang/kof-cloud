@@ -145,6 +145,113 @@ test "usage: e2e — relay real acumula no dono; recusa nao conta; outra conta n
 
 test "usage: help anuncia o comando", "usage-help" {
     var help = usageText()
-    assert(help.indexOf("usage   (uso da conta") >= 0, "help anuncia usage")
+    assert(help.indexOf("usage [--export]") >= 0, "help anuncia usage")
     assert(help.indexOf("billing externo") >= 0, "help diz para que serve")
+}
+
+test "usage: snapshot fecha a janela (le e zera) e o Edge continua contando", "usage-unit" {
+    var unitPath = usagePath("snapshot")
+    var registry = Registry(unitPath)
+    var mel = registry.createAccount("mel", "mel@e.com", "segredo")
+    registry.noteUsage(mel.id, 100, 200)
+    registry.noteUsage(mel.id, 50, 60)
+    // Snapshot: devolve o acumulado da janela e zera o contador.
+    var window1 = registry.usageSnapshot(mel.id)
+    assert(window1.requests == "2", "janela 1: requests: " + window1.requests)
+    assert(window1.bytesIn == "150" && window1.bytesOut == "260", "janela 1: bytes")
+    // Zerado: o proximo snapshot e zeros (idempotente — export repetido
+    // nao re-fatura).
+    var window2 = registry.usageSnapshot(mel.id)
+    assert(window2.requests == "0", "janela fechada: zeros")
+    // O Edge continua contando em cima do zero: nova janela comeca limpa.
+    registry.noteUsage(mel.id, 10, 20)
+    var window3 = registry.usageSnapshot(mel.id)
+    assert(window3.requests == "1" && window3.bytesIn == "10", "janela 2 comeca do zero")
+    // Sem entrada nunca e erro: snapshot de conta sem uso devolve zeros.
+    var empty = registry.usageSnapshot("sem-conta")
+    assert(empty.requests == "0" && empty.bytesIn == "0", "zeros honestos")
+}
+
+test "usage: export fecha a janela pelo fio com rastro de auditoria", "usage-e2e" {
+    var localSvc = 20298
+    var controlPort = 20299
+    var tunnelPort = 20300
+    var httpPort = 20301
+
+    var app = web.app()
+    app.get("/") { return "svc-usage" }
+    var server = spawn { app.listen(localSvc) }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry(usagePath("export"))
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-exp-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-exp-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var token = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "publicado")
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, token, "", agentStop, "127.0.0.1", tunnelPort, 500)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent no ar")
+    var i = 0
+    while (i < 2) {
+        assert(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 200, "relay ok " + intToString(i))
+        i = i + 1
+    }
+
+    // Export (POST): devolve a janela com periodEnd e ZERA o fio.
+    var exp = httpPostJson(controlPort, "/v1/usage/export", "{}", token)
+    assert(statusOf(exp) == 200, "export 200")
+    var window = json.decode<Map<String, String>>(bodyOf(exp))
+    assert(mapField(window, "requests") == "2", "janela do export: " + bodyOf(exp))
+    assert(mapField(window, "periodEnd").length > 0, "periodEnd presente")
+    var after = httpGetToken(controlPort, "/v1/usage", token)
+    assert(mapField(json.decode<Map<String, String>>(bodyOf(after)), "requests") == "0", "contador zerado apos export")
+
+    // Rastro de auditoria do fechamento de janela (same vocabulary do CLI).
+    var audit = httpGetToken(controlPort, "/v1/audit", token)
+    assert(bodyOf(audit).indexOf("usage.export") >= 0, "usage.export na trilha")
+
+    // Export repetido: zeros (idempotente — nunca re-fatura a mesma janela).
+    var exp2 = httpPostJson(controlPort, "/v1/usage/export", "{}", token)
+    assert(mapField(json.decode<Map<String, String>>(bodyOf(exp2)), "requests") == "0", "export repetido nao re-fatura")
+    // Sem token: 401.
+    assert(statusOf(httpPostJson(controlPort, "/v1/usage/export", "{}", "")) == 401, "401 sem token")
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1200)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(800)
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}
+
+test "usage: help anuncia --export e a janela", "usage-help" {
+    var help = usageText()
+    assert(help.indexOf("usage [--export]") >= 0, "help anuncia --export")
+    assert(help.indexOf("fecha a janela") >= 0, "help diz o que o export faz")
 }
