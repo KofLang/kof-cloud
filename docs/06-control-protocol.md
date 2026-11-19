@@ -54,7 +54,7 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/services/rotation` | conta | `{serviceId}` → `{serviceId,pending}` = quantas credenciais do serviço ainda valem (1 = só a atual) |
 | `POST` | `/v1/services/token-hygiene` | conta | serviços da conta com `kfs_` válidos **sem expiração** → `{services,count}` (só leitura; a ação recomendada é `service rotate --ttl`) |
 | `POST` | `/v1/webhook` | conta | webhook de incidentes `{action:set\|show\|remove\|test, url?, secret?}` → config sem o segredo (`secretHint`); `set` valida URL/segredo (400 `KCF129`) **e barra host de rede interna** (169.254.x metadata, 10/8, 172.16/12, 192.168/16, `.local` — IP literal ou resolvido; loopback fora por desenho), `remove`/`test` sem config → 404 `KCF130` |
-| `GET` | `/v1/health` | — | liveness do control plane |
+| `GET` | `/v1/health` | — | liveness **e readiness** do control plane: `200` `{ok,ready,service,version,state}` com `state` = `ok`\|`absent` (primeiro boot); `503` com `ok:false`/`ready:false`/`state:corrupt` quando o arquivo de estado existe e não decodifica (o `serve` também recusa subir nesse caso) |
 | `GET` | `/v1/metrics` | — | export Prometheus (`observability.metrics()`): contadores do control plane + Edge (mesmo processo no `serve`); sem auth, só agregados |
 
 ## Exemplos

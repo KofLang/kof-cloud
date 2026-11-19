@@ -178,12 +178,37 @@ String joinStrings(List<String> parts, String separator) {
 
 // ---- handlers ----
 
-HttpResult handleHealth() {
+// Readiness do control plane (Fase 16 s3): o `/v1/health` respondia `200 ok`
+// mesmo quando o arquivo de estado existia e nao decodificava — o processo
+// subia VAZIO e o balanceador/status page davam verde sobre perda de dados.
+// A sonda e PURA (loadStatus -> codigo+corpo) para o teste julgar a regra
+// sem subir processo; o lambda da rota so aplica o codigo. Nao verifica
+// backend: o `serve` recusa subir com estado ilegivel (F16 s3, fail-closed
+// em `Commands.kf`), entao `corrupt` aqui e o estado que alguem trocou em
+// disco depois da partida.
+HttpResult readinessFor(String loadStatus) {
     var out = mapOf()
-    out.put("ok", "true")
     out.put("service", "kofcloud-control")
     out.put("version", intToString(protocolVersion()))
+    if (loadStatus == "corrupt") {
+        out.put("ok", "false")
+        out.put("ready", "false")
+        out.put("state", "corrupt")
+        return HttpResult(503, json.encode(out))
+    }
+    var state = "ok"
+    if (loadStatus == "absent") {
+        // Sem arquivo e o primeiro boot (nenhuma conta perdida): pronto.
+        state = "absent"
+    }
+    out.put("ok", "true")
+    out.put("ready", "true")
+    out.put("state", state)
     return HttpResult(200, json.encode(out))
+}
+
+HttpResult handleHealth(String loadStatus) {
+    return readinessFor(loadStatus)
 }
 
 HttpResult handleCreateAccount(Registry registry, String bodyText) {
@@ -1408,8 +1433,11 @@ class ControlPlane {
         }
 
         app.get("/v1/health") {
-            var result = handleHealth()
-            return result.body
+            var result = handleHealth(reg.loadStatus)
+            if (result.code == 200) {
+                return result.body
+            }
+            return status(result.code, result.body)
         }
         app.get("/v1/metrics") {
             var result = handleMetrics()

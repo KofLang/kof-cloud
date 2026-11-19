@@ -1,0 +1,67 @@
+import kofcloud.cli.Commands
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.store.Store
+import testkit.Support
+
+// F16 s3 — readiness do control plane. O `/v1/health` respondia `200 ok`
+// mesmo com o arquivo de estado existente e ilegivel: o processo subia
+// VAZIO e o balanceador/status page davam verde sobre perda de dados.
+// A sonda e PURA (loadStatus -> codigo+corpo) e o `serve` recusa subir com
+// estado ilegivel (fail-closed); o arquivo nunca e tocado.
+
+test "readiness: sonda pura (corrupt 503, absent/ok 200)", "readiness-unit" {
+    var corrupt = readinessFor("corrupt")
+    assert(corrupt.code == 503, "corrupt = 503: " + intToString(corrupt.code))
+    assert(corrupt.body.indexOf("\"ok\":\"false\"") >= 0, "corrupt diz ok=false")
+    assert(corrupt.body.indexOf("\"ready\":\"false\"") >= 0, "corrupt diz ready=false")
+    assert(corrupt.body.indexOf("\"state\":\"corrupt\"") >= 0, "corrupt nomeia o estado")
+
+    var absent = readinessFor("absent")
+    assert(absent.code == 200, "absent = 200 (primeiro boot e pronto)")
+    assert(absent.body.indexOf("\"ready\":\"true\"") >= 0, "absent diz ready=true")
+    assert(absent.body.indexOf("\"state\":\"absent\"") >= 0, "absent nomeia o estado")
+
+    var ok = readinessFor("ok")
+    assert(ok.code == 200, "ok = 200")
+    assert(ok.body.indexOf("\"ready\":\"true\"") >= 0, "ok diz ready=true")
+    assert(ok.body.indexOf("\"state\":\"ok\"") >= 0, "ok nomeia o estado")
+
+    // Nenhum corpo carrega credencial nem conta (mesma regra do /v1/health).
+    var all = corrupt.body + absent.body + ok.body
+    assert(all.indexOf("kfc_") < 0, "sonda nao vaza token de conta")
+    assert(all.indexOf("kfs_") < 0, "sonda nao vaza credencial de servico")
+
+    // Recusa do serve: pura, cita o arquivo e garante que nada foi tocado.
+    var refusal = serveCorruptRefusal("/tmp/estado.json")
+    assert(refusal.indexOf("recusado") >= 0, "recusa nomeia o veredito")
+    assert(refusal.indexOf("/tmp/estado.json") >= 0, "recusa cita o arquivo")
+    assert(refusal.indexOf("NAO foi tocado") >= 0, "recusa garante o arquivo intacto")
+    assert(refusal.indexOf("state-backup") >= 0, "recusa aponta o backup")
+}
+
+test "readiness: e2e — corrupt responde 503 e o serve recusa subir", "readiness-e2e" {
+    // O `loadStatus` e o veredito da CARGA (construtor), nao do estado atual:
+    // para exercitar o 503 o arquivo precisa nascer ilegivel ANTES.
+    var port = 18084
+    var path = "/tmp/kofcloud-ready-" + crypto.randomHex(4) + ".json"
+    writeTextTo(path, "{ isto nao e estado }")
+    var registry = Registry(path)
+    assert(registry.loadStatus == "corrupt", "arquivo ilegivel na partida = corrupt")
+
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control plane no ar")
+
+    var broken = httpGetRaw(port, "/v1/health", "127.0.0.1")
+    assert(statusOf(broken) == 503, "estado corrupt = 503: " + intToString(statusOf(broken)))
+    assert(bodyOf(broken).indexOf("\"state\":\"corrupt\"") >= 0, "503 nomeia corrupt")
+    assert(bodyOf(broken).indexOf("\"ready\":\"false\"") >= 0, "503 diz ready=false")
+
+    // Fail-closed na partida: o mesmo arquivo ilegivel faz o `serve` recusar
+    // (exit 1) e o arquivo continua intacto.
+    var code = cmdServe(listOf("--state", path, "--control-port", "18085", "--tunnel-port", "18086", "--http-port", "18087"))
+    assert(code == 1, "serve recusa com estado ilegivel: " + intToString(code))
+    var still = readTextOr(path, "")
+    assert(still.indexOf("isto nao e estado") >= 0, "o arquivo ilegivel nao foi tocado")
+}

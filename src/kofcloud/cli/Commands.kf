@@ -76,6 +76,16 @@ String resolveWafMode(String flagRaw) {
     return "?"
 }
 
+// Recusa do `serve` com estado ilegivel (Fase 16 s3). Pura para o teste
+// julgar o texto sem subir processo; o arquivo e so CITADO (nunca tocado) e
+// nao ha dado de conta — a perda e de plataforma.
+String serveCorruptRefusal(String statePath) {
+    return "recusado: o arquivo de estado existe mas nao decodifica como estado do control plane\n" +
+        "  arquivo: " + statePath + "\n" +
+        "  o control plane NAO subiu e o arquivo NAO foi tocado.\n" +
+        "  faca backup e restaure, ou use outro --state: kof cloud state-backup --file <estado.json>"
+}
+
 String usoLogsLine() {
     return "uso: kof cloud logs [--tail <linhas>] [--runtime|--edge]"
 }
@@ -3278,6 +3288,14 @@ Int cmdServe(List<String> args) {
     }
 
     var registry = Registry(statePath)
+    if (registry.loadStatus == "corrupt") {
+        // Fail-closed (Fase 16 s3): com o arquivo ilegivel o serve subia
+        // VAZIO e servia "conta sumida" — publicar ali criava conta nova por
+        // cima da perda. A mensagem de recusa e PURA (testavel) e o exit e
+        // nao-zero; o arquivo nunca e tocado (backup manual antes de seguir).
+        println(serveCorruptRefusal(statePath))
+        return 1
+    }
     var edgeState = EdgeState(registry)
     edgeState.setWafEnforce(wafMode == "enforce")
 
@@ -3285,11 +3303,6 @@ Int cmdServe(List<String> args) {
     println("kofcloud edge tunnel    -> 127.0.0.1:" + intToString(tunnelPort))
     println("kofcloud edge public    -> http://127.0.0.1:" + intToString(httpPort))
     println("estado: " + statePath)
-    if (registry.loadStatus == "corrupt") {
-        println("ATENCAO: o arquivo de estado existe mas nao pode ser lido —")
-        println("         o control plane comecou VAZIO. O arquivo nao foi sobrescrito")
-        println("         ate a primeira escrita; faca backup antes de seguir.")
-    }
     println("waf: " + wafMode)
     var secretLabel = secretSourceLabel(tunnelFile, tunnelCmd)
     if (secretLabel.length > 0) {

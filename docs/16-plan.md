@@ -1279,8 +1279,23 @@ iguais).
   `tests/migrate_test.kf` (5). `kof cloud state-backup [--file <estado>]`
   preserva o arquivo em disco ao lado (`.bak-<ms>`) antes de qualquer troca
   de backend, e recusa origem ilegível/ausente em vez de copiar lixo.
-  **Pendente:** backend SQLite/Postgres atrás de
-  interface (o `kof.db` existe, mas o desenho pede a interface primeiro).
+  **Implementado (readiness + fail-closed — o nó não mente sobre perda de
+  dados):** `/v1/health` respondia `200 ok` mesmo com o arquivo ilegível —
+  o balanceador e a status page davam verde sobre a perda. Agora a sonda é
+  **pura** (`readinessFor(loadStatus)`, testável sem processo) e o fio
+  devolve **503** com `ok:false`/`ready:false`/`state:corrupt` (estado
+  `absent` — primeiro boot — e `ok` seguem 200 com `ready:true`); o
+  `serve` **recusa subir** com o estado ilegível (`serveCorruptRefusal`,
+  exit 1: cita o arquivo, garante que ele **não foi tocado** e aponta o
+  `state-backup`) — antes subia VAZIO e publicar criava conta nova por
+  cima da perda. Nenhum corpo carrega conta/credencial. O estado corrupto
+  pós-partida (arquivo trocado em disco com o processo vivo) já tinha a
+  status page; agora o health também conta. Prova:
+  `tests/readiness_test.kf` (2: sonda pura nos três estados + recusa do
+  texto, e2e com o Registry carregando arquivo ilegível — 503 pelo fio e
+  `cmdServe` exit 1 com o arquivo intacto). **Pendente:** backend
+  SQLite/Postgres atrás de interface (o `kof.db` existe, mas o desenho pede
+  a interface primeiro).
 * **Slice 2 — Edge horizontal.** N Edges atrás de qualquercast/DNS-round-
   robin; presença vira pub/sub entre Edges (o `/v1/presence` agrega, com
   TTL curto por entrada); rate limit passa a janela deslizante em store
