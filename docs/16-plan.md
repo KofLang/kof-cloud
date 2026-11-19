@@ -1576,6 +1576,25 @@ env, credencial nunca em log, teste com fake local + e2e opcional real):
   1Password Connect) como fonte do `tunnelSecret`/PEMs: a plataforma lê
   na partida, nunca persiste em disco; rotação por SIGHUP/reload.
 
+  **Implementado (fonte externa por arquivo/comando):** `serve` ganha
+  `--tunnel-secret-file <arq>`/`--tunnel-secret-cmd <cmd>` e
+  `--tls-cert-cmd <cmd> --tls-key-cmd <cmd>` (exclusivos com
+  `--tls-cert/--tls-key`). A plataforma fala o **protocolo aberto do shell**
+  (`sh -c`) — qualquer provedor (Vault, AWS SM, 1Password Connect expõem um
+  CLI) vira fonte sem SDK; nada de lock-in. O valor é lido **uma vez na
+  partida**, mantido só em memória, **nunca impresso** (o banner diz só a
+  ORIGEM — arquivo ou "comando", jamais a linha do comando, que pode
+  carregar token) e **nunca gravado** (os PEMs vão direto ao `enableTls`,
+  sem arquivo temporário). Duas fontes para o mesmo segredo = erro
+  posicional (nunca escolha silenciosa); comando que falha ou devolve vazio
+  = erro explícito, nunca segredo vazio indo para o handler. **Divergência
+  honesta:** rotação é por reiniciar o `serve` — SIGHUP não existe (L3, sem
+  sinais), então o "reload" do desenho original não tem mecanismo; o
+  operador rotaciona no provedor e reinicia. Prova:
+  `tests/secrets_test.kf` (4: leitura de comando/arquivo com falha honesta,
+  combinação de fontes, help, e2e — `ControlPlane.enableTls` com PEMs lidos
+  por comando sobe HTTPS de verdade).
+
 **Regras:** todo conector é opcional e sem lock-in (o caminho manual
 continua funcionando); credencial de terceiro nunca atravessa o túnel
 nem aparece em log/métrica/audit; cada conector tem modo `--dry-run`.

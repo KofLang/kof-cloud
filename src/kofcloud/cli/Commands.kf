@@ -57,7 +57,7 @@ String usoServiceTokenLine() {
 }
 
 String usoServeLine() {
-    return "uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--waf detectar|enforce] [--panel] [--tls-cert <pem> --tls-key <pem>] (portas 1-65535)"
+    return "uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--waf detectar|enforce] [--panel] [--tls-cert <pem> --tls-key <pem> | --tls-cert-cmd <cmd> --tls-key-cmd <cmd>] [--tunnel-secret-file <arq> | --tunnel-secret-cmd <cmd>] (portas 1-65535)"
 }
 
 // Modo WAF do `serve --waf`: ausente, vazio ou so-espacos = detectar
@@ -311,7 +311,8 @@ List<String> valueFlags() {
         "--control", "--control-port", "--tunnel-port", "--http-port",
         "--state", "--waf", "--tls-cert", "--tls-key", "--service", "--file",
         "--password", "--from", "--to", "--resolve", "--secret",
-        "--allow-method", "--allow-path", "--action", "--dns-webhook"
+        "--allow-method", "--allow-path", "--action", "--dns-webhook",
+        "--tunnel-secret-file", "--tunnel-secret-cmd", "--tls-cert-cmd", "--tls-key-cmd"
     )
 }
 
@@ -2964,6 +2965,88 @@ String resolveStatePath(String flagRaw) {
     return trimmed
 }
 
+// Segredos de fonte externa (F18 s5): o `serve` pode ler o tunnel secret e
+// os PEMs de um ARQUIVO ou de um COMANDO (qualquer provedor: Vault, AWS SM,
+// 1Password Connect expõem um CLI — a plataforma fala o protocolo aberto do
+// shell, nunca um SDK). Lido UMA vez na partida e mantido so em memoria:
+// nada e gravado em disco pela plataforma e nenhum valor e impresso (o
+// banner diz so a ORIGEM). Rotacao = reiniciar o serve (SIGHUP nao existe,
+// L3). Funcoes puras: a decisao nao toca IO, o exec vive em readSecretSource.
+//
+// "Nenhuma", "exatamente uma" — duas fontes para o mesmo segredo seriam
+// escolha silenciosa (a que veio depois, ou a que o codigo leu primeiro):
+// erro posicional, como o par TLS.
+String secretSourceError(String inlineValue, String filePath, String cmdText, String label) {
+    var sources = 0
+    if (inlineValue.length > 0) {
+        sources = sources + 1
+    }
+    if (filePath.trim().length > 0) {
+        sources = sources + 1
+    }
+    if (cmdText.trim().length > 0) {
+        sources = sources + 1
+    }
+    if (sources > 1) {
+        return label + ": informe UMA fonte (flag direta, arquivo ou comando) — " + intToString(sources) + " dadas"
+    }
+    return ""
+}
+
+// Linha do banner para a origem do segredo: "" (sem origem), "arquivo <p>"
+// ou "comando" — o comando NUNCA e ecoado inteiro (pode carregar token na
+// linha; o operador sabe o que digitou). Pura.
+String secretSourceLabel(String filePath, String cmdText) {
+    if (cmdText.trim().length > 0) {
+        return "comando (saida lida na partida; o valor nunca e impresso nem gravado)"
+    }
+    if (filePath.trim().length > 0) {
+        return "arquivo " + filePath.trim()
+    }
+    return ""
+}
+
+// Le a fonte externa. `inlineValue` ja vem resolvida (env/config), `file`
+// le o arquivo (trim: newline final de `vault kv get -field` nao e segredo),
+// `cmd` roda via `sh -c` (precedente: build do deploy — process.run nao faz
+// split de shell). Falha vira String de erro explicita; "" so quando nao ha
+// fonte. O valor nunca entra em mensagem de erro.
+String readSecretSource(String inlineValue, String filePath, String cmdText, String label) {
+    if (cmdText.trim().length > 0) {
+        try {
+            var result = process.run("sh", "-c", cmdText)
+            if (result.exitCode != 0) {
+                return label + ": comando falhou (exit " + intToString(result.exitCode) + ") — nada foi lido"
+            }
+            var value = result.stdout.trim()
+            if (value.length == 0) {
+                return label + ": comando nao devolveu valor (saida vazia)"
+            }
+            return value
+        } catch (String e) {
+            return label + ": comando nao executou (" + e + ")"
+        }
+    }
+    if (filePath.trim().length > 0) {
+        var fromFile = readTextOr(filePath.trim(), "")
+        if (fromFile.trim().length == 0) {
+            return label + ": arquivo ilegivel ou vazio (" + filePath.trim() + ")"
+        }
+        return fromFile.trim()
+    }
+    return inlineValue
+}
+
+// Falha (mensagem de erro/aviso) vs. valor: o chamador distingue pelo
+// prefixo do label — este helper e pura e sem IO. Prefixo com ":" e o que
+// readSecretSource usa nas mensagens; um segredo legitimo raramente comeca
+// com o label assim, mas para eliminar ambiguidade o chamador compara por
+// `startsWith(label + ":")` — o label tem espaco ("tunnel secret"), o que
+// nao aparece em segredo hex/opaco.
+Bool secretSourceFailed(String label, String valueOrError) {
+    return valueOrError.startsWith(label + ":")
+}
+
 // TLS do control plane (`serve --tls-cert/--tls-key`): ausente = HTTP
 // (comportamento atual); presente exige o PAR (cert + key) — metade sozinha
 // e erro posicional, nao default silencioso. Pura, sem IO: o cmdServe le os
@@ -3011,7 +3094,7 @@ Int cmdServe(List<String> args) {
     // duplicada leria a primeira. Ambas rejeitadas antes de validar faixa.
     // --state segue a mesma regra (precedente: --file/--control/--device):
     // solto caia no default em silencio, duplicado lia a primeira.
-    if (flagMissingValue(args, "--control-port") || flagMissingValue(args, "--tunnel-port") || flagMissingValue(args, "--http-port") || flagMissingValue(args, "--state") || flagMissingValue(args, "--waf") || flagMissingValue(args, "--tls-cert") || flagMissingValue(args, "--tls-key")) {
+    if (flagMissingValue(args, "--control-port") || flagMissingValue(args, "--tunnel-port") || flagMissingValue(args, "--http-port") || flagMissingValue(args, "--state") || flagMissingValue(args, "--waf") || flagMissingValue(args, "--tls-cert") || flagMissingValue(args, "--tls-key") || flagMissingValue(args, "--tunnel-secret-file") || flagMissingValue(args, "--tunnel-secret-cmd") || flagMissingValue(args, "--tls-cert-cmd") || flagMissingValue(args, "--tls-key-cmd")) {
         println(usoServeLine())
         return 1
     }
@@ -3021,7 +3104,7 @@ Int cmdServe(List<String> args) {
         println(usoServeLine())
         return 1
     }
-    if (flagDuplicated(args, "--control-port") || flagDuplicated(args, "--tunnel-port") || flagDuplicated(args, "--http-port") || flagDuplicated(args, "--state") || flagDuplicated(args, "--waf") || flagDuplicated(args, "--tls-cert") || flagDuplicated(args, "--tls-key") || flagDuplicated(args, "--panel") || flagDuplicated(args, "--status-page")) {
+    if (flagDuplicated(args, "--control-port") || flagDuplicated(args, "--tunnel-port") || flagDuplicated(args, "--http-port") || flagDuplicated(args, "--state") || flagDuplicated(args, "--waf") || flagDuplicated(args, "--tls-cert") || flagDuplicated(args, "--tls-key") || flagDuplicated(args, "--tunnel-secret-file") || flagDuplicated(args, "--tunnel-secret-cmd") || flagDuplicated(args, "--tls-cert-cmd") || flagDuplicated(args, "--tls-key-cmd") || flagDuplicated(args, "--panel") || flagDuplicated(args, "--status-page")) {
         println("flag repetida — informe uma so vez: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]")
         return 1
     }
@@ -3032,19 +3115,56 @@ Int cmdServe(List<String> args) {
     var wafMode = resolveWafMode(flagValue(args, "--waf"))
     var panel = hasFlag(args, "--panel")
     var statusPage = hasFlag(args, "--status-page")
-    var tunnelSecret = config.str("kofcloud.tunnelSecret", "")
+    // Segredo do tunel de fonte externa (F18 s5): flag direta (config/env),
+    // arquivo ou comando — nunca duas fontes (erro posicional). Lido na
+    // partida, mantido so em memoria, jamais impresso.
+    var tunnelCmd = flagValue(args, "--tunnel-secret-cmd")
+    var tunnelFile = flagValue(args, "--tunnel-secret-file")
+    var tunnelBase = config.str("kofcloud.tunnelSecret", "")
+    var tunnelErr = secretSourceError(tunnelBase, tunnelFile, tunnelCmd, "tunnel secret")
+    if (tunnelErr.length > 0) {
+        println(tunnelErr)
+        println(usoServeLine())
+        return 1
+    }
+    var tunnelSecret = readSecretSource(tunnelBase, tunnelFile, tunnelCmd, "tunnel secret")
+    if (secretSourceFailed("tunnel secret", tunnelSecret)) {
+        println(tunnelSecret)
+        println(usoServeLine())
+        return 1
+    }
     var maxBytes = limitMaxBodyBytes()
     // TLS do control plane (Fase 9 slice 1 parcial): par cert+key em PEM;
     // ausente = HTTP (comportamento atual); metade sozinha = erro local.
+    // F18 s5: o PEM tambem pode vir de um comando (--tls-cert-cmd/-key-cmd),
+    // exclusivo com o caminho de arquivo (--tls-cert/--tls-key).
+    var certCmd = flagValue(args, "--tls-cert-cmd")
+    var keyCmd = flagValue(args, "--tls-key-cmd")
     var tlsPair = resolveTlsPair(flagValue(args, "--tls-cert"), flagValue(args, "--tls-key"))
     if (tlsPair.startsWith("tls exige")) {
         println(tlsPair)
         println(usoServeLine())
         return 1
     }
+    var tlsCommands = certCmd.trim().length > 0 || keyCmd.trim().length > 0
+    if (tlsPair.length > 0 && tlsCommands) {
+        println("tls: informe os PEMs por arquivo (--tls-cert/--tls-key) OU por comando (--tls-cert-cmd/--tls-key-cmd), nao os dois")
+        println(usoServeLine())
+        return 1
+    }
+    if (tlsCommands && (certCmd.trim().length == 0 || keyCmd.trim().length == 0)) {
+        println("tls exige --tls-cert-cmd e --tls-key-cmd juntos (par ausente)")
+        println(usoServeLine())
+        return 1
+    }
     var tlsCertPath = ""
     var tlsKeyPath = ""
-    if (tlsPair.length > 0) {
+    if (tlsCommands) {
+        // Comandos: o PEM vai direto para o listenSecure (nunca a um arquivo
+        // temporario — gravar em disco e o que a fatia existe para evitar).
+        tlsCertPath = ""
+        tlsKeyPath = ""
+    } else if (tlsPair.length > 0) {
         var sep = tlsPair.indexOf("\n")
         tlsCertPath = tlsPair.substring(0, sep)
         tlsKeyPath = tlsPair.substring(sep + 1)
@@ -3096,7 +3216,13 @@ Int cmdServe(List<String> args) {
         println("         ate a primeira escrita; faca backup antes de seguir.")
     }
     println("waf: " + wafMode)
-    if (tlsPair.length > 0) {
+    var secretLabel = secretSourceLabel(tunnelFile, tunnelCmd)
+    if (secretLabel.length > 0) {
+        println("tunnel secret: fonte " + secretLabel)
+    }
+    if (tlsCommands) {
+        println("tls: control plane em HTTPS (PEMs dos comandos do operador)")
+    } else if (tlsPair.length > 0) {
         println("tls: control plane em HTTPS (cert do operador)")
     }
     if (panel) {
@@ -3115,7 +3241,25 @@ Int cmdServe(List<String> args) {
     if (statusPage) {
         control.enableStatusPage()
     }
-    if (tlsPair.length > 0) {
+    if (tlsCommands) {
+        // PEMs dos comandos: lidos UMA vez aqui (nao antes — o --dry-run
+        // nao existe no serve; ler so no momento de subir evita segredo na
+        // memoria por mais tempo que o necessario). Falha = nao sobe HTTPS
+        // com PEM vazio (erro explicito).
+        var certFromCmd = readSecretSource("", "", certCmd, "tls cert")
+        var keyFromCmd = readSecretSource("", "", keyCmd, "tls key")
+        if (secretSourceFailed("tls cert", certFromCmd)) {
+            println(certFromCmd)
+            println(usoServeLine())
+            return 1
+        }
+        if (secretSourceFailed("tls key", keyFromCmd)) {
+            println(keyFromCmd)
+            println(usoServeLine())
+            return 1
+        }
+        control.enableTls(certFromCmd, keyFromCmd)
+    } else if (tlsPair.length > 0) {
         // PEMs ja validados acima (nao-vazios); rele do disco por clareza —
         // o readTextOr do fail-fast e a fonte da verdade, sem duplicar regra.
         var sep = tlsPair.indexOf("\n")

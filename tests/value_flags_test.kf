@@ -64,7 +64,7 @@ test "flags: toda flag com valor esta na lista e o valor nao conta como posicion
         assert(firstPositional(listOf(flag, "valor", "alvo")) == "alvo", "primeiro posicional apos " + flag)
         assert(secondPositional(listOf("um", flag, "valor", "dois")) == "dois", "segundo posicional apos " + flag)
     }
-    assert(known.size == 25, "25 flags com valor: " + intToString(known.size))
+    assert(known.size == 29, "29 flags com valor (4 fontes de segredo entram): " + intToString(known.size))
     assert(flagsReadWithFlagValue().size >= 20, "lista derivada das fontes: " + intToString(flagsReadWithFlagValue().size))
 
     // Posicional de verdade continua barrando (a regra nao ficou frouxa).

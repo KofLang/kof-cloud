@@ -57,7 +57,7 @@ String usageText() {
     out = out + "  token list|revoke <id|kfc_...>|rotate [--ttl <horas>]|rotation|prune   (credencial da CONTA)\n"
     out = out + "  logs [--tail <linhas>] [--runtime|--edge]  (marcos de sessao; --runtime = eventos do Agent; --edge = eventos do Edge)\n"
     out = out + "\n"
-    out = out + "  serve [--control-port " + intToString(defaultControlPort()) + "] [--tunnel-port " + intToString(defaultTunnelPort()) + "] [--http-port " + intToString(defaultHttpPort()) + "] [--state <arquivo>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]\n"
+    out = out + "  serve [--control-port " + intToString(defaultControlPort()) + "] [--tunnel-port " + intToString(defaultTunnelPort()) + "] [--http-port " + intToString(defaultHttpPort()) + "] [--state <arquivo>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem> | --tls-cert-cmd <cmd> --tls-key-cmd <cmd>] [--tunnel-secret-file <arq> | --tunnel-secret-cmd <cmd>]\n"
     out = out + "        sobe a plataforma (control plane + edge) localmente; com o par TLS o control plane serve HTTPS\n"
     return out
 }
