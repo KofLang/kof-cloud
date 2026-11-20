@@ -42,7 +42,19 @@ test "contencao: unfreeze restaura o status anterior", "freeze-unit" {
     var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
     registry.setServiceStatus(service.id, "ONLINE")
 
-    registry.freezeService(account.id, service.id)
+    // Cruzamento unfreeze × credencial: o freeze revoga (morte anunciada no
+    // `revoked`), mas o unfreeze devolve SÓ o status — nunca ressuscita nem
+    // reemite credencial. Overlap vivo antes do freeze (uma sem TTL, outra
+    // com TTL): as duas morrem no freeze e seguem mortas depois do unfreeze.
+    var k1 = registry.issueServiceToken(account.id, service.id)
+    var k2 = registry.issueServiceToken(account.id, service.id, 24)
+    assert(registry.pendingRotationCount(service.id) == 2, "overlap vivo antes do freeze")
+
+    var frozen = registry.freezeService(account.id, service.id)
+    assert(frozen.ok, "congelou")
+    assert(frozen.revoked == 2, "freeze matou as duas (morte anunciada)")
+    assert(registry.serviceByServiceToken(k1) == null, "antiga morta no freeze")
+    assert(registry.serviceByServiceToken(k2) == null, "nova morta no freeze")
     var during = registry.serviceById(service.id)
     assert(during != null, "existe durante")
     if (during != null) {
@@ -54,6 +66,12 @@ test "contencao: unfreeze restaura o status anterior", "freeze-unit" {
     if (restored != null) {
         assert(restored.status == "ONLINE", "voltou ao status de antes do freeze")
     }
+    // Unfreeze devolve o status, NÃO a credencial: voltar a rotear com a
+    // kfs_ antiga valendo faria o containment mentir (o `revoked` do freeze
+    // disse que morreram). Reemitir é decisão de `service rotate`.
+    assert(registry.serviceByServiceToken(k1) == null, "antiga segue morta apos o unfreeze")
+    assert(registry.serviceByServiceToken(k2) == null, "nova segue morta apos o unfreeze")
+    assert(registry.pendingRotationCount(service.id) == 0, "sem overlap fantasma apos o unfreeze")
 }
 
 test "contencao: marcas de freeze sobrevivem ao restart", "freeze-unit" {
