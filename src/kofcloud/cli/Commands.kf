@@ -774,21 +774,55 @@ Int cmdStatus(List<String> args) {
 // `doctor` — `bodyContainsId`). Lista de dispositivos sem saber qual esta
 // vivo obriga o operador a cruzar dois comandos para responder "este
 // notebook esta no ar?".
-String deviceListLine(Device device, String presenceRaw, String presenceError) {
-    var presence = "OFFLINE"
+// Presenca do device derivada do fio: "ONLINE"/"OFFLINE"/"desconhecido (...)".
+// Fonte unica da linha de texto e do --json (as duas nao podem divergir).
+String presenceOf(String deviceId, String presenceRaw, String presenceError) {
     if (presenceError.length > 0) {
-        presence = "desconhecido (" + presenceError + ")"
-    } else if (bodyContainsId(presenceRaw, device.id)) {
-        presence = "ONLINE"
+        return "desconhecido (" + presenceError + ")"
     }
-    return device.name + "  " + device.id + "  " + device.status + "  tunel: " + presence
+    if (bodyContainsId(presenceRaw, deviceId)) {
+        return "ONLINE"
+    }
+    return "OFFLINE"
+}
+
+// Listagens em JSON (CI/automacao): delegam na MESMA serializacao do fio
+// (`serviceJson`/`deviceJson` do control plane — o que o operador ve no
+// curl e o que a CLI imprime), e o device ganha o eixo de presenca que a
+// API nao carrega por device (vem do /v1/presence). Nada inventado: saida
+// vazia e `[]`, nunca texto de "nenhum servico".
+String serviceListJsonFor(List<Service> services) {
+    var parts = listOf<String>()
+    for (var service in services) {
+        parts.add(serviceJson(service))
+    }
+    return "[" + joinStrings(parts, ",") + "]"
+}
+
+String deviceListJsonFor(List<Device> devices, String presenceRaw, String presenceError) {
+    var parts = listOf<String>()
+    for (var device in devices) {
+        var entry = mapOf()
+        entry.put("id", device.id)
+        entry.put("deviceId", device.id)
+        entry.put("name", device.name)
+        entry.put("status", device.status)
+        entry.put("tunnel", presenceOf(device.id, presenceRaw, presenceError))
+        parts.add(json.encode(entry))
+    }
+    return "[" + joinStrings(parts, ",") + "]"
+}
+
+String deviceListLine(Device device, String presenceRaw, String presenceError) {
+    return device.name + "  " + device.id + "  " + device.status + "  tunel: " + presenceOf(device.id, presenceRaw, presenceError)
 }
 
 Int cmdDeviceList(List<String> args) {
-    if (extraPositional(args, 0)) {
-        println("uso: kof cloud device list")
+    if (extraPositional(args, 0) || flagDuplicated(args, "--json")) {
+        println("uso: kof cloud device list [--json]")
         return 1
     }
+    var asJson = hasFlag(args, "--json")
     var session = loadSession()
     if (session == null) {
         println(notLoggedInLine())
@@ -796,18 +830,23 @@ Int cmdDeviceList(List<String> args) {
     }
     try {
         var devices = fetchDevices(session.controlUrl, session.token)
-        if (devices.size == 0) {
-            println("nenhum dispositivo registrado")
-            return 0
-        }
         // Presenca: uma falha na consulta nao esconde a lista — a coluna vira
-        // "desconhecido", nunca um OFFLINE inventado.
+        // "desconhecido", nunca um OFFLINE inventado (texto e --json usam a
+        // mesma `presenceOf`).
         var presenceRaw = ""
         var presenceError = ""
         try {
             presenceRaw = requireOk(http.get(session.controlUrl + "/v1/presence", authHeader(session.token)))
         } catch (String e) {
             presenceError = e
+        }
+        if (asJson) {
+            println(deviceListJsonFor(devices, presenceRaw, presenceError))
+            return 0
+        }
+        if (devices.size == 0) {
+            println("nenhum dispositivo registrado")
+            return 0
         }
         for (var device in devices) {
             println(deviceListLine(device, presenceRaw, presenceError))
@@ -1130,10 +1169,11 @@ String serviceListLine(Service service, List<Device> devices) {
 }
 
 Int cmdServiceList(List<String> args) {
-    if (extraPositional(args, 0)) {
-        println("uso: kof cloud service list")
+    if (extraPositional(args, 0) || flagDuplicated(args, "--json")) {
+        println("uso: kof cloud service list [--json]")
         return 1
     }
+    var asJson = hasFlag(args, "--json")
     var session = loadSession()
     if (session == null) {
         println(notLoggedInLine())
@@ -1141,6 +1181,12 @@ Int cmdServiceList(List<String> args) {
     }
     try {
         var services = fetchServices(session.controlUrl, session.token)
+        if (asJson) {
+            // Saida estavel para CI: `[]` tambem e uma lista valida (nunca o
+            // texto de "nenhum servico", que quebraria o parser).
+            println(serviceListJsonFor(services))
+            return 0
+        }
         if (services.size == 0) {
             println("nenhum servico publicado")
             return 0

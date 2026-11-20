@@ -252,6 +252,15 @@ serviço novo passa a ser sondado no ciclo seguinte (antes, STATUS preso no
 UNKNOWN e removido reportado para sempre).
 Prova: `tests/reload_test.kf` + OPENED em `tests/protocol_test.kf` + `health-reload`/`health-follows-reload` em `tests/health_test.kf`.
 
+**Listagens em JSON para CI (`--json`).** `kof cloud service list --json` e
+`device list --json` imprimem a MESMA serialização do fio (`serviceJson`)
+e, no device, o eixo de presença (`tunnel`: ONLINE/OFFLINE/"desconhecido
+(motivo)") derivado do `/v1/presence` — nenhum script precisa parsear a
+tabela de texto nem chamar `curl`. A presença vive numa pura única
+(`presenceOf`) usada pelo texto E pelo JSON (as duas não divergem); lista
+vazia é `[]`, nunca o texto de "nenhum serviço" (que quebraria o parser).
+Prova: `tests/json_output_test.kf` (2: puras + e2e).
+
 **Estado (presenca real do tunel): ✅ implementado.** O Edge espelha
 bind/unbind num mapa do Registry (nao persistido); `GET /v1/presence`
 (autenticado, filtrado por conta) lista devices com sessao viva; `kof cloud
