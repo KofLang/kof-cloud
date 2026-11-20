@@ -52,7 +52,7 @@ o run total imprime `67 passed, 0 failed`. Falha = nome do teste + assert
 | vocabulario fechado do status (F5) | `tests/status_report_test.kf` | 2 |
 | backoff + drift de Edge | `tests/backoff_test.kf` | 4 |
 | registry | `tests/registry_test.kf` | 12 |
-| limites + varredura + push de SERVICES + trava de citação | `tests/limits_test.kf` | 10 |
+| limites + varredura + push de SERVICES + trava de citação + família em fonte única | `tests/limits_test.kf` | 11 |
 | service token | `tests/service_token_test.kf` | 15 |
 | erros R6 | `tests/errors_test.kf` | 11 |
 | dominios (+ certificado x hostname) | `tests/domains_test.kf` | 14 |
@@ -114,4 +114,4 @@ o run total imprime `67 passed, 0 failed`. Falha = nome do teste + assert
 | push do uso para billing (F18 s4) | `tests/usage_push_test.kf` | 4 |
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 5 |
 
-Total: 462 testes. Ver `15-tests.md` para a matriz.
+Total: 463 testes. Ver `15-tests.md` para a matriz.

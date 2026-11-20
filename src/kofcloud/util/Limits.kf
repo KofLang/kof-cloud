@@ -262,6 +262,23 @@ Int refreshPollMsFrom(Int configured) {
     return configured
 }
 
+// Intervalo do `deploy --watch` (ms): com que passo o manifesto e re-lido e
+// comparado. Mora aqui, junto dos outros PASSOS de laco
+// (`limitRefreshPollMs`/`limitServicesPushMs`), para a familia `*MsFrom` ter
+// uma casa so — antes ficava em `cli/Deploy.kf`, longe dos irmaos. Recuo
+// seguro: 0/negativo virariam busy-loop lendo e parseando o arquivo — volta
+// ao default. `kofcloud.limits.deployWatchMs`.
+Int deployWatchMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 2000
+    }
+    return configured
+}
+
+Int limitDeployWatchMs() {
+    return deployWatchMsFrom(config.int("kofcloud.limits.deployWatchMs", 2000))
+}
+
 Int limitRefreshPollMs() {
     return refreshPollMsFrom(config.int("kofcloud.limits.refreshPollMs", 1000))
 }

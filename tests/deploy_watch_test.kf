@@ -47,6 +47,9 @@ test "watch: limits do passo com recuo seguro", "deploy-watch" {
     assert(deployWatchMsFrom(-1) == 2000, "negativo recai no default")
     assert(deployWatchMsFrom(500) == 500, "positivo passa")
     assert(limitDeployWatchMs() == 2000, "default travado em 2 s")
+    // A pura mora em `util/Limits.kf` junto dos outros passos de laco (import
+    // `kofcloud.util.Limits`): sem ela la, este assert nem compila.
+    assert(limitDeployWatchMs() == deployWatchMsFrom(0), "default = recuo de 0")
 }
 
 test "watch: uso/help documentam --watch e a combinacao proibida", "deploy-watch" {

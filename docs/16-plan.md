@@ -60,7 +60,7 @@ congelava TODO cadastro novo em TODA conta**), `kofcloud.limits.services` (por d
 `kofcloud.limits.streams` (por túnel, default 128, **zero/inválido recaem no
 default via `streamLimitFrom` pura — 0 recusaria todo OPEN**, com
 `429`/`RESET LIMIT_EXCEEDED`).
-Prova: `tests/limits_test.kf` (10 testes: limites + recuo seguro do passo
+Prova: `tests/limits_test.kf` (11 testes: limites + recuo seguro do passo
 da varredura de credenciais e do pusher de SERVICES) + `tests/e2e_multiservice_test.kf`
 (3 serviços no mesmo túnel, com isolamento de falha).
 
@@ -1070,7 +1070,7 @@ Desenho fatiado:
   **Implementado (sincronização — `deploy --watch`; auto-update pendente):**
   o manifesto local é a fonte — `kof cloud deploy --watch` re-lê o arquivo a
   cada passo (`kofcloud.limits.deployWatchMs`, default 2 s, recuo seguro
-  `deployWatchMsFrom` — 0/negativo viraria busy-loop lendo/parseando) e,
+  `deployWatchMsFrom` em `util/Limits.kf`, junto dos outros passos de laço — 0/negativo viraria busy-loop lendo/parseando) e,
   quando o TEXTO muda, aplica com a MESMA semantica do deploy (build →
   artifact → publish idempotente), serviço a serviço com falha isolada; o
   primeiro apply é imediato. O que o watch NÃO faz, por desenho: **nunca
@@ -1215,7 +1215,7 @@ sem mudar formato público):
   `tests/services_push_test.kf` (2 testes: aplicação pura + e2e com
   healthMs=60000 — o refresher não roda na janela do teste, então o
   publish/remoção que roteia veio pelo push) e `limits-push` em
-  `tests/limits_test.kf` (10 testes).
+  `tests/limits_test.kf` (11 testes).
 
 **Teto da sonda de health na fonte unica.** `limitHealthHeadBytes()` era o
 ultimo literal numerico do caminho de health (16384 em `agent/Health.kf`);

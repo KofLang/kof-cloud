@@ -238,5 +238,42 @@ test "limits: os planos citam as puras de passo/prazo pelo nome", "limits-docs" 
         assert(plan.indexOf("servicesPushMsFrom") >= 0, "16-plan cita a pura do pusher")
         assert(plan.indexOf("webhookTimeoutSecFrom") >= 0, "16-plan cita a pura do prazo do webhook")
         assert(plan.indexOf("backoffBaseLimitFrom") >= 0 && plan.indexOf("backoffMaxLimitFrom") >= 0, "16-plan cita as puras do backoff (Fase 1)")
+        assert(shipped.indexOf("tokenExpiryWarnMsFrom") >= 0, "linha de limites do 18 lista a janela de aviso do kfc_")
     }
+}
+
+test "limits: a familia de passos e prazos mora em Limits.kf", "limits-family" {
+    // Trava de fonte: os PASSOS de laco e os PRAZOS tem uma casa so
+    // (`util/Limits.kf`), ao lado dos tetos de capacidade. Antes o passo do
+    // `deploy --watch` vivia em `cli/Deploy.kf` — a mesma familia partida em
+    // dois arquivos, e uma afinacao de config podia divergir em silencio.
+    var limitsRaw = File("src/kofcloud/util/Limits.kf").readText()
+    var limits = ""
+    if (limitsRaw != null) {
+        limits = limitsRaw
+    }
+    assert(limits.length > 0, "a fonte dos limites e legivel")
+    var family = listOf<String>()
+    family.add("expirySweepMsFrom")
+    family.add("servicesPushMsFrom")
+    family.add("deployWatchMsFrom")
+    family.add("refreshPollMsFrom")
+    family.add("webhookTimeoutSecFrom")
+    family.add("backoffBaseLimitFrom")
+    family.add("backoffMaxLimitFrom")
+    family.add("usagePushMsFrom")
+    family.add("tokenExpiryWarnMsFrom")
+    var i = 0
+    while (i < family.length) {
+        assert(limits.indexOf("Int " + family[i] + "(") >= 0 || limits.indexOf("Long " + family[i] + "(") >= 0, "a familia mora em Limits: " + family[i])
+        i = i + 1
+    }
+    // E o passo do watch nao pode voltar para a CLI.
+    var deployRaw = File("src/kofcloud/cli/Deploy.kf").readText()
+    var deploy = ""
+    if (deployRaw != null) {
+        deploy = deployRaw
+    }
+    assert(deploy.indexOf("Int deployWatchMsFrom(") < 0, "a pura do watch nao volta para a CLI")
+    assert(deploy.indexOf("limitDeployWatchMs()") >= 0, "a CLI consome a fonte unica")
 }

@@ -772,20 +772,6 @@ String manifestField(String entry, String key) {
     return num
 }
 
-// Intervalo do watch (ms): com que passo o manifesto e re-lido e comparado.
-// Recuo seguro na familia `*MsFrom`: 0/negativo virariam busy-loop lendo e
-// parseando o arquivo — volta ao default. `kofcloud.limits.deployWatchMs`.
-Int deployWatchMsFrom(Int configured) {
-    if (configured <= 0) {
-        return 2000
-    }
-    return configured
-}
-
-Int limitDeployWatchMs() {
-    return deployWatchMsFrom(config.int("kofcloud.limits.deployWatchMs", 2000))
-}
-
 // Arquivo de parada do watch: separado do stopFile do Agent (`disconnect`
 // e do tunel/redeploy), porque o watch e um processo proprio — encerra-lo
 // nao pode parar o connect de alguem. Mesmo padrao de sentinela observada

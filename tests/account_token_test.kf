@@ -90,6 +90,8 @@ test "credencial de conta: aviso de expiracao proxima so para valida na janela",
     assert(window == tokenExpiryWarnMsFrom(0), "default = recuo de 0")
     assert(tokenExpiryWarnMsFrom(-5) == window, "negativo recai no default")
     assert(tokenExpiryWarnMsFrom(123) == 123, "valor configurado vale")
+    assert(limitTokenExpiryWarnMs() == tokenExpiryWarnMsFrom(0), "default = recuo de 0")
+    assert(limitTokenExpiryWarnMs() == 604800000L, "janela travada em 7 dias (Long)")
     // A linha do CLI: sem campo/sem TTL/vencida/fora = silencio; dentro =
     // orientacao acionavel com a mesma janela do fio.
     assert(tokenAccountWarningLine("", "0") == "", "sem campo: silencio")
