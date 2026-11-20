@@ -93,6 +93,11 @@ test "token de servico: revogar o dispositivo poda as credenciais dos servicos" 
     var token = registry.issueServiceToken(account.id, service.id)
     assert(registry.revokeDevice(account.id, device.id) == true, "dispositivo revogado")
     assert(registry.serviceByServiceToken(token) == null, "credencial podada junto")
+    // Cruzamento revoke-device × higiene (espelho do removeService): a poda
+    // do device REVOKED também limpa o relatório — órfã de device morto não
+    // é pendência de rotação.
+    assert(registry.tokensWithoutExpiry(account.id).size == 0, "orfa de device morto sai da higiene")
+    assert(registry.servicesWithUnrotatedTokens(account.id).size == 0, "sem nome fantasma no relatorio")
 }
 
 test "token de servico: persiste entre recargas do registry" {
