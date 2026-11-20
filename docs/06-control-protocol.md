@@ -265,6 +265,7 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `400` | `KCF119` missing or ambiguous Host header | Edge: `Host` ausente, duplicado ou com caractere inválido; antes de rotear, métrica `_invalid_host`. O Edge roteia pelo `Host` e reconstrói o pedido ao serviço local — valores divergentes seriam host-header injection |
 | `400` | `KCF132` invalid or ambiguous request line | Edge: linha de requisição fora de `METODO SP PATH SP HTTP/1.x`; antes de rotear, métrica `_invalid_request_line` |
 | `400` | `KCF133` invalid header line | Edge: cabeçalho fora de `Nome: valor` (nome com espaço/controle, valor com CR/LF/NUL); antes de rotear, métrica `_invalid_header_line` |
+| `400` | `KCF136` HEAD request with body | Edge: `HEAD` com corpo (RFC 9110 §9.3.2 — o cabeçalho descreve o GET, não transporta dados); antes do rate limit e do relay, métrica `_head_with_body` |
 | `502` | `KCF131` upstream sent an invalid HTTP response | Edge: o serviço local devolveu bytes sem linha de status válida; recusa com 502 sem repassar/ecoar os bytes; métrica `_invalid_response` |
 | `403` | `KCF111` method or path not allowed | Edge: método/path fora da allowlist do serviço (`wafAllowCheck` antes do relay, sem stream; fail-closed só para quem declarou, lista vazia = legado passa) + header `X-KofCloud-WAF: blocked` + métrica `_waf_allow_denied` |
 | `504` | `KCF112` upstream did not respond in time | Edge: watchdog do stream sem DATA no prazo (`kofcloud.limits.tunnelIdleMs`); sem bytes → 504, com parcial → entrega o parcial; métrica `_timeout` |

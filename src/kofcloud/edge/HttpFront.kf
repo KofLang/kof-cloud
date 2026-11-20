@@ -104,6 +104,18 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
         noteHttpFinished("ok", "", raw.length, txt.length, time.now() - started)
         return
     }
+    // HEAD com corpo (RFC 9110 §9.3.2): o corpo de um HEAD nao tem
+    // semantica. O Edge nao entrega o corpo ao servico local, entao repassar
+    // o pedido faria a aplicacao bloquear lendo um corpo que nunca chega —
+    // e o cliente nunca saberia que o pedido dele e invalido. Recusa antes
+    // do rate limit (o erro e do enquadramento, nao da cota do hostname).
+    if (requestHasBody(request.method, request.body)) {
+        var headBody = errorResponse(400, errHeadWithBody())
+        conn.send(headBody)
+        conn.close()
+        noteHttpFinished("denied", "KCF136", raw.length, headBody.length, time.now() - started)
+        return
+    }
     var host = hostOnly(headerValue(request.headers, "host"))
     // Rate limit ANTES de rotear/autorizar/tocar no tunel: o 429 nao revela
     // nada sobre o servico (existe? qual exposicao?) e nao consome recurso

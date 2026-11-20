@@ -69,6 +69,8 @@ test "metricas: nomes e saidas no formato Prometheus", "metrics" {
     assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_request_line"), "linha de requisicao")
     noteHttpFinished("denied", "KCF133", 10, 20, 1)
     assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_header_line"), "linha de header")
+    noteHttpFinished("denied", "KCF136", 10, 20, 1)
+    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_head_with_body"), "HEAD com corpo")
     noteHttpFinished("denied", "KCF110", 10, 20, 1)
     assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_body_too_large"), "corpo grande")
     assert(metricHas(exposition, "kofcloud_edge_http_request_bytes_total"), "bytes de pedido")
@@ -365,7 +367,7 @@ test "metricas: todo KCF passado ao noteHttpFinished tem sufixo (invariante de f
     // _other documentado); os demais precisam estar mapeados.
     var exempt = listOf("KCF106")
     var missing = listOf<String>()
-    for (var code in listOf("KCF100", "KCF101", "KCF102", "KCF103", "KCF105", "KCF107", "KCF108", "KCF109", "KCF110", "KCF111", "KCF112", "KCF115", "KCF116", "KCF118", "KCF119", "KCF131", "KCF132", "KCF133")) {
+    for (var code in listOf("KCF100", "KCF101", "KCF102", "KCF103", "KCF105", "KCF107", "KCF108", "KCF109", "KCF110", "KCF111", "KCF112", "KCF115", "KCF116", "KCF118", "KCF119", "KCF131", "KCF132", "KCF133", "KCF136")) {
         if (httpFront.indexOf("\"" + code + "\"") < 0) {
             continue
         }

@@ -189,6 +189,15 @@ test "framing: 1xx/204/304 e HEAD nunca entregam corpo", "framing-status-unit" {
     assert(statusAllowsBody(204, "GET") == false, "204 sem corpo")
     assert(statusAllowsBody(304, "GET") == false, "304 sem corpo")
     assert(statusAllowsBody(100, "POST") == false, "1xx sem corpo")
+    // Corpo de REQUISICAO que o metodo recusa (lado simetrico): so HEAD, e
+    // so quando ha bytes — GET/POST/DELETE com corpo seguem legitimos.
+    assert(requestHasBody("HEAD", bytesFromString("abc")), "HEAD com corpo recusado")
+    assert(requestHasBody("HEAD", bytesEmpty()) == false, "HEAD sem corpo passa")
+    assert(requestHasBody("GET", bytesFromString("abc")) == false, "GET com corpo passa")
+    assert(requestHasBody("POST", bytesFromString("abc")) == false, "POST com corpo passa")
+    assert(requestHasBody("DELETE", bytesFromString("x")) == false, "DELETE com corpo passa")
+    assert(errHeadWithBody().indexOf("KCF136") >= 0, "codigo KCF136")
+    assert(errHint(errHeadWithBody()).indexOf("HEAD") >= 0, "Hint explica o metodo")
     // 204/1xx perdem tambem o Content-Length; 304 e HEAD mantem (descrevem
     // a representacao do GET).
     var n204 = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 204 No Content\r\nContent-Length: 5\r\n\r\nhello"), "GET"))
@@ -416,6 +425,14 @@ test "framing: enquadramento ambiguo vira 400 KCF118 e gigante vira 413", "frami
     // Enquadramento valido atravessa: sem rota, 404 opaco (nao 400/413).
     var plain = httpPostRaw(httpPort, "/", host, listOf<String>(), "ok")
     assert(statusOf(plain) == 404, "CL valido chega ao roteamento")
+
+    // HEAD com corpo: 400 KCF136 antes de rotear. O Edge nao entrega o corpo
+    // ao servico local, entao aceitar o pedido esconderia do cliente um erro
+    // dele; e um servico local que lesse o corpo bloquearia esperando bytes
+    // que o relay nunca manda.
+    var headBody = rawExchange(httpPort, "HEAD / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 3\r\nConnection: close\r\n\r\nabc")
+    assert(statusOf(headBody) == 400, "HEAD com corpo -> 400 (recebido " + intToString(statusOf(headBody)) + ")")
+    assert(bodyOf(headBody).indexOf("KCF136") >= 0, "KCF136 no corpo")
 
     // Conta por motivo, sem ecoar o valor do header.
     var counted = false

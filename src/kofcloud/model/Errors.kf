@@ -319,6 +319,13 @@ String errInvalidHeaderLine() {
     return "KCF133: invalid header line"
 }
 
+// HEAD com corpo (RFC 9110 §9.3.2): o corpo de um HEAD nao tem semantica, e
+// repassar o pedido faria o servico local bloquear esperando um corpo que o
+// Edge nao entrega. Recusa antecipada em vez de descartar em silencio.
+String errHeadWithBody() {
+    return "KCF136: HEAD request with body"
+}
+
 // ---- dominio proprio (Fase 6) ----
 
 String errInvalidCustomHostname() {
@@ -435,6 +442,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF134") >= 0) {
         return "Tentativas de login demais para esta conta — aguarde a janela (kofcloud.limits.loginWindowMs) e tente de novo."
+    }
+    if (raw.indexOf("KCF136") >= 0) {
+        return "HEAD nao aceita corpo — envie o pedido sem corpo (o HEAD descreve a resposta do GET, nao transporta dados)."
     }
     if (raw.indexOf("KCF107") >= 0) {
         return "Muitas requisicoes em pouco tempo — aguarde um instante e tente de novo."

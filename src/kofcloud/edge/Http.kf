@@ -654,6 +654,15 @@ Int statusCodeOf(String statusLine) {
 // do header fazia o cliente ler como corpo da PROXIMA resposta (a conexao
 // fecha, entao o efeito e bytes inventados no fim do stream). `HEAD` entra
 // pela mesma razao: os headers descrevem o GET, o corpo nao existe.
+//
+// Corpo de REQUISICAO que o metodo nao aceita. Hoje so HEAD: RFC 9110
+// §9.3.2 diz que o HEAD nao transporta corpo (o cabecalho descreve o GET).
+// O Edge nao entrega o corpo ao servico local de qualquer forma, e aceitar
+// um pedido com corpo que o relay descarta esconde do cliente um erro dele.
+Bool requestHasBody(String method, Byte[] body) {
+    return method == "HEAD" && body.length > 0
+}
+
 Bool statusAllowsBody(Int code, String method) {
     if (method == "HEAD") {
         return false

@@ -182,6 +182,8 @@ void noteHttpFinished(String outcome, String deniedDetail, Int requestBytes, Int
             observability.counter(metricHttpDenied() + "_invalid_header_line")
         } else if (deniedDetail == "KCF111") {
             observability.counter(metricHttpDenied() + "_waf_allow_denied")
+        } else if (deniedDetail == "KCF136") {
+            observability.counter(metricHttpDenied() + "_head_with_body")
         } else {
             observability.counter(metricHttpDenied() + "_other")
         }
