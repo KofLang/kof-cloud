@@ -137,7 +137,9 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 * **O health check lê só a linha de status da resposta.** O `GET` do Agent
   não segue o corpo nem revalida a cada requisição do Edge: um serviço que
   responde `200` e depois falha é detectado na próxima checagem (ciclo
-  `kofcloud.limits.healthMs`, 5 s), não na hora. O prazo é por checagem e
+  `kofcloud.limits.healthMs`, 5 s), não na hora. O código precisa ser **2xx**
+  (`healthStatusFor`): 3xx/4xx contam como `DEGRADED` (a sonda não segue
+  redirecionamento nem trata 404 como saudável). O prazo é por checagem e
   mede até o cabeçalho chegar — um serviço que manda cabeçalho rápido e
   trava no corpo conta como `ONLINE`.
 * **O Edge fala HTTP/1.1.** Sem pipelining avançado, sem trailers.

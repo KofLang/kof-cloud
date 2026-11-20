@@ -140,7 +140,7 @@ alternativa): só o código obrigava o operador a reproduzir o comando à mão.
     dispositivo, e a mensagem não disfarça isso de "ausente"
  6. com `--check`: publicado **neste dispositivo** E respondendo localmente?
     (`checkLocalServiceFor`,
-    que agora usa a MESMA sonda do Agent: `GET /` com prazo, status < 500 —
+    que agora usa a MESMA sonda do Agent: `GET /` com prazo, status 2xx —
     antes era só um connect TCP, e um serviço que respondia `500` ou que
     aceitava e nunca respondia passava como saudável; e um homônimo publicado
     noutro device não conta como publicado aqui) + artefato declarado

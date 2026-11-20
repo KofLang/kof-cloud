@@ -42,14 +42,7 @@ String checkService(Service service) {
             // Aceitou a conexao mas nao respondeu nada: nao serve http.
             status = statusDegraded()
         } else {
-            var code = parseStatusLine(head)
-            if (code >= 500) {
-                status = statusDegraded()
-            } else if (code >= 100) {
-                status = statusOnline()
-            } else {
-                status = statusDegraded()
-            }
+            status = healthStatusFor(parseStatusLine(head))
         }
     } catch (String e) {
         // So se chega aqui depois do connect: a conexao abriu e a resposta
@@ -59,6 +52,20 @@ String checkService(Service service) {
     }
     closeQuietly(conn)
     return status
+}
+
+// Veredito do codigo HTTP da sonda. Pura: o desenho do health dizia
+// "status < 500 = ONLINE", mas isso aprovava 404/403/301 — um servico com a
+// rota de health removida (ou que so devolve pagina de erro) ficava ONLINE e
+// o Edge roteava para ele. Regra honesta: 2xx = ONLINE (o servico responde o
+// que promete); 1xx/3xx/4xx/5xx e codigo invalido (0) = DEGRADED — o Edge
+// continua roteando DEGRADED, mas o operador ve o sinal e o `status` mostra.
+// O caminho da sonda com allowlist ja evita o 403 legitimo (healthPath).
+String healthStatusFor(Int code) {
+    if (code >= 200 && code < 300) {
+        return statusOnline()
+    }
+    return statusDegraded()
 }
 
 // Connect com resultado nulavel: a recusa e um valor (OFFLINE), nao um

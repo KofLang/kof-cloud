@@ -102,10 +102,14 @@ para o teto (são o que desbloqueia o consumidor). Prova:
 **Health check HTTP com prazo (parte do contrato de `09-flows.md` §6 e `04-service.md`).**
 O check só fazia um connect TCP e `DEGRADED` nunca era emitido: um serviço que
 respondia `500` continuava `ONLINE` no Edge. Agora `agent/Health.kf` faz `GET`
-de verdade (status < 500 = `ONLINE`, ≥ 500 ou sem resposta no prazo =
-`DEGRADED`, recusa = `OFFLINE`); o prazo (`kofcloud.limits.healthTimeoutMs`,
-2 s) usa o único mecanismo do Kof para `receive` sem timeout: uma task fecha
-a conexão e o receive em voo lança (medido). Prova: `tests/health_test.kf` (4).
+de verdade. **2xx = `ONLINE`**, qualquer outro código (3xx/4xx/5xx ou
+inválido) ou sem resposta no prazo = `DEGRADED`, recusa = `OFFLINE` — a
+regra antiga "status < 500 = ONLINE" aprovava 404/403/301: um serviço com a
+rota de health removida ficava ONLINE e o Edge roteava para ele (a decisão
+é a pura `healthStatusFor`, coberta pelo teste). O prazo
+(`kofcloud.limits.healthTimeoutMs`, 2 s) usa o único mecanismo do Kof para
+`receive` sem timeout: uma task fecha a conexão e o receive em voo lança
+(medido). Prova: `tests/health_test.kf` (5).
 
 ## Fase 5 — autenticação
 

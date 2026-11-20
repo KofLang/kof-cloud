@@ -96,7 +96,7 @@ o run total imprime `67 passed, 0 failed`. Falha = nome do teste + assert
 | falha de bind visível do serve (F16 s3) | `tests/serve_bind_test.kf` | 3 |
 | leitura de métricas pela CLI | `tests/metrics_cmd_test.kf` | 2 |
 | credencial da conta com ciclo de vida (F19 s3) | `tests/account_token_test.kf` | 11 |
-| health HTTP com prazo (F4) | `tests/health_test.kf` | 4 |
+| health HTTP com prazo (F4) | `tests/health_test.kf` | 5 |
 | teto de resposta + cabeçalho + leitura (F14 s3 parcial) | `tests/relay_limit_test.kf` | 4 |
 | profundidade de fila por stream (F4) | `tests/queue_depth_test.kf` | 3 |
 | teto de conexões públicas (F4) | `tests/conn_limit_test.kf` | 2 |

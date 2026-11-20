@@ -1,5 +1,6 @@
 import kofcloud.agent.Agent
 import kofcloud.agent.Health
+import kofcloud.cli.Deploy
 import kofcloud.model.Service
 import kofcloud.protocol.Bytes
 import kofcloud.protocol.Session
@@ -242,4 +243,35 @@ test "health: apos hot-reload sonda o servico novo e para de sondar o removido",
     time.sleep(250)
     firstListener.close()
     lateListener.close()
+}
+
+test "health: status nao-2xx vira DEGRADED (antes 404 ficava ONLINE)", "health" {
+    // O desenho dizia "status < 500 = ONLINE", mas isso aprovava 404/403/301:
+    // um servico com a rota de saude removida (ou so devolvendo pagina de
+    // erro) ficava ONLINE e o Edge roteava para ele. Regra: so 2xx = ONLINE.
+    assert(healthStatusFor(200) == statusOnline(), "200 = ONLINE")
+    assert(healthStatusFor(204) == statusOnline(), "204 = ONLINE")
+    assert(healthStatusFor(299) == statusOnline(), "299 = ONLINE (fim da faixa)")
+    assert(healthStatusFor(301) == statusDegraded(), "301 = DEGRADED")
+    assert(healthStatusFor(403) == statusDegraded(), "403 = DEGRADED")
+    assert(healthStatusFor(404) == statusDegraded(), "404 = DEGRADED")
+    assert(healthStatusFor(500) == statusDegraded(), "500 = DEGRADED")
+    assert(healthStatusFor(199) == statusDegraded(), "1xx = DEGRADED")
+    assert(healthStatusFor(0) == statusDegraded(), "codigo invalido (0) = DEGRADED")
+
+    // Fim a fim com servidor real: 404 e 301 nao sao saudaveis para o check
+    // local do deploy (mesma sonda do Agent).
+    var notFoundPort = 20051
+    var redirectPort = 20052
+    var nf = net.listen(notFoundPort)
+    var nfServer = spawn { serveRawFixed(nf, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n") }
+    var rd = net.listen(redirectPort)
+    var rdServer = spawn { serveRawFixed(rd, "HTTP/1.1 301 Moved Permanently\r\nLocation: /x\r\nContent-Length: 0\r\nConnection: close\r\n\r\n") }
+    assert(waitForPort(notFoundPort, 60), "404 no ar")
+    assert(waitForPort(redirectPort, 60), "301 no ar")
+    assert(checkLocalService("127.0.0.1", notFoundPort) == false, "404 nao e 'respondendo'")
+    assert(checkLocalService("127.0.0.1", redirectPort) == false, "301 nao e 'respondendo'")
+    assert(checkService(healthService(notFoundPort, "")) == statusDegraded(), "404 -> DEGRADED pelo Agent")
+    nf.close()
+    rd.close()
 }

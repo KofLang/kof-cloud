@@ -139,9 +139,9 @@ de saúde). Resultado:
 
 | Estado | Condição |
 |---|---|
-| `ONLINE` | conecta e responde com status < 500 |
+| `ONLINE` | conecta e responde com status **2xx** (a sonda pede o caminho de health: `/` ou o primeiro literal da allowlist) |
 | `OFFLINE` | recusa a conexão |
-| `DEGRADED` | conecta mas responde ≥ 500 (ou status inválido), ou não responde dentro do prazo |
+| `DEGRADED` | conecta mas responde fora de 2xx (3xx/4xx/5xx ou status inválido), ou não responde dentro do prazo |
 | `UNKNOWN` | ainda não verificado |
 
 O vocabulário é **fechado** (`statusIsKnown`): a API de health recusa
