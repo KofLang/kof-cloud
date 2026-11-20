@@ -846,7 +846,10 @@ domínios/tokens pelo terminal afasta quem não é técnico — e gestão visual
   a janela, então usuário legítimo que errou a senha não fica travado pelo
   próprio sucesso. A chave é o handle porque o control plane não vê o IP de
   origem em `web.app()` — e força bruta dirigida a uma conta é o ataque que
-  importa aqui. Prova: `tests/login_limit_test.kf` (2).
+  importa aqui. O cadastro implícito da CLI (`loginOrCreate`) respeita o
+  mesmo teto: a falha limitada (`KCF134`) sobe intacta, em vez de cair no
+  cadastro — que criava conta para handle bloqueado — ou ser mascarada como
+  credencial inválida. Prova: `tests/login_limit_test.kf` (3).
 
 **Estado: slices 1, 2 e 3 ✅ implementados.** Desenho fatiado (cada slice é
 um incremento testável; o painel consome só a API pública `/v1` — nenhum

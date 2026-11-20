@@ -49,6 +49,14 @@ test "login limit: fonte unica, codigo e Hint", "loginlimit-unit" {
     registry.loginAttemptReset("mel")
     assert(registry.loginAttemptBlocked("mel") == false, "reset libera de novo")
     assert(blocked == false, "sem efeito colateral no account")
+
+    // A CLI reconhece o teto (pura): a falha limitada sobe intacta e o
+    // cadastro implicito nao vira burleta nem mascara como senha invalida.
+    assert(loginRateLimited(errLoginRateLimited()), "KCF134 reconhecido")
+    assert(loginRateLimited("KCF134: too many login attempts"), "mesmo texto")
+    assert(loginRateLimited(errInvalidCredentials()) == false, "KCF003 nao e limite")
+    assert(loginRateLimited(errHandleTaken()) == false, "KCF002 nao e limite")
+    assert(loginRateLimited("") == false, "vazio nao e limite")
 }
 
 test "login limit: senha errada repetida vira 429 KCF134; acerto limpa", "loginlimit" {
@@ -89,4 +97,51 @@ test "login limit: senha errada repetida vira 429 KCF134; acerto limpa", "loginl
     registry.loginAttemptReset("mel")
     var back = httpPostJson(controlPort, "/v1/login", "{\"handle\":\"mel\",\"password\":\"segredo\"}", "")
     assert(statusOf(back) == 200, "acerto depois do reset")
+}
+
+test "login limit: o cadastro implicito nao burla o teto do handle", "loginlimit-cli" {
+    // O CLI entra pelo `loginOrCreate`: tenta entrar e, se o login FALHAR,
+    // cai no cadastro implicito. Com o handle sob ataque, o login volta 429
+    // KCF134 — e o fallback do cadastro RESPONDIA: ou criava a conta do
+    // handle bloqueado (burlando o teto do abuse prevention) ou devolvia
+    // "credencial invalida" (KCF003) para quem so precisa esperar a janela.
+    var controlPort = 20172
+    var registry = Registry(loginLimitPath("cli"))
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    var url = "http://127.0.0.1:" + intToString(controlPort)
+
+    // Handle que EXISTE, com a janela esgotada: o erro honesto (KCF134)
+    // precisa chegar ao operador, nao "senha invalida".
+    httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var i = 0
+    while (i <= limitLoginAttempts()) {
+        registry.loginAttemptBlocked("mel")
+        i = i + 1
+    }
+    var blocked = ""
+    try {
+        loginOrCreate(url, "mel", "segredo")
+    } catch (String e) {
+        blocked = e
+    }
+    assert(blocked.indexOf("KCF134") >= 0, "o teto chega ao operador (recebido: " + blocked + ")")
+    assert(blocked.indexOf("KCF003") < 0, "nao vira 'credencial invalida'")
+
+    // Handle NOVO, com a janela esgotada: o cadastro implicito nao pode
+    // criar a conta — o teto do abuse prevention vale para a CLI tambem.
+    var j = 0
+    while (j <= limitLoginAttempts()) {
+        registry.loginAttemptBlocked("ana")
+        j = j + 1
+    }
+    var blockedNew = ""
+    try {
+        loginOrCreate(url, "ana", "segredo2")
+    } catch (String e) {
+        blockedNew = e
+    }
+    assert(blockedNew.indexOf("KCF134") >= 0, "handle novo bloqueado tambem (recebido: " + blockedNew + ")")
+    assert(registry.accountByHandle("ana") == null, "nenhuma conta criada sob o teto")
 }

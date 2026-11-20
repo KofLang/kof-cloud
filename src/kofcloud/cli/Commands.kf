@@ -509,6 +509,15 @@ String createFailureMessage(String createError) {
     return createError
 }
 
+// O teto de tentativas de login (KCF134) e uma resposta HONESTA do control
+// plane: o handle esta sob ataque e a janela do abuse prevention ainda nao
+// zerou. Nao e "senha invalida" (KCF003) e, sobretudo, nao pode virar um
+// convite para cadastrar conta: o cadastro implicito seria um caminho para
+// BURlar o teto do handle. A falha limitada sobe intacta para o operador.
+Bool loginRateLimited(String error) {
+    return error.indexOf("KCF134") >= 0
+}
+
 String loginOrCreate(String control, String handle, String password) {
     var loginBody = mapOf()
     loginBody.put("handle", handle)
@@ -517,6 +526,11 @@ String loginOrCreate(String control, String handle, String password) {
         var raw = requireOk(http.post(control + "/v1/login", json.encode(loginBody), "Content-Type: application/json"))
         return mapField(json.decode<Map<String, String>>(raw), "token")
     } catch (String e) {
+        // Teto de login: nao ha nada a criar e nada a tentar de novo — o
+        // operador precisa saber que a janela ainda esta correndo.
+        if (loginRateLimited(e)) {
+            throw e
+        }
         var createBody = mapOf()
         createBody.put("handle", handle)
         createBody.put("email", handle + "@kofcloud.local")
