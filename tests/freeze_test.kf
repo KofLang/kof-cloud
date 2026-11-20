@@ -72,6 +72,24 @@ test "contencao: unfreeze restaura o status anterior", "freeze-unit" {
     assert(registry.serviceByServiceToken(k1) == null, "antiga segue morta apos o unfreeze")
     assert(registry.serviceByServiceToken(k2) == null, "nova segue morta apos o unfreeze")
     assert(registry.pendingRotationCount(service.id) == 0, "sem overlap fantasma apos o unfreeze")
+    // Cruzamento suspensao-previa × freeze: um serviço que JA estava
+    // SUSPENDED (decisão administrativa, não freeze) antes do ciclo tem o
+    // SUSPENDED como "anterior" — o unfreeze devolve SUSPENDED, nunca um
+    // status operacional. Reverter para ONLINE ressuscitaria a rota que o
+    // operador mandou derrubar.
+    var registry2 = Registry(freezePath("restore-susp"))
+    var account2 = registry2.createAccount("mel", "m@e.com", "segredo")
+    var device2 = registry2.registerDevice(account2, "nb2", "pk2")
+    var service2 = registry2.publishService(account2, device2.id, "api", "127.0.0.1", 8081, "http", "PUBLIC", "", "")
+    assert(registry2.suspendService(account2.id, service2.id), "suspensao previa")
+    assert(registry2.freezeService(account2.id, service2.id).ok, "freeze sobre o suspenso")
+    assert(registry2.unfreezeService(account2.id, service2.id).restored, "descongelou o suspenso")
+    var back2 = registry2.serviceById(service2.id)
+    assert(back2 != null, "suspenso existe")
+    if (back2 != null) {
+        assert(back2.status == "SUSPENDED", "voltou ao SUSPENDED previo, nao a ONLINE")
+        assert(registry2.resolveRoute(back2.hostname) == null, "rota segue fora apos o ciclo")
+    }
 }
 
 test "contencao: marcas de freeze sobrevivem ao restart", "freeze-unit" {
