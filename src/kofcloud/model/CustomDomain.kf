@@ -35,7 +35,16 @@ Bool validCustomHostname(String hostname) {
     if (hostname.indexOf(" ") >= 0 || hostname.indexOf("_") >= 0) {
         return false
     }
-    if (hostname.toLowerCase().endsWith(kofcloudDomainSuffix())) {
+    // Zona reservada da plataforma: qualquer subdominio (`x.kofcloud.io`)
+    // e o proprio APEX (`kofcloud.io`). O sufixo tem o ponto na frente, entao
+    // o apex — que nao tem — passava como dominio externo e uma conta podia
+    // registrar o dominio da propria plataforma. Normaliza caixa e ponto
+    // final (o ponto final ja foi recusado acima, mas o apex roda apos).
+    var lower = hostname.trim().toLowerCase()
+    if (lower == kofcloudDomain()) {
+        return false
+    }
+    if (lower.endsWith(kofcloudDomainSuffix())) {
         return false
     }
     var labels = splitHostname(hostname)

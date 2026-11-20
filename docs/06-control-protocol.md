@@ -243,7 +243,7 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `404` | `KCF021` device not found | device inexistente **ou de outra conta** (opaco por desenho) |
 | `404` | `KCF041` service not found | serviço inexistente **ou de outra conta** (opaco por desenho) |
 | `404` | `KCF122` domain not found | domínio inexistente **ou de outra conta** (opaco por desenho) |
-| `400` | `KCF120` invalid custom hostname | hostname fora do formato, IP literal ou `*.kofcloud.io` |
+| `400` | `KCF120` invalid custom hostname | hostname fora do formato, IP literal ou zona reservada (`*.kofcloud.io` e o apex `kofcloud.io`) |
 | `409` | `KCF121` hostname already registered | hostname já registrado (outra conta ou outro serviço) |
 | `409` | `KCF063` ambiguous token id | id curto casa com 2+ credenciais (usar o `kfs_` completo) |
 | `409` | `KCF124` does not resolve to this Edge | DNS ainda não aponta para este Edge |

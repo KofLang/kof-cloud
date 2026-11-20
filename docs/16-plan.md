@@ -143,7 +143,8 @@ limites/owner-gate no registry, códigos do Edge, Hint + trava de regressao
 verificação por `net.resolve` contra os destinos esperados do Edge (config
 `kofcloud.edgeHosts`, comparação exata, NXDOMAIN/falha vira `KCF124`
 indistinguível de "resolveu para outro lugar"), rota ativa só depois de
-VERIFIED, poda junto com serviço/dispositivo. Dono verificado antes do DNS
+VERIFIED, poda junto com serviço/dispositivo. A zona reservada cobre
+subdomínios **e o apex** (`kofcloud.io` também é recusado com `KCF120`). Dono verificado antes do DNS
 (sem trabalho de rede para conta alheia). CLI: `domain add --service`,
 `domain verify [--tls-cert <pem>]`, `domain remove`; erros `KCF120`–`KCF124`
 com `Hint:`. O `--tls-cert` julga o PEM localmente antes da rede (cobre o

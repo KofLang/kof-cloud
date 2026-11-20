@@ -107,6 +107,13 @@ test "dominio: validacao de hostname externo", "domains" {
     assert(validCustomHostname("api.example.c0m") == false, "digito no TLD")
     assert(validCustomHostname("site.mel.kofcloud.io") == false, "espaco kofcloud reservado")
     assert(validCustomHostname("mel.kofcloud.io") == false, "zona da conta reservada")
+    // O APEX da plataforma tambem e zona reservada: o sufixo tem o ponto na
+    // frente, entao "kofcloud.io" nao casava e passava como dominio externo —
+    // uma conta podia registrar o proprio dominio da plataforma e, com a
+    // borda entre os destinos esperados, disputa-lo (medido).
+    assert(validCustomHostname("kofcloud.io") == false, "apex da plataforma reservado")
+    assert(validCustomHostname("KofCloud.IO") == false, "apex reservado sem caixa")
+    assert(validCustomHostname("mykofcloud.io") == true, "sufixo parecido mas outro dominio e externo")
     assert(validCustomHostname("api_example.com") == false, "underscore")
     assert(validCustomHostname("api.example.com.") == false, "ponto final")
     assert(validCustomHostname("api..example.com") == false, "ponto duplo")
@@ -252,6 +259,13 @@ test "dominio: control plane registra, lista, verifica e remove", "domains-api" 
     var badHost = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"site.mel.kofcloud.io\",\"service\":\"site\"}", accountToken)
     assert(statusOf(badHost) == 400, "reservado -> 400")
     assert(domainCodeIs(domainErrOf(badHost), "KCF120"), "KCF120")
+
+    // Apex da plataforma: o mesmo 400 KCF120 da zona reservada. Antes passava
+    // pela validacao (so `.kofcloud.io` casava) e a conta registrava o
+    // proprio dominio da plataforma.
+    var apex = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"kofcloud.io\",\"service\":\"site\"}", accountToken)
+    assert(statusOf(apex) == 400, "apex da plataforma -> 400")
+    assert(domainCodeIs(domainErrOf(apex), "KCF120"), "apex -> KCF120")
 
     var badService = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"api.example.com\",\"service\":\"naosite\"}", accountToken)
     assert(statusOf(badService) == 404, "servico inexistente -> 404")
