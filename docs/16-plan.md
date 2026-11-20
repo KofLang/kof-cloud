@@ -174,6 +174,10 @@ address validados, sem default silencioso). **Fatia: nome único no manifesto.**
 `parseManifest` recusava tudo menos a repetição: dois itens com o mesmo
 `name` passavam e o publish — idempotente por nome — reescrevia o primeiro
 em silêncio. Agora nome repetido falha posicional antes de build/publish.
+**Fatia: campo repetido na mesma entrada.** `manifestField` lê pela primeira
+ocorrência, então `"exposure":"PRIVATE","exposure":"PUBLIC"` valia `PRIVATE`
+e a segunda cópia era ignorada sem aviso (medido) — mesmo risco do nome
+repetido. `duplicateManifestField` recusa posicional antes do build/publish.
 Prova: `tests/deploy_test.kf` (`deploy-err` estendido). **Fatia: nome é único
 na CONTA, não só no manifesto.** Medido: publicar `site` no device B devolvia
 `200` com o `site` do device A (porta do A) e nada era criado — a conta ficava

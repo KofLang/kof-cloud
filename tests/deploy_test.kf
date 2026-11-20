@@ -132,6 +132,34 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     assert(tricky.get(0).name == "portaria", "substring nao casa")
     assert(tricky.get(0).port == 9000, "porta certa")
 
+    // Campo repetido na MESMA entrada: `manifestField` devolve a primeira
+    // ocorrencia, entao um segundo "exposure":"PUBLIC" era ignorado em
+    // silencio (medido: PRIVATE depois PUBLIC parseava PRIVATE). Uma
+    // segunda exposicao escrita a mao e copia-paste sem editar — recusa
+    // posicional como o nome repetido.
+    var dupField = ""
+    try {
+        parseManifest("{\"services\":[{\"name\":\"db\",\"port\":5432,\"exposure\":\"PRIVATE\",\"exposure\":\"PUBLIC\"}]}")
+    } catch (String e) {
+        dupField = e
+    }
+    assert(dupField.indexOf("repetido") >= 0, "campo repetido recusa (recebido: " + dupField + ")")
+    assert(dupField.indexOf("\"exposure\"") >= 0, "nomeia o campo")
+    assert(dupField.indexOf("\"db\"") >= 0, "nomeia o servico")
+    var dupPortField = ""
+    try {
+        parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"port\" : 9090}]}")
+    } catch (String e) {
+        dupPortField = e
+    }
+    assert(dupPortField.indexOf("\"port\" repetido") >= 0, "porta repetida (com espaco antes dos dois-pontos)")
+    // Mesma chave em servicos DIFERENTES nao e repeticao.
+    var twoServices = parseManifest("{\"services\":[{\"name\":\"a\",\"port\":8080},{\"name\":\"b\",\"port\":8081}]}")
+    assert(twoServices.size == 2, "port em servicos distintos e normal")
+    // Chave aparente dentro de string nao conta.
+    var quoted = parseManifest("{\"services\":[{\"name\":\"a \\\"port\\\": 1\",\"port\":8080}]}")
+    assert(quoted.get(0).port == 8080, "chave dentro de string nao confunde")
+
     // Exposure desconhecida nao cai para PUBLIC em silencio: typo
     // ("PUBLIK") num servico que devia ser PRIVATE exporia o servico.
     var badExposure = ""

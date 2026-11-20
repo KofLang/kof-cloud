@@ -579,6 +579,14 @@ List<ManifestService> parseManifest(String raw) {
         if (port <= 0 || port > 65535) {
             throw "servico \"" + name + "\" sem porta valida (1-65535)"
         }
+        // Campo repetido na MESMA entrada: `manifestField` devolve a
+        // primeira ocorrencia e a segunda fica muda (exposure PRIVATE
+        // virando PUBLIC nao valia). Falha posicional antes de build/
+        // publish, como o nome repetido.
+        var repeated = duplicateManifestField(entry)
+        if (repeated.length > 0) {
+            throw "servico \"" + name + "\" com campo \"" + repeated + "\" repetido (posicao " + intToString(index) + ") — deixe so um valor"
+        }
         // Nome repetido e ambiguidade, nao "dois servicos": o publish e
         // idempotente por nome (`serviceByName` devolve o existente), entao o
         // segundo item reescreveria a config do primeiro em silencio e o
@@ -770,6 +778,77 @@ String manifestField(String entry, String key) {
         k = k + 1
     }
     return num
+}
+
+// Chave TOP-LEVEL repetida numa entrada do manifesto: "address",
+// "address" (ou qualquer outra). Devolve a primeira repetida, "" se nao ha.
+//
+// `manifestField` le por `indexOf` e devolve a PRIMEIRA ocorrencia; um
+// segundo "exposure":"PUBLIC" era ignorado em silencio (medido: entrada com
+// PRIVATE depois PUBLIC parseava PRIVATE). Copiar um bloco e esquecer de
+// editar o campo antigo deixava o valor errado valendo, sem aviso — mesmo
+// risco que o nome repetido, entao mesma resposta: falha posicional no
+// parse. So casa chave no nivel do objeto (chaves dentro de string sao
+// puladas) e so quando o que vem depois dos dois-pontos e um valor (`"` ou
+// digito/sinal), para nao confundir com texto solto.
+String duplicateManifestField(String entry) {
+    var seen = listOf<String>()
+    var depth = 0
+    var i = 0
+    while (i < entry.length) {
+        var c = entry.charAt(i)
+        if (c == 34) {
+            var j = i + 1
+            var text = ""
+            var escaped = false
+            while (j < entry.length) {
+                var d = entry.charAt(j)
+                if (escaped) {
+                    escaped = false
+                } else if (d == 92) {
+                    escaped = true
+                } else if (d == 34) {
+                    break
+                } else {
+                    text = text + (d as Char)
+                }
+                j = j + 1
+            }
+            // Fim do texto: procura dois-pontos e o inicio de um valor.
+            var k = j + 1
+            while (k < entry.length && (entry.charAt(k) == 32 || entry.charAt(k) == 10 || entry.charAt(k) == 13 || entry.charAt(k) == 9)) {
+                k = k + 1
+            }
+            if (depth == 1 && k < entry.length && entry.charAt(k) == 58) {
+                var v = k + 1
+                while (v < entry.length && (entry.charAt(v) == 32 || entry.charAt(v) == 10 || entry.charAt(v) == 13 || entry.charAt(v) == 9)) {
+                    v = v + 1
+                }
+                if (v < entry.length) {
+                    var first = entry.charAt(v)
+                    var isValue = first == 34 || (first >= 48 && first <= 57) || first == 45 || first == 43
+                    if (isValue) {
+                        for (var prior in seen) {
+                            if (prior == text) {
+                                return text
+                            }
+                        }
+                        seen.add(text)
+                    }
+                }
+            }
+            i = j + 1
+        } else if (c == 123) {
+            depth = depth + 1
+            i = i + 1
+        } else if (c == 125) {
+            depth = depth - 1
+            i = i + 1
+        } else {
+            i = i + 1
+        }
+    }
+    return ""
 }
 
 // Arquivo de parada do watch: separado do stopFile do Agent (`disconnect`
