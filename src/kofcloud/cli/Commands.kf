@@ -376,7 +376,8 @@ List<String> valueFlags() {
         "--password", "--from", "--to", "--resolve", "--secret",
         "--allow-method", "--allow-path", "--action", "--dns-webhook",
         "--tunnel-secret-file", "--tunnel-secret-cmd", "--tls-cert-cmd", "--tls-key-cmd",
-        "--dns-cmd"
+        "--dns-cmd",
+        "--grep"
     )
 }
 
@@ -2109,6 +2110,66 @@ Int cmdUsage(List<String> args) {
         println("  requests: " + mapField(result, "requests"))
         println("  entrada:  " + mapField(result, "bytesIn") + " bytes")
         println("  saida:    " + mapField(result, "bytesOut") + " bytes")
+        return 0
+    } catch (String e) {
+        printFail("falha", e)
+        return 1
+    }
+}
+
+// Linhas de um export Prometheus que casam com o filtro (substring na
+// linha, caixa exata — nomes de metrica sao identificadores). Pura, sem
+// rede: o cmdMetrics le o fio e formata aqui. Filtro vazio = todas; linhas
+// vazias saem (o export termina com newline).
+List<String> metricsLines(String text, String filter) {
+    var out = listOf<String>()
+    for (var line in text.split("\n")) {
+        if (line.length == 0) {
+            continue
+        }
+        if (filter.length > 0 && line.indexOf(filter) < 0) {
+            continue
+        }
+        out.add(line)
+    }
+    return out
+}
+
+// `kof cloud metrics [--grep <texto>] [--control <url>]`: le o export
+// Prometheus do control plane (`GET /v1/metrics`, SEM auth — so agregados,
+// mesma regra do /v1/health) e imprime. Sem sessao usa `--control` ou o
+// default (metricas nao sao dado de conta: qualquer um que alcance o
+// control as le, como no fio). Antes o operador precisava de `curl` para
+// ver o que a plataforma ja exporta.
+Int cmdMetrics(List<String> args) {
+    if (extraPositional(args, 0) || flagMissingValue(args, "--grep") || flagDuplicated(args, "--grep") || flagMissingValue(args, "--control") || flagDuplicated(args, "--control")) {
+        println("uso: kof cloud metrics [--grep <texto>] [--control <url>]")
+        return 1
+    }
+    var control = flagValue(args, "--control").trim()
+    if (control.length == 0) {
+        var session = loadSession()
+        if (session != null) {
+            control = session.controlUrl
+        } else {
+            control = defaultControlUrl()
+        }
+    }
+    var filter = flagValue(args, "--grep").trim()
+    try {
+        var raw = requireOk(http.get(control + "/v1/metrics", "Accept: text/plain"))
+        var lines = metricsLines(raw, filter)
+        if (lines.size == 0) {
+            if (filter.length > 0) {
+                println("nenhuma metrica casa com: " + filter)
+            } else {
+                println("export vazio (nenhuma metrica emitida ainda)")
+            }
+            return 0
+        }
+        for (var line in lines) {
+            println(line)
+        }
         return 0
     } catch (String e) {
         printFail("falha", e)

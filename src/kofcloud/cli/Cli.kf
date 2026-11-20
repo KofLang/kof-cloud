@@ -88,6 +88,9 @@ Int runCli(List<String> args) {
     if (first == "usage") {
         return cmdUsage(rest)
     }
+    if (first == "metrics") {
+        return cmdMetrics(rest)
+    }
     if (first == "audit") {
         return cmdAudit(rest)
     }

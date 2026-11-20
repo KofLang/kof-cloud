@@ -1,0 +1,52 @@
+import kofcloud.cli.Commands
+import kofcloud.cli.Usage
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.store.Store
+import testkit.Support
+
+// `kof cloud metrics`: le o export Prometheus do control (GET /v1/metrics,
+// sem auth — so agregados) e imprime, com `--grep` para filtrar. Antes o
+// operador precisava de `curl`.
+
+test "metrics-cmd: filtro puro (substring na linha, vazio = tudo)", "metrics-cmd-unit" {
+    var exp = "# HELP kofcloud_control_accounts_created_total x\n# TYPE kofcloud_control_accounts_created_total counter\nkofcloud_control_accounts_created_total 3\nkofcloud_edge_http_requests_total 7\n"
+    var all = metricsLines(exp, "")
+    assert(all.size == 4, "sem filtro: todas as linhas nao vazias: " + intToString(all.size))
+    var only = metricsLines(exp, "kofcloud_edge_")
+    assert(only.size == 1, "filtro: so as casadas: " + intToString(only.size))
+    assert(only.get(0) == "kofcloud_edge_http_requests_total 7", "linha certa: " + only.get(0))
+    // HELP/TYPE carregam o nome da metrica e casam tambem.
+    var control = metricsLines(exp, "accounts_created")
+    assert(control.size == 3, "HELP/TYPE/valor casam o nome")
+    assert(metricsLines(exp, "nao_existe").size == 0, "sem casamento = lista vazia")
+    // Linhas vazias (newline final) nunca entram.
+    assert(metricsLines("a\n\nb\n", "").size == 2, "vazias fora")
+    // Help anuncia o comando.
+    assert(usageText().indexOf("metrics [--grep <texto>]") >= 0, "help anuncia metrics")
+}
+
+test "metrics-cmd: e2e — imprime o export do control e filtra", "metrics-cmd-e2e" {
+    var port = 19994
+    var registry = Registry("/tmp/kofcloud-metrics-cmd-" + crypto.randomHex(4) + ".json")
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control no ar")
+
+    // Gera um contador real (conta criada).
+    var created = httpPostJson(port, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    assert(statusOf(created) == 200, "conta criada")
+
+    // O comando le o fio (mesma regra do operador: --control).
+    var code = cmdMetrics(listOf("--control", "http://127.0.0.1:" + intToString(port)))
+    assert(code == 0, "metrics exit 0: " + intToString(code))
+    // Filtro: so as linhas do contador de contas.
+    var code2 = cmdMetrics(listOf("--control", "http://127.0.0.1:" + intToString(port), "--grep", "kofcloud_control_accounts_created_total"))
+    assert(code2 == 0, "metrics --grep exit 0")
+    // Filtro sem casamento: exit 0 com a mensagem (nunca erro).
+    var code3 = cmdMetrics(listOf("--control", "http://127.0.0.1:" + intToString(port), "--grep", "nao_existe_xyz"))
+    assert(code3 == 0, "filtro sem casamento nao e erro")
+    // Control fora do ar: falha honesta (exit 1).
+    var code4 = cmdMetrics(listOf("--control", "http://127.0.0.1:1"))
+    assert(code4 == 1, "control fora do ar = exit 1")
+}

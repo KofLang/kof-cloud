@@ -349,6 +349,17 @@ no Registry (contas, logins, devices, serviços, tokens, domínios) e
 Prova: `tests/metrics_test.kf` (13 testes: formato, recusa por motivo,
 Edge fim a fim, privacidade, endpoint + contadores via HTTP e via registry).
 
+**Implementado (leitura pela CLI — `kof cloud metrics`):** o export existia
+no fio e nenhum comando o consumia — o operador precisava de `curl`. Agora
+`kof cloud metrics [--grep <texto>] [--control <url>]` imprime as linhas do
+export (filtro puro `metricsLines`: substring na linha, vazio = tudo, linhas
+vazias fora; sem casamento = mensagem e exit 0, nunca erro). Não exige sessão
+(métricas são agregados sem dado de conta, como no `/v1/health`): usa
+`--control`, senão o control da sessão, senão o default; control fora do ar
+é exit 1. Prova: `tests/metrics_cmd_test.kf` (2: filtro puro + help, e2e
+com contador real — sem filtro, com filtro, filtro sem casamento e control
+fora do ar).
+
 **Estado (slice 3 — fecha): ✅ implementado.** `agent/Metrics.kf` conta
 connects, reconnects (backoff), recusas fatais por motivo, health reports,
 streams servidos e erros locais — agregados, sem nome de serviço, endereço,

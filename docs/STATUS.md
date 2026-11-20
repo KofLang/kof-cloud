@@ -28,7 +28,7 @@
 ```bash
 export PATH=/home/mel/tools/jdk-25/bin:$PATH
 KOF=/home/mel/Kof4j/kof-cli/target/kof-cli-0.6.3.jar
-java -jar $KOF test --target jvm --timeout 150   # 66 suites, 0 falhas
+java -jar $KOF test --target jvm --timeout 150   # 67 suites, 0 falhas
 java -jar $KOF build --output /tmp/kofcloud-check # compila sem erro
 ```
 
@@ -39,7 +39,7 @@ Ver `13-kof-apis.md` e `14-modules.md`.
 ## Marcadores por area (goldens)
 
 Cada suite imprime `PASS <nome>` por teste e `0 failed of N tests` no fim;
-o run total imprime `66 passed, 0 failed`. Falha = nome do teste + assert
+o run total imprime `67 passed, 0 failed`. Falha = nome do teste + assert
 + abort sem cleanup (listeners presos ate o `--timeout` matar — ver
 `15-tests.md` sobre sentinelas).
 
@@ -94,6 +94,7 @@ o run total imprime `66 passed, 0 failed`. Falha = nome do teste + assert
 | carga explícita + migrate (F16 s1) | `tests/migrate_test.kf` | 5 |
 | readiness + fail-closed (F16 s3) | `tests/readiness_test.kf` | 2 |
 | falha de bind visível do serve (F16 s3) | `tests/serve_bind_test.kf` | 3 |
+| leitura de métricas pela CLI | `tests/metrics_cmd_test.kf` | 2 |
 | credencial da conta com ciclo de vida (F19 s3) | `tests/account_token_test.kf` | 11 |
 | health HTTP com prazo (F4) | `tests/health_test.kf` | 4 |
 | teto de resposta + cabeçalho + leitura (F14 s3 parcial) | `tests/relay_limit_test.kf` | 4 |
@@ -113,4 +114,4 @@ o run total imprime `66 passed, 0 failed`. Falha = nome do teste + assert
 | push do uso para billing (F18 s4) | `tests/usage_push_test.kf` | 4 |
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 5 |
 
-Total: 460 testes. Ver `15-tests.md` para a matriz.
+Total: 462 testes. Ver `15-tests.md` para a matriz.
