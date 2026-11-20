@@ -3037,6 +3037,42 @@ String validateServePorts(Int controlPort, Int tunnelPort, Int httpPort) {
     return ""
 }
 
+// Rotulo humano da porta por papel (mensagem de recusa do bind). Pura.
+String servePortLabel(String role) {
+    if (role == "control") {
+        return "control"
+    }
+    if (role == "tunnel") {
+        return "tunel"
+    }
+    return "publica"
+}
+
+// Mensagem da recusa quando um listener do `serve` nao consegue abrir o
+// bind (F16 s3-cont): porta ocupada/privilegiada. Pura — o teste julga o
+// texto sem tocar a rede; o bind real vive em prebindServeListener.
+String serveBindRefusal(String role, Int port, String cause) {
+    return "recusado: nao foi possivel abrir a porta " + servePortLabel(role) + " " + intToString(port) + "\n" +
+        "  motivo: " + cause + "\n" +
+        "  nenhuma porta foi anunciada como no ar. use outro --" + role + "-port ou libere a porta."
+}
+
+// Pre-bind de UM listener (F16 s3-cont): o `serve` abre os tres listeners
+// DENTRO de `spawn`; se a porta estivesse ocupada, `net.listen` lancaria e a
+// excecao morreria na task — o `serve` seguiria anunciando as portas como no
+// ar, com a borda silenciosamente inexistente. Aqui a porta e testada ANTES
+// de qualquer spawn/anuncio: abrir e fechar na hora (o listener real reusa o
+// bind em seguida). Devolve "" quando a porta abre, ou o motivo da falha.
+String prebindServeListener(String role, Int port) {
+    try {
+        var probe = net.listen(port)
+        probe.close()
+        return ""
+    } catch (String e) {
+        return e
+    }
+}
+
 // Caminho do estado do `serve --state`: ausente, vazio ou so-espacos =
 // default (`~/.kofcloud/control-state.json`); senao, o valor aparado.
 // Pura, sem HOME nem rede — o default vive aqui como o chamador ja fazia
@@ -3280,6 +3316,22 @@ Int cmdServe(List<String> args) {
         println(portsError)
         println(usoServeLine())
         return 1
+    }
+    // Pre-bind (F16 s3-cont): testa as tres portas ANTES de anunciar/spawnar.
+    // Sem isso, porta ocupada morria dentro do `spawn` e o serve anunciava
+    // portas no ar com a borda inexistente (medido: net.listen lanca
+    // "cannot listen on port ... Endereco ja em uso" e a excecao some na task).
+    var bindRoles = listOf("control", "tunnel", "http")
+    var bindPorts = listOf(controlPort, tunnelPort, httpPort)
+    var bi = 0
+    while (bi < bindRoles.size) {
+        var bindErr = prebindServeListener(bindRoles.get(bi), bindPorts.get(bi))
+        if (bindErr.length > 0) {
+            println(serveBindRefusal(bindRoles.get(bi), bindPorts.get(bi), bindErr))
+            println(usoServeLine())
+            return 1
+        }
+        bi = bi + 1
     }
     if (wafMode == "?") {
         println("waf invalido: " + flagValue(args, "--waf").trim() + " (use detectar|enforce)")

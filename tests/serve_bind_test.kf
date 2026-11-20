@@ -1,0 +1,60 @@
+import kofcloud.cli.Commands
+import kofcloud.cli.Usage
+import kofcloud.store.Store
+import kofcloud.util.Text
+import testkit.Support
+
+// F16 s3-cont — falha de bind dos listeners do `serve`. Medido: `net.listen`
+// numa porta ocupada LANÇA ("cannot listen on port ... Endereco ja em uso"),
+// e os tres listeners do serve abrem DENTRO de `spawn` — a excecao morria na
+// task e o serve anunciava as portas como no ar com a borda inexistente.
+// Agora a porta e testada ANTES de anunciar/spawnar.
+
+test "serve-bind: mensagem de recusa e pre-bind puros", "serve-bind-unit" {
+    // Rotulos por papel.
+    assert(servePortLabel("control") == "control", "rotulo control")
+    assert(servePortLabel("tunnel") == "tunel", "rotulo tunnel")
+    assert(servePortLabel("http") == "publica", "rotulo http")
+
+    // Recusa: nomeia o papel, a porta e o motivo; promete que nada subiu e
+    // aponta a saida (outra --<role>-port ou liberar a porta).
+    var refusal = serveBindRefusal("tunnel", 7000, "kof.net: cannot listen on port 7000: Endereco ja em uso")
+    assert(refusal.indexOf("recusado") >= 0, "recusa nomeia o veredito")
+    assert(refusal.indexOf("tunel 7000") >= 0, "recusa cita o papel e a porta")
+    assert(refusal.indexOf("Endereco ja em uso") >= 0, "recusa carrega o motivo")
+    assert(refusal.indexOf("nenhuma porta foi anunciada") >= 0, "recusa garante que nada subiu")
+    assert(refusal.indexOf("--tunnel-port") >= 0, "recusa aponta a flag")
+}
+
+test "serve-bind: pre-bind detecta a porta ocupada e libera quando livre", "serve-bind-unit" {
+    var port = 19981
+    // Porta livre: pre-bind passa ("") e a porta fica livre para o listener.
+    assert(prebindServeListener("tunnel", port) == "", "porta livre = sem erro")
+    // Porta ocupada: segura um listener e o pre-bind devolve o motivo.
+    var held = net.listen(port)
+    var err = prebindServeListener("tunnel", port)
+    assert(err.length > 0, "porta ocupada = erro: [" + err + "]")
+    assert(err.indexOf("port") >= 0, "o motivo cita a porta")
+    // Solta a porta: volta a passar.
+    held.close()
+    assert(prebindServeListener("tunnel", port) == "", "porta liberada = sem erro")
+}
+
+test "serve-bind: e2e — serve recusa subir com a porta ocupada", "serve-bind-e2e" {
+    // Segura a porta do tunel e chama cmdServe com portas dedicadas: a recusa
+    // sai ANTES de subir o control plane (nao deixa metade no ar).
+    var tunnelPort = 19982
+    var held = net.listen(tunnelPort)
+    var code = cmdServe(listOf("--control-port", "19983", "--tunnel-port", intToString(tunnelPort), "--http-port", "19984"))
+    assert(code == 1, "serve recusa com porta ocupada: " + intToString(code))
+    // O control-plane port NAO subiu (a recusa foi antes do start).
+    var controlUp = false
+    try {
+        var probe = net.connect("127.0.0.1", 19983)
+        probe.close()
+        controlUp = true
+    } catch (String e) {
+    }
+    assert(controlUp == false, "o control plane nao subiu (recusa antes do start)")
+    held.close()
+}

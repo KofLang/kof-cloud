@@ -1293,7 +1293,21 @@ iguais).
   status page; agora o health também conta. Prova:
   `tests/readiness_test.kf` (2: sonda pura nos três estados + recusa do
   texto, e2e com o Registry carregando arquivo ilegível — 503 pelo fio e
-  `cmdServe` exit 1 com o arquivo intacto). **Pendente:** backend
+  `cmdServe` exit 1 com o arquivo intacto).
+
+  **Implementado (falha de bind visível — a borda não some em silêncio):**
+  os três listeners do `serve` (control, túnel, público) abrem DENTRO de
+  `spawn`; se uma porta estivesse ocupada, `net.listen` lançaria e a exceção
+  **morreria na task** — o `serve` seguiria anunciando as portas como no ar,
+  com a borda inexistente (medido: `cannot listen on port … Endereço já em
+  uso`). Agora as três portas são testadas ANTES de qualquer anúncio/spawn
+  (`prebindServeListener`: abre e fecha na hora, o listener real reusa o
+  bind); a falha vira `serveBindRefusal` (papel + porta + motivo + "nenhuma
+  porta foi anunciada" + a flag para trocar) e sai **exit 1** — nunca deixa
+  metade da plataforma no ar. Pura na decisão (o bind real é o único IO).
+  Prova: `tests/serve_bind_test.kf` (3: rótulos+recusa puros, pre-bind
+  detecta ocupada/libera quando solta, e2e com a porta do túnel segurada —
+  `cmdServe` exit 1 e o control plane NÃO sobe). **Pendente:** backend
   SQLite/Postgres atrás de interface (o `kof.db` existe, mas o desenho pede
   a interface primeiro).
 * **Slice 2 — Edge horizontal.** N Edges atrás de qualquercast/DNS-round-
