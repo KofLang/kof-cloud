@@ -132,7 +132,7 @@ ManifestLoad loadManifestText(String raw, String path) {
 // Health check local pos-deploy: o servico responde no endereco publicado?
 //
 // Usa a MESMA sonda do Agent (`agent/Health.checkService`): GET / HTTP/1.1
-// com prazo, status < 500 = saudavel. Antes era so um connect TCP — medido:
+// com prazo, so 2xx = saudavel. Antes era so um connect TCP — medido:
 // um servico que responde 500 e um que aceita e NUNCA responde passavam os
 // dois como "respondendo", e o `deploy --check` declarava saudavel um deploy
 // quebrado (o mesmo defeito que o health do Agent ja tinha corrigido).

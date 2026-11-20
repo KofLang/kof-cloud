@@ -11,8 +11,8 @@ import testkit.Support
 //
 // Antes o check era so um connect TCP: um servico que aceitava a conexao e
 // devolvia 500 — ou nunca respondia — ficava ONLINE para sempre, e DEGRADED
-// nunca era emitido. Agora e um GET / de verdade com prazo: < 500 = ONLINE,
-// >= 500 ou sem resposta a tempo = DEGRADED, recusa = OFFLINE.
+// nunca era emitido. Agora e um GET / de verdade com prazo: 2xx = ONLINE,
+// fora de 2xx ou sem resposta a tempo = DEGRADED, recusa = OFFLINE.
 
 Service healthService(Int port, String allowPaths) {
     return Service("svc", "acc", "dev", "site", "127.0.0.1", port, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", allowPaths)
@@ -258,6 +258,24 @@ test "health: status nao-2xx vira DEGRADED (antes 404 ficava ONLINE)", "health" 
     assert(healthStatusFor(500) == statusDegraded(), "500 = DEGRADED")
     assert(healthStatusFor(199) == statusDegraded(), "1xx = DEGRADED")
     assert(healthStatusFor(0) == statusDegraded(), "codigo invalido (0) = DEGRADED")
+
+    // As superficies que descrevem a regra em prosa (o cabecalho da sonda, o
+    // comentario do check pos-deploy e este arquivo) nao voltam para a regra
+    // antiga "< 500" — a deriva que 054be5f corrigiu no codigo e deixou no
+    // comentario do Deploy.kf por varias rodadas.
+    var healthRaw = File("src/kofcloud/agent/Health.kf").readText()
+    var healthSrc = ""
+    if (healthRaw != null) { healthSrc = healthRaw }
+    var deployRaw = File("src/kofcloud/cli/Deploy.kf").readText()
+    var deploySrc = ""
+    if (deployRaw != null) { deploySrc = deployRaw }
+    var thisRaw = File("tests/health_test.kf").readText()
+    var thisSrc = ""
+    if (thisRaw != null) { thisSrc = thisRaw }
+    assert(healthSrc.length > 0 && deploySrc.length > 0 && thisSrc.length > 0, "fontes legiveis")
+    assert(healthSrc.indexOf("responde < 500") < 0, "cabecalho do Health fala 2xx")
+    assert(deploySrc.indexOf("status < 500 = saudavel") < 0, "comentario do Deploy fala 2xx")
+    assert(thisSrc.indexOf("prazo: 2xx = ONLINE") >= 0, "cabecalho deste teste fala 2xx")
 
     // Fim a fim com servidor real: 404 e 301 nao sao saudaveis para o check
     // local do deploy (mesma sonda do Agent).

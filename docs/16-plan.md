@@ -109,7 +109,9 @@ rota de health removida ficava ONLINE e o Edge roteava para ele (a decisão
 é a pura `healthStatusFor`, coberta pelo teste). O prazo
 (`kofcloud.limits.healthTimeoutMs`, 2 s) usa o único mecanismo do Kof para
 `receive` sem timeout: uma task fecha a conexão e o receive em voo lança
-(medido). Prova: `tests/health_test.kf` (5).
+(medido). A regra também fica travada na prosa: os cabeçalhos de
+`Health.kf`/`Deploy.kf` e deste teste dizem 2xx, e a trava quebra se alguém
+restaurar "< 500". Prova: `tests/health_test.kf` (5).
 
 ## Fase 5 — autenticação
 

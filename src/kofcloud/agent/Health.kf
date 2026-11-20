@@ -12,8 +12,8 @@ import kofcloud.util.Text
 // estado ao Edge, que para de encaminhar quando o servico esta OFFLINE.
 //
 // Regra (docs/04-service.md): para `http`, um `GET /` de verdade.
-//   conecta e responde < 500           -> ONLINE
-//   conecta mas responde >= 500        -> DEGRADED
+//   conecta e responde 2xx             -> ONLINE
+//   conecta mas responde fora de 2xx   -> DEGRADED (3xx/4xx/5xx)
 //   conecta mas nao responde no prazo  -> DEGRADED
 //   recusa conexao / fecha antes       -> OFFLINE
 // Antes so havia o connect TCP: um servico que aceitava e devolvia 500 (ou
