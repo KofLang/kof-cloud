@@ -3,6 +3,7 @@ import kofcloud.cli.Usage
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.store.Store
+import kofcloud.util.Hosts
 import kofcloud.util.Text
 import testkit.Support
 
@@ -45,6 +46,34 @@ test "dns-cmd: execucao real com falha honesta", "dns-cmd-unit" {
     // nunca execucao silenciosa nem aborto.
     var missing = dnsCmdRun("/bin/nao-existe-dns-x")
     assert(missing.indexOf("falhou") >= 0, "inexistente falha: " + missing)
+}
+
+test "dns-cmd: o alvo do CNAME e o hostname do SERVICO, nunca o do control", "dns-cmd-unit" {
+    // Antes `domain add` expandia {target} (e o `target` do webhook) com
+    // `webhookUrlHost(controlUrl)` — o host do control plane, ex.
+    // `api.kofcloud.io`, e nao o destino do CNAME. O provedor criaria um
+    // registro errado e o `verify` nunca sairia de PENDING. O alvo correto
+    // e o hostname do servico (`<servico>.<handle>.kofcloud.io`, o mesmo
+    // que a instrucao `CNAME <host> -> <target>` do control plane imprime).
+    var expected = serviceHostname("site", "mel")
+    assert(expected == "site.mel.kofcloud.io", "host do servico: " + expected)
+    assert(expected != webhookUrlHost("https://api.kofcloud.io"), "nao e o host do control")
+    // A instrucao devolvida pelo control plane e a fonte do alvo REAL
+    // (customTargetFor). A pura extrai o que vem depois de "->".
+    assert(dnsTargetFromInstruction("CNAME api.example.com -> site.mel.kofcloud.io") == "site.mel.kofcloud.io", "extrai o alvo")
+    assert(dnsTargetFromInstruction("") == "", "instrucao vazia = sem alvo (nao inventa)")
+    assert(dnsTargetFromInstruction("sem seta") == "", "sem seta = sem alvo")
+    assert(dnsTargetFromInstruction("CNAME h -> outro.kofcloud.io  ") == "outro.kofcloud.io", "apara padding")
+    // Trava de fonte: o `cmdDomainAdd` NAO pode voltar a usar o host do
+    // control plane como alvo (nem no dry-run, nem no webhook, nem no
+    // comando). Restaurar `webhookUrlHost(session.controlUrl)` quebra.
+    var srcRaw = File("src/kofcloud/cli/Commands.kf").readText()
+    var src = ""
+    if (srcRaw != null) { src = srcRaw }
+    assert(src.length > 0, "fonte legivel")
+    assert(src.indexOf("webhookUrlHost(session.controlUrl)") < 0, "alvo nunca e o host do control")
+    assert(src.indexOf("serviceHostname(service, session.handle)") >= 0, "dry-run deriva do servico")
+    assert(src.indexOf("dnsTargetFromInstruction(created.instruction)") >= 0, "execucao usa a instrucao do control")
 }
 
 test "dns-cmd: help anuncia --dns-cmd no domain add", "dns-cmd-unit" {

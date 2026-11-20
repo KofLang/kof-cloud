@@ -112,6 +112,6 @@ o run total imprime `67 passed, 0 failed`. Falha = nome do teste + assert
 | uso por conta + ciclo de billing (F18 s4) | `tests/usage_test.kf` | 6 |
 | segredos de fonte externa (F18 s5) | `tests/secrets_test.kf` | 4 |
 | push do uso para billing (F18 s4) | `tests/usage_push_test.kf` | 4 |
-| provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 5 |
+| provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 6 |
 
-Total: 466 testes. Ver `15-tests.md` para a matriz.
+Total: 467 testes. Ver `15-tests.md` para a matriz.

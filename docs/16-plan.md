@@ -1592,13 +1592,18 @@ env, credencial nunca em log, teste com fake local + e2e opcional real):
   por vez (`--dns-webhook` × `--dns-cmd` = erro posicional), `--dry-run`
   mostra o comando expandido e não executa, e falha do provedor vira
   **AVISO** (o domínio já ficou PENDING e o caminho manual `domain verify`
-  continua) — nunca aborta nem esconde o motivo. A credencial do provedor
+  continua) — nunca aborta nem esconde o motivo. **O alvo do CNAME é o
+  hostname do serviço**, nunca o host do control plane: a execução usa o
+  `target` da instrução devolvida pelo control (`dnsTargetFromInstruction`)
+  e o dry-run deriva o mesmo alvo localmente (`serviceHostname`) — antes os
+  dois usavam `webhookUrlHost(controlUrl)` e o provedor criava o registro
+  errado (o `verify` nunca sairia de PENDING). A credencial do provedor
   fica no ambiente do operador (o comando só referencia, ex.
   `CF_API_TOKEN`), nunca no corpo/saída/log; o stdout é descartado (pode
   conter dado do provedor), só o exit code decide. Prova:
-  `tests/dns_cmd_test.kf` (5: fonte única, expansão+previa, execução real
-  com falha honesta — inclusive o exit 127 medido de comando inexistente,
-  help, e2e com efeito observável).
+  `tests/dns_cmd_test.kf` (6: fonte única, expansão+previa, alvo do CNAME
+  = host, execução real com falha honesta — inclusive o exit 127 medido de
+  comando inexistente, help, e2e com efeito observável).
 * **Slice 2 — identidade e SSO.** OIDC genérico (qualquer IdP:
   Google, GitHub, Keycloak): `login` abre browser, troca code por conta
   vinculada (nunca substitui `kfc_` — vira segundo fator de emissão).
