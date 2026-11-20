@@ -179,6 +179,82 @@ test "dominio: registro e idempotencia no registry", "domains-reg" {
     assert(registry.customByHostname("api.example.com") == null, "sumiu")
 }
 
+test "dominio: DNS fora do Edge recusa a verificacao (KCF164)", "domains-verify" {
+    var registry = Registry("/tmp/kofcloud-domext-" + crypto.randomHex(4) + ".json")
+    registry.setEdgeHosts(listOf("203.0.113.10"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    registry.registerCustomDomain(mel.id, "api.example.com", service.id)
+
+    // Chega ao Edge E a um IP de terceiro (registro antigo/CDN): antes virava
+    // VERIFIED e parte dos clientes saia da plataforma (medido por sonda).
+    var mixed = listOf<String>()
+    mixed.add("203.0.113.10")
+    mixed.add("198.51.100.7")
+    assert(registry.verifyCustomDomainWith(mel.id, "api.example.com", mixed) == "KCF164: hostname resolves outside this Edge", "endereco de terceiro recusa")
+    var still = registry.customByHostname("api.example.com")
+    assert(still != null, "registro existe")
+    if (still != null) {
+        assert(still.status == "PENDING", "continua pendente com endereco de terceiro")
+    }
+
+    // So o Edge (em qualquer ordem, repetido): verifica.
+    var only = listOf<String>()
+    only.add("198.51.100.7")
+    only.add("203.0.113.10")
+    assert(registry.verifyCustomDomainWith(mel.id, "api.example.com", only) == "KCF164: hostname resolves outside this Edge", "terceiro sozinho recusa com KCF164")
+    var good = listOf<String>()
+    good.add("203.0.113.10")
+    good.add("203.0.113.10")
+    assert(registry.verifyCustomDomainWith(mel.id, "api.example.com", good) == "", "so o Edge verifica")
+    var done = registry.customByHostname("api.example.com")
+    if (done != null) {
+        assert(done.status == "VERIFIED", "agora verificado")
+    }
+
+    // CNAME-only (sem endereco proprio na resposta): o resolver pode devolver
+    // o nome do destino ou um host por nome — nada disso recusa.
+    var other = registry.createAccount("ana", "a@e.com", "segredo")
+    var otherDevice = registry.registerDevice(other, "nb", "pk")
+    var otherService = registry.publishService(other, otherDevice.id, "blog", "127.0.0.1", 8081, "http", "PUBLIC", "", "")
+    registry.registerCustomDomain(other.id, "blog.example.org", otherService.id)
+    var cnameText = listOf<String>()
+    cnameText.add("203.0.113.10")
+    cnameText.add("site.mel.kofcloud.io")
+    cnameText.add("edge-by-name.example.net")
+    assert(registry.verifyCustomDomainWith(other.id, "blog.example.org", cnameText) == "", "CNAME-only verifica")
+}
+
+test "dominio: IPv4 literal e host que nao e endereco", "domains-verify" {
+    assert(isIPv4Literal("203.0.113.10"), "v4 literal")
+    assert(isIPv4Literal("0.0.0.0") == true, "zero valido")
+    assert(isIPv4Literal("255.255.255.255"), "teto do octeto")
+    assert(isIPv4Literal("256.1.1.1") == false, "octeto acima de 255")
+    assert(isIPv4Literal("1.2.3") == false, "tres rotulos")
+    assert(isIPv4Literal("1.2.3.4.5") == false, "cinco rotulos")
+    assert(isIPv4Literal("1.2.3.4.com") == false, "nome com tres rotulos numericos")
+    assert(isIPv4Literal("01.2.3.4") == false, "zero a esquerda e ambiguo")
+    assert(isIPv4Literal("1..3.4") == false, "rotulo vazio")
+    assert(isIPv4Literal("-1.2.3.4") == false, "sinal")
+    assert(isIPv4Literal("site.mel.kofcloud.io") == false, "nome nao e endereco")
+    assert(validIPv4Octet("0"), "zero")
+    assert(validIPv4Octet("00") == false, "zero duplo")
+
+    var expected = listOf<String>()
+    expected.add("203.0.113.10")
+    expected.add("*.edge.example.net")
+    var third = listOf<String>()
+    third.add("198.51.100.7")
+    assert(domainResolvesOnlyToEdge(third, expected) == false, "IPv4 de terceiro recusa")
+    var names = listOf<String>()
+    names.add("site.mel.kofcloud.io")
+    names.add("203.0.113.10")
+    assert(domainResolvesOnlyToEdge(names, expected), "texto de CNAME nao e endereco de terceiro")
+    assert(customTargetIsExpected("edge1.edge.example.net", expected), "wildcard vale aqui tambem")
+    assert(errHint(errDomainResolvesElsewhere()).indexOf("domain verify") >= 0, "o Hint aponta o verify")
+}
+
 test "dominio: verificacao contra destinos esperados (sem rede)", "domains-verify" {
     var registry = Registry("/tmp/kofcloud-domver-" + crypto.randomHex(4) + ".json")
     registry.setEdgeHosts(listOf("203.0.113.10", "edge-by-name.example.net"))
@@ -195,7 +271,13 @@ test "dominio: verificacao contra destinos esperados (sem rede)", "domains-verif
         assert(pending.status == "PENDING", "continua pendente")
     }
     assert(registry.verifyCustomDomainWith(mel.id, "nope.example.com", listOf("203.0.113.10")) == "KCF122: domain not found", "desconhecido -> KCF122")
-    assert(registry.verifyCustomDomainWith(mel.id, "api.example.com", listOf("198.51.100.7", "203.0.113.10")) == "", "algum coincide aprova")
+    // Chega ao Edge E a outro IP: nao aprova (KCF164 — ver teste abaixo);
+    // so o Edge sozinho (com repeticao) aprova.
+    assert(registry.verifyCustomDomainWith(mel.id, "api.example.com", listOf("198.51.100.7", "203.0.113.10")) == "KCF164: hostname resolves outside this Edge", "Edge + terceiro recusa")
+    var both = listOf<String>()
+    both.add("203.0.113.10")
+    both.add("203.0.113.10")
+    assert(registry.verifyCustomDomainWith(mel.id, "api.example.com", both) == "", "so o Edge aprova")
     var verified = registry.customByHostname("api.example.com")
     assert(verified != null, "registro existe")
     if (verified != null) {

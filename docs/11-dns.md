@@ -44,6 +44,12 @@ Detalhes honestos do slice:
   vazio = verificação sempre recusa até o operador configurar);
 * NXDOMAIN/falha de rede vira `KCF124` indistinguível de "resolveu para outro
   lugar"; conta alheia recebe `404 KCF122` opaco **antes** de qualquer DNS;
+* **resolver também para fora não verifica** (`409 KCF164`): se a resposta tem
+  o Edge **e** um IPv4 de terceiro (registro A antigo, CDN/provedor no meio),
+  o domínio fica PENDING — senão parte dos clientes cai fora da plataforma.
+  CNAME-only (sem endereço próprio) continua aprovando. IPv6 não é julgado
+  neste slice (o destino esperado é IPv4); remove o registro extra e rode
+  `domain verify` de novo;
 * PENDING nunca roteia (indistinguível de host inexistente: `404 KCF100`);
 * remoção e poda (serviço/dispositivo) desativam a rota imediatamente;
 * **sem TLS/SNI neste slice**: o hostname próprio serve HTTP pela borda; HTTPS

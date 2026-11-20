@@ -34,7 +34,10 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 * QUIC, UDP forwarding, TCP forwarding genérico.
 * CDN, edge distribuído, relay regional.
 * Domínio próprio: registro + verificação + rota (Fase 6 slice 1) ✅; sem
-  TLS por SNI e sem automação por provedor (Cloudflare/Route53).
+  TLS por SNI e sem automação por provedor (Cloudflare/Route53). A
+  verificação recusa DNS que também resolve fora do Edge (`KCF164`), mas só
+  julga IPv4 literal: destino IPv6 e o texto do CNAME devolvido pelo
+  resolver do SO não desqualificam.
 * Deploy com **artefato transferível** — o deploy declarativo (`kof cloud
   deploy`) existe (Fase 7), mas o build roda na máquina do usuário e só o
   publish atravessa a rede.

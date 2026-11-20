@@ -146,11 +146,23 @@ indistinguível de "resolveu para outro lugar"), rota ativa só depois de
 VERIFIED, poda junto com serviço/dispositivo. A zona reservada cobre
 subdomínios **e o apex** (`kofcloud.io` também é recusado com `KCF120`). Dono verificado antes do DNS
 (sem trabalho de rede para conta alheia). CLI: `domain add --service`,
-`domain verify [--tls-cert <pem>]`, `domain remove`; erros `KCF120`–`KCF124`
+`domain verify [--tls-cert <pem>]`, `domain remove`; erros `KCF120`–`KCF124` e `KCF164`
 com `Hint:`. O `--tls-cert` julga o PEM localmente antes da rede (cobre o
 hostname? expira em 30 dias?) — ver Fase 9 slice 3.
-Prova: `tests/domains_test.kf` (14 testes: validação, registro/idempotência,
+Prova: `tests/domains_test.kf` (16 testes: validação, registro/idempotência,
 verificação sem rede, rota/poda, API com service preenchido, Edge via túnel real, Hint + serializadores, certificado × hostname puro e com openssl real, webhook DNS no fio e dry-run).
+
+**Fatia: DNS fora do Edge recusa (KCF164).** A verificação aprovava quando
+ALGUM endereço era o Edge: o hostname com CNAME para o Edge que também
+responde num IPv4 de terceiro (registro antigo, CDN/provedor no meio)
+virava VERIFIED e parte dos clientes ia para fora da plataforma — medido
+por sonda (`outcome='' status=VERIFIED` com `198.51.100.7` na resposta).
+Agora, achado o Edge, `domainResolvesOnlyToEdge` confere os demais IPv4
+literais; sobra de terceiro = PENDING + `409 KCF164` (distinto do `KCF124`
+de "nada chega"). Hostname CNAME-only (sem endereço próprio) e texto de
+CNAME devolvido pelo resolver continuam aprovando. Prova:
+`tests/domains_test.kf` (fatia `domains-verify`: dois testes novos + expectativa antiga
+ajustada).
 
 Falta (fatiado de propósito): TLS por SNI no Edge (o Kof não expõe — ver
 `12-tls.md`) e automação DNS específica de provedor (Cloudflare/Route53 — o

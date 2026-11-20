@@ -15,7 +15,7 @@ package kofcloud.model
 //   KCF100-KCF119  Edge / roteamento / tunel
 //   KCF120-KCF139  dominio proprio (Fase 6), incidentes/contencao/webhook
 //                  (Fase 17) e resposta invalida do upstream — KCF123
-//                  reservado, nunca emitido
+//                  reservado, nunca emitido; KCF164 = DNS fora do Edge
 
 // ---- conta / autenticacao ----
 
@@ -344,6 +344,12 @@ String errDomainUnreachable() {
     return "KCF124: hostname does not resolve to this Edge"
 }
 
+// Fase 6: o nome resolve, mas para um endereco alem dos destinos do Edge —
+// o cliente iria parar fora da plataforma. Distinto de KCF124 (nada chega).
+String errDomainResolvesElsewhere() {
+    return "KCF164: hostname resolves outside this Edge"
+}
+
 // Dica humana para um erro da plataforma. Nunca revela segredos, conteudo de
 // servico ou existencia de recurso alheio — so orienta o proximo passo.
 String errHint(String raw) {
@@ -436,6 +442,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF140") >= 0) {
         return "Ha mais de um servico com esse nome na conta (estado antigo) — remova o duplicado (`kof cloud unpublish <nome>` no dispositivo certo) antes de vincular o dominio."
+    }
+    if (raw.indexOf("KCF164") >= 0) {
+        return "O hostname tambem resolve para um endereco fora deste Edge (registro antigo, CDN/provedor no meio) — remova esse registro no provedor e rode `kof cloud domain verify` de novo."
     }
     if (raw.indexOf("KCF141") >= 0) {
         return "Esse alvo nao esta congelado — nada a reverter. Suspensao comum se libera com `kof cloud service unsuspend`/`device unsuspend`."

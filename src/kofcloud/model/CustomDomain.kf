@@ -95,6 +95,79 @@ String kofcloudDomainSuffix() {
     return "." + kofcloudDomain()
 }
 
+// Um octeto IPv4 decimal 0-255 (sem sinal, sem zero a esquerda — "010" e
+// ambigua entre decimal/octal e nunca e destino que a plataforma anuncie).
+Bool validIPv4Octet(String text) {
+    if (text.length == 0 || text.length > 3) {
+        return false
+    }
+    if (text.length > 1 && text.startsWith("0")) {
+        return false
+    }
+    var value = 0
+    for (var i = 0; i < text.length; i++) {
+        var c = text.charAt(i) as Int
+        if (c < 48 || c > 57) {
+            return false
+        }
+        value = value * 10 + (c - 48)
+    }
+    return value <= 255
+}
+
+// `1.2.3.4` literal (quatro octetos). Nome DNS pode ter quatro rotulos
+// numericos (`1.2.3.4.com`, alias publico de DNS dinamico), por isso a
+// checagem e sobre o texto inteiro.
+Bool isIPv4Literal(String address) {
+    var labels = splitHostname(address)
+    if (labels.size != 4) {
+        return false
+    }
+    for (var i = 0; i < labels.size; i++) {
+        if (validIPv4Octet(labels[i]) == false) {
+            return false
+        }
+    }
+    return true
+}
+
+// Fase 6 — a resposta DNS pode CHEGAR ao Edge por um caminho que nao e o
+// CNAME esperado. Medido (sonda): o hostname com CNAME para o Edge responde
+// tambem com um registro de outro IP; a verificacao mirava so "algum
+// endereco e o Edge" e dava VERIFIED — o cliente que cai no IP de terceiro
+// (registro antigo, CDN/provedor no meio) para fora da plataforma. Nome que
+// resolve para IPv4 alem dos esperados fica PENDING com `KCF164`; hostnames
+// CNAME-only (sem endereco proprio) continuam OK.
+//
+// Guarda de sinal: o resolver pode devolver o TEXTO do CNAME visto no meio
+// da cadeia (depende do resolver do SO). Um destino que e nome nao e
+// "endereco de terceiro" e nao recusa a verificacao.
+Bool domainResolvesOnlyToEdge(List<String> addresses, List<String> expected) {
+    for (var address in addresses) {
+        if (isIPv4Literal(address) == false) {
+            // IPv6, texto de CNAME, host por nome: nao desqualifica (o
+            // destino esperado pode vir por AAAA ou o resolver nao expor IP).
+        } else if (customTargetIsExpected(address, expected) == false) {
+            return false
+        }
+    }
+    return true
+}
+
+// Mesma regra do Registry (`isExpectedEdgeHost`): exato ou wildcard
+// `*.dominio` (o destino anunciado continua o Edge, ainda que por nome).
+Bool customTargetIsExpected(String address, List<String> expected) {
+    for (var candidate in expected) {
+        if (candidate == address) {
+            return true
+        }
+        if (candidate.startsWith("*.") && address.endsWith(candidate.substring(1))) {
+            return true
+        }
+    }
+    return false
+}
+
 // Divide por ponto LITERAL. `String.split` trata o padrao como regex (ponto
 // casa tudo e o resultado vem vazio) — por isso o split manual.
 List<String> splitHostname(String hostname) {

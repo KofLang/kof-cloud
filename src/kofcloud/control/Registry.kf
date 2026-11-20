@@ -2308,6 +2308,12 @@ class Registry {
         }
         for (var address in addresses) {
             if (isExpectedEdgeHost(address)) {
+                // Chega ao Edge, mas confere se TAMBEM nao chega a outro
+                // lugar: VERIFIED com IP de terceiro na resposta manda parte
+                // dos clientes para fora da plataforma.
+                if (domainResolvesOnlyToEdge(addresses, this.edgeHosts) == false) {
+                    return errDomainResolvesElsewhere()
+                }
                 this.markDomainVerified(label)
                 return ""
             }
