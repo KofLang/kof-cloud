@@ -211,6 +211,20 @@ test "framing: 1xx/204/304 e HEAD nunca entregam corpo", "framing-status-unit" {
     var head = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"), "HEAD"))
     assert(bodyOf(head) == "", "HEAD sem corpo")
     assert(head.indexOf("Content-Length: 2") >= 0, "HEAD mantem o CL do GET")
+    // Corpo do HEAD descartado e NADA alem dele: a resposta termina no
+    // separador (sem 4 bytes extras do separador vindo como corpo) e o
+    // texto do corpo nao aparece em lugar nenhum. Sem o corte em `bodiless`
+    // o `ok` continuaria no fim do stream e o cliente leria um corpo que o
+    // HEAD proibe.
+    assert(head.endsWith("\r\n\r\n"), "HEAD termina no separador (sem corpo)")
+    assert(head.endsWith("\r\n\r\nok") == false, "nem 2 bytes de corpo passam")
+    assert(head.indexOf("ok") < 0, "texto do corpo ausente")
+    // Mesma regra para chunked: decodifica e descarta, sem vazar o
+    // enquadramento (nem os bytes decodificados).
+    var headChunked = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n"), "HEAD"))
+    assert(bodyOf(headChunked) == "", "HEAD chunked sem corpo")
+    assert(headChunked.indexOf("hello") < 0, "bytes decodificados nao vazam")
+    assert(headChunked.toLowerCase().indexOf("transfer-encoding") < 0, "sem TE na resposta")
     // GET comum segue intacto.
     var get = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"), "GET"))
     assert(bodyOf(get) == "ok", "GET preservado")
