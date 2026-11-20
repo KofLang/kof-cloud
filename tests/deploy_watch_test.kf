@@ -146,6 +146,26 @@ test "watch: e2e — edita o manifesto e o watch publica; removedor nunca roda s
     var f4 = watchApplyOnce("http://127.0.0.1:" + intToString(controlPort), accountToken, deviceId, "")
     assert(f4 == 0, "texto vazio nao aplica nem falha")
 
+    // Cruzamento watch × freeze: o watch re-publica em lote a cada mudanca
+    // do manifesto — republicar um serviço CONGELADO (SUSPENDED) nao pode
+    // ressuscita-lo. O freeze mata as kfs_ e suspende; o apply seguinte
+    // republica a mesma config e o servico segue fora da rota.
+    var site = registry.serviceByName(accountId, "site")
+    assert(site != null, "site existe antes do freeze")
+    if (site != null) {
+        assert(registry.freezeService(accountId, site.id).ok, "freeze do site")
+    }
+    var f5 = watchApplyOnce("http://127.0.0.1:" + intToString(controlPort), accountToken, deviceId, body2)
+    assert(f5 == 0, "apply apos o freeze sem falha")
+    if (site != null) {
+        var kept = registry.serviceById(site.id)
+        assert(kept != null, "site segue existindo apos o apply")
+        if (kept != null) {
+            assert(kept.status == "SUSPENDED", "watch nao dessuspende o congelado")
+            assert(registry.resolveRoute(kept.hostname) == null, "congelado segue fora da rota apos o apply")
+        }
+    }
+
     writeTextTo(agentStop, "stop")
     time.sleep(1200)
     writeTextTo(edgeStop, "stop")
