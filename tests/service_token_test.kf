@@ -75,8 +75,14 @@ test "token de servico: remover o servico poda as credenciais" {
     assert(registry.serviceByServiceToken(token) != null, "vale antes")
     assert(registry.removeService(account.id, service.id) == true, "servico removido")
     assert(registry.serviceByServiceToken(token) == null, "token orfao nao vale mais")
+    // Cruzamento remoção × higiene: a credencial podada NÃO fica no relatório
+    // de higiene ("sem expiração" é para credencial VIVA que ninguém rotacionou —
+    // órfã não é pendência, e o serviço nem existe mais para ser nomeado).
+    assert(registry.tokensWithoutExpiry(account.id).size == 0, "orfa sai da higiene")
+    assert(registry.servicesWithUnrotatedTokens(account.id).size == 0, "sem nome fantasma no relatorio")
     var reloaded = Registry(path)
     assert(reloaded.serviceByServiceToken(token) == null, "e continua invalido apos recarregar")
+    assert(reloaded.tokensWithoutExpiry(account.id).size == 0, "e fora da higiene apos recarregar")
 }
 
 test "token de servico: revogar o dispositivo poda as credenciais dos servicos" {
