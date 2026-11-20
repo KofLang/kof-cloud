@@ -1314,7 +1314,13 @@ iguais).
   status page; agora o health também conta. Prova:
   `tests/readiness_test.kf` (2: sonda pura nos três estados + recusa do
   texto, e2e com o Registry carregando arquivo ilegível — 503 pelo fio e
-  `cmdServe` exit 1 com o arquivo intacto).
+  `cmdServe` exit 1 com o arquivo intacto). **Doctor ✅:** o `http.get` lança
+  em ≥500, então o 503 do estado ilegível virava "control plane inacessível
+  ou fora do ar" — rede quando o problema era o ARQUIVO. A camada agora é
+  pura (`doctorControlLine`): 503 nomeia o estado ilegível e aponta o
+  `state-backup`; falha de rede segue "inacessível"; corpo sem `ok` é
+  "resposta inesperada" (nunca verde). Prova: `doctor-control` em
+  `tests/doctor_test.kf` (puro em 4 casos + e2e com control real corrupto).
 
   **Implementado (falha de bind visível — a borda não some em silêncio):**
   os três listeners do `serve` (control, túnel, público) abrem DENTRO de

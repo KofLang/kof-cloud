@@ -531,3 +531,51 @@ test "doctor: aviso de kfs_ perto do fim por servico (mesma fonte do --check)", 
     var wantedPublic = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":19987}]}")
     assert(kfsExpiryWarningsFor(controlUrl, accountToken, wantedPublic, deviceId, fioNow).size == 0, "PUBLIC silencia mesmo com kfs_ na conta")
 }
+
+test "doctor: camada do control plane distingue estado ilegivel de fora do ar", "doctor-control" {
+    // Medido: o health responde 503 com o estado ilegivel (F16 s3) e o
+    // http.get LANCA em >=500 ("HTTP 503 from <url>") — o doctor traduzia
+    // como "inacessivel ou fora do ar" e mandava o operador olhar rede
+    // quando o problema era o ARQUIVO DE ESTADO.
+    var corrupt = doctorControlLine("http://127.0.0.1:8080", "", "HTTP 503 from http://127.0.0.1:8080/v1/health")
+    assert(corrupt.startsWith("FALHA control plane"), "503 e FALHA: " + corrupt)
+    assert(corrupt.indexOf("503") >= 0, "nomeia o codigo")
+    assert(corrupt.indexOf("ilegivel") >= 0, "nomeia o estado ilegivel: " + corrupt)
+    assert(corrupt.indexOf("state-backup") >= 0, "aponta o backup")
+    assert(corrupt.indexOf("fora do ar") < 0, "nunca diz fora do ar quando respondeu")
+
+    // Falha de rede de verdade: "inacessivel", sem falar de estado.
+    var down = doctorControlLine("http://127.0.0.1:8080", "", "kof.net: connect failed")
+    assert(down.startsWith("FALHA control plane"), "rede e FALHA")
+    assert(down.indexOf("inacessivel") >= 0, "rede = inacessivel")
+    assert(down.indexOf("ilegivel") < 0, "rede nao inventa estado")
+
+    // Corpo sem "ok" (control estranho/proxy): resposta inesperada, nunca verde.
+    var weird = doctorControlLine("http://c", "<html>", "")
+    assert(weird.indexOf("resposta inesperada") >= 0, "corpo estranho: " + weird)
+
+    // Saudavel: ok com a URL, sem conta nem credencial.
+    var good = doctorControlLine("http://127.0.0.1:8080", "{\"ok\":\"true\",\"ready\":\"true\"}", "")
+    assert(good == "ok   control plane (http://127.0.0.1:8080)", "saudavel: " + good)
+    assert(good.indexOf("kfc_") < 0, "sem credencial")
+
+    // e2e: control real com estado ilegivel — a linha diz estado, nao rede.
+    var port = 19988
+    var path = "/tmp/kofcloud-docctl-" + crypto.randomHex(4) + ".json"
+    writeTextTo(path, "{ isto nao e estado }")
+    var registry = Registry(path)
+    assert(registry.loadStatus == "corrupt", "estado ilegivel na partida")
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control no ar")
+    var body = ""
+    var err = ""
+    try {
+        body = http.get("http://127.0.0.1:" + intToString(port) + "/v1/health")
+    } catch (String e) {
+        err = e
+    }
+    var line = doctorControlLine("http://127.0.0.1:" + intToString(port), body, err)
+    assert(err.indexOf("503") >= 0, "e2e: http.get lanca 503: " + err)
+    assert(line.indexOf("ilegivel") >= 0, "e2e: a camada nomeia o estado: " + line)
+}

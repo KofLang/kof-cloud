@@ -65,7 +65,7 @@ o run total imprime `67 passed, 0 failed`. Falha = nome do teste + assert
 | conexoes | `tests/conns_test.kf` | 2 |
 | deploy + scan | `tests/deploy_test.kf` | 16 |
 | daemon | `tests/daemon_test.kf` | 14 |
-| doctor | `tests/doctor_test.kf` | 16 |
+| doctor | `tests/doctor_test.kf` | 17 |
 | hot-reload | `tests/reload_test.kf` | 1 |
 | control plane | `tests/control_test.kf` | 6 |
 | presenca | `tests/presence_test.kf` | 1 |
@@ -114,4 +114,4 @@ o run total imprime `67 passed, 0 failed`. Falha = nome do teste + assert
 | push do uso para billing (F18 s4) | `tests/usage_push_test.kf` | 4 |
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 5 |
 
-Total: 465 testes. Ver `15-tests.md` para a matriz.
+Total: 466 testes. Ver `15-tests.md` para a matriz.

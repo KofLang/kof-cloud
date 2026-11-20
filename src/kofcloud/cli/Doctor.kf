@@ -39,6 +39,27 @@ String doctorWarnLine(String label, String why) {
 // Linha da camada do tunel a partir do corpo de /v1/presence ja buscado
 // (ou do erro da busca): pura, sem rede nem HOME — testavel sem tunel.
 // Devolve a linha pronta; "" significa "ok, sessao viva".
+// Camada do control plane. Pura: o chamador ja tentou o `/v1/health` e
+// passa o corpo (sucesso) ou o erro da tentativa. O health responde 503
+// quando o estado em disco e ilegivel (F16 s3), e `http.get` LANCA em >=500
+// (medido: "HTTP 503 from <url>") — antes o doctor traduzia isso como
+// "inacessivel ou fora do ar", mandando o operador olhar rede/processo
+// quando o problema era o ARQUIVO DE ESTADO. Agora 503 nomeia o estado, as
+// demais falhas de rede seguem "inacessivel", e um corpo sem `ok` vira
+// "resposta inesperada" (nunca verde). Nao carrega conta nem credencial.
+String doctorControlLine(String controlUrl, String healthBody, String fetchError) {
+    if (fetchError.length > 0) {
+        if (fetchError.indexOf("503") >= 0) {
+            return doctorFailLine("control plane", controlUrl + " respondeu 503: estado do control ilegivel (o arquivo existe mas nao decodifica) — faca backup e restaure: kof cloud state-backup --file <estado.json>")
+        }
+        return doctorFailLine("control plane", controlUrl + " inacessivel ou fora do ar (" + fetchError + ")")
+    }
+    if (healthBody.indexOf("\"ok\"") < 0) {
+        return doctorFailLine("control plane", "resposta inesperada de " + controlUrl + "/v1/health")
+    }
+    return doctorOkLine("control plane (" + controlUrl + ")")
+}
+
 String doctorTunnelLine(String presenceRaw, String deviceId, String fetchError) {
     if (fetchError.length > 0) {
         return doctorFailLine("tunel", "presenca indisponivel (" + fetchError + ")")
@@ -227,17 +248,17 @@ DoctorReport doctorCheckWith(String manifestPath, String tlsCertPath) {
 
     // 2. Control plane alcancavel e autenticado.
     var health = ""
+    var healthError = ""
     try {
         health = requireOk(http.get(session.controlUrl + "/v1/health", authHeader(session.token)))
     } catch (String e) {
-        lines.add(doctorFailLine("control plane", session.controlUrl + " inacessivel ou fora do ar (" + e + ")"))
+        healthError = e
+    }
+    var controlLine = doctorControlLine(session.controlUrl, health, healthError)
+    lines.add(controlLine)
+    if (controlLine.startsWith("FALHA")) {
         return DoctorReport(false, lines)
     }
-    if (health.indexOf("\"ok\"") < 0 && health.indexOf("ok") < 0) {
-        lines.add(doctorFailLine("control plane", "resposta inesperada de " + session.controlUrl + "/v1/health"))
-        return DoctorReport(false, lines)
-    }
-    lines.add(doctorOkLine("control plane (" + session.controlUrl + ")"))
 
     // 2a. Ciclo de vida da credencial da conta (Fase 19): o doctor autentica
     // COM o kfc_ mas esta era a unica camada sem olhar para ele — a sessao
