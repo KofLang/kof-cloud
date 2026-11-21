@@ -117,4 +117,8 @@ diagnostica, não reverte — `docs/17-limitations.md`).
 O teste `docs-controls` em `tests/controls_doc_test.kf` lê este arquivo e
 quebra se (a) uma citação `tests/<arquivo>.kf` apontar para arquivo
 inexistente, (b) alguma seção `## ` não trouxer a linha **Não cobre** (o
-limite), ou (c) a lista de controles encolher sem regressão de propósito.
+limite), (c) a lista de controles encolher sem regressão de propósito, ou
+(d) um identificador em crase (`EdgeState`, `serviceMaxBodyCap`, `doctor`)
+não resolver a uma declaração do `src/` (classe, função, método, construtor)
+nem a um comando do help — o mapa deixa de poder citar um mecanismo que saiu
+do código, e nome que só "parece" identificador não vira mecanismo.

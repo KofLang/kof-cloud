@@ -1,3 +1,5 @@
+import kofcloud.cli.Commands
+import kofcloud.cli.Usage
 import kofcloud.store.Store
 import kofcloud.util.Text
 
@@ -73,6 +75,154 @@ test "controles: toda seção declara o limite (NÃO cobre)", "docs-controls" {
     assert(found == controlSections().size, "seções de controle: " + intToString(found) + " (esperado " + intToString(controlSections().size) + ")")
     for (var head in controlSections()) {
         assert(doc.indexOf("\n" + head) >= 0 || doc.startsWith(head.substring(3)), "controle presente: " + head)
+    }
+}
+
+
+// A crase é o contrato: mecanismo é um identificador declarado no `src/`
+// (classe/record/type/const, função, método, construtor), comando do help
+// ou palavra do próprio texto. Ficam de fora arquivos/paths (`a/b.kf`, `a/b`),
+// chaves e headers com ponto (`security.rateLimit`, `X-KofCloud-Token`),
+// nomes de teste com hífen (`chain-unit`), flags (`--x`), trechos com `()` e
+// literais de wire. Nada vira mecanismo por "parecer" um nome: ou o código
+// declara, ou o help despacha.
+// Literal de wire: `KCFnnn` ou valor exato da lista curta do protocolo
+// (docs/07-tunnel-protocol.md). Lista, não regra de caixa: `toUpperCase`,
+// `charAt` e `strings.isUpperCase` não se comportam como esperado no JVM
+// deste toolchain (medido).
+Bool isWireLiteral(String tok) {
+    if (tok.startsWith("KCF")) {
+        return true
+    }
+    return protocolWireLiterals().contains(tok)
+}
+
+List<String> protocolWireLiterals() {
+    return listOf("AUTHENTICATED", "SUSPENDED", "ONLINE", "OFFLINE", "DEVICE_REVOKED",
+        "REVOKED", "EXPIRED", "HELLO", "WELCOME", "OPENED", "RESET", "GOAWAY", "PING", "PONG")
+}
+
+List<String> controlsSymbols(String doc) {
+    return controlsSymbolsWith(doc, sbomModules())
+}
+
+List<String> controlsSymbolsWith(String doc, List<String> modules) {
+    var out = listOf<String>()
+    var start = doc.indexOf("## CC6.1")
+    if (start < 0) {
+        return out
+    }
+    var rest = doc.substring(start)
+    var at = rest.indexOf("`")
+    while (at >= 0) {
+        var end = rest.indexOf("`", at + 1)
+        if (end < 0) {
+            break
+        }
+        var tok = rest.substring(at + 1, end).trim()
+        rest = rest.substring(end + 1)
+        at = rest.indexOf("`")
+        if (tok.length < 4) {
+            continue
+        }
+        if (tok.indexOf(" ") >= 0 || tok.indexOf("##") >= 0 || tok.indexOf("**") >= 0) {
+            continue
+        }
+        if (tok.indexOf("/") >= 0 || tok.indexOf(".") >= 0 || tok.indexOf("-") >= 0
+            || tok.indexOf("(") >= 0 || tok.startsWith("--")) {
+            continue
+        }
+        // `chain` é o nome do arquivo de prova; `kofdeps` é a metadata do
+        // manifesto — lugares, não mecanismos.
+        if (isWireLiteral(tok) || tok == "chain" || tok == "kofdeps") {
+            continue
+        }
+        if (symbolDeclared(tok, modules) == false && usageText().indexOf("  " + tok) < 0) {
+            continue
+        }
+        if (out.contains(tok)) {
+            continue
+        }
+        out.add(tok)
+    }
+    return out
+}
+
+// Símbolo DECLARADO em algum fonte do `src/`: classe/record/type/const de
+// modelo (`class Service`, `const X`), função top-level ou método
+// (`[Mods] Tipo nome(`) e construtor de objeto (`Service(`). Comentário ou
+// nome de flag com a mesma palavra não conta.
+Bool symbolDeclared(String sym, List<String> modules) {
+    var marker = " " + sym + "("
+    for (var path in modules) {
+        var body = readTextOr(path, "")
+        if (body.indexOf("class " + sym) >= 0 || body.indexOf("record " + sym) >= 0
+            || body.indexOf("type " + sym) >= 0 || body.indexOf("const " + sym) >= 0) {
+            return true
+        }
+        if (body.indexOf(marker) >= 0) {
+            return true
+        }
+    }
+    return false
+}
+
+// `assert` puro só imprime "assertion failed"; este leva o rótulo junto
+// (mesma forma do `assertTrue` de `kof.test`, que não é importável aqui).
+Void assertWith(Bool cond, String label) {
+    if (!cond) {
+        throw "assertion failed: " + label
+    }
+}
+
+// Símbolo presente em algum fonte (declaração, chamada ou import). A lista
+// vem de `sbomModules()` (curada e travada pelo `audit-sbom`), então a
+// varredura nunca "passa em vazio": módulo fora do SBOM quebra lá antes.
+Bool symbolInSources(String sym, List<String> modules) {
+    for (var path in modules) {
+        var body = readTextOr(path, "")
+        if (body.indexOf(sym) >= 0) {
+            return true
+        }
+    }
+    return false
+}
+
+test "controles: cada identificador em crase resolve para o código", "docs-controls" {
+    var doc = controlsDoc()
+    var modules = sbomModules()
+    var symbols = controlsSymbolsWith(doc, modules)
+    // Sanidade da extração (mesma regra do u-counts): formato mudou e nada
+    // casou = falha de propósito, não verde. Falhas usam `assertWith`, que
+    // leva a mensagem junto (`assert` puro só imprime "assertion failed").
+    var tag = " (" + intToString(symbols.size) + " identificadores)"
+    assertWith(symbols.size >= 12, "o mapa cita mecanismos" + tag)
+    // Uma de cada classe da regra: classe, função com `_`, comando do help.
+    assertWith(symbols.contains("EdgeState"), "extrai classe" + tag)
+    assertWith(symbols.contains("serviceMaxBodyCap"), "extrai função com _" + tag)
+    assertWith(symbols.contains("doctor"), "extrai comando do help" + tag)
+    assertWith(symbolDeclared("doctor", modules) == false, "comando do help não é declarado em src/ (o filtro de help importa)")
+    // Os filtros não podem engolir o mapa inteiro pelo caminho errado.
+    assertWith(isWireLiteral("AUTHENTICATED") && isWireLiteral("KCF111"), "literal de wire e código de erro ficam fora")
+    assertWith(isWireLiteral("EdgeState") == false, "regra de wire não come identificador")
+    assertWith(symbolDeclared("worm", modules) == false, "palavra de comentário não é mecanismo")
+    assertWith(symbolInSources("zz-not-a-symbol-zz", modules) == false, "sonda: a varredura percorre o src")
+    // A regra de extração exige declaração no `src/`, então hoje a presença é
+    // redundante; o laço fica como rede para quem afrouxar a regra (aceitar
+    // nome por parecença) — aí um nome inexistente no mapa quebra aqui.
+    var missing = ""
+    for (var sym in symbols) {
+        if (symbolInSources(sym, modules) == false) {
+            missing = missing + " " + sym
+        }
+    }
+    assertWith(missing.length == 0, "mecanismos citados existem no src/:" + missing + tag)
+    // Comandos da plataforma citados no mapa: cada um aparece no help (a
+    // fonte viva do que o binário despacha).
+    var help = usageText()
+    for (var cmd in listOf("scan", "state-backup")) {
+        assertWith(doc.indexOf("kof cloud " + cmd) >= 0, "mapa cita o comando: kof cloud " + cmd)
+        assertWith(help.indexOf("  " + cmd) >= 0, "comando existe no help: kof cloud " + cmd)
     }
 }
 

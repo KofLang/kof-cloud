@@ -98,7 +98,7 @@ o run total imprime `71 passed, 0 failed`. Falha = nome do teste + assert
 | listagens em `--json` (CI) | `tests/json_output_test.kf` | 2 |
 | teto de corpo por rota (F10 s2) | `tests/route_cap_test.kf` | 2 |
 | percentis de latência (F14 s1) | `tests/percentile_test.kf` | 3 |
-| relatório de controles (F19 s4) | `tests/controls_doc_test.kf` | 3 |
+| relatório de controles (F19 s4) | `tests/controls_doc_test.kf` | 4 |
 | credencial da conta com ciclo de vida (F19 s3) | `tests/account_token_test.kf` | 11 |
 | health HTTP com prazo (F4) | `tests/health_test.kf` | 5 |
 | teto de resposta + cabeçalho + leitura (F14 s3 parcial) | `tests/relay_limit_test.kf` | 4 |
@@ -118,4 +118,4 @@ o run total imprime `71 passed, 0 failed`. Falha = nome do teste + assert
 | push do uso para billing (F18 s4) | `tests/usage_push_test.kf` | 4 |
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 6 |
 
-Total: 485 testes. Ver `15-tests.md` para a matriz.
+Total: 486 testes. Ver `15-tests.md` para a matriz.

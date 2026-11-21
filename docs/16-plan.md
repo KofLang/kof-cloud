@@ -1829,9 +1829,11 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   WORM não imutável, nó único, sem MFA, HMAC em vez de Ed25519, sem artefato
   transferível). Não é certificação — é o retrato que a auditoria externa
   leria, sem checklist aspiracional. Prova: `tests/controls_doc_test.kf`
-  (`docs-controls` ×3: citações de suíte existentes, toda seção com o
+  (`docs-controls` ×4: citações de suíte existentes, toda seção com o
   limite e a contagem de seções fixa, âncoras de mecanismo e os limites
-  espelhados do 17-limitations).
+  espelhados do 17-limitations, e cada identificador em crase do mapa —
+  `EdgeState`, `wafAllowCheck`, `doctor` — resolvido a uma declaração do
+  `src/` ou a um comando do help: nome por parecença não vira mecanismo).
 * **Slice 2 — varredura contínua (parcial: manifesto + ambiente + PEM ✅; dependências pendente).**
   `kof cloud scan [--file]` lê o manifesto e acusa `kfs_`/`kfc_`/password
   literal (exit 1 com achado, 0 limpo) — sem login, sem rede, para rodar
