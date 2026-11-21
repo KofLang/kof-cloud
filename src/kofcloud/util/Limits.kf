@@ -585,6 +585,22 @@ Int limitBackoffMaxMs() {
     return backoffMaxLimitFrom(config.int("kofcloud.limits.backoffMaxMs", 30000), limitBackoffBaseMs())
 }
 
+// Passo de retentativa quando a maquina esta SEM REDE (F16: ligar o notebook
+// no aviao nao pode acender um incidente de "Edge caindo"). Fonte unica do
+// `agent/Agent.offlineRetryMs`. Recuo seguro: zerado/negativo recai no
+// default — com 0 o laco viraria busy-loop de sondas de rede enquanto o
+// notebook esta offline (o caso em que a maquina tem MENOS recursos).
+Int offlineRetryMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 30000
+    }
+    return configured
+}
+
+Int limitOfflineRetryMs() {
+    return offlineRetryMsFrom(config.int("kofcloud.limits.offlineRetryMs", 30000))
+}
+
 // Tamanho do anel de auditoria operacional (eventos por control plane).
 // Fonte unica do `Registry.audit()` — sem isso, afinar a trilha exigiria
 // editar o produto, nao a config. Afinavel por config mas sem recuo

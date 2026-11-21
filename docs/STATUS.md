@@ -50,7 +50,7 @@ o run total imprime `69 passed, 0 failed`. Falha = nome do teste + assert
 | identidade/cifra/tokens | `tests/identity_test.kf` | 6 |
 | forca bruta no login (F5) | `tests/login_limit_test.kf` | 3 |
 | vocabulario fechado do status (F5) | `tests/status_report_test.kf` | 2 |
-| backoff + drift de Edge | `tests/backoff_test.kf` | 4 |
+| backoff + drift de Edge + retry offline | `tests/backoff_test.kf` | 5 |
 | registry | `tests/registry_test.kf` | 12 |
 | limites + varredura + push de SERVICES + trava de citação + família em fonte única | `tests/limits_test.kf` | 11 |
 | service token | `tests/service_token_test.kf` | 15 |
@@ -84,7 +84,7 @@ o run total imprime `69 passed, 0 failed`. Falha = nome do teste + assert
 | contenção (Fase 17 s2) | `tests/freeze_test.kf` | 17 |
 | status page (Fase 17 s3 parcial) | `tests/status_page_test.kf` | 6 |
 | publish com allowlist pela CLI (F10 s3) | `tests/publish_allow_test.kf` | 4 |
-| webhook de incidentes (F17 s3) | `tests/webhook_test.kf` | 11 |
+| webhook de incidentes (F17 s3) + extração de host de URL | `tests/webhook_test.kf` | 12 |
 | cadeia de auditoria (F19 s4) | `tests/audit_chain_test.kf` | 21 |
 | scan de ambiente e PEM (F19 s2) | `tests/scan_extra_test.kf` | 5 |
 | higiene de credenciais (F19 s2) | `tests/token_hygiene_test.kf` | 5 |
@@ -116,4 +116,4 @@ o run total imprime `69 passed, 0 failed`. Falha = nome do teste + assert
 | push do uso para billing (F18 s4) | `tests/usage_push_test.kf` | 4 |
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 6 |
 
-Total: 473 testes. Ver `15-tests.md` para a matriz.
+Total: 475 testes. Ver `15-tests.md` para a matriz.

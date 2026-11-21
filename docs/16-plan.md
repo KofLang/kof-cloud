@@ -1375,6 +1375,23 @@ iguais).
   "resposta inesperada" (nunca verde). Prova: `doctor-control` em
   `tests/doctor_test.kf` (puro em 4 casos + e2e com control real corrupto).
 
+  **Implementado (retry offline — a máquina sem rede não acorda a cada
+  segundo):** notebook no avião, Wi-Fi trocando, VPN caindo — tudo virava
+  "control plane inalcançável" e o laço de reconexão batia na base do
+  backoff (500 ms, crescendo) contra uma rede que não existe (medido: o
+  retry continuava no ritmo do backoff normal por todo o período offline).
+  Agora o `runAgent` sonda a rede a cada volta (`agentNetworkUp`: nome do
+  Edge fixo, senão o host do control plane): sem rede, a espera é o passo
+  fixo de `offlineRetryMs` (30 s default, `kofcloud.limits.offlineRetryMs`,
+  recuo seguro) em vez do backoff crescente, a linha do evento diz "sem
+  rede local" em vez de culpar o Edge, e na volta a rede avisa "rede local
+  voltou" e o backoff recomeça do zero. Prova: `tests/backoff_test.kf`
+  (5: passo fixo nas voltas offline, backoff normal online, recuo do
+  passo, linhas, sonda real com `.invalid`; 3 mutações — sem passo fixo,
+  sem recuo, sem delegação do `webhookUrlHost` — quebram).
+  `urlHost` em `util/Text.kf` é a extração genérica de host (o
+  `webhookUrlHost` delega nela — mesma regra, sem duas cópias).
+
   **Implementado (falha de bind visível — a borda não some em silêncio):**
   os três listeners do `serve` (control, túnel, público) abrem DENTRO de
   `spawn`; se uma porta estivesse ocupada, `net.listen` lançaria e a exceção
@@ -1596,7 +1613,8 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   real registra, o 404 de inexistente não). **Divergência registrada:** o
   desenho pedia Ed25519, mas o stdlib não expõe par Ed25519
   utilizável (SECN014, `13-kof-apis.md` L17). Prova:
-  `tests/webhook_test.kf` (11).
+  `tests/webhook_test.kf` (12: + `webhook-host`, `urlHost` genérico
+  com `webhookUrlHost` delegando).
 **Regras:** contenção sempre reversível; comunicação sempre antes do
 fix secreto (avisa o impacto, depois corrige); todo incidente vira teste
 novo (se não tem regressão, não fechou).

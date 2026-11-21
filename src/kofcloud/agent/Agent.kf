@@ -151,11 +151,76 @@ EdgeEndpoint fetchEdge(AgentConfig config) {
     )
 }
 
+// A maquina tem rede para o Edge? Sonda barata: o nome do Edge (config ou
+// o que o control plane devolveu) e, sem nome, o control plane — a rota de
+// descoberta do Edge. Refazer a sonda a cada volta e proposital: e ela que
+// detecta a volta, entao nao ha estado a invalidar.
+//
+// Janela de rede ausente: notebook no aviao, Wi-Fi trocando, VPN caindo —
+// tudo vira "control plane inalcancavel" e o laco de backoff batia na base
+// (500 ms → 1 s) contra uma rede que nao existe, gastando bateria justamente
+// quando ela esta curta (medido pela sonda: o retry continuava no ritmo do
+// backoff normal por todo o periodo offline).
+Bool agentNetworkUp(String edgeHost, String controlUrl) {
+    if (edgeHost.length > 0) {
+        return hostReachable(edgeHost)
+    }
+    var controlHost = urlHost(controlUrl)
+    if (controlHost.length == 0) {
+        // Sem rotulo para sondar: nao afirma nem nega (o proximo fetch
+        // resolve o Edge e a volta seguinte sabe).
+        return true
+    }
+    return hostReachable(controlHost)
+}
+
+// Resolve o nome; resolvido = ha caminho de saida. Falha = sem rede.
+Bool hostReachable(String host) {
+    try {
+        return net.resolve(host).size > 0
+    } catch (String e) {
+        return false
+    }
+}
+
+// Espera antes da proxima tentativa (pura, fonte unica): com rede, o
+// backoff exponencial de sempre (o Edge pode ter caido sozinho e a espera
+// cresce); sem rede, o passo fixo de `offlineRetryMs` — retry continua, mas
+// nao acorda a maquina a cada segundo contra uma rede ausente. Nunca
+// negativa (base offline nao-positiva recai no default de 30 s).
+Int reconnectWaitMs(Bool networkUp, Int attempt, Int base, Int maxDelay, Int offlineMs) {
+    if (networkUp == false) {
+        if (offlineMs <= 0) {
+            return 30000
+        }
+        return offlineMs
+    }
+    return backoffDelay(attempt, base, maxDelay)
+}
+
+// Linha do evento de retentativa: com rede, a mesma palavra de sempre
+// (`reconnecting in Nms`, que o operador ja procura nos logs); sem rede, o
+// comeco do texto diz para onde olhar — nunca culpa o Edge por Wi-Fi caido.
+String reconnectLine(String error, Bool networkUp, Int waitMs) {
+    if (networkUp) {
+        return error + " — reconnecting in " + intToString(waitMs) + "ms"
+    }
+    return error + " — sem rede local; retentando em " + intToString(waitMs) + "ms"
+}
+
+// Volta da rede: uma linha para o silencio nao parecer travamento.
+String networkBackLine() {
+    return "rede local voltou — retomando a reconexao"
+}
+
 // Loop de conexao com backoff. `once` = uma tentativa (usado em testes);
-// senao reconecta indefinidamente, exceto em recusa definitiva.
+// senao reconecta indefinidamente, exceto em recusa definitiva. Com a
+// maquina sem rede o retry espera o passo offline fixo em vez de bater na
+// base do backoff; quando a rede volta, volta ao backoff do zero.
 void runAgent(AgentConfig config, Bool once) {
     var attempt = 0
     var running = true
+    var wasOffline = false
     while (running) {
         try {
             noteAgentConnect()
@@ -176,10 +241,21 @@ void runAgent(AgentConfig config, Bool once) {
                 running = false
             } else {
                 noteAgentReconnect()
-                var delay = backoffDelay(attempt, defaultBackoffBase(), defaultBackoffMax())
-                agentEvent("warn", e + " — reconnecting in " + intToString(delay) + "ms")
+                var up = agentNetworkUp(config.edgeHost, config.controlUrl)
+                if (up) {
+                    if (wasOffline) {
+                        agentEvent("info", networkBackLine())
+                    }
+                    wasOffline = false
+                } else {
+                    wasOffline = true
+                }
+                var delay = reconnectWaitMs(up, attempt, defaultBackoffBase(), defaultBackoffMax(), limitOfflineRetryMs())
+                agentEvent("warn", reconnectLine(e, up, delay))
                 time.sleep(delay)
-                attempt = attempt + 1
+                if (up) {
+                    attempt = attempt + 1
+                }
             }
         }
     }

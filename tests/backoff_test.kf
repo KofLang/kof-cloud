@@ -2,6 +2,7 @@ import kofcloud.agent.Agent
 
 import kofcloud.agent.Backoff
 import kofcloud.util.Limits
+import kofcloud.util.Text
 
 test "backoff: cresce com tentativas e respeita o teto" {
     var base = 500
@@ -84,4 +85,40 @@ test "edge drift: linha so quando ranking aponta outro Edge (puro)", "edge-drift
     assert(body.indexOf("edgeDriftLine(") >= 0, "refresher detecta drift")
     assert(body.indexOf("agentEvent(\"info\", line)") >= 0, "sinal vai ao runtime log")
     assert(body.indexOf("endpoint.best") >= 0, "usa o ranking do fetchEdge")
+}
+
+test "rede ausente: retry espera o passo offline, nunca a base (F16)", "backoff-offline" {
+    // Medido pela sonda: sem rede o laco batia na base do backoff (500 ms)
+    // contra uma rede que nao existe. Sem rede, espera fixa e curta; com
+    // rede, o backoff exponencial de sempre.
+    var offline = limitOfflineRetryMs()
+    assert(offline == 30000, "default 30000 ms")
+    assert(reconnectWaitMs(false, 0, 500, 30000, offline) == 30000, "offline: passo fixo ja na 1a volta")
+    assert(reconnectWaitMs(false, 9, 500, 30000, offline) == 30000, "offline: nao cresce com tentativas")
+    assert(reconnectWaitMs(false, 0, 500, 30000, 0) == 30000, "offline sem passo -> default, nunca 0")
+    assert(reconnectWaitMs(false, 0, 500, 30000, -5) == 30000, "offline negativo -> default")
+    assert(reconnectWaitMs(false, 0, 500, 30000, 7000) == 7000, "offline respeita a config")
+    var online = reconnectWaitMs(true, 0, 500, 30000, offline)
+    assert(online >= 0 && online <= 620, "online: volta ao backoff da base")
+    assert(offlineRetryMsFrom(0) == 30000, "recuo: zero volta ao default")
+    assert(offlineRetryMsFrom(-1) == 30000, "recuo: negativo volta ao default")
+    assert(offlineRetryMsFrom(2500) == 2500, "recuo: positivo passa")
+
+    // Eventos: a palavra que o operador ja procura continua com rede; sem
+    // rede o texto diz de quem e a falta.
+    var line = reconnectLine("control unreachable", true, 750)
+    assert(line.indexOf("reconnecting in 750ms") >= 0, "com rede: mesma palavra")
+    assert(line.indexOf("sem rede") < 0, "com rede: nao acusa a maquina")
+    var offLine = reconnectLine("control unreachable", false, 30000)
+    assert(offLine.indexOf("sem rede local") >= 0, "sem rede: diz a causa")
+    assert(offLine.indexOf("reconnecting in") < 0, "sem rede: nao culpa o Edge")
+    assert(networkBackLine().indexOf("rede local voltou") >= 0, "volta da rede avisa")
+
+    // Sonda real: `.invalid` (RFC 6761) nunca resolve.
+    assert(hostReachable("kofcloud-offline-probe.invalid") == false, "nome impossivel = sem rede")
+    // O host fixo da config e quem manda na sonda; sem Edge fixo, cai no
+    // control plane (host impossivel tambem).
+    assert(agentNetworkUp("kofcloud-offline-probe.invalid", "http://127.0.0.1:1") == false, "Edge fixo decide")
+    // Control plane com host URL ilegivel: "nao afirma nem nega".
+    assert(agentNetworkUp("", "nao-e-url") == true, "sem rotulo para sondar: nao bloqueia")
 }

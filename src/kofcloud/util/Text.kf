@@ -593,3 +593,30 @@ List<String> splitList(String csv) {
 List<String> httpVerbs() {
     return listOf("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")
 }
+
+// Host de uma URL http(s) sem esquema, sem caminho e sem porta, em
+// minusculas; "" quando a forma nao e URL. Generico de proposito: a mesma
+// extracao serve ao webhook (`webhookUrlHost`) e a sonda de rede do Agent
+// (host do control plane). Nunca lanca.
+String urlHost(String url) {
+    var lower = url.trim().toLowerCase()
+    var hostStart = 0
+    if (lower.startsWith("https://")) {
+        hostStart = 8
+    } else if (lower.startsWith("http://")) {
+        hostStart = 7
+    } else {
+        return ""
+    }
+    var rest = lower.substring(hostStart)
+    var slash = rest.indexOf("/")
+    if (slash >= 0) {
+        rest = rest.substring(0, slash)
+    }
+    var colon = rest.indexOf(":")
+    if (colon >= 0) {
+        rest = rest.substring(0, colon)
+    }
+    return rest
+}
+

@@ -399,3 +399,16 @@ test "webhook: set/remove deixam rastro de auditoria sem o segredo", "webhook-au
     var after = bodyOf(httpGetToken(controlPort, "/v1/audit", token)).split("\"webhook.removed\"").length
     assert(after == before, "404 nao registra evento")
 }
+
+test "webhook: urlHost extrai host sem porta/caminho (fonte unica)", "webhook-host" {
+    // `webhookUrlHost` delega na extracao generica: uma regra so. A mesma
+    // usada pela sonda de rede do Agent — mudar aqui quebra la (e vice-versa).
+    assert(urlHost("https://hooks.example.com/hook") == "hooks.example.com", "https com caminho")
+    assert(urlHost("http://127.0.0.1:9/hook") == "127.0.0.1", "http com porta")
+    assert(urlHost("HTTPS://HOOKS.EXAMPLE.COM/A") == "hooks.example.com", "caixa")
+    assert(urlHost("  https://hooks.example.com/a  ") == "hooks.example.com", "espacos")
+    assert(urlHost("https://169.254.169.254/latest") == "169.254.169.254", "ip com caminho")
+    assert(urlHost("nao-e-url") == "", "forma invalida")
+    assert(urlHost("") == "", "vazio")
+    assert(webhookUrlHost("https://hooks.example.com/a") == urlHost("https://hooks.example.com/a"), "delega na generica")
+}
