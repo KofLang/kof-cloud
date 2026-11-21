@@ -726,6 +726,28 @@ test "text: sbom cobre os 49 fontes com hash verificavel", "audit-sbom" {
     }
 }
 
+test "text: limitacoes distinguem chunked de pedido e de resposta", "limits-docs" {
+    // Trava do drift medido: docs/17-limitations.md dizia "chunked: nao
+    // decodificado" sem dizer o lado — e a resposta E decodificada desde a
+    // Fase 10 slice 2g (decodeChunked, prova em framing_test). Afirmacao so
+    // do lado do pedido continua honesta; a do lado da resposta nao.
+    var limits = readTextOr("docs/17-limitations.md", "")
+    assert(limits.length > 0, "17-limitations existe")
+    var bullet = ""
+    for (var line in limits.split("\n")) {
+        if (line.startsWith("* `Transfer-Encoding` / chunked **no pedido**")) {
+            bullet = line
+        }
+    }
+    assert(bullet.length > 0, "bullet do chunked declara o lado do pedido")
+    assert(bullet.indexOf("**não decodificado**") < 0, "sem 'nao decodificado' sem lado")
+    assert(limits.indexOf("decodeChunked") >= 0, "resposta decodificada citada")
+    assert(limits.indexOf("`framing-chunked-unit`") >= 0, "prova da resposta citada")
+    var apis = readTextOr("docs/13-kof-apis.md", "")
+    assert(apis.indexOf("utils/decodeChunked") >= 0, "13-kof-apis aponta o decodificador")
+    assert(apis.indexOf("o que fica fora é o **streaming**") >= 0, "13-kof-apis separa decode de streaming")
+}
+
 test "text: breakdowns por tag da matriz U batem com os arquivos", "u-counts" {
     // Trava da coluna de suite do docs/15-tests.md (irma do status-counts,
     // que so trava o TOTAL por suite): quando a linha declara

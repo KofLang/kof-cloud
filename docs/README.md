@@ -18,7 +18,7 @@
 | 14 | [Módulos](14-modules.md) | estrutura e regras |
 | 15 | [Testes](15-tests.md) | matriz unit/integração/E2E/falha |
 | 16 | [Plano](16-plan.md) | fases 1–8 |
-| 17 | [Limitações](17-limitations.md) | lacunas honestas |
+| 17 | [Limitações](17-limitations.md) | lacunas honestas (chunked: só no pedido; a resposta é decodificada) |
 | 18 | [Implementado](18-implemented.md) | o que está pronto e verificado |
 | — | [STATUS](STATUS.md) | estado medido: verde/prova/gaps + como reproduzir |
 | — | [Segurança](SECURITY.md) | política: suporte, reporte, SLA, escopo (Fase 19 slice 1) |

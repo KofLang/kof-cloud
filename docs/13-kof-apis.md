@@ -79,7 +79,10 @@ por elemento; `encoding.hexDecode` devolve `String`, não bytes.
 
 O corpo é lido inteiro. **Consequência:** upload grande é limitado por
 `limits.frameBytes` × fragmentação; streaming contínuo (SSE longo) fica
-limitado pelo idle timeout.
+limitado pelo idle timeout. Decodificar um corpo chunked na leitura do
+socket é possível e barato (`utils/decodeChunked` em `src/kofcloud/edge/`,
+prova em `tests/framing_test.kf`); o que fica fora é o **streaming**: o
+corpo inteiro precisa caber antes do repasse.
 
 ### L8 — `web.app()` intercepta o header `Authorization` ⚠️ **moldou o protocolo**
 
