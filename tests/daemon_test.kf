@@ -128,6 +128,11 @@ test "daemon: ajuda reconciliada com os comandos reais", "usage-parity" {
     // viajam juntos; a prova do json vive em `json_output_test.kf`.
     assert(help.indexOf("domain list [--json]   (--json = saida estavel para CI)") >= 0, "help anuncia domain list --json")
     assert(readme.indexOf("domain list [--json]") >= 0, "README espelha domain list --json")
+    // O README tambem arrastou o `domain add` so com o webhook: `--dns-cmd`
+    // (F18 s1) existia no help, nos testes e na prosa, mas sumia da
+    // referencia do usuario. Linha inteira (precedente do token/prune):
+    // assert de prefixo passaria sem a fonte de DNS nova.
+    assert(readme.indexOf("domain add <hostname> --service <nome> [--dns-webhook <url> | --dns-cmd <cmd>] [--dry-run]") >= 0, "README espelha domain add com --dns-cmd")
     // Varredura generica help -> README: todo comando do help tem de ter
     // linha propria na referencia do README. Precedente real: a lane do
     // `usage` (F18 s4) atualizou o help e o paragrafo de suites e esqueceu

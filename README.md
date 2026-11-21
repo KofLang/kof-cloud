@@ -125,7 +125,7 @@ service tokens   (credenciais validas SEM expiracao na conta)
 service rotate (<nome>|--all) [--ttl <horas>] [--prune]  (credencial nova; revoga as antigas SO depois do TTL)
 service rotation <nome>  (quantas credenciais ainda valem)
 domain list [--json]   (--json = saida estavel para CI)
-domain add <hostname> --service <nome> [--dns-webhook <url>] [--dry-run]   (dominio proprio; --dns-webhook pede a criacao do CNAME num receptor HTTP do operador, token via KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN; --dry-run mostra o pedido e nao registra nem envia)
+domain add <hostname> --service <nome> [--dns-webhook <url> | --dns-cmd <cmd>] [--dry-run]   (dominio proprio; UMA fonte de DNS — --dns-webhook pede a criacao do CNAME num receptor HTTP do operador, token via KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN, ou --dns-cmd roda o CLI do provedor com {hostname}/{target}/{service}; --dry-run mostra e nao registra nem envia)
 domain verify <hostname> [--tls-cert <pem>]  (confere o DNS e ativa a rota; --tls-cert julga o PEM antes da rede)
 domain remove <hostname>
 deploy [--file kofcloud.json] [--check] [--plan] [--watch]  (roda build + publica + verifica; --plan so mostra o diff; --watch observa o manifesto e re-publica o que mudar — nunca remove)

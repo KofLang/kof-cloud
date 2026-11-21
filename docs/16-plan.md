@@ -176,11 +176,13 @@ e o Registry aceita o AAAA do Edge pela mesma comparação. Saída: PENDING +
 testes novos; três mutações — AAAA ignorado, IPv6 sempre recusando, Registry
 sem IPv6 — quebram).
 
+Automação DNS específica de provedor ✅ (Cloudflare/Route53/qualquer CLI):
+`domain add --dns-webhook` (receptor HTTP do operador) e `--dns-cmd`
+(CLI do provedor via `sh -c`, sem SDK), ver Fase 18 slice 1.
+
 Falta (fatiado de propósito): TLS por SNI no Edge (o Kof não expõe — ver
-`12-tls.md`) e automação DNS específica de provedor (Cloudflare/Route53 — o
-webhook genérico já existe, ver Fase 18 slice 1). Sem isso,
-o hostname próprio serve HTTP pela borda; o HTTPS continua dependendo de
-terminador externo.
+`12-tls.md`). Sem isso, o hostname próprio serve HTTP pela borda; o HTTPS
+continua dependendo de terminador externo.
 
 ## Fase 7 — deploy
 

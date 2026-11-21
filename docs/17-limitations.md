@@ -33,8 +33,9 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   declarado são descartados, nunca viram uma segunda requisição).
 * QUIC, UDP forwarding, TCP forwarding genérico.
 * CDN, edge distribuído, relay regional.
-* Domínio próprio: registro + verificação + rota (Fase 6 slice 1) ✅; sem
-  TLS por SNI e sem automação por provedor (Cloudflare/Route53). A
+* Domínio próprio: registro + verificação + rota (Fase 6 slice 1) ✅, com
+  automação DNS por provedor (`--dns-webhook` / `--dns-cmd`) ✅; sem TLS
+  por SNI. A
   verificação recusa DNS que também resolve fora do Edge (`KCF164`), por
   IPv4 e por IPv6 literal (julgado pelo valor, não pela grafia). O texto do
   CNAME devolvido pelo resolver do SO não desqualifica, e o Edge precisa ser
