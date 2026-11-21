@@ -566,6 +566,12 @@ test "text: notFoundLine trava mensagens da CLI", "not-found-line" {
     // Linhas de uso duplicadas em dois guardas do mesmo comando (fonte
     // unica): cada helper abaixo cobre 2 call sites (flag + args).
     assert(usoServiceTokenLine() == "uso: kof cloud service token <nome> [--ttl <horas>]", "uso token")
+    // Uso do dispatch (grupo sem subcomando): precisa listar TODOS os subs
+    // que o runXxx despacha — antes `service` omitia tokens|rotate|rotation
+    // e `token` omitia prune (medido: o comando existia, o help anunciava,
+    // o uso mentia). Puras, sem rede.
+    assert(usoServiceDispatchLine() == "uso: kof cloud service list|status|suspend|unsuspend|token <nome>|token-list <nome>|token-revoke <nome> <kfs_...|id>|tokens|rotate|rotation", "uso service dispatch")
+    assert(usoTokenDispatchLine() == "uso: kof cloud token list|revoke|rotate|rotation|prune", "uso token dispatch")
     assert(usoServeLine().indexOf("kof cloud serve") >= 0, "uso serve")
     assert(usoLogsLine() == "uso: kof cloud logs [--tail <linhas>] [--runtime|--edge]", "uso logs")
     assert(usoDomainAddLine() == "uso: kof cloud domain add <hostname> --service <nome> [--dns-webhook <url> | --dns-cmd <cmd>] [--dry-run]", "uso domain add")

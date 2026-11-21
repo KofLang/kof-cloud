@@ -1860,7 +1860,7 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   valores), `POST /v1/tokens/revoke` (valor ou id curto; 409 `KCF063`
   ambíguo, 404 `KCF064` opaco) e `POST /v1/tokens/rotate` com overlap
   (antigas só caem depois do TTL; sem TTL nada é revogado em silêncio).
-  CLI: `kof cloud token list|revoke|rotate|rotation`; o `rotate` grava a
+  CLI: `kof cloud token list|revoke|rotate|rotation|prune`; o `rotate` grava a
   nova credencial na sessão local antes de imprimir. O `status` mostra o
   aviso de expiracao do mesmo sinal `expiring` do fio (pura
   `statusCredentialWarning`; era o comando de rotina cego — o operador

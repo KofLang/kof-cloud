@@ -52,8 +52,20 @@ String notLoggedInLine() {
 // cada par abaixo aparecia 2x — uma para flag invalida (missing/duplicada)
 // e outra para args invalidos. Helpers puros para travar o formato em teste
 // (precedente: serviceNotFoundLine/deviceNotFoundLine/notLoggedInLine).
+// O `uso:` do dispatch (kof cloud <grupo> sem subcomando) tambem e fonte
+// unica aqui: ele precisa listar TODOS os subs que o runXxx despacha —
+// antes `service` omitia tokens|rotate|rotation e `token` omitia prune,
+// e o operador descobria o subcomando so no help.
 String usoServiceTokenLine() {
     return "uso: kof cloud service token <nome> [--ttl <horas>]"
+}
+
+String usoServiceDispatchLine() {
+    return "uso: kof cloud service list|status|suspend|unsuspend|token <nome>|token-list <nome>|token-revoke <nome> <kfs_...|id>|tokens|rotate|rotation"
+}
+
+String usoTokenDispatchLine() {
+    return "uso: kof cloud token list|revoke|rotate|rotation|prune"
 }
 
 String usoServeLine() {

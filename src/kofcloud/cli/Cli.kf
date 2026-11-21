@@ -137,7 +137,7 @@ Int runDevice(List<String> args) {
 
 Int runService(List<String> args) {
     if (args.size == 0) {
-        println("uso: kof cloud service list|status|suspend|unsuspend|token <nome>|token-list <nome>|token-revoke <nome> <kfs_...|id>")
+        println(usoServiceDispatchLine())
         return 1
     }
     var sub = args.get(0)
@@ -221,7 +221,7 @@ Int runDaemon(List<String> args) {
 
 Int runToken(List<String> args) {
     if (args.size == 0) {
-        println("uso: kof cloud token list|revoke|rotate|rotation")
+        println(usoTokenDispatchLine())
         return 1
     }
     var sub = args.get(0)
