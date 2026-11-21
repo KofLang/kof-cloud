@@ -1181,9 +1181,18 @@ sem mudar formato público):
   única `latencyBucketLimitsMs()`; o rótulo é **derivado** da lista (mudar
   a lista muda o rótulo, sem dois lugares para manter). Negativo (relógio
   ajustado) cai na primeira faixa. Prova: `tests/metrics_test.kf`
-  (`metrics-latency`). **Pendente:** p50/p99 por hostname (hoje só agregado
-  global, porque contar por hostname seria cardinalidade por cliente) e o
-  tempo de relay por tamanho.
+  (`metrics-latency`). **p50/p95/p99 AGREGADOS ✅ (F14 s1, sem
+  cardinalidade):** o histograma do Edge já cai em faixas; `percentileFromBuckets`
+  (nearest-rank puro, `edge/Metrics.kf`) converte as contagens em um **teto de
+  faixa** (`<=250 ms`, `>+2000 ms`) — nunca um valor exato inventado (o
+  histograma não guarda amostras) e `sem amostras` quando não há. A CLI lê o
+  fio já baixado (`expositionCounter`/`latencyBucketCounts` puros; a stdlib
+  **só exporta faixas não-zero** — medido —, então ausente = 0) e
+  `kof cloud metrics --percentiles` imprime o bloco. Prova:
+  `tests/percentile_test.kf` (3: pura nas bordas/excedente/vazio, parser com
+  exposição real medida, e2e com relay real — 5 pedidos nas faixas, p50 é um
+  teto e o bloco não diz "sem amostras"). Por hostname continua deliberado
+  fora (privacidade).
 
   **Implementado (tamanho da resposta):** faixas em KiB
   (`responseSizeBucketLimitsKb`: 1, 4, 16, 64, 256, 1024 + excedente),

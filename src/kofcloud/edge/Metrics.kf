@@ -102,6 +102,60 @@ String responseSizeBucketSuffix(Int responseBytes) {
     return "_kb_gt_" + intToString(limits.get(limits.size - 1))
 }
 
+// Nome do contador da faixa que contem `elapsedMs` (o de verdade, com o
+// prefixo do histograma) — fonte unica do que `noteRequestLatency` incrementa
+// e do que o percentil le na exposicao.
+String latencyBucketCounter(Long elapsedMs) {
+    return metricRequestLatencyMs() + latencyBucketSuffix(elapsedMs)
+}
+
+// Percentil nearest-rank sobre as FAIXAS (Fase 14 slice 1: p50/p99 sem
+// cardinalidade por cliente). Recebe os limites e as contagens ja lidas da
+// exposicao (mesma ordem e tamanho de `latencyBucketLimitsMs()` mais o
+// excedente no fim). Devolve o rotulo do teto da faixa que contem o rank —
+// um TETO, nunca um valor exato (o histograma nao guarda amostras): abaixo do
+// primeiro limite sai "-<N>", acima do ultimo sai ">+<N>", e sem amostras sai
+// "sem amostras" (nunca "0 ms", que mentiria "latencia zero").
+// Pura e sem IO: o parser da exposicao (CLI) alimenta as contagens.
+String percentileFromBuckets(List<Int> limits, List<Int> counts, Int percent) {
+    if (limits.size == 0) {
+        return "sem amostras"
+    }
+    if (counts.size < limits.size + 1) {
+        return "sem amostras"
+    }
+    var total = 0
+    var i = 0
+    while (i < counts.size) {
+        total = total + counts.get(i)
+        i = i + 1
+    }
+    if (total <= 0) {
+        return "sem amostras"
+    }
+    if (percent <= 0) {
+        percent = 1
+    }
+    if (percent > 100) {
+        percent = 100
+    }
+    // nearest-rank: o menor k tal que a soma acumulada >= ceil(percent/100 * N).
+    var rank = (total * percent + 99) / 100
+    var acc = 0
+    var b = 0
+    while (b < counts.size) {
+        acc = acc + counts.get(b)
+        if (acc >= rank) {
+            if (b == limits.size) {
+                return ">+" + intToString(limits.get(limits.size - 1)) + " ms"
+            }
+            return "<=" + intToString(limits.get(b)) + " ms"
+        }
+        b = b + 1
+    }
+    return ">+" + intToString(limits.get(limits.size - 1)) + " ms"
+}
+
 // Conta a resposta na faixa de tamanho (so respostas com bytes: recusa
 // pequena de plataforma nao mede relay e viraria ruido na faixa menor).
 void noteResponseSize(Int responseBytes) {

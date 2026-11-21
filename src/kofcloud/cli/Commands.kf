@@ -6,6 +6,7 @@ import kofcloud.cli.Local
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.edge.EdgeState
+import kofcloud.edge.Metrics
 import kofcloud.edge.Events
 import kofcloud.edge.HttpFront
 import kofcloud.edge.Tunnel
@@ -2283,6 +2284,55 @@ List<String> metricsLines(String text, String filter) {
     return out
 }
 
+// Contagem de um contador Prometheus pelo prefixo exato. Devolve -1 quando
+// a metrica nao aparece na exposicao. Puro: o percentil usa a MESMA leitura
+// para todas as faixas (uma passada por linha por faixa; a exposicao e
+// pequena e a CLI roda no terminal).
+Int expositionCounter(String exposition, String namePrefix) {
+    for (var line in exposition.split("\n")) {
+        if (line.startsWith("#")) {
+            continue
+        }
+        if (line.startsWith(namePrefix + " ")) {
+            return parseIntBounded(line.substring(namePrefix.length + 1).trim(), -1, 2147483647)
+        }
+    }
+    return -1
+}
+
+// Contagens por faixa de latencia do EDGE na exposicao (ordem de
+// `latencyBucketLimitsMs()` mais o excedente no fim). Faixa zerada nao e
+// exportada pela stdlib (medido: `_le_50 2` e `_le_500 1`, sem as do meio),
+// entao ausente vira 0 — nunca "faltando". Puro.
+List<Int> latencyBucketCounts(String exposition) {
+    var out = listOf<Int>()
+    var limits = latencyBucketLimitsMs()
+    for (var limit in limits) {
+        var n = expositionCounter(exposition, metricRequestLatencyMs() + "_le_" + intToString(limit))
+        if (n < 0) {
+            n = 0
+        }
+        out.add(n)
+    }
+    var over = expositionCounter(exposition, metricRequestLatencyMs() + "_gt_" + intToString(limits.get(limits.size - 1)))
+    if (over < 0) {
+        over = 0
+    }
+    out.add(over)
+    return out
+}
+
+// Bloco de percentis (F14 s1): p50/p95/p99 nearest-rank sobre as faixas do
+// Edge. Sem cardinalidade por cliente — e o histograma AGREGADO que ja
+// existe; o valor e um TETO de faixa, dito como tal.
+String latencyPercentileLines(String exposition) {
+    var counts = latencyBucketCounts(exposition)
+    var limits = latencyBucketLimitsMs()
+    return "  latencia p50: " + percentileFromBuckets(limits, counts, 50) + "\n" +
+        "  latencia p95: " + percentileFromBuckets(limits, counts, 95) + "\n" +
+        "  latencia p99: " + percentileFromBuckets(limits, counts, 99)
+}
+
 // `kof cloud metrics [--grep <texto>] [--control <url>]`: le o export
 // Prometheus do control plane (`GET /v1/metrics`, SEM auth — so agregados,
 // mesma regra do /v1/health) e imprime. Sem sessao usa `--control` ou o
@@ -2290,8 +2340,8 @@ List<String> metricsLines(String text, String filter) {
 // control as le, como no fio). Antes o operador precisava de `curl` para
 // ver o que a plataforma ja exporta.
 Int cmdMetrics(List<String> args) {
-    if (extraPositional(args, 0) || flagMissingValue(args, "--grep") || flagDuplicated(args, "--grep") || flagMissingValue(args, "--control") || flagDuplicated(args, "--control")) {
-        println("uso: kof cloud metrics [--grep <texto>] [--control <url>]")
+    if (extraPositional(args, 0) || flagMissingValue(args, "--grep") || flagDuplicated(args, "--grep") || flagMissingValue(args, "--control") || flagDuplicated(args, "--control") || flagDuplicated(args, "--percentiles")) {
+        println("uso: kof cloud metrics [--grep <texto>] [--percentiles] [--control <url>]")
         return 1
     }
     var control = flagValue(args, "--control").trim()
@@ -2306,6 +2356,17 @@ Int cmdMetrics(List<String> args) {
     var filter = flagValue(args, "--grep").trim()
     try {
         var raw = requireOk(http.get(control + "/v1/metrics", "Accept: text/plain"))
+        if (hasFlag(args, "--percentiles")) {
+            // Resumo agregado do histograma (p50/p95/p99). O prometheus cru
+            // continua disponivel sem a flag.
+            println("latencia das requisicoes publicas do Edge (teto de faixa, agregado):")
+            for (var pl in latencyPercentileLines(raw).split("\n")) {
+                if (pl.length > 0) {
+                    println(pl)
+                }
+            }
+            return 0
+        }
         var lines = metricsLines(raw, filter)
         if (lines.size == 0) {
             if (filter.length > 0) {

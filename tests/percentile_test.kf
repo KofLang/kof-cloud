@@ -1,0 +1,151 @@
+import kofcloud.agent.Agent
+import kofcloud.cli.Commands
+import kofcloud.cli.Usage
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.edge.EdgeState
+import kofcloud.edge.HttpFront
+import kofcloud.edge.Metrics
+import kofcloud.edge.Tunnel
+import kofcloud.store.Store
+import kofcloud.util.Limits
+import kofcloud.util.Text
+import testkit.Support
+
+// F14 slice 1 — percentil de latência sem cardinalidade por cliente: o
+// histograma do Edge já cai em faixas (`_le_50`…`_gt_2000`); aqui um
+// nearest-rank sobre elas dá p50/p95/p99 AGREGADOS, expostos pela CLI
+// (`kof cloud metrics --percentiles`). O valor é um TETO de faixa, dito como
+// tal — o histograma não guarda amostras.
+
+test "percentil: nearest-rank sobre faixas (bordas, excedente, sem amostras)", "percentile-unit" {
+    var limits = latencyBucketLimitsMs()
+    // 7 faixas de contagem (6 limites + excedente).
+    // 10 amostras: 8 em <=50, 1 em <=100, 1 em <=500.
+    var counts = listOf(8, 1, 0, 1, 0, 0, 0)
+    assert(percentileFromBuckets(limits, counts, 50) == "<=50 ms", "p50 na primeira faixa: " + percentileFromBuckets(limits, counts, 50))
+    assert(percentileFromBuckets(limits, counts, 80) == "<=50 ms", "p80 ainda em <=50 (9a amostra cabe)")
+    assert(percentileFromBuckets(limits, counts, 90) == "<=100 ms", "p90 cai na 9a amostra (<=100)")
+    assert(percentileFromBuckets(limits, counts, 100) == "<=500 ms", "p100 na ultima amostra")
+    // Excedente: 1 em <=50 e 1 acima de 2000.
+    // 1 em <=50 e 1 acima de 2000: o rank de p50 (ceil(0.5*2)=1) cabe na
+    // primeira faixa; p51+ ja cai no excedente (rank 2).
+    var over = listOf(1, 0, 0, 0, 0, 0, 1)
+    assert(percentileFromBuckets(limits, over, 50) == "<=50 ms", "p50 com metade na primeira faixa: " + percentileFromBuckets(limits, over, 50))
+    assert(percentileFromBuckets(limits, over, 51) == ">+2000 ms", "p51 no excedente: " + percentileFromBuckets(limits, over, 51))
+    // Sem amostras e contagens invalidas: mensagem honesta, nunca "0 ms".
+    var zeros = listOf(0, 0, 0, 0, 0, 0, 0)
+    assert(percentileFromBuckets(limits, zeros, 50) == "sem amostras", "vazio = sem amostras")
+    assert(percentileFromBuckets(limits, listOf(1, 2), 50) == "sem amostras", "lista curta = sem amostras")
+    assert(percentileFromBuckets(listOf<Int>(), zeros, 50) == "sem amostras", "sem limites = sem amostras")
+    // Percentil fora da faixa e aparado (1..100), nunca divisao invalida.
+    assert(percentileFromBuckets(limits, counts, 0) == "<=50 ms", "percentil 0 vira 1")
+    assert(percentileFromBuckets(limits, counts, 1000) == "<=500 ms", "percentil 1000 vira 100")
+    // Uma amostra so: todos os percentis caem nela.
+    var single = listOf(0, 0, 0, 0, 0, 1, 0)
+    assert(percentileFromBuckets(limits, single, 99) == "<=2000 ms", "uma amostra em <=2000")
+    // O contador que o Edge incrementa e o MESMO nome que o parser le.
+    assert(latencyBucketCounter(10L) == metricRequestLatencyMs() + "_le_50", "contador da faixa: " + latencyBucketCounter(10L))
+    assert(latencyBucketCounter(5000L) == metricRequestLatencyMs() + "_gt_2000", "excedente")
+}
+
+test "percentil: leitura da exposicao (faixa ausente = 0)", "percentile-unit" {
+    // Formato real medido: a stdlib so exporta faixas NAO-ZERO.
+    var exp = "kofcloud_edge_http_request_latency_ms_le_50 2\nkofcloud_edge_http_request_latency_ms_le_500 1\nkofcloud_edge_http_request_latency_ms_count 3\n"
+    var counts = latencyBucketCounts(exp)
+    assert(counts.size == 7, "6 limites + excedente")
+    assert(counts.get(0) == 2, "<=50 = 2")
+    assert(counts.get(1) == 0, "<=100 ausente = 0")
+    assert(counts.get(3) == 1, "<=500 = 1")
+    assert(counts.get(6) == 0, "excedente ausente = 0")
+    // Prefixo nao colide: `_le_5` nao casa `_le_50`.
+    assert(expositionCounter(exp, metricRequestLatencyMs() + "_le_5") == -1, "prefixo exato")
+    assert(expositionCounter(exp, "outra") == -1, "nome ausente = -1")
+    // HELP/TYPE ficam fora (linhas com #).
+    var withHelp = "# TYPE x counter\n" + exp
+    assert(latencyBucketCounts(withHelp).get(0) == 2, "comentarios ignorados")
+    // Bloco de texto: tres linhas com o teto.
+    var block = latencyPercentileLines(withHelp)
+    assert(block.indexOf("p50: <=50 ms") >= 0, "p50 no bloco: " + block)
+    assert(block.indexOf("p99: ") >= 0, "p99 no bloco")
+    assert(latencyPercentileLines("") == "  latencia p50: sem amostras\n  latencia p95: sem amostras\n  latencia p99: sem amostras", "vazio = sem amostras")
+    // Help anuncia a flag.
+    assert(usageText().indexOf("metrics [--grep <texto>] [--percentiles]") >= 0, "help anuncia --percentiles")
+}
+
+test "percentil: e2e — o fio real alimenta os percentis", "percentile-e2e" {
+    var localSvc = 20320
+    var controlPort = 20321
+    var tunnelPort = 20322
+    var httpPort = 20323
+
+    var app = web.app()
+    app.get("/") { return "svc-pct" }
+    var server = spawn { app.listen(localSvc) }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-pct-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-pct-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-pct-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var token = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var dev = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(dev)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "publicado")
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, token, "", agentStop, "127.0.0.1", tunnelPort, 500)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent no ar")
+
+    // Semantica do histograma: le o que o Edge ja incrementou (observability
+    // e por processo — o teste roda o Edge em task no mesmo processo).
+    // Antes de qualquer pedido pelo Edge nao ha bucket de latencia.
+    var countsBefore = latencyBucketCounts(observability.metrics())
+    var waited = 0
+    while (waited < 5) {
+        assert(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 200, "relay ok " + intToString(waited))
+        waited = waited + 1
+    }
+    var exposition = observability.metrics()
+    var counts = latencyBucketCounts(exposition)
+    var total = 0
+    for (var c in counts) {
+        total = total + c
+    }
+    assert(total >= 5, "5 pedidos nas faixas agregadas: " + intToString(total))
+    var p50 = percentileFromBuckets(latencyBucketLimitsMs(), counts, 50)
+    assert(p50.startsWith("<=") || p50.startsWith(">+"), "p50 e um teto de faixa: " + p50)
+    // O bloco que a CLI imprime usa o MESMO parser sobre o MESMO fio.
+    var block = latencyPercentileLines(exposition)
+    assert(block.indexOf("sem amostras") < 0, "com amostras nao diz vazio: " + block)
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1200)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(800)
+    app.close()
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}
