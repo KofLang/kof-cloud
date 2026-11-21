@@ -1823,6 +1823,15 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   PEM ✅ — aviso de expiração em 30 dias no `doctor --tls-cert` (Fase 9 s3)
   e no `scan --tls-cert`; kill-switch ✅ documentado; WORM ✅ parcial no
   slice 4 — espelho append-only + verify; storage separado pendente).
+  **Relatório de controles ✅ (meta SOC2-tipo-II):** `docs/CONTROLS.md` mapeia
+  cada controle (CC6.1–CC8.1, A1.2/A1.3) 1:1 com o mecanismo real (arquivo)
+  e a prova (suíte/tag) e, em TODA seção, o limite honesto (**Não cobre**:
+  WORM não imutável, nó único, sem MFA, HMAC em vez de Ed25519, sem artefato
+  transferível). Não é certificação — é o retrato que a auditoria externa
+  leria, sem checklist aspiracional. Prova: `tests/controls_doc_test.kf`
+  (`docs-controls` ×3: citações de suíte existentes, toda seção com o
+  limite e a contagem de seções fixa, âncoras de mecanismo e os limites
+  espelhados do 17-limitations).
 * **Slice 2 — varredura contínua (parcial: manifesto + ambiente + PEM ✅; dependências pendente).**
   `kof cloud scan [--file]` lê o manifesto e acusa `kfs_`/`kfc_`/password
   literal (exit 1 com achado, 0 limpo) — sem login, sem rede, para rodar
