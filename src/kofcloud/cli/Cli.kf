@@ -114,7 +114,7 @@ Int runCli(List<String> args) {
 
 Int runDevice(List<String> args) {
     if (args.size == 0) {
-        println("uso: kof cloud device list|revoke|suspend|unsuspend <nome|id>")
+        println(usoDeviceDispatchLine())
         return 1
     }
     var sub = args.get(0)
@@ -178,7 +178,7 @@ Int runService(List<String> args) {
 
 Int runDomain(List<String> args) {
     if (args.size == 0) {
-        println("uso: kof cloud domain list|add|verify|remove")
+        println(usoDomainDispatchLine())
         return 1
     }
     var sub = args.get(0)
@@ -201,7 +201,7 @@ Int runDomain(List<String> args) {
 
 Int runDaemon(List<String> args) {
     if (args.size == 0) {
-        println("uso: kof cloud daemon install|status|uninstall")
+        println(usoDaemonDispatchLine())
         return 1
     }
     var sub = args.get(0)

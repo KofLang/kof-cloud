@@ -68,6 +68,18 @@ String usoTokenDispatchLine() {
     return "uso: kof cloud token list|revoke|rotate|rotation|prune"
 }
 
+String usoDeviceDispatchLine() {
+    return "uso: kof cloud device list|revoke|suspend|unsuspend <nome|id>"
+}
+
+String usoDomainDispatchLine() {
+    return "uso: kof cloud domain list|add|verify|remove"
+}
+
+String usoDaemonDispatchLine() {
+    return "uso: kof cloud daemon install|status|uninstall"
+}
+
 String usoServeLine() {
     return "uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--waf detectar|enforce] [--panel] [--tls-cert <pem> --tls-key <pem> | --tls-cert-cmd <cmd> --tls-key-cmd <cmd>] [--tunnel-secret-file <arq> | --tunnel-secret-cmd <cmd>] (portas 1-65535)"
 }

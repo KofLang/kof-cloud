@@ -572,6 +572,11 @@ test "text: notFoundLine trava mensagens da CLI", "not-found-line" {
     // o uso mentia). Puras, sem rede.
     assert(usoServiceDispatchLine() == "uso: kof cloud service list|status|suspend|unsuspend|token <nome>|token-list <nome>|token-revoke <nome> <kfs_...|id>|tokens|rotate|rotation", "uso service dispatch")
     assert(usoTokenDispatchLine() == "uso: kof cloud token list|revoke|rotate|rotation|prune", "uso token dispatch")
+    // Os outros 3 dispatch (device/domain/daemon) ja listavam tudo — agora
+    // tambem em fonte unica (mesmo padrao, sem refatorar formato).
+    assert(usoDeviceDispatchLine() == "uso: kof cloud device list|revoke|suspend|unsuspend <nome|id>", "uso device dispatch")
+    assert(usoDomainDispatchLine() == "uso: kof cloud domain list|add|verify|remove", "uso domain dispatch")
+    assert(usoDaemonDispatchLine() == "uso: kof cloud daemon install|status|uninstall", "uso daemon dispatch")
     assert(usoServeLine().indexOf("kof cloud serve") >= 0, "uso serve")
     assert(usoLogsLine() == "uso: kof cloud logs [--tail <linhas>] [--runtime|--edge]", "uso logs")
     assert(usoDomainAddLine() == "uso: kof cloud domain add <hostname> --service <nome> [--dns-webhook <url> | --dns-cmd <cmd>] [--dry-run]", "uso domain add")
