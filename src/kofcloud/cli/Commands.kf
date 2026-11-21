@@ -3038,7 +3038,7 @@ Int cmdLogs(List<String> args) {
 
 record AuditEntry(String at, String actor, String action, String target, String prevHash, String hash)
 
-// Inventario SBOM (Fase 19 slice 1 parcial): lista curada dos 44 fontes do
+// Inventario SBOM (Fase 19 slice 1 parcial): lista curada dos 49 fontes do
 // KofCloud — sem Directory.list (plano, sem recursao) e sem versao no repo
 // ou no stdlib (STATUS.md documenta o toolchain; nada inventado). O hash
 // e sha256 sobre o texto (sonda provou byte-identico ao sha256sum). Pura

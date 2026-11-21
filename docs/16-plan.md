@@ -1804,7 +1804,7 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   limit/roteamento/auth — sem conta, sem túnel, sem tocar em serviço
   local (scanner legítimo não é contido); `docs/SECURITY.md` declara
   suporte/reporte/SLA/escopo com trava de regressão; `audit --sbom`
-  imprime o inventário local (48 fontes + SHA-256, sem login, sem rede).
+  imprime o inventário local (49 fontes + SHA-256, sem login, sem rede).
   Prova: `tests/security_test.kf` (`security-unit` + `security` +
   `security-policy`) + `tests/hosts_test.kf` (`audit-sbom`). Pendente:
   o resto do ritmo (`rotate --all` ✅ no slice 3, `scan` ✅ no slice 2,
