@@ -65,6 +65,34 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 
 ## Limites do MVP implementado
 
+"As limitações honestas" é a função deste documento, e por isso era fácil
+ler só a lista e concluir que nada de proteção existe. O que **existe de
+verdade**, com prova executável, está aqui — os buracos de cada item vêm
+logo abaixo, na mesma lista:
+
+* **Rate limit por hostname:** `429 KCF107` + `Retry-After` antes de rotear,
+  janela fixa por processo (`security.rateLimit`) — `tests/ratelimit_test.kf`.
+* **Abuso:** suspensão reversível (`SUSPENDED`) de serviço/dispositivo,
+  trilha de auditoria só com metadados e `freeze`/`unfreeze` por
+  serviço/device/conta — `tests/abuse_test.kf`, `tests/freeze_test.kf`.
+* **Tetos de tamanho:** corpo de requisição (`httpBodyBytes`, `413 KCF110`,
+  inclusive por rota via `--max-body`), leitura absoluta do pedido
+  (`maxBytes`), resposta (`maxResponseBytes` → `502 KCF115`), cabeçalho sem
+  fim (`431 KCF116`), WAF inspeciona até 64 KiB — `tests/framing_test.kf`,
+  `tests/route_cap_test.kf`, `tests/waf_detect_test.kf`.
+* **Ciclo de vida de credencial:** `kfs_`/`kfc_` com TTL opcional em `Long`,
+  revogação por token ou id curto, inventário sem valores, rotação com
+  overlap (`rotate --all`), varredura de vencidas no `serve` —
+  `tests/service_token_test.kf` (`token-ttl`), `tests/rotate_test.kf`,
+  `tests/account_token_test.kf`, `tests/incidents_test.kf`
+  (`incident-expiry`).
+* **Detecção de incidente:** rajada de 401, perda de túnel, queda por
+  ociosidade, expiração em massa, suspensão em lote, com webhook HMAC,
+  status page sem login e template de post-mortem — `tests/incidents_test.kf`.
+* **Política de segurança publicada:** `/.well-known/security.txt` no Edge
+  (antes de rate limit/rota/auth) e `docs/SECURITY.md` (o que é suportado,
+  SLA de reporte, kill-switch) — `tests/security_test.kf` (`security-policy`).
+
 * **A trilha de auditoria é detectável, não imutável.** Cada evento tem hash
   encadeado (`audit --verify` acusa adulteração/remoção parcial) e há espelho
   append-only em `<estado>.worm.jsonl` (uma linha JSON por evento, mesma

@@ -52,6 +52,36 @@ test "security: SECURITY.md existe com as secoes e o contato canonico", "securit
     assert(securityTxtBody().indexOf("security@kofcloud.local") >= 0, "contato no fio")
 }
 
+test "security: 17-limitations lista o que existe de protecao com prova", "security-limits" {
+    // Drift medido: o doc de limitacoes so falava do que NAO existe, e quem
+    // lia so a lista concluia que nada de protecao foi implementado. A
+    // ressalva tem de citar cada familia E cada prova; arquivo de prova que
+    // nao existe (ex.: expiry_test.kf, que nunca existiu) quebra aqui.
+    var limits = readTextOr("docs/17-limitations.md", "")
+    assert(limits.length > 0, "17-limitations existe")
+    var start = limits.indexOf("O que **existe de\nverdade**")
+    assert(start >= 0, "ressalva do que existe")
+    var caveat = limits.substring(start, limits.indexOf("* **A trilha de auditoria", start))
+    var families = listOf("Rate limit por hostname", "suspensão reversível",
+        "Tetos de tamanho", "Ciclo de vida de credencial", "Detecção de incidente",
+        "Política de segurança publicada")
+    for (var family in families) {
+        assert(caveat.indexOf(family) >= 0, "familia citada: " + family)
+    }
+    var proofs = listOf("tests/ratelimit_test.kf", "tests/abuse_test.kf",
+        "tests/freeze_test.kf", "tests/framing_test.kf", "tests/route_cap_test.kf",
+        "tests/waf_detect_test.kf", "tests/service_token_test.kf", "tests/rotate_test.kf",
+        "tests/account_token_test.kf", "tests/incidents_test.kf", "tests/security_test.kf")
+    for (var proof in proofs) {
+        assert(caveat.indexOf("`" + proof + "`") >= 0, "prova citada: " + proof)
+        assert(readTextOr(proof, "").length > 0, "prova existe: " + proof)
+    }
+    // Os dois codigos citados seguem no vocabulario do Edge (nao viram texto
+    // solto quando um deles mudar de numero).
+    assert(caveat.indexOf("429 " + errRateLimited().substring(0, 6)) >= 0, "rate limit cita o status 429 e o codigo do construtor")
+    assert(caveat.indexOf("413 " + errBodyTooLarge().substring(0, 6)) >= 0, "teto cita o status 413 e o codigo do construtor")
+}
+
 test "security: Edge serve sem conta, sem tunel e sem rate limit", "security" {
     var controlPort = 19731
     var tunnelPort = 19732
