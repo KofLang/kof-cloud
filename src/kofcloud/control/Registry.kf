@@ -2361,6 +2361,12 @@ Service publishServiceWithBody(Account account, String deviceId, String name, St
                 return true
             }
         }
+        // IPv6: o mesmo endereco escrito de outra forma ("2001:db8::10" vs
+        // "2001:db8:0:0:0:0:0:10") e o mesmo destino, e o IPv4 mapeado
+        // ("::ffff:203.0.113.10") chega no mesmo host do IPv4 puro.
+        if (ipv6IsExpected(address, this.edgeHosts)) {
+            return true
+        }
         return false
     }
 

@@ -55,7 +55,7 @@ o run total imprime `69 passed, 0 failed`. Falha = nome do teste + assert
 | limites + varredura + push de SERVICES + trava de citação + família em fonte única | `tests/limits_test.kf` | 11 |
 | service token | `tests/service_token_test.kf` | 15 |
 | erros R6 | `tests/errors_test.kf` | 11 |
-| dominios (+ certificado x hostname) | `tests/domains_test.kf` | 16 |
+| dominios (+ certificado x hostname) | `tests/domains_test.kf` | 18 |
 | metricas | `tests/metrics_test.kf` | 13 |
 | rate limit | `tests/ratelimit_test.kf` | 2 |
 | agent metrics | `tests/agent_metrics_test.kf` | 3 |

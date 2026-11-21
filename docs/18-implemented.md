@@ -214,7 +214,9 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   ativa só após VERIFIED; conta alheia recebe o mesmo `404` opaco; poda junto
   com serviço/dispositivo; persistido no estado. DNS que também resolve
   para um IPv4 de terceiro não verifica (`KCF164`, PENDING) — antes "algum
-  endereço é o Edge" bastava (`domains_test.kf`, 16 testes).
+  endereço é o Edge" bastava. O mesmo vale para um AAAA de terceiro: o IPv6
+  é julgado pelo valor (`ipv6Groups` grupo a grupo), aceitando outra grafia
+  e o IPv4 mapeado do Edge (`domains_test.kf`, 18 testes).
   Sem TLS/SNI neste slice (terminador externo — ver `12-tls.md`).
 * **Observabilidade mínima (slice 1)**: `edge/Metrics.kf` conta túneis
   aceitos/recusados por motivo, sessões abertas, requisições ok/negadas por

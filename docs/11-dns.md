@@ -47,9 +47,13 @@ Detalhes honestos do slice:
 * **resolver também para fora não verifica** (`409 KCF164`): se a resposta tem
   o Edge **e** um IPv4 de terceiro (registro A antigo, CDN/provedor no meio),
   o domínio fica PENDING — senão parte dos clientes cai fora da plataforma.
-  CNAME-only (sem endereço próprio) continua aprovando. IPv6 não é julgado
-  neste slice (o destino esperado é IPv4); remove o registro extra e rode
-  `domain verify` de novo;
+  CNAME-only (sem endereço próprio) continua aprovando; remove o registro
+  extra e rode `domain verify` de novo;
+* **AAAA também é julgado** (mesma `KCF164`): um IPv6 de terceiro na resposta
+  recusa a verificação. A comparação é pelo **valor** do endereço, não pelo
+  texto — `2001:db8::10` e `2001:db8:0:0:0:0:0:10` são o mesmo host, e o IPv4
+  mapeado (`::ffff:203.0.113.10`) chega no mesmo destino do IPv4 declarado em
+  `kofcloud.edgeHosts`. Texto com `:` que não é IPv6 válido também recusa;
 * PENDING nunca roteia (indistinguível de host inexistente: `404 KCF100`);
 * remoção e poda (serviço/dispositivo) desativam a rota imediatamente;
 * **sem TLS/SNI neste slice**: o hostname próprio serve HTTP pela borda; HTTPS

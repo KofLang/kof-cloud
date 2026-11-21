@@ -131,6 +131,249 @@ Bool isIPv4Literal(String address) {
     return true
 }
 
+// --- IPv6 (Fase 6, fatia 2) -------------------------------------------------
+//
+// O AAAA e julgado pelo VALOR do endereco, nao pelo texto: "2001:db8::10" e
+// "2001:db8:0:0:0:0:0:10" sao o mesmo host, e o IPv4 mapeado
+// ("::ffff:203.0.113.10") chega no mesmo destino do IPv4 puro. Comparar
+// texto rejects um destino legitimo por causa da grafia.
+
+// Grupos numericos (8 x 16 bits) de um IPv6 literal, na ordem da rede.
+// `::` vira zeros; a forma mista com IPv4 no fim vira 2 grupos. Devolve a
+// lista VAZIA quando o texto nao e um IPv6 valido.
+List<Int> ipv6Groups(String address) {
+    var out = listOf<Int>()
+    var text = address.trim().toLowerCase()
+    if (text.length == 0) {
+        return out
+    }
+    var at = text.indexOf("::")
+    var head = text
+    var tail = ""
+    if (at >= 0) {
+        if (text.indexOf("::", at + 2) >= 0) {
+            // dois "::" — invalido
+            return out
+        }
+        head = text.substring(0, at)
+        tail = text.substring(at + 2)
+        if (head.indexOf(".") >= 0) {
+            // IPv4 so pode aparecer no FIM do endereco
+            return out
+        }
+    }
+    var headGroups = ipv6ChunkGroups(head)
+    var tailGroups = ipv6ChunkGroups(tail)
+    if (headGroups.size == 1 && headGroups.get(0) < 0) {
+        return out
+    }
+    if (tailGroups.size == 1 && tailGroups.get(0) < 0) {
+        return out
+    }
+    var total = headGroups.size + tailGroups.size
+    if (at >= 0) {
+        if (total > 7) {
+            // o "::" precisa cobrir pelo menos um grupo
+            return out
+        }
+    } else {
+        if (total != 8) {
+            return out
+        }
+    }
+    for (var i = 0; i < headGroups.size; i++) {
+        out.add(headGroups.get(i))
+    }
+    var zeros = 8 - total
+    for (var j = 0; j < zeros; j++) {
+        out.add(0)
+    }
+    for (var k = 0; k < tailGroups.size; k++) {
+        out.add(tailGroups.get(k))
+    }
+    return out
+}
+
+// Grupos de um trecho separado por ':'. Trecho vazio (lado do `::`) nao e
+// erro e devolve lista vazia; texto invalido devolve a lista [-1] — grupo
+// impossivel, usado como sentinela.
+List<Int> ipv6ChunkGroups(String text) {
+    var out = listOf<Int>()
+    if (text.length == 0) {
+        return out
+    }
+    var parts = listOf<String>()
+    var current = ""
+    for (var i = 0; i < text.length; i++) {
+        var c = text.charAt(i) as Int
+        if (c == 58) {
+            parts.add(current)
+            current = ""
+        } else {
+            current = current + (text.charAt(i) as Char)
+        }
+    }
+    parts.add(current)
+    var last = parts.size - 1
+    for (var p = 0; p < parts.size; p++) {
+        var part = parts[p]
+        if (part.length == 0) {
+            return ipv6InvalidGroups()
+        }
+        if (part.indexOf(".") >= 0) {
+            // forma mista: IPv4 no fim do endereco -> 2 grupos
+            if (p != last) {
+                return ipv6InvalidGroups()
+            }
+            var v4 = ipv4Octets(part)
+            if (v4.size != 4) {
+                return ipv6InvalidGroups()
+            }
+            out.add(v4.get(0) * 256 + v4.get(1))
+            out.add(v4.get(2) * 256 + v4.get(3))
+        } else {
+            var g = hexGroupValue(part)
+            if (g < 0) {
+                return ipv6InvalidGroups()
+            }
+            out.add(g)
+        }
+    }
+    return out
+}
+
+// Sentinela de "grupo invalido" (nenhum grupo real tem valor negativo).
+List<Int> ipv6InvalidGroups() {
+    var out = listOf<Int>()
+    out.add(-1)
+    return out
+}
+
+// Valor de um grupo hexadecimal (1 a 4 digitos). -1 quando nao e hex.
+Int hexGroupValue(String text) {
+    if (text.length == 0 || text.length > 4) {
+        return -1
+    }
+    var value = 0
+    for (var i = 0; i < text.length; i++) {
+        var c = text.charAt(i) as Int
+        var digit = 0
+        if (c >= 48 && c <= 57) {
+            digit = c - 48
+        } else if (c >= 97 && c <= 102) {
+            digit = c - 87
+        } else if (c >= 65 && c <= 70) {
+            digit = c - 55
+        } else {
+            return -1
+        }
+        value = value * 16 + digit
+    }
+    return value
+}
+
+// Os quatro octetos de um IPv4 literal; lista vazia quando nao e IPv4.
+List<Int> ipv4Octets(String text) {
+    var out = listOf<Int>()
+    var labels = splitHostname(text)
+    if (labels.size != 4) {
+        return listOf<Int>()
+    }
+    for (var i = 0; i < labels.size; i++) {
+        if (validIPv4Octet(labels[i]) == false) {
+            return listOf<Int>()
+        }
+        var value = 0
+        for (var j = 0; j < labels[i].length; j++) {
+            var d = labels[i].charAt(j) as Int
+            value = value * 10 + (d - 48)
+        }
+        out.add(value)
+    }
+    return out
+}
+
+// IPv6 literal valido (RFC 4291: 8 grupos, no maximo um "::", IPv4 misto
+// so no fim).
+Bool isIPv6Literal(String address) {
+    var groups = ipv6Groups(address)
+    if (groups.size != 8) {
+        return false
+    }
+    for (var i = 0; i < groups.size; i++) {
+        if (groups.get(i) < 0) {
+            return false
+        }
+    }
+    return true
+}
+
+// Mesmo endereco? Comparacao grupo a grupo (nao depende da grafia).
+Bool ipv6SameGroups(List<Int> a, List<Int> b) {
+    if (a.size != b.size) {
+        return false
+    }
+    for (var i = 0; i < a.size; i++) {
+        if (a.get(i) != b.get(i)) {
+            return false
+        }
+    }
+    return true
+}
+
+// Mesmos quatro octetos.
+Bool ipv4SameOctets(List<Int> a, List<Int> b) {
+    if (a.size != 4 || b.size != 4) {
+        return false
+    }
+    for (var i = 0; i < a.size; i++) {
+        if (a.get(i) != b.get(i)) {
+            return false
+        }
+    }
+    return true
+}
+
+// Octetos do IPv4 embutido num IPv6 mapeado ("::ffff:203.0.113.10" e a
+// forma compativel "::203.0.113.10"); lista vazia quando nao ha IPv4
+// embutido. O cliente que chega por essa forma chega no mesmo host do IPv4.
+List<Int> ipv4MappedOctets(String address) {
+    var out = listOf<Int>()
+    var text = address.trim().toLowerCase()
+    var rest = ""
+    if (text.startsWith("::ffff:")) {
+        rest = text.substring(7)
+    } else if (text.startsWith("::")) {
+        rest = text.substring(2)
+    } else {
+        return out
+    }
+    return ipv4Octets(rest)
+}
+
+// O endereco IPv6 e um destino esperado? Aceita o mesmo endereco escrito de
+// outra forma (comparacao numerica) e o IPv4 mapeado do IPv4 esperado.
+Bool ipv6IsExpected(String address, List<String> expected) {
+    if (isIPv6Literal(address) == false) {
+        return false
+    }
+    var groups = ipv6Groups(address)
+    var mapped = ipv4MappedOctets(address)
+    for (var candidate in expected) {
+        if (isIPv6Literal(candidate)) {
+            if (ipv6SameGroups(groups, ipv6Groups(candidate))) {
+                return true
+            }
+        } else if (mapped.size == 4) {
+            var candidateV4 = ipv4Octets(candidate)
+            if (candidateV4.size == 4 && ipv4SameOctets(mapped, candidateV4)) {
+                return true
+            }
+        }
+    }
+    return false
+}
+
 // Fase 6 — a resposta DNS pode CHEGAR ao Edge por um caminho que nao e o
 // CNAME esperado. Medido (sonda): o hostname com CNAME para o Edge responde
 // tambem com um registro de outro IP; a verificacao mirava so "algum
@@ -144,12 +387,24 @@ Bool isIPv4Literal(String address) {
 // "endereco de terceiro" e nao recusa a verificacao.
 Bool domainResolvesOnlyToEdge(List<String> addresses, List<String> expected) {
     for (var address in addresses) {
-        if (isIPv4Literal(address) == false) {
-            // IPv6, texto de CNAME, host por nome: nao desqualifica (o
-            // destino esperado pode vir por AAAA ou o resolver nao expor IP).
-        } else if (customTargetIsExpected(address, expected) == false) {
+        if (isIPv4Literal(address)) {
+            if (customTargetIsExpected(address, expected) == false) {
+                return false
+            }
+        } else if (isIPv6Literal(address)) {
+            // AAAA: julgado pelo VALOR do endereco. Um AAAA que nao e o Edge
+            // declarado em `kofcloud.edgeHosts` recusa (KCF164) — o cliente
+            // que seguir o AAAA sairia da plataforma.
+            if (ipv6IsExpected(address, expected) == false) {
+                return false
+            }
+        } else if (address.indexOf(":") >= 0) {
+            // Texto com ':' que nao e IPv6 valido: nao da para julgar, e
+            // nao da para aceitar — recusa.
             return false
         }
+        // Host por nome / texto de CNAME: nao desqualifica (o resolver pode
+        // nao expor o endereco).
     }
     return true
 }

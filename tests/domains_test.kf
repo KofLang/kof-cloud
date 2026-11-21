@@ -255,6 +255,104 @@ test "dominio: IPv4 literal e host que nao e endereco", "domains-verify" {
     assert(errHint(errDomainResolvesElsewhere()).indexOf("domain verify") >= 0, "o Hint aponta o verify")
 }
 
+test "dominio: AAAA de terceiro recusa e IPv6 do Edge verifica (KCF164)", "domains-verify" {
+    var registry = Registry("/tmp/kofcloud-domaaaa-" + crypto.randomHex(4) + ".json")
+    registry.setEdgeHosts(listOf("203.0.113.10"))
+    var mel = registry.createAccount("mel", "m@e.com", "segredo")
+    var device = registry.registerDevice(mel, "nb", "pk")
+    var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    registry.registerCustomDomain(mel.id, "api.example.com", service.id)
+
+    // AAAA de terceiro ao lado do A do Edge: o cliente que seguir o AAAA
+    // sai da plataforma — recusa (KCF164) e o registro fica PENDING.
+    var mixed = listOf<String>()
+    mixed.add("203.0.113.10")
+    mixed.add("2001:db8::7")
+    assert(registry.verifyCustomDomainWith(mel.id, "api.example.com", mixed) == "KCF164: hostname resolves outside this Edge", "AAAA de terceiro recusa")
+    var pending = registry.customByHostname("api.example.com")
+    assert(pending != null, "registro existe")
+    if (pending != null) {
+        assert(pending.status == "PENDING", "continua pendente com AAAA de terceiro")
+    }
+
+    // IPv4 mapeado: mesmo host do Edge declarado em IPv4 — verifica.
+    var mapped = listOf<String>()
+    mapped.add("::ffff:203.0.113.10")
+    assert(registry.verifyCustomDomainWith(mel.id, "api.example.com", mapped) == "", "IPv4 mapeado do Edge verifica")
+    var verified = registry.customByHostname("api.example.com")
+    if (verified != null) {
+        assert(verified.status == "VERIFIED", "vira VERIFIED")
+    }
+
+    // Edge declarado em IPv6: o mesmo endereco escrito de outra forma
+    // (comprimido vs expandido) e o mesmo destino — verifica.
+    var registry6 = Registry("/tmp/kofcloud-domaaaa6-" + crypto.randomHex(4) + ".json")
+    registry6.setEdgeHosts(listOf("2001:db8::10"))
+    var ana = registry6.createAccount("ana", "a@e.com", "segredo")
+    var device6 = registry6.registerDevice(ana, "nb", "pk")
+    var service6 = registry6.publishService(ana, device6.id, "blog", "127.0.0.1", 8081, "http", "PUBLIC", "", "")
+    registry6.registerCustomDomain(ana.id, "blog.example.org", service6.id)
+    var expanded = listOf<String>()
+    expanded.add("2001:db8:0:0:0:0:0:10")
+    assert(registry6.verifyCustomDomainWith(ana.id, "blog.example.org", expanded) == "", "IPv6 do Edge em outra grafia verifica")
+    // Edge anunciado em IPv4 e IPv6 ao mesmo tempo: o IPv6 de terceiro
+    // continua recusando mesmo com o IPv4 do Edge na resposta.
+    registry6.setEdgeHosts(listOf("203.0.113.10", "2001:db8::10"))
+    var other6 = listOf<String>()
+    other6.add("203.0.113.10")
+    other6.add("2001:db8::11")
+    assert(registry6.verifyCustomDomainWith(ana.id, "blog.example.org", other6) == "KCF164: hostname resolves outside this Edge", "outro IPv6 recusa")
+}
+
+test "dominio: literais IPv6 e comparacao numerica", "domains-verify" {
+    assert(isIPv6Literal("2001:db8::10"), "comprimido")
+    assert(isIPv6Literal("2001:db8:0:0:0:0:0:10"), "expandido")
+    assert(isIPv6Literal("::1"), "loopback")
+    assert(isIPv6Literal("::"), "todos os grupos zero")
+    assert(isIPv6Literal("2001:db8::"), "cauda vazia")
+    assert(isIPv6Literal("1:2:3:4:5:6:1.2.3.4"), "forma mista com IPv4 no fim")
+    assert(isIPv6Literal("1:2:3:4:5:6:7") == false, "sete grupos")
+    assert(isIPv6Literal("1:2:3:4:5:6:7:8:9") == false, "nove grupos")
+    assert(isIPv6Literal("1::2::3") == false, "dois compressores")
+    assert(isIPv6Literal("2001:db8:::1") == false, "tres dois pontos")
+    assert(isIPv6Literal("2001:db8::10%eth0") == false, "escopo de zona")
+    assert(isIPv6Literal("203.0.113.10") == false, "IPv4 nao e IPv6")
+    assert(isIPv6Literal("site.mel.kofcloud.io") == false, "nome nao e endereco")
+    assert(isIPv6Literal("2001:db8::10000") == false, "grupo com cinco digitos")
+    assert(isIPv6Literal("2001:db8::10g") == false, "digito nao hex")
+
+    // Grupos numericos: 0x2001=8193, 0x0db8=3512, 0x0010=16.
+    var groups = ipv6Groups("2001:db8::10")
+    assert(groups.size == 8, "oito grupos")
+    assert(groups.get(0) == 8193, "primeiro grupo")
+    assert(groups.get(1) == 3512, "segundo grupo")
+    assert(groups.get(7) == 16, "ultimo grupo")
+    assert(ipv6SameGroups(ipv6Groups("2001:db8:0:0:0:0:0:10"), groups), "mesmo valor, outra grafia")
+
+    // O IPv4 mapeado traz o mesmo host do IPv4 puro.
+    var mapped = ipv4MappedOctets("::ffff:203.0.113.10")
+    assert(mapped.size == 4, "quatro octetos")
+    assert(mapped.get(0) == 203, "primeiro octeto")
+    assert(mapped.get(3) == 10, "ultimo octeto")
+    assert(ipv4MappedOctets("2001:db8::10").size == 0, "IPv6 puro nao tem IPv4 embutido")
+
+    var expected = listOf<String>()
+    expected.add("2001:db8::10")
+    expected.add("203.0.113.10")
+    var third = listOf<String>()
+    third.add("2001:db8::7")
+    assert(domainResolvesOnlyToEdge(third, expected) == false, "IPv6 de terceiro recusa")
+    var own = listOf<String>()
+    own.add("2001:db8:0:0:0:0:0:10")
+    assert(domainResolvesOnlyToEdge(own, expected), "IPv6 do Edge em outra grafia nao recusa")
+    var mappedList = listOf<String>()
+    mappedList.add("::ffff:203.0.113.10")
+    assert(domainResolvesOnlyToEdge(mappedList, expected), "IPv4 mapeado nao recusa")
+    var broken = listOf<String>()
+    broken.add("2001:db8::10%eth0")
+    assert(domainResolvesOnlyToEdge(broken, expected) == false, "texto com dois pontos que nao e IPv6 recusa")
+}
+
 test "dominio: verificacao contra destinos esperados (sem rede)", "domains-verify" {
     var registry = Registry("/tmp/kofcloud-domver-" + crypto.randomHex(4) + ".json")
     registry.setEdgeHosts(listOf("203.0.113.10", "edge-by-name.example.net"))

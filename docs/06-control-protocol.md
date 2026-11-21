@@ -247,7 +247,7 @@ traduz para `Hint:` humana (`errHint` em `model/Errors.kf`).
 | `409` | `KCF121` hostname already registered | hostname já registrado (outra conta ou outro serviço) |
 | `409` | `KCF063` ambiguous token id | id curto casa com 2+ credenciais (usar o `kfs_` completo) |
 | `409` | `KCF124` does not resolve to this Edge | DNS ainda não aponta para este Edge |
-| `409` | `KCF164` hostname resolves outside this Edge | o nome chega ao Edge **e também** a um IPv4 de terceiro (registro antigo/CDN no meio): antes bastava "algum endereço é o Edge" e o domínio ficava VERIFIED com parte dos clientes fora da plataforma. Fica PENDING até o registro extra sumir. Precede a faixa KCF120–KCF141 (extensão da Fase 6; `KCF123` continua reservado) |
+| `409` | `KCF164` hostname resolves outside this Edge | o nome chega ao Edge **e também** a um IPv4 ou IPv6 literal de terceiro (registro antigo/CDN no meio; o IPv6 é comparado pelo valor, aceitando outra grafia e o IPv4 mapeado do Edge): antes bastava "algum endereço é o Edge" e o domínio ficava VERIFIED com parte dos clientes fora da plataforma. Fica PENDING até o registro extra sumir. Precede a faixa KCF120–KCF141 (extensão da Fase 6; `KCF123` continua reservado) |
 | `409` | `KCF002` handle taken | handle já em uso |
 | `429` | `KCF080` too many active devices | limite `kofcloud.limits.devices` |
 | `429` | `KCF081` too many services | limite `kofcloud.limits.services` por dispositivo |

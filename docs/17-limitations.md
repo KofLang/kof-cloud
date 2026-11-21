@@ -35,9 +35,11 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 * CDN, edge distribuído, relay regional.
 * Domínio próprio: registro + verificação + rota (Fase 6 slice 1) ✅; sem
   TLS por SNI e sem automação por provedor (Cloudflare/Route53). A
-  verificação recusa DNS que também resolve fora do Edge (`KCF164`), mas só
-  julga IPv4 literal: destino IPv6 e o texto do CNAME devolvido pelo
-  resolver do SO não desqualificam.
+  verificação recusa DNS que também resolve fora do Edge (`KCF164`), por
+  IPv4 e por IPv6 literal (julgado pelo valor, não pela grafia). O texto do
+  CNAME devolvido pelo resolver do SO não desqualifica, e o Edge precisa ser
+  anunciado em `kofcloud.edgeHosts` na mesma família do endereço (AAAA do
+  Edge só passa se houver um IPv6 esperado, ou se for o IPv4 mapeado).
 * Deploy com **artefato transferível** — o deploy declarativo (`kof cloud
   deploy`) existe (Fase 7), mas o build roda na máquina do usuário e só o
   publish atravessa a rede.

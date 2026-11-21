@@ -149,7 +149,7 @@ subdomínios **e o apex** (`kofcloud.io` também é recusado com `KCF120`). Dono
 `domain verify [--tls-cert <pem>]`, `domain remove`; erros `KCF120`–`KCF124` e `KCF164`
 com `Hint:`. O `--tls-cert` julga o PEM localmente antes da rede (cobre o
 hostname? expira em 30 dias?) — ver Fase 9 slice 3.
-Prova: `tests/domains_test.kf` (16 testes: validação, registro/idempotência,
+Prova: `tests/domains_test.kf` (18 testes: validação, registro/idempotência,
 verificação sem rede, rota/poda, API com service preenchido, Edge via túnel real, Hint + serializadores, certificado × hostname puro e com openssl real, webhook DNS no fio e dry-run).
 
 **Fatia: DNS fora do Edge recusa (KCF164).** A verificação aprovava quando
@@ -163,6 +163,18 @@ de "nada chega"). Hostname CNAME-only (sem endereço próprio) e texto de
 CNAME devolvido pelo resolver continuam aprovando. Prova:
 `tests/domains_test.kf` (fatia `domains-verify`: dois testes novos + expectativa antiga
 ajustada).
+
+**Fatia: AAAA de terceiro recusa (KCF164).** A mesma sonda mostrou que um
+registro AAAA de terceiro na resposta era ignorado — o cliente que prefere
+IPv6 caía fora da plataforma mesmo com o IPv4 certo. O IPv6 agora é
+julgado pelo valor: `ipv6Groups` expande `::` e a forma mista
+(`1:2:3:4:5:6:1.2.3.4`) em 8 grupos numéricos, então `2001:db8::10` e
+`2001:db8:0:0:0:0:0:10` são o mesmo host; o IPv4 mapeado
+(`::ffff:203.0.113.10`) casa com o IPv4 declarado em `kofcloud.edgeHosts`,
+e o Registry aceita o AAAA do Edge pela mesma comparação. Saída: PENDING +
+`409 KCF164`. Prova: `tests/domains_test.kf` (fatia `domains-verify`: dois
+testes novos; três mutações — AAAA ignorado, IPv6 sempre recusando, Registry
+sem IPv6 — quebram).
 
 Falta (fatiado de propósito): TLS por SNI no Edge (o Kof não expõe — ver
 `12-tls.md`) e automação DNS específica de provedor (Cloudflare/Route53 — o
