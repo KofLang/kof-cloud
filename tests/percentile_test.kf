@@ -71,6 +71,18 @@ test "percentil: leitura da exposicao (faixa ausente = 0)", "percentile-unit" {
     assert(latencyPercentileLines("") == "  latencia p50: sem amostras\n  latencia p95: sem amostras\n  latencia p99: sem amostras", "vazio = sem amostras")
     // Help anuncia a flag.
     assert(usageText().indexOf("metrics [--grep <texto>] [--percentiles]") >= 0, "help anuncia --percentiles")
+    // Drift medido na reconciliacao: o slice atualizou o help e deixou o
+    // README preso na linha antiga (o operador lia `metrics [--grep]` e nao
+    // descobria os percentis). Linha INTEIRA: o assert de prefixo passaria
+    // com o --percentiles ausente (mesma licao do flag-drift).
+    var readme = readTextOr("README.md", "")
+    assert(readme.indexOf("metrics [--grep <texto>] [--percentiles] [--control <url>]") >= 0, "README espelha --percentiles")
+    assert(readme.indexOf("metrics [--grep <texto>] [--percentiles]") >= 0, "percentis anunciados no README")
+    // Honestidade no doc de limitacoes: o teto de faixa e a ausencia de
+    // percentil por hostname sao o que o operador NAO deve esperar.
+    var limits = readTextOr("docs/17-limitations.md", "")
+    assert(limits.indexOf("teto da faixa, não o valor") >= 0, "17-limitations diz teto de faixa")
+    assert(limits.indexOf("percentil por hostname fica fora") >= 0, "17-limitations exclui hostname")
 }
 
 test "percentil: e2e — o fio real alimenta os percentis", "percentile-e2e" {

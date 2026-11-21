@@ -174,6 +174,12 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
   resposta (`maxResponseBytes`) e o de fila por stream limitam o caso comum.
 * **Sem half-close no protocolo.** Um stream termina com `END`/`RESET`; não há
   sinal de "não vou mais escrever, mas ainda leio".
+* **Percentil de latência é o teto da faixa, não o valor.** O histograma do
+  Edge guarda contagens por faixa (`le_50`…`gt_2000`), não amostras — então
+  `metrics --percentiles` responde `<=250 ms` ou `sem amostras`, nunca um
+  número exato (inventá-lo seria mentir com duas casas decimais). A
+  distribuição é agregada: percentil por hostname fica fora por desenho
+  (cardinalidade por cliente).
 * **Limites aplicados.** Dispositivos ativos por conta, serviços por
   dispositivo, streams por túnel, rate limit por hostname, frame DATA fatiado
   (blocos de 16 KiB), teto de linha do túnel (fail-closed), idle timeout,
