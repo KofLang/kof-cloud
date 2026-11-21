@@ -20,7 +20,7 @@ import testkit.Support
 
 Service statusCertService(String name) {
     return Service("s-" + name, "acc", "dev-1", name, "127.0.0.1", 8080, "http",
-                   name + ".mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "")
+                   name + ".mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "", "")
 }
 
 test "service status: serviceCertLines roda openssl uma vez e julga cada host", "svcdevice-unit" {

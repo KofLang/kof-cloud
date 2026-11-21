@@ -77,6 +77,8 @@ String serviceJson(Service service) {
     out.put("createdAt", longToString(service.createdAt))
     out.put("allowMethods", service.allowMethods)
     out.put("allowPaths", service.allowPaths)
+    // Teto por servico (F10 s2): texto decimal; "" = herda o global.
+    out.put("maxBodyBytes", serviceCapText(service.maxBodyBytes))
     return json.encode(out)
 }
 
@@ -480,6 +482,17 @@ HttpResult handlePublishService(Registry registry, String? authHeader, String bo
     if (allowPaths.length == 0 && mapField(body, "allowPaths").trim().length > 0) {
         return HttpResult(400, errorJson(errInvalidAllowPath()))
     }
+    // Teto de corpo POR SERVICO (F10 s2 "limites por rota"): ausente = herda
+    // o global; presente tem de ser inteiro positivo dentro da faixa. A
+    // forma canonica vai ao fio (sem espacos) para o roundtrip ser exato.
+    var maxBody = mapField(body, "maxBodyBytes").trim()
+    if (maxBody.length > 0) {
+        var parsedCap = parseIntBounded(maxBody, -1, 2147483647)
+        if (parsedCap <= 0) {
+            return HttpResult(400, errorJson(errInvalidMaxBody()))
+        }
+        maxBody = intToString(parsedCap)
+    }
     var device = registry.deviceById(deviceId)
     if (device == null) {
         return HttpResult(404, errorJson(errDeviceNotFound()))
@@ -488,7 +501,7 @@ HttpResult handlePublishService(Registry registry, String? authHeader, String bo
         return HttpResult(404, errorJson(errDeviceNotFound()))
     }
     try {
-        var service = registry.publishService(account, deviceId, name, localAddress, localPort, protocol, exposure, allowMethods, allowPaths)
+        var service = registry.publishServiceWithBody(account, deviceId, name, localAddress, localPort, protocol, exposure, allowMethods, allowPaths, maxBody)
         return HttpResult(200, serviceJson(service))
     } catch (String e) {
         return publishError(e)

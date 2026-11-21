@@ -24,7 +24,7 @@ String usageText() {
     out = out + "  device revoke <nome|deviceId>\n"
     out = out + "  device suspend <nome|deviceId>\n"
     out = out + "  device unsuspend <nome|deviceId>\n"
-    out = out + "  publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>] [--allow-method VERBO]... [--allow-path /caminho]...\n"
+    out = out + "  publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>] [--allow-method VERBO]... [--allow-path /caminho]... [--max-body <bytes>]\n"
     out = out + "  unpublish <nome>\n"
     out = out + "  service list [--json]   (--json = saida estavel para CI)\n"
     out = out + "  service status <nome> [--tls-cert <pem>]  (com o PEM, julga expiracao e cobertura para os hosts do servico)\n"

@@ -12,7 +12,7 @@ import testkit.Support
 // device carrega o eixo de presenca derivado do /v1/presence.
 
 test "json: listagens puras (fio identico, presenca unica, vazio e [])", "json-unit" {
-    var svc = Service("s1", "a1", "d1", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "ONLINE", 1L, "", "")
+    var svc = Service("s1", "a1", "d1", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "ONLINE", 1L, "", "", "")
     var one = serviceListJsonFor(listOf(svc))
     assert(one == "[" + serviceJson(svc) + "]", "servico: mesma serializacao do fio: " + one)
     assert(serviceListJsonFor(listOf<Service>()) == "[]", "vazio = [] (nunca texto)")

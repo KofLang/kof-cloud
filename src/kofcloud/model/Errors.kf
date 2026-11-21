@@ -222,6 +222,13 @@ String errInvalidAllowPath() {
     return "KCF114: allowPaths must be absolute paths (/api/*)"
 }
 
+// Teto de corpo por servico (F10 s2 "limites por rota"): campo de AUTORIA
+// na publicacao (como KCF113/KCF114). Ausente = herda o global; presente
+// tem de ser inteiro positivo.
+String errInvalidMaxBody() {
+    return "KCF142: maxBodyBytes must be a positive integer"
+}
+
 String errInvalidWebhook() {
     return "KCF129: invalid webhook configuration"
 }
@@ -442,6 +449,9 @@ String errHint(String raw) {
     }
     if (raw.indexOf("KCF140") >= 0) {
         return "Ha mais de um servico com esse nome na conta (estado antigo) — remova o duplicado (`kof cloud unpublish <nome>` no dispositivo certo) antes de vincular o dominio."
+    }
+    if (raw.indexOf("KCF142") >= 0) {
+        return "maxBodyBytes invalido — informe um inteiro positivo em bytes (omita para herdar `kofcloud.limits.httpBodyBytes`)."
     }
     if (raw.indexOf("KCF164") >= 0) {
         return "O hostname tambem resolve para um endereco fora deste Edge (registro antigo, CDN/provedor no meio) — remova esse registro no provedor e rode `kof cloud domain verify` de novo."

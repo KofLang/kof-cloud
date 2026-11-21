@@ -391,7 +391,7 @@ List<String> valueFlags() {
         "--control", "--control-port", "--tunnel-port", "--http-port",
         "--state", "--waf", "--tls-cert", "--tls-key", "--service", "--file",
         "--password", "--from", "--to", "--resolve", "--secret",
-        "--allow-method", "--allow-path", "--action", "--dns-webhook",
+        "--allow-method", "--allow-path", "--action", "--dns-webhook", "--max-body",
         "--tunnel-secret-file", "--tunnel-secret-cmd", "--tls-cert-cmd", "--tls-key-cmd",
         "--dns-cmd",
         "--grep"
@@ -974,6 +974,21 @@ Int cmdDeviceUnsuspend(List<String> args) {
 // Valida nome/porta/exposure/address ANTES de qualquer rede ou sessao:
 // pura, testavel sem HOME. Devolve "" quando ok, ou a mensagem de erro
 // (mesmas regras da API KCF045/KCF047 — fail-fast local com dica).
+// Teto de corpo por servico na CLI: "" (herda o global), inteiro positivo
+// em bytes, ou a mensagem de erro (KCF142). Pura — o cmdPublish barra antes
+// da rede, a mesma regra da API.
+String validateMaxBodyBytes(String raw) {
+    var trimmed = raw.trim()
+    if (trimmed.length == 0) {
+        return ""
+    }
+    var parsed = parseIntBounded(trimmed, -1, 2147483647)
+    if (parsed <= 0) {
+        return errInvalidMaxBody()
+    }
+    return ""
+}
+
 String validatePublishLocal(String name, Int port, String exposure, String address) {
     // Trim como o parseManifest (manifesto e CLI aceitam os mesmos campos;
     // espacos sobrando nao devem virar nome com espaco nem exposure
@@ -1008,16 +1023,16 @@ Int cmdPublish(List<String> args) {
     // Flags com valor obrigatorio quando presentes: `--port` solto (sem
     // valor) nao pode cair no erro generico de uso nem em default.
     // Duplicada tambem nao: `flagValue` leria a primeira em silencio.
-    if (flagMissingValue(args, "--port") || flagMissingValue(args, "--address") || flagMissingValue(args, "--exposure") || flagMissingValue(args, "--device")) {
-        println("uso: kof cloud publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]")
+    if (flagMissingValue(args, "--port") || flagMissingValue(args, "--address") || flagMissingValue(args, "--exposure") || flagMissingValue(args, "--device") || flagMissingValue(args, "--max-body")) {
+        println("uso: kof cloud publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>] [--max-body <bytes>]")
         return 1
     }
-    if (flagDuplicated(args, "--port") || flagDuplicated(args, "--address") || flagDuplicated(args, "--exposure") || flagDuplicated(args, "--device")) {
+    if (flagDuplicated(args, "--port") || flagDuplicated(args, "--address") || flagDuplicated(args, "--exposure") || flagDuplicated(args, "--device") || flagDuplicated(args, "--max-body")) {
         println("flag repetida — informe uma so vez: kof cloud publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]")
         return 1
     }
     if (extraPositional(args, 1)) {
-        println("argumento a mais — uso: kof cloud publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]")
+        println("argumento a mais — uso: kof cloud publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>] [--max-body <bytes>]")
         return 1
     }
     var port = parsePortSafe(flagValue(args, "--port"), 0)
@@ -1077,6 +1092,15 @@ Int cmdPublish(List<String> args) {
         println(localError)
         return 1
     }
+    // Teto de corpo por servico (F10 s2): validado antes da rede; vazio =
+    // herda o global.
+    var maxBodyRaw = flagValue(args, "--max-body").trim()
+    var maxBodyError = validateMaxBodyBytes(maxBodyRaw)
+    if (maxBodyError.length > 0) {
+        println(maxBodyError)
+        println(errHint(errInvalidMaxBody()))
+        return 1
+    }
     var body = mapOf()
     body.put("deviceId", deviceId)
     body.put("name", name)
@@ -1089,6 +1113,9 @@ Int cmdPublish(List<String> args) {
     }
     if (allowPaths.length > 0) {
         body.put("allowPaths", allowPaths)
+    }
+    if (maxBodyRaw.length > 0) {
+        body.put("maxBodyBytes", maxBodyRaw)
     }
     try {
         var raw = requireOk(http.post(session.controlUrl + "/v1/services", json.encode(body), jsonHeader(session.token)))
@@ -1104,6 +1131,9 @@ Int cmdPublish(List<String> args) {
         }
         if (service.allowPaths.length > 0) {
             println("Caminhos: " + service.allowPaths)
+        }
+        if (serviceCapText(service.maxBodyBytes).length > 0) {
+            println("Teto de corpo: " + serviceCapText(service.maxBodyBytes) + " bytes (por servico)")
         }
         return 0
     } catch (String e) {

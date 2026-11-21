@@ -17,7 +17,14 @@ record Service(
     Long createdAt,
     // Allowlist WAF (Fase 10 slice 3). Listas vazias = sem restricao.
     String allowMethods,
-    String allowPaths
+    String allowPaths,
+    // Teto de corpo POR SERVICO (Fase 10 s2, "limites por rota"), em bytes,
+    // como texto decimal. "" (ou 0/invalido) = herda o teto global do Edge
+    // (`kofcloud.limits.httpBodyBytes`). String de proposito — a mesma forma
+    // de `localPort`: um campo numerico nulavel no record custou VerifyError
+    // e decode quebrado (medido), e um campo de texto decodifica vazio num
+    // estado antigo (JSN004: chave ausente vira "").
+    String maxBodyBytes
 )
 
 String statusOnline() {
@@ -66,5 +73,44 @@ Bool statusIsKnown(String status) {
 // e estado operacional (status) ficam de fora de proposito: nao sao
 // configuracao do operador e nao mudam por republicacao.
 Bool serviceConfigEquals(Service a, Service b) {
-    return a.localAddress == b.localAddress && a.localPort == b.localPort && a.protocol == b.protocol && a.exposure == b.exposure && a.allowMethods == b.allowMethods && a.allowPaths == b.allowPaths
+    return a.localAddress == b.localAddress && a.localPort == b.localPort && a.protocol == b.protocol && a.exposure == b.exposure && a.allowMethods == b.allowMethods && a.allowPaths == b.allowPaths && serviceCapText(a.maxBodyBytes) == serviceCapText(b.maxBodyBytes)
+}
+
+// Texto do teto por servico para o fio e a comparacao de config: chave
+// ausente decodifica `null` (medido) e sai como "" (herda o global) — a
+// mesma forma que o publish grava.
+String serviceCapText(String? cap) {
+    if (cap == null) {
+        return ""
+    }
+    var v = cap
+    if (v == null) {
+        return ""
+    }
+    return v.trim()
+}
+
+// Teto EFETIVO do corpo de um servico (bytes). Pura: o valor do servico
+// quando e inteiro positivo dentro da faixa; qualquer outra coisa (vazio,
+// 0, negativo, lixo) recai no teto global — nunca "sem teto" silencioso
+// (a familia de recuos seguros de `util/Limits`). O global chega por
+// parametro para a funcao ficar sem I/O.
+Int serviceMaxBodyCap(String? serviceCap, Int globalLimit) {
+    if (globalLimit <= 0) {
+        globalLimit = 16777216
+    }
+    // Chave ausente no estado antigo decodifica `null` (medido) — trata
+    // como "" (herda o global), nunca como erro.
+    if (serviceCap == null) {
+        return globalLimit
+    }
+    var capText = serviceCap
+    if (capText == null) {
+        return globalLimit
+    }
+    var parsed = parseIntBounded(capText.trim(), 0, 2147483647)
+    if (parsed > 0) {
+        return parsed
+    }
+    return globalLimit
 }

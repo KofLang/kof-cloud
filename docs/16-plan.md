@@ -815,6 +815,22 @@ Desenho fatiado:
 * **Slice 2 — limites de corpo/tempo por rota.** Teto de request body por
   serviço (`kofcloud.limits.httpBodyBytes`, default 1 MiB; excedeu →
   `413 KCF110`) + timeout de upstream (502 após N s, sem pendurar o stream).
+
+  **Implementado (teto de corpo POR SERVIÇO ✅):** `publish` aceita
+  `maxBodyBytes` (API `POST /v1/services`, CLI `--max-body <bytes>` e
+  manifesto `"maxBodyBytes"`) — texto decimal no record (`""` = herda o
+  global), a mesma forma de `localPort`: um campo numérico nulável custou
+  VerifyError e decode quebrado (medido) e, de texto, um estado antigo
+  decodifica `null` (tratado como "herda"). Forma inválida (0, negativo,
+  lixo) → **400 KCF142** com Hint apontando o global; o Edge aplica o teto
+  do serviço antes do relay (`serviceMaxBodyCap` pura, recuo seguro para o
+  global) — acima do da rota → `413 KCF110`, o mesmo código do teto global.
+  O teto entra na config mutável (`serviceConfigEquals`) — republicar com
+  outro valor é drift no `--plan`/`--check` — e `serviceJson` o expõe. Prova:
+  `tests/route_cap_test.kf` (2: `route-cap-unit` — pura, recuos, igualdade,
+  validador; `route-cap-e2e` com túnel real: corpo de 16 bytes → **413** no
+  serviço com teto 8 e **200** no que herda o global, mesmo corpo e mesmo
+  túnel; teto 0 recusado com KCF142).
 * **Slice 3 — allowlist por serviço ✅.** `allowMethods`/`allowPaths` (CSV)
   opcionais no `POST /v1/services`; persistidos no `Service` e aplicados no
   Edge **antes do relay**: fora da lista → `403 KCF111` +

@@ -254,8 +254,8 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     // Puro: duas listas, nenhuma rede, nenhum HOME. Cobre novo/igual/
     // diferente/extra numa chamada so (precedente: doctorTunnelLine).
     var live = listOf<Service>()
-    live.add(Service("id-site", "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", ""))
-    live.add(Service("id-veterano", "acc", "dev", "veterano", "127.0.0.1", 9000, "http", "veterano.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", ""))
+    live.add(Service("id-site", "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
+    live.add(Service("id-veterano", "acc", "dev", "veterano", "127.0.0.1", 9000, "http", "veterano.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
     var wanted = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"mudou\",\"port\":3000,\"exposure\":\"PRIVATE\"}]}")
     var plan = diffDeployment(live, wanted)
     assert(plan.size == 3, "tres linhas: igual, novo, extra")
@@ -297,7 +297,7 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     assert(plan6.get(0).startsWith("~ site"), "politica nova vira update")
     assert(plan6.size == 2, "mudado + extra")
     var livePolicy = listOf<Service>()
-    livePolicy.add(Service("id-site", "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "GET", "/api/*"))
+    livePolicy.add(Service("id-site", "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "GET", "/api/*", ""))
     var plan7 = diffDeployment(livePolicy, wanted6)
     assert(plan7.get(0) == "= site (igual)", "politica igual segue igual")
 
@@ -306,7 +306,7 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     // "extra" (o down --prune nunca toca outro device). Medido: sem escopo
     // os dois casos mentiam.
     var liveDevices = listOf<Service>()
-    liveDevices.add(Service("id-b", "acc", "devB", "remoto", "127.0.0.1", 7000, "http", "remoto.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", ""))
+    liveDevices.add(Service("id-b", "acc", "devB", "remoto", "127.0.0.1", 7000, "http", "remoto.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
     var wantedDevices = parseManifest("{\"services\":[{\"name\":\"remoto\",\"port\":7000}]}")
     // Sem escopo: igual (comportamento legado, ainda usado por chamadores sem sessao).
     assert(diffDeployment(liveDevices, wantedDevices).get(0).startsWith("= remoto"), "sem escopo: igual")
@@ -323,7 +323,7 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     assert(scopedEmpty.size == 1, "com escopo: so o novo")
     assert(scopedEmpty.get(0).startsWith("+ meu"), "com escopo: nada de extra de outro device")
     // Servico DESTE device fora do manifesto continua aparecendo como extra.
-    var mine = Service("id-a", "acc", "devA", "orfa", "127.0.0.1", 9100, "http", "orfa.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "")
+    var mine = Service("id-a", "acc", "devA", "orfa", "127.0.0.1", 9100, "http", "orfa.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", "")
     var scopedMixed = diffDeploymentFor(listOf<Service>(mine), wantedEmpty, "devA")
     assert(scopedMixed.size == 2, "novo + orfao do proprio device")
     assert(scopedMixed.get(1).startsWith("- orfa"), "orfao do proprio device aparece")
@@ -350,8 +350,8 @@ test "deploy: down distingue ausente de publicado noutro dispositivo", "deploy-d
     // imprimia "ausente (ok)" — o operador achava que nao havia nada e o
     // servico seguia no ar com o mesmo hostname.
     var live = listOf<Service>()
-    live.add(Service("id-a", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", ""))
-    live.add(Service("id-b", "acc", "devB", "outro", "127.0.0.1", 9000, "http", "outro.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", ""))
+    live.add(Service("id-a", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
+    live.add(Service("id-b", "acc", "devB", "outro", "127.0.0.1", 9000, "http", "outro.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
     assert(serviceIdOnDevice(live, "site", "devA") == "id-a", "alvo do proprio device")
     assert(serviceIdOnDevice(live, "site", "devB") == "", "nao pega id de outro device")
     assert(serviceIdOnDevice(live, "outro", "devA") == "", "homonimo alheio nao vira alvo")
@@ -365,8 +365,8 @@ test "deploy: down distingue ausente de publicado noutro dispositivo", "deploy-d
     assert(line.indexOf("nao removido") >= 0, "diz que nada foi removido")
     assert(line.indexOf("down") >= 0, "orienta rodar la")
     // Nome igual em DOIS devices: o proprio vence (remove o dele).
-    live.add(Service("id-a2", "acc", "devA", "dup", "127.0.0.1", 7000, "http", "dup.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", ""))
-    live.add(Service("id-b2", "acc", "devB", "dup", "127.0.0.1", 7001, "http", "dup.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", ""))
+    live.add(Service("id-a2", "acc", "devA", "dup", "127.0.0.1", 7000, "http", "dup.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
+    live.add(Service("id-b2", "acc", "devB", "dup", "127.0.0.1", 7001, "http", "dup.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
     assert(serviceIdOnDevice(live, "dup", "devA") == "id-a2", "homonimo: mira o proprio")
 }
 
@@ -892,7 +892,7 @@ test "deploy: check acusa servico SUSPENSO com a dica do unsuspend", "deploy-che
     // (republicar preserva o status de proposito). A dica certa e o
     // unsuspend.
     var live = listOf<Service>()
-    live.add(Service("id-site", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "SUSPENDED", 0, "", ""))
+    live.add(Service("id-site", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "SUSPENDED", 0, "", "", ""))
 
     // Puro (`suspendedByName`, o ponto da decisao): sem rede. Sem escopo.
     assert(statusIsSuspended(suspendedByName(live, "site", "")), "sem escopo: suspenso acusado")
@@ -906,7 +906,7 @@ test "deploy: check acusa servico SUSPENSO com a dica do unsuspend", "deploy-che
 
     // ONLINE/UNKNOWN/OFFLINE nao caem na dica do unsuspend.
     var online = listOf<Service>()
-    online.add(Service("id-site", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "ONLINE", 0, "", ""))
+    online.add(Service("id-site", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "ONLINE", 0, "", "", ""))
     assert(statusIsSuspended(suspendedByName(online, "site", "devA")) == false, "online nao e suspenso")
 
     // Fim a fim: control plane de verdade, servico suspenso pela API. O

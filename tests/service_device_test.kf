@@ -20,7 +20,7 @@ Device deviceFixture(String id, String name) {
 
 Service serviceFixture(String name, String deviceId) {
     return Service("s-" + name, "acc", deviceId, name, "127.0.0.1", 8080, "http",
-                   name + ".mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "")
+                   name + ".mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "", "")
 }
 
 test "service list: rotulo do dispositivo resolve nome, cai no id e nunca some", "svcdevice-unit" {
@@ -117,7 +117,7 @@ test "status/token: nome homonimo em estado legado recusa em vez de escolher", "
     if (mel != null) {
         accountId = mel.id
     }
-    registry.services.add(Service("legacy-1", accountId, second, "site", "127.0.0.1", 8081, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", ""))
+    registry.services.add(Service("legacy-1", accountId, second, "site", "127.0.0.1", 8081, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "", ""))
 
     var services = fetchServices(url, token)
     var match = resolveServiceName(services, "site")

@@ -15,7 +15,7 @@ import testkit.Support
 // fora de 2xx ou sem resposta a tempo = DEGRADED, recusa = OFFLINE.
 
 Service healthService(Int port, String allowPaths) {
-    return Service("svc", "acc", "dev", "site", "127.0.0.1", port, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", allowPaths)
+    return Service("svc", "acc", "dev", "site", "127.0.0.1", port, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", allowPaths, "")
 }
 
 // Servidor TCP cru que responde sempre com `raw` depois de ler o pedido.
@@ -144,7 +144,7 @@ test "health: ciclo le a tabela da sessao (hot-reload), memoria poda removido", 
     // Servico removido no hot-reload (trocado por outro nome): sai da tabela
     // E da memoria — se um dia voltar, o primeiro ciclo reporta de novo como
     // mudanca.
-    var late = Service("late-id", "acc", "dev", "late", "127.0.0.1", 8081, "http", "late.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "")
+    var late = Service("late-id", "acc", "dev", "late", "127.0.0.1", 8081, "http", "late.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "", "")
     session.setServices(listOf(late))
     var swapped = currentServiceNames(session)
     assert(swapped.size == 1 && swapped.get(0) == "late", "tabela nova, sem tocar na anterior")
@@ -199,7 +199,7 @@ test "health: apos hot-reload sonda o servico novo e para de sondar o removido",
     assert(waitForPort(latePort, 60), "servico tardio no ar")
 
     var session = TunnelSession("s1", "d1", "a1", "")
-    var first = Service("id-1", "acc", "dev", "first", "127.0.0.1", firstPort, "http", "first.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "")
+    var first = Service("id-1", "acc", "dev", "first", "127.0.0.1", firstPort, "http", "first.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "", "")
     session.setServices(listOf(first))
     var healthTask = spawn { agentHealth(session, 100) }
 
@@ -217,7 +217,7 @@ test "health: apos hot-reload sonda o servico novo e para de sondar o removido",
     assert(countValue(lateCount) == 0, "servico ainda nao publicado nao e sondado")
 
     // Hot-reload: some `first`, entra `late` (o Edge poda a rota na mesma troca).
-    var late = Service("id-2", "acc", "dev", "late", "127.0.0.1", latePort, "http", "late.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "")
+    var late = Service("id-2", "acc", "dev", "late", "127.0.0.1", latePort, "http", "late.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "", "")
     session.setServices(listOf(late))
 
     var lateProbed = false

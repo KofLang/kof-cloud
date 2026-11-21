@@ -26,7 +26,7 @@ import kofcloud.store.Store
 // presentes sao normalizados (`normalizeAllowMethods`/`normalizeAllowPaths`)
 // e politica malformada falha no parse antes de publicar qualquer coisa.
 
-record ManifestService(String name, String address, Int port, String exposure, String protocol, String build, String artifact, String allowMethods, String allowPaths)
+record ManifestService(String name, String address, Int port, String exposure, String protocol, String build, String artifact, String allowMethods, String allowPaths, String maxBodyBytes)
 
 // Resultado de rodar o build de UM servico: ok=true, comando executado;
 // ok=false traz o motivo ja formatado ("falhou (exit N)" ou "nao executou").
@@ -145,7 +145,7 @@ Bool checkLocalService(String address, Int port) {
 Bool checkLocalServiceFor(String address, Int port, String protocol) {
     var service = Service(
         "local-check", "", "", "local-check", address, port, protocol,
-        address + ":" + intToString(port), "PRIVATE", "UNKNOWN", 0L, "", ""
+        address + ":" + intToString(port), "PRIVATE", "UNKNOWN", 0L, "", "", ""
     )
     var status = checkService(service)
     return status == statusOnline()
@@ -185,7 +185,7 @@ List<String> diffDeploymentFor(List<Service> live, List<ManifestService> wanted,
                     conflictedOn = service.deviceId
                 } else {
                     found = true
-                    if (service.localPort == item.port && service.localAddress == item.address && service.exposure == item.exposure && service.protocol == item.protocol && service.allowMethods == item.allowMethods && service.allowPaths == item.allowPaths) {
+                    if (service.localPort == item.port && service.localAddress == item.address && service.exposure == item.exposure && service.protocol == item.protocol && service.allowMethods == item.allowMethods && service.allowPaths == item.allowPaths && serviceCapText(service.maxBodyBytes) == item.maxBodyBytes) {
                         same = true
                     }
                 }
@@ -316,6 +316,8 @@ List<String> verifyDeploymentFor(String controlUrl, String token, List<ManifestS
                         drift = "protocol " + remote.protocol + " != " + service.protocol
                     } else if (remote.allowMethods != service.allowMethods) {
                         drift = "allowMethods " + remote.allowMethods + " != " + service.allowMethods
+                    } else if (serviceCapText(remote.maxBodyBytes) != service.maxBodyBytes) {
+                        drift = "maxBodyBytes " + serviceCapText(remote.maxBodyBytes) + " != " + service.maxBodyBytes
                     } else if (remote.allowPaths != service.allowPaths) {
                         drift = "allowPaths " + remote.allowPaths + " != " + service.allowPaths
                     }
@@ -573,6 +575,16 @@ List<ManifestService> parseManifest(String raw) {
         if (allowPaths.length == 0 && allowPathsRaw.length > 0) {
             throw "servico \"" + name + "\" com allowPaths invalido: " + allowPathsRaw
         }
+        // Teto de corpo por servico (Fase 10 s2 "limites por rota"): mesma
+        // regra da API/CLI — ausente = herda o global; presente tem de ser
+        // inteiro positivo (lixo/0/negativo falha posicional no parse).
+        var maxBodyBytes = manifestField(entry, "maxBodyBytes").trim()
+        if (maxBodyBytes.length > 0) {
+            if (validateMaxBodyBytes(maxBodyBytes).length > 0) {
+                throw "servico \"" + name + "\" com maxBodyBytes invalido: " + maxBodyBytes
+            }
+            maxBodyBytes = intToString(parseIntBounded(maxBodyBytes, 0, 2147483647))
+        }
         if (name.length == 0) {
             throw "servico sem nome na posicao " + intToString(index)
         }
@@ -598,7 +610,7 @@ List<ManifestService> parseManifest(String raw) {
                 throw "servico \"" + name + "\" duplicado no manifesto (posicao " + intToString(index) + ") — cada nome publica um servico so"
             }
         }
-        out.add(ManifestService(name, address, port, exposure, protocol, build, artifact, allowMethods, allowPaths))
+        out.add(ManifestService(name, address, port, exposure, protocol, build, artifact, allowMethods, allowPaths, maxBodyBytes))
         index = index + 1
     }
     if (out.size == 0) {
@@ -918,6 +930,9 @@ Int watchApplyOnce(String controlUrl, String token, String deviceId, String rawT
         body.put("exposure", wanted.exposure)
         body.put("allowMethods", wanted.allowMethods)
         body.put("allowPaths", wanted.allowPaths)
+        if (wanted.maxBodyBytes.length > 0) {
+            body.put("maxBodyBytes", wanted.maxBodyBytes)
+        }
         try {
             requireOk(http.post(controlUrl + "/v1/services", json.encode(body), jsonHeader(token)))
             println("watch: publicado: " + wanted.name)
@@ -1061,6 +1076,9 @@ Int cmdDeploy(List<String> args) {
         body.put("exposure", wanted.exposure)
         body.put("allowMethods", wanted.allowMethods)
         body.put("allowPaths", wanted.allowPaths)
+        if (wanted.maxBodyBytes.length > 0) {
+            body.put("maxBodyBytes", wanted.maxBodyBytes)
+        }
         try {
             var created = requireOk(http.post(session.controlUrl + "/v1/services", json.encode(body), jsonHeader(session.token)))
             var service = json.decode<Service>(created)

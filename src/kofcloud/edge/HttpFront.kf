@@ -253,7 +253,8 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     // declarado e a fronteira confiavel do corpo. Comparacao em Long: um
     // valor valido mas acima de 2^31 nao pode virar negativo.
     var declared = parseContentLength(request.headers).value
-    if (declared > (state.bodyLimitBytes() as Long)) {
+    if (declared > (serviceMaxBodyCap(service.maxBodyBytes, state.bodyLimitBytes()) as Long)) {
+        // (teto do servico quando declarado, senao o global do Edge)
         var tooLarge = errorResponse(413, errBodyTooLarge())
         conn.send(tooLarge)
         conn.close()

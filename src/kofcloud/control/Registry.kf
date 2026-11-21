@@ -1880,6 +1880,14 @@ class Registry {
     // `allowMethods`/`allowPaths`: politica WAF opcional (CSV). Ausentes =
     // sem restricao, que e o comportamento de quem nao declara allowlist.
     Service publishService(Account account, String deviceId, String name, String localAddress, Int localPort, String protocol, String exposure, String allowMethods, String allowPaths) {
+    return publishServiceWithBody(account, deviceId, name, localAddress, localPort, protocol, exposure, allowMethods, allowPaths, "")
+}
+
+// Fase 10 s2 ("limites por rota"): o publish aceita o teto de corpo POR
+// SERVICO (texto decimal; "" herda o global). A sobrecarga acima preserva a
+// assinatura antiga para chamadores/testes sem politica; a validacao da
+// forma fica na borda (API 400 KCF142, CLI e manifesto barram antes).
+Service publishServiceWithBody(Account account, String deviceId, String name, String localAddress, Int localPort, String protocol, String exposure, String allowMethods, String allowPaths, String maxBody) {
         if (validServiceName(name) == false) {
             throw errInvalidServiceName()
         }
@@ -1923,7 +1931,7 @@ class Registry {
                 existing.id, existing.accountId, existing.deviceId, existing.name,
                 localAddress, localPort, protocol, existing.hostname,
                 exposureName(exposureFrom(exposure)), existing.status,
-                existing.createdAt, allowMethods, allowPaths
+                existing.createdAt, allowMethods, allowPaths, serviceCapText(maxBody)
             )
             if (serviceConfigEquals(existing, updated) == false) {
                 this.replaceService(updated)
@@ -1939,7 +1947,7 @@ class Registry {
         var service = Service(
             uuid.v4(), account.id, deviceId, name, localAddress, localPort, protocol,
             serviceHostname(name, account.handle), exposureName(exposureFrom(exposure)),
-            statusUnknown(), time.now(), allowMethods, allowPaths
+            statusUnknown(), time.now(), allowMethods, allowPaths, serviceCapText(maxBody)
         )
         this.services.add(service)
         this.audit(auditActorAccount(account.handle), auditServicePublished(), account.id + "/" + service.id)
@@ -2106,7 +2114,7 @@ class Registry {
                     service.id, service.accountId, service.deviceId, service.name,
                     service.localAddress, service.localPort, service.protocol,
                     service.hostname, service.exposure, status, service.createdAt,
-                    service.allowMethods, service.allowPaths
+                    service.allowMethods, service.allowPaths, service.maxBodyBytes
                 ))
                 found = true
             } else {

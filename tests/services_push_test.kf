@@ -19,7 +19,7 @@ import testkit.Support
 // antes do primeiro ciclo do refresher (healthMs alto -> refresh = 6x).
 
 String pushSvcJson(String name, Int port) {
-    var svc = Service("id-" + name, "a1", "d1", name, "127.0.0.1", port, "http", name + ".mel.kofcloud.io", "PUBLIC", "UNKNOWN", 1, "", "")
+    var svc = Service("id-" + name, "a1", "d1", name, "127.0.0.1", port, "http", name + ".mel.kofcloud.io", "PUBLIC", "UNKNOWN", 1, "", "", "")
     return json.encode(svc)
 }
 

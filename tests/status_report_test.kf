@@ -19,7 +19,7 @@ String statusProbePath(String name) {
 }
 
 Service statusProbeService(String id) {
-    return Service(id, "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "")
+    return Service(id, "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "", "")
 }
 
 test "status report: vocabulario fechado e fonte unica", "statusreport-unit" {

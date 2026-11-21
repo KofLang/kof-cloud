@@ -832,7 +832,7 @@ test "dominio: nome de servico ambiguo recusa em vez de escolher o primeiro", "d
     var mel = registry.accountByHandle("mel")
     assert(mel != null, "conta existe")
     if (mel != null) {
-        registry.services.add(Service("legacy-1", mel.id, dev2, "site", "127.0.0.1", 8081, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", ""))
+        registry.services.add(Service("legacy-1", mel.id, dev2, "site", "127.0.0.1", 8081, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "", ""))
         assert(registry.servicesByName(mel.id, "site").size == 2, "dois homonimos no estado")
     }
 
