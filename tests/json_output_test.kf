@@ -32,10 +32,21 @@ test "json: listagens puras (fio identico, presenca unica, vazio e [])", "json-u
     assert(presenceOf("d1", "[\"d1\"]", "") == "ONLINE", "presenceOf ONLINE")
     assert(deviceListLine(dev, "[\"d1\"]", "").endsWith("tunel: ONLINE"), "linha de texto usa a mesma fonte")
 
-    // Help anuncia --json nas duas listagens.
+    // Help anuncia --json nas tres listagens.
     var help = usageText()
     assert(help.indexOf("device list [--json]") >= 0, "help device list")
     assert(help.indexOf("service list [--json]") >= 0, "help service list")
+    assert(help.indexOf("domain list [--json]") >= 0, "help domain list")
+
+    // JSON do `domain list`: mesma lista do fio que a linha de texto imprime.
+    var custom = DomainEntry("loja.exemplo.com", "custom", "site", "PENDING")
+    var domOut = domainListJsonFor(listOf(custom))
+    assert(domOut.indexOf("\"hostname\":\"loja.exemplo.com\"") >= 0, "hostname no json: " + domOut)
+    assert(domOut.indexOf("\"kind\":\"custom\"") >= 0, "kind no json")
+    assert(domOut.indexOf("\"service\":\"site\"") >= 0, "servico vinculado no json")
+    assert(domOut.indexOf("\"status\":\"PENDING\"") >= 0, "status do ciclo no json")
+    assert(domainListJsonFor(listOf<DomainEntry>()) == "[]", "dominios vazio = []")
+    assert(domainListLine(custom).indexOf("PENDING") >= 0, "texto mostra o mesmo status do json")
 }
 
 test "json: e2e — service list --json imprime lista valida", "json-e2e" {
@@ -59,4 +70,12 @@ test "json: e2e — service list --json imprime lista valida", "json-e2e" {
     var out = serviceListJsonFor(services)
     assert(out.startsWith("[") && out.endsWith("]"), "array JSON: " + out)
     assert(out.indexOf("\"name\":\"site\"") >= 0, "servico no array")
+
+    // `domain list --json`: o fio mistura wildcard + service + custom; a
+    // pura serializa a mesma lista que o texto imprime, sem inventar.
+    var domains = json.decode<List<DomainEntry>>(requireOk(http.get("http://127.0.0.1:" + intToString(port) + "/v1/domains", authHeader(token))))
+    assert(domains.size >= 2, "wildcard + service no fio")
+    var domJson = domainListJsonFor(domains)
+    assert(domJson.startsWith("[") && domJson.endsWith("]"), "array JSON de dominios")
+    assert(domJson.indexOf("\"kind\":\"service\"") >= 0, "service no array de dominios: " + domJson)
 }

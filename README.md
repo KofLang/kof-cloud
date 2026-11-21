@@ -107,14 +107,14 @@ logout
 connect
 disconnect
 status
-device list
+device list [--json]   (--json = saida estavel para CI, com o eixo de presenca)
 device revoke <nome|deviceId>
 device suspend <nome|deviceId>      (túnel recusado, nada removido)
 device unsuspend <nome|deviceId>
 publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]
         [--allow-method VERBO]... [--allow-path /caminho]...
 unpublish <nome>
-service list
+service list [--json]   (--json = saida estavel para CI)
 service status <nome> [--tls-cert <pem>]  (com o PEM, julga expiracao e cobertura para o hostname do servico + dominios proprios)
 service suspend <nome>       (fora da rota, nada removido)
 service unsuspend <nome>
@@ -124,7 +124,7 @@ service token-revoke <nome> <kfs_|id>  (revoga UMA credencial; id curto se unico
 service tokens   (credenciais validas SEM expiracao na conta)
 service rotate (<nome>|--all) [--ttl <horas>] [--prune]  (credencial nova; revoga as antigas SO depois do TTL)
 service rotation <nome>  (quantas credenciais ainda valem)
-domain list
+domain list [--json]   (--json = saida estavel para CI)
 domain add <hostname> --service <nome> [--dns-webhook <url>] [--dry-run]   (dominio proprio; --dns-webhook pede a criacao do CNAME num receptor HTTP do operador, token via KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN; --dry-run mostra o pedido e nao registra nem envia)
 domain verify <hostname> [--tls-cert <pem>]  (confere o DNS e ativa a rota; --tls-cert julga o PEM antes da rede)
 domain remove <hostname>

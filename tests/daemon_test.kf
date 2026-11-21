@@ -118,6 +118,13 @@ test "daemon: ajuda reconciliada com os comandos reais", "usage-parity" {
     // abaixo so trava o primeiro token (`usage`), entao o drift de FLAG passa
     // pela rede: aqui a trava e da linha inteira, flag incluida.
     assert(readme.indexOf("usage [--export]   (uso da conta: requests e bytes roteados pelo Edge; --export fecha a janela") >= 0, "README espelha usage --export com a janela")
+    // A lane do `domain list --json` (F6 paridade com service/device) atualizou
+    // o help (`domain list [--json]`) — mesmo padrao do drift de flag acima:
+    // a varredura generica trava so o primeiro token (`domain`), entao sem o
+    // assert de linha inteira o README ficaria stale sem a flag. README + help
+    // viajam juntos; a prova do json vive em `json_output_test.kf`.
+    assert(help.indexOf("domain list [--json]   (--json = saida estavel para CI)") >= 0, "help anuncia domain list --json")
+    assert(readme.indexOf("domain list [--json]") >= 0, "README espelha domain list --json")
     // Varredura generica help -> README: todo comando do help tem de ter
     // linha propria na referencia do README. Precedente real: a lane do
     // `usage` (F18 s4) atualizou o help e o paragrafo de suites e esqueceu

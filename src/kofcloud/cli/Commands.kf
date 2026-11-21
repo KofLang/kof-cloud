@@ -789,8 +789,9 @@ String presenceOf(String deviceId, String presenceRaw, String presenceError) {
 // Listagens em JSON (CI/automacao): delegam na MESMA serializacao do fio
 // (`serviceJson`/`deviceJson` do control plane — o que o operador ve no
 // curl e o que a CLI imprime), e o device ganha o eixo de presenca que a
-// API nao carrega por device (vem do /v1/presence). Nada inventado: saida
-// vazia e `[]`, nunca texto de "nenhum servico".
+// API nao carrega por device (vem do /v1/presence). O domain delega no
+// corpo do GET /v1/domains — mesma entrada que a linha de texto imprime.
+// Nada inventado: saida vazia e `[]`, nunca texto de "nenhum servico".
 String serviceListJsonFor(List<Service> services) {
     var parts = listOf<String>()
     for (var service in services) {
@@ -808,6 +809,22 @@ String deviceListJsonFor(List<Device> devices, String presenceRaw, String presen
         entry.put("name", device.name)
         entry.put("status", device.status)
         entry.put("tunnel", presenceOf(device.id, presenceRaw, presenceError))
+        parts.add(json.encode(entry))
+    }
+    return "[" + joinStrings(parts, ",") + "]"
+}
+
+// JSON do `domain list` (mesma lista do fio que a linha de texto imprime —
+// precedente: serviceListJsonFor). Uma entrada por dominio com os campos
+// que o operador ve no texto (kind/hostname/service + status quando ha).
+String domainListJsonFor(List<DomainEntry> domains) {
+    var parts = listOf<String>()
+    for (var domain in domains) {
+        var entry = mapOf()
+        entry.put("hostname", domain.hostname)
+        entry.put("kind", domain.kind)
+        entry.put("service", domain.service)
+        entry.put("status", domain.status)
         parts.add(json.encode(entry))
     }
     return "[" + joinStrings(parts, ",") + "]"
@@ -2358,10 +2375,11 @@ Int cmdServiceRotation(List<String> args) {
 }
 
 Int cmdDomainList(List<String> args) {
-    if (extraPositional(args, 0)) {
-        println("uso: kof cloud domain list")
+    if (extraPositional(args, 0) || flagDuplicated(args, "--json")) {
+        println("uso: kof cloud domain list [--json]")
         return 1
     }
+    var asJson = hasFlag(args, "--json")
     var session = loadSession()
     if (session == null) {
         println(notLoggedInLine())
@@ -2370,6 +2388,12 @@ Int cmdDomainList(List<String> args) {
     try {
         var raw = requireOk(http.get(session.controlUrl + "/v1/domains", authHeader(session.token)))
         var domains = json.decode<List<DomainEntry>>(raw)
+        if (asJson) {
+            // Saida estavel para CI: `[]` tambem e uma lista valida (nunca
+            // silencio, que quebraria o parser).
+            println(domainListJsonFor(domains))
+            return 0
+        }
         for (var domain in domains) {
             println(domainListLine(domain))
         }

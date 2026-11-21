@@ -36,7 +36,7 @@ String usageText() {
     out = out + "  service tokens   (credenciais validas SEM expiracao na conta)\n"
     out = out + "  service rotate (<nome>|--all) [--ttl <horas>] [--prune]  (credencial nova; revoga as antigas SO depois do TTL)\n"
     out = out + "  service rotation <nome>   (quantas credenciais ainda valem)\n"
-    out = out + "  domain list\n"
+    out = out + "  domain list [--json]   (--json = saida estavel para CI)\n"
     out = out + "  domain add <hostname> --service <nome> [--dns-webhook <url> | --dns-cmd <cmd>] [--dry-run]  (CNAME: webhook do operador OU CLI do provedor — {hostname}/{target}/{service} no comando; --dry-run mostra e nao registra nem envia)\n"
     out = out + "  domain verify <hostname> [--tls-cert <pem>]  (com o PEM, confere ANTES que ele cobre o hostname)\n"
     out = out + "  domain remove <hostname>\n"
