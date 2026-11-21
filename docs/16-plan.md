@@ -1627,7 +1627,7 @@ novo (se não tem regressão, não fechou).
 identidade e billing moram em ferramentas que o operador já usa. Cloud
 robusta pluga por padrão aberto, nunca por SDK proprietário.
 
-**Estado: 🟡 parcial (slice 1 — webhook DNS genérico ✅).** Princípio único: **a KofCloud fala o protocolo
+**Estado: 🟡 parcial (DNS ✅ s1 — webhook e `--dns-cmd`; billing ✅ s4 — export e push por webhook; segredos ✅ s5; CI/CD ✅ s3; falta OTel e SSO).** Princípio único: **a KofCloud fala o protocolo
 do mercado, não o contrário.** Fatiado por conector (cada um: config por
 env, credencial nunca em log, teste com fake local + e2e opcional real):
 
@@ -1718,8 +1718,9 @@ env, credencial nunca em log, teste com fake local + e2e opcional real):
   carrega, mesmo padrão do freezeMarks; o `noteUsage` NÃO grava disco por
   request — o uso vai junto no próximo `save()` de mutação). Leitura:
   `GET /v1/usage` escopado pelo token (a conta alheia não existe para o
-  fio; 401 sem token) e `kof cloud usage`. A camada de **export** (webhook
-  de uso/OTel) fica para o próximo passo — o contador já é o contrato.
+  fio; 401 sem token) e `kof cloud usage`. A camada de **export** veio em
+  dois conectores: o fechamento sob demanda (`POST /v1/usage/export`) e o
+  **push por webhook** (`usagePushSweeper`) — o contador já era o contrato.
   **Implementado (ciclo de billing — o export):** `POST /v1/usage/export`
   devolve a janela acumulada com `periodEnd` e **zera** o contador
   (`Registry.usageSnapshot`): cada export cobre exatamente uma janela, sem

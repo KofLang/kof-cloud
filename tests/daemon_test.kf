@@ -115,6 +115,14 @@ test "daemon: ajuda reconciliada com os comandos reais", "usage-parity" {
     // o caminho continuou existindo na árvore combinada.
     assert(readTextOr("docs/examples/ci-pipeline.yml", "").length > 0, "exemplo de pipeline CI existe no disco")
     assert(readTextOr("docs/examples/action.yml", "").length > 0, "exemplo de action reutilizavel existe no disco")
+    // O push de uso (F18 s4) landou com `usage_push_test.kf`, mas a tabela
+    // do 18-implemented ainda dizia "o export push segue pendente" — o
+    // drift de prosa que esta execucao fechou. O OTel continua fora; a
+    // frase e lida pelo caminho que sobra, entao volta-la para "pendente"
+    // (ou apagar o push) quebra aqui.
+    var implemented = readTextOr("docs/18-implemented.md", "")
+    assert(implemented.indexOf("o push por webhook (evento `usage.window`") >= 0, "18-implemented registra o push de uso")
+    assert(implemented.indexOf("o export push (webhook/OTel) segue pendente") < 0, "18-implemented nao chama o push de pendente")
     // A lane do `usage --export` (F18 s4 ciclo de billing) atualizou o help
     // (`usage [--export]`, com a janela) e deixou a linha do README no texto
     // antigo sem a flag — mesmo padrao dos drifts acima. A varredura generica
