@@ -63,7 +63,7 @@ o run total imprime `71 passed, 0 failed`. Falha = nome do teste + assert
 | frames | `tests/frames_test.kf` | 4 |
 | idle + shutdown limpo do Edge | `tests/idle_test.kf` | 5 |
 | conexoes | `tests/conns_test.kf` | 2 |
-| deploy + scan | `tests/deploy_test.kf` | 16 |
+| deploy + scan | `tests/deploy_test.kf` | 18 |
 | daemon | `tests/daemon_test.kf` | 14 |
 | doctor | `tests/doctor_test.kf` | 17 |
 | hot-reload | `tests/reload_test.kf` | 1 |
@@ -118,4 +118,4 @@ o run total imprime `71 passed, 0 failed`. Falha = nome do teste + assert
 | push do uso para billing (F18 s4) | `tests/usage_push_test.kf` | 4 |
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 6 |
 
-Total: 492 testes. Ver `15-tests.md` para a matriz.
+Total: 494 testes. Ver `15-tests.md` para a matriz.

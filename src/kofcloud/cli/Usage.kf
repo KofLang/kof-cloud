@@ -41,7 +41,7 @@ String usageText() {
     out = out + "  domain verify <hostname> [--tls-cert <pem>]  (com o PEM, confere ANTES que ele cobre o hostname)\n"
     out = out + "  domain remove <hostname>\n"
     out = out + "  deploy [--file " + defaultManifestPath() + "] [--check] [--plan] [--watch]  (publica + verifica; --plan so mostra o diff e marca (build)/(artifact); --watch observa o manifesto e re-publica o que mudar — nunca remove; manifesto aceita build/artifact por servico; pare com o arquivo deploy-watch-stop)\n"
-    out = out + "  down [--file " + defaultManifestPath() + "] [--prune]  (remove os do manifesto; --prune remove orfaos do device)\n"
+    out = out + "  down [--file " + defaultManifestPath() + "] [--prune] [--yes]  (remove os do manifesto; --prune remove orfaos do device; sem --yes so avisa)\n"
     out = out + "  daemon install|status|uninstall   (artefato por SO — systemd/launchd/Windows — sem root, ativacao manual)\n"
     out = out + "  doctor [--file " + defaultManifestPath() + "] [--tls-cert <pem>]       (diagnostico: login, control, device, tunel, auditoria, tls, servicos)\n"
     out = out + "  metrics [--grep <texto>] [--percentiles] [--control <url>]   (export Prometheus; --percentiles = p50/p95/p99 de latencia do Edge; sem auth, so agregados)\n  usage [--export]   (uso da conta: requests e bytes roteados pelo Edge; --export fecha a janela — le e zera, para billing externo)\n  audit [--sbom] [--verify] [--action <acao>] [--tail <n>]  (trilha da conta; --sbom = inventario local; --action filtra, --tail corta)\n"

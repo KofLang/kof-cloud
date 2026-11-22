@@ -370,6 +370,40 @@ test "deploy: down distingue ausente de publicado noutro dispositivo", "deploy-d
     assert(serviceIdOnDevice(live, "dup", "devA") == "id-a2", "homonimo: mira o proprio")
 }
 
+test "deploy: down exige --yes (guarda pura + contagem de orfaos)", "deploy-down-guard" {
+    // Puro. O `down` REMOVE; sem confirmacao explicita ele aborta. Medido:
+    // um down que aborta por remocao falha + servico re-publicado entre os
+    // dois comandos fazia o down seguinte apagar um servico que o operador
+    // nao pediu naquele momento.
+    var live = listOf<Service>()
+    live.add(Service("id-a", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
+    live.add(Service("id-x", "acc", "devA", "velho", "127.0.0.1", 9000, "http", "velho.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
+    live.add(Service("id-b", "acc", "devB", "alheio", "127.0.0.1", 7000, "http", "alheio.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
+    var services = listOf<ManifestService>()
+    services.add(ManifestService("site", "127.0.0.1", 8080, "PUBLIC", "http", "", "", "", "", ""))
+    // So o proprio device conta: "velho" (devA, fora do manifesto) = 1 orfao;
+    // "alheio" (devB) nunca e orfao do prune.
+    assert(downOrphanCount(live, services, "devA") == 1, "um orfao do proprio device")
+    assert(downOrphanCount(live, services, "devB") == 1, "para devB, 'alheio' e o orfao")
+    var noServices = listOf<ManifestService>()
+    assert(downOrphanCount(live, noServices, "devA") == 2, "sem manifesto, todos do device sao orfaos")
+    // Mensagem: nomeia os declarados, e os orfaos so com --prune.
+    var msg = downConfirmationRequired(3, 2, true)
+    assert(msg.indexOf("3 declarado(s)") >= 0, "conta os declarados")
+    assert(msg.indexOf("2 orfao(s)") >= 0, "conta orfaos com --prune")
+    assert(msg.indexOf("irreversivel") >= 0, "avisa irreversibilidade")
+    assert(msg.indexOf("down --yes") >= 0, "aponta como prosseguir")
+    var plain = downConfirmationRequired(1, 5, false)
+    assert(plain.indexOf("orfao") < 0, "sem --prune nao fala de orfaos")
+}
+
+test "deploy: down --yes repetido barra no uso", "deploy-down-guard" {
+    // Booleana repetida barra antes de qualquer rede (mesma regra do
+    // --prune/--check), entao roda sem sessao.
+    var bad = cmdDown(listOf("--yes", "--yes"))
+    assert(bad == 1, "down --yes repetido barra no uso: " + intToString(bad))
+}
+
 test "deploy: build opcional no manifesto executa antes do publish", "deploy-build" {
     // Puro no parse + execucao real de comandos triviais (/bin/true e
     // /bin/false existem em Linux; o deploy roda no Linux). Ausente = sem

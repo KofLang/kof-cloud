@@ -51,8 +51,12 @@ test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
     // as portas da fonte; mutacao no default quebra aqui e no help).
     var deployLine = "deploy [--file " + defaultManifestPath() + "] [--check] [--plan]"
     assert(help.indexOf(deployLine) >= 0, "deploy documenta flags")
-    var downLine = "down [--file " + defaultManifestPath() + "] [--prune]"
-    assert(help.indexOf(downLine) >= 0, "down documenta flags do manifesto")
+    var downLine = "down [--file " + defaultManifestPath() + "] [--prune] [--yes]"
+    assert(help.indexOf(downLine) >= 0, "down documenta flags do manifesto (com --yes)")
+    // Rota do `usage-parity`: o `--yes` tambem tem de estar na referencia
+    // do README (a varredura generica trava so o primeiro token `down`).
+    var readmeDown = readTextOr("README.md", "")
+    assert(readmeDown.indexOf("down [--file kofcloud.json] [--prune] [--yes]") >= 0, "README espelha down --yes")
     var doctorLine = "doctor [--file " + defaultManifestPath() + "]"
     assert(help.indexOf(doctorLine) >= 0, "doctor documenta --file do manifesto")
     assert(help.indexOf("build/artifact") >= 0, "deploy anuncia build+artifact do manifesto")

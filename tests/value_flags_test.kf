@@ -227,8 +227,10 @@ test "flags: booleana repetida barra antes de qualquer efeito", "boolean-dup" {
     assert(cmdDeploy(listOf("--file", mf, "--plan", "--plan")) == 1, "--plan duplicado barra")
     assert(cmdDeploy(listOf("--file", mf, "--check")) == 0, "--check unico passa")
     assert(cmdDeploy(listOf("--file", mf, "--check", "--check")) == 1, "--check duplicado barra")
-    assert(cmdDown(listOf("--file", mf, "--prune")) == 0, "--prune unico passa")
+    assert(cmdDown(listOf("--file", mf, "--prune", "--yes")) == 0, "--prune unico passa")
     assert(cmdDown(listOf("--file", mf, "--prune", "--prune")) == 1, "--prune duplicado barra")
+    assert(cmdDown(listOf("--file", mf, "--yes")) == 0, "--yes unico passa")
+    assert(cmdDown(listOf("--file", mf, "--yes", "--yes")) == 1, "--yes duplicado barra")
 
     if (priorSession.length == 0) {
         File(sessionPath()).delete()

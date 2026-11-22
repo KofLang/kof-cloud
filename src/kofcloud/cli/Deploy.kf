@@ -1148,6 +1148,46 @@ String downElsewhereLine(String name, String deviceId) {
     return "noutro dispositivo (nao removido): " + name + " (device " + deviceId + ") — rode o down la"
 }
 
+// Quantos publicados DESTE device estao FORA do manifesto (o `--prune`
+// levaria). Pura: so o device da sessao conta, nunca outro. Alimenta a
+// mensagem da guarda e o mesmo predicado do laco que poda adiante — dois
+// pontos, uma regra.
+Int downOrphanCount(List<Service> live, List<ManifestService> services, String deviceId) {
+    var count = 0
+    for (var service in live) {
+        if (service.deviceId != deviceId) {
+            continue
+        }
+        var declared = false
+        for (var wanted in services) {
+            if (service.name == wanted.name) {
+                declared = true
+            }
+        }
+        if (declared == false) {
+            count = count + 1
+        }
+    }
+    return count
+}
+
+// Guarda do `down`: como o comando REMOVE (irreversivel), sem `--yes` ele
+// aborta. A mensagem nomeia o que sera removido, quantos orfaos o `--prune`
+// levaria e como prosseguir. Pura, sem IO.
+//
+// O caso que a torna necessaria: um `down` que ja removeu servicos e aborta
+// por uma remocao falha; se um servico for publicado de novo entre os dois
+// comandos, o `down` seguinte rodava direto e apagava um servico que o
+// operador nao pediu naquele momento (re-criado por entropia, medido no
+// e2e). Exigir confirmacao explicita quebra este fluxo destrutivo.
+String downConfirmationRequired(Int declared, Int orphanCount, Bool prune) {
+    var msg = "down remove servicos (" + intToString(declared) + " declarado(s) no manifesto"
+    if (prune) {
+        msg = msg + ", ate " + intToString(orphanCount) + " orfao(s) com --prune"
+    }
+    return msg + ") — a remocao e irreversivel; confirme com `kof cloud down --yes`"
+}
+
 // Sumario do `down` em fonte unica: com falha, "down com N falha(s)";
 // sem falha, o verbo muda conforme o que de fato aconteceu — so "removidos"
 // quando removeu, "nada a remover" quando todos estavam ausentes/noutro
@@ -1168,8 +1208,8 @@ Int cmdDown(List<String> args) {
     // --prune repetido seguia normal: `hasFlag` leria a primeira e o down
     // rodaria como se o operador tivesse dito uma so vez (mesma regra do
     // --file acima e do --check do deploy).
-    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file") || flagDuplicated(args, "--prune")) {
-        println("uso: kof cloud down [--file <caminho>] [--prune]")
+    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file") || flagDuplicated(args, "--prune") || flagDuplicated(args, "--yes")) {
+        println("uso: kof cloud down [--file <caminho>] [--prune] [--yes]")
         return 1
     }
     var session = loadSession()
@@ -1195,6 +1235,13 @@ Int cmdDown(List<String> args) {
     var elsewhereCount = 0
     try {
         var live = fetchServices(session.controlUrl, session.token)
+        // Guarda de destruicao: sem --yes nao remove nada. A contagem pura
+        // (declarados DESTE device + orfaos se --prune) alimenta a mensagem.
+        var orphanCount = downOrphanCount(live, services, identity.deviceId)
+        if (hasFlag(args, "--yes") == false) {
+            println(downConfirmationRequired(services.size, orphanCount, prune))
+            return 1
+        }
         for (var wanted in services) {
             // Decisao pura (testavel sem rede): alvo DESTE device, ou o
             // device alheio onde o nome vive, ou nenhum dos dois.

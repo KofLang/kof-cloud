@@ -77,7 +77,7 @@ deploy e no `--check`; ver `docs/09-flows.md` §3.2):
 
 ```bash
 kof run src/Main.kf deploy [--file kofcloud.json] [--check] [--plan] [--watch]   # publica (+ verifica; --plan so mostra; --watch observa e re-publica o que mudar — nunca remove)
-kof run src/Main.kf down [--prune]              # remove os do manifesto (+ orfaos do device)
+kof run src/Main.kf down --yes [--prune]        # remove os do manifesto (+ orfaos do device)
 ```
 
 Em CI/CD, veja o exemplo de pipeline GitHub Actions em
@@ -129,7 +129,7 @@ domain add <hostname> --service <nome> [--dns-webhook <url> | --dns-cmd <cmd>] [
 domain verify <hostname> [--tls-cert <pem>]  (confere o DNS e ativa a rota; --tls-cert julga o PEM antes da rede)
 domain remove <hostname>
 deploy [--file kofcloud.json] [--check] [--plan] [--watch]  (roda build + publica + verifica; --plan so mostra o diff; --watch observa o manifesto e re-publica o que mudar — nunca remove)
-down [--file kofcloud.json] [--prune]  (remove os do manifesto; --prune remove orfaos)
+down [--file kofcloud.json] [--prune] [--yes]  (remove os do manifesto; --prune remove orfaos; sem --yes so avisa)
 daemon install|status|uninstall   (artefato por SO — systemd/launchd/Windows — sem root, ativação manual)
 doctor [--file kofcloud.json] [--tls-cert <pem>]  (diagnostico: login, control, device, tunel, auditoria, tls, servicos)
 usage [--export]   (uso da conta: requests e bytes roteados pelo Edge; --export fecha a janela — le e zera, para billing externo)

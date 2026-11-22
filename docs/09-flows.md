@@ -130,9 +130,11 @@ alternativa): só o código obrigava o operador a reproduzir o comando à mão.
     mesmo device ATUALIZA a config mutável — porta/exposure/allowlist —
     preservando id/hostname/status; config idêntica não escreve)
  4. reporta publicados/mantidos/falhas (exit 1 se alguma falhar)
- 5. usuário: kof cloud down → unpublish só dos listados (extra sobrevive)
-    com `--prune`: remove também os órfãos DESTE device fora do manifesto
-    (nunca toca serviço de outro device)
+ 5. usuário: kof cloud down --yes → unpublish só dos listados (extra
+    sobrevive); sem `--yes` o `down` só avisa o que removeria e aborta
+    (remoção é irreversível; sem a guarda, um serviço re-publicado entre dois
+    `down` era apagado sem o operador pedir). Com `--prune`: remove também os
+    órfãos DESTE device fora do manifesto (nunca toca serviço de outro device)
     serviço homônimo noutro device: `noutro dispositivo (nao removido): nome
     (device X) — rode o down la`
     (o resumo conta o que saiu: "nada a remover" quando nenhum era deste

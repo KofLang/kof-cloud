@@ -235,7 +235,18 @@ Prova: `tests/deploy_test.kf` (`deploy-plan` estendido). **Fatia: `down` diz qua
 serviços nunca publicados dizia "3 removidos" — medido. `downSummary` (pura)
 diz "nada a remover (N no manifesto, M noutro dispositivo)" quando nada saiu,
 mantém a contagem real quando removeu e "down com N falha(s)" quando falhou.
-Prova: `tests/deploy_test.kf` (`deploy-down-summary`).
+Prova: `tests/deploy_test.kf` (`deploy-down-summary`). **Fatia: `down` exige `--yes`
+(guarda de destruição).** O `down` REMOVE serviços e a remoção é
+irreversível — sem confirmação explícita ele agora aborta. O caso medido: um
+`down` que removeu parte e abortou por uma falha, mais um serviço publicado
+de novo entre os dois comandos, fazia o `down` seguinte apagar um serviço
+que o operador não pediu naquele momento (re-criado por entropia). A
+contagem pura `downOrphanCount` (só o device da sessão, o mesmo predicado do
+`--prune`) e `downConfirmationRequired` alimentam a mensagem: nomeia os
+declarados, diz quantos órfãos o `--prune` levaria e aponta o `down --yes`.
+Prova: `tests/deploy_test.kf` (`deploy-down-guard`: pura + `--yes` repetido
+barra no uso) + `deploy_test.kf` (`valueflags-unit`: `down --prune --yes`
+passa, `--yes --yes` barra).
 **Fatia: artefato tem de ser arquivo
 legível** (`artifactProblem`): `File().exists()` aceita diretório, então
 `"artifact": "dist"` passava a checagem e o deploy publicava um serviço cujo
