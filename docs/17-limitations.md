@@ -334,15 +334,22 @@ logo abaixo, na mesma lista:
   excedente era **cortado em silêncio** e o cliente recebia 200 com corpo
   incompleto. O Agent agora envia em fluxo e para de produzir quando o Edge
   cancela, mas o teto continua existindo: respostas maiores exigem aumentar
-  a config (e pagam o custo O(n²) abaixo).
-* **Throughput de payloads grandes é limitado por `bytesToString` O(n²).**
-  Medido: ~1 s para 100 KiB em `bytesToBase64`; 1 MiB levaria ~100 s. Por isso
-  o envio é fatiado em blocos de 16 KiB (custo total linear no tamanho do
-  bloco, não no payload) e o teto de linha existe para recusar, não para
-  transportar. Respostas de dezenas de MiB funcionam, mas devagar — quando o
-  stdlib tiver base64/slice O(n) sobre bytes, o bloco pode subir. Também por
-  isso os testes evitam materializar 1.5 MiB em String (`frames_test.kf` lê em
-  chunks e confere tamanho + pontas).
+  a config (a codificação linear do próximo item já não é o gargalo, mas a
+  reconstrução `bytesConcat` O(n²) ainda é).
+* **Codificação base64 agora é linear em bytes (caminho quente resolvido).**
+  `bytesToBase64`/`bytesFromBase64` deixaram de passar por `bytesToString`
+  (concatenação `out = out + c` O(n²)) e pelo `encoding.base64Encode` do
+  stdlib (que empacotava byte ≥ 0x80 como UTF-8 e inflava a saída). A nova
+  tabela RFC 4648 mapeia byte-a-byte com concatenação em blocos de ~3 KiB via
+  `String.concat` (o `java.lang.String.concat`, O(tamanho atual) por chamada).
+  Medido: 100 KiB em **~46 ms** (antes ~1137 ms, ~25×) e 512 KiB em ~331 ms;
+  a saída é byte-exata (9000 bytes → 12000 chars, sem expansão). Por isso o
+  bloco de envio (16 KiB) hoje existe por latência/memória, não para escapar
+  de O(n²). O que **permanece** O(n²): `bytesToString` em si (usado por
+  `Http.kf` para cabeçalhos e por `Health.kf`) e `bytesConcat` — ambos em
+  trechos pequenos, mas um corpo grande reconstruído caractere a caractere
+  ainda custaria caro. O teto de `maxResponseBytes` continua; respostas de
+  dezenas de MiB funcionam.
 
 * **O platô do incidente segura reabertura por até 1 h (por sinal e conta).**
   Depois de resolvido, o mesmo sinal que volta dentro de

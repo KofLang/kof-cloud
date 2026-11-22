@@ -45,7 +45,7 @@ o run total imprime `71 passed, 0 failed`. Falha = nome do teste + assert
 
 | Suite | Arquivo | Testes |
 |---|---|---|
-| framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 12 |
+| framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 14 |
 | hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls/audit-sbom/host-normalize/u-matrix/u-counts/prova-counts/limits-docs/lacunas-docs | `tests/hosts_test.kf` | 35 |
 | identidade/cifra/tokens | `tests/identity_test.kf` | 6 |
 | forca bruta no login (F5) | `tests/login_limit_test.kf` | 3 |
@@ -118,4 +118,15 @@ o run total imprime `71 passed, 0 failed`. Falha = nome do teste + assert
 | push do uso para billing (F18 s4) | `tests/usage_push_test.kf` | 4 |
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 6 |
 
-Total: 494 testes. Ver `15-tests.md` para a matriz.
+Total: 496 testes. Ver `15-tests.md` para a matriz.
+
+## Desempenho medido
+
+Regra do plano: nenhuma otimização sem número antes/depois. Medições no mesmo
+processo (`kof run --target jvm`), payload ASCII de 100 KiB.
+
+| Caminho | Antes | Depois | Nota |
+|---|---|---|---|
+| base64 do relay (`bytesToBase64`) | ~1137 ms | ~46 ms (~25×) | F14 s3: tabela RFC 4648 própria + `String.concat` em blocos; saída byte-exata (antes o stdlib inflava byte ≥ 0x80 via UTF-8) |
+| base64 512 KiB (encode/decode) | (projetado ~28 s) | 331 ms / 61 ms | confirma linearidade |
+

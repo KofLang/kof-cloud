@@ -81,8 +81,9 @@ test "frames: encodeChunks fatia e recompoe", "frames" {
         assert(shipped.indexOf("sendChunkBytesFrom") >= 0, "18-implemented cita a pura do bloco de envio")
     }
 
-    // 1.5 MiB = 2 chunks (1 MiB + 0.5 MiB). Maior que isso e o proprio
-    // bytesToString (O(n^2), ver 17-limitations) domina o tempo do teste.
+    // 1.5 MiB = 2 chunks (1 MiB + 0.5 MiB). O base64 proprio e linear em
+    // bytes, entao este tamanho nao domina mais o tempo do teste; ele segue
+    // aqui porque cobre o caso de MAIS de um chunk.
     var big = new Byte[1500000]
     for (var i = 0; i < big.length; i++) {
         big[i] = (i * 7 + 13) as Byte

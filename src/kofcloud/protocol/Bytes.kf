@@ -27,12 +27,124 @@ String bytesToString(Byte[] data) {
     return out
 }
 
+// ── base64 proprio, linear em BYTES ─────────────────────────────────────
+//
+// `encoding.base64Encode` do stdlib so aceita String (S4.2), entao o caminho
+// antigo era `bytesToString` — concatenacao `out = out + c` caractere a
+// caractere, O(n^2) — e so depois o encode. Medido: ~1 s para 100 KiB.
+//
+// Aqui o encode vai direto da tabela para um acumulador de blocos: cada
+// bloco de ate base64BlockChars() caracteres e concatenado UMA vez por
+// `String.concat` (no JVM, o java.lang.String.concat, O(tamanho atual)).
+// Sem a fatia o mesmo acumulador voltaria a ser O(n^2); com ela o custo e
+// linear no numero de BYTES. A linguagem nao expoe StringBuilder (medido:
+// SEM015) e o `List.join` do CLI 0.6.3 nao resolve (SEM025).
+//
+// A tabela e a do RFC 4648 e o padding e identico ao do stdlib, entao a saida
+// e byte-a-byte a mesma; a decodificacao mantem a semantica TOLERANTE do
+// stdlib (caractere fora do alfabeto e ignorado, `=` encerra, grupo final
+// incompleto rende floor(bits/8) bytes).
+
+String base64Alphabet() {
+    return "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+}
+
+// Quantos caracteres de saida antes de cada `concat`. Blocos de ~3 KiB
+// mantem o custo de copia desprezivel e o numero de concats linear no
+// tamanho (pouco mais de mil blocos por MiB).
+Int base64BlockChars() {
+    return 3072
+}
+
 String bytesToBase64(Byte[] data) {
-    return encoding.base64Encode(bytesToString(data))
+    var alphabet = base64Alphabet()
+    var out = ""
+    var block = ""
+    var i = 0
+    while (i + 2 < data.length) {
+        var n = (byteAt(data, i) << 16) + (byteAt(data, i + 1) << 8) + byteAt(data, i + 2)
+        block = block + alphabet.charAt(n >> 18) + alphabet.charAt((n >> 12) & 63)
+            + alphabet.charAt((n >> 6) & 63) + alphabet.charAt(n & 63)
+        if (block.length >= base64BlockChars()) {
+            out = out.concat(block)
+            block = ""
+        }
+        i = i + 3
+    }
+    if (i + 1 == data.length) {
+        var n = byteAt(data, i) << 16
+        block = block + alphabet.charAt(n >> 18) + alphabet.charAt((n >> 12) & 63) + "=="
+    } else {
+        if (i + 2 == data.length) {
+            var n = (byteAt(data, i) << 16) + (byteAt(data, i + 1) << 8)
+            block = block + alphabet.charAt(n >> 18) + alphabet.charAt((n >> 12) & 63)
+                + alphabet.charAt((n >> 6) & 63) + "="
+        }
+    }
+    return out.concat(block)
+}
+
+// Byte assinado (-128..127) como valor sem sinal 0..255. Precisa acontecer
+// ANTES de qualquer deslocamento: -56 << 16 nao e 200 << 16.
+Int byteAt(Byte[] data, Int i) {
+    var v = data[i] as Int
+    if (v < 0) {
+        return v + 256
+    }
+    return v
 }
 
 Byte[] bytesFromBase64(String text) {
-    return bytesFromString(encoding.base64Decode(text))
+    var out = listOf<Int>()
+    var bits = 0
+    var nbits = 0
+    var i = 0
+    var done = false
+    while (i < text.length && done == false) {
+        var c = text.charAt(i)
+        if (c == '=') {
+            done = true
+        } else {
+            var v = base64Value(c)
+            if (v >= 0) {
+                bits = (bits << 6) + v
+                nbits = nbits + 6
+                while (nbits >= 8) {
+                    nbits = nbits - 8
+                    out.add((bits >> nbits) & 255)
+                }
+            }
+            i = i + 1
+        }
+    }
+    return bytesFromInts(out)
+}
+
+// Valor 0..63 do caractere, -1 se nao pertence ao alfabeto (o stdlib tambem
+// ignora o que nao conhece, em vez de recusar a linha inteira). A busca e um
+// laco de 64 passos porque `String.indexOf` nao aceita Char (SEM051).
+Int base64Value(Char c) {
+    var alphabet = base64Alphabet()
+    var i = 0
+    while (i < alphabet.length) {
+        if (alphabet.charAt(i) == c) {
+            return i
+        }
+        i = i + 1
+    }
+    return -1
+}
+
+Byte[] bytesFromInts(List<Int> values) {
+    var out = new Byte[values.size()]
+    for (var i = 0; i < values.size(); i++) {
+        var v = values.get(i)
+        if (v > 127) {
+            v = v - 256
+        }
+        out[i] = v as Byte
+    }
+    return out
 }
 
 Byte[] bytesEmpty() {

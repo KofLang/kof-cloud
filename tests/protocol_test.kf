@@ -40,6 +40,40 @@ test "bytes: base64 preserva bytes altos" {
     assert(ok, "byte preserving")
 }
 
+test "bytes: base64 e byte-exato (4/3, sem expansao UTF-8)" {
+    // O caminho antigo (bytesToString + encoding.base64Encode do stdlib)
+    // empacotava o byte alto como UTF-8 e inflava a saida; o base64 proprio
+    // mapeia cada byte a um valor da tabela, entao o tamanho e 4*ceil(n/3).
+    var data = new Byte[3]
+    data[0] = 0
+    data[1] = -56
+    data[2] = -1
+    assert(bytesToBase64(data) == "AMj/", "tabela RFC 4648, byte a byte")
+    var big = new Byte[9000]
+    for (var i = 0; i < 9000; i++) {
+        big[i] = (i % 251) as Byte
+    }
+    var encoded = bytesToBase64(big)
+    assert(encoded.length == 12000, "9000 bytes -> 12000 chars")
+    assert(bytesToString(bytesFromBase64(encoded)) == bytesToString(big), "ida e volta")
+    // padding identico ao stdlib nas bordas de 1 e 2 bytes
+    var one = new Byte[1]
+    one[0] = 65
+    assert(bytesToBase64(one) == "QQ==", "1 byte")
+    var two = new Byte[2]
+    two[0] = 65
+    two[1] = 66
+    assert(bytesToBase64(two) == "QUI=", "2 bytes")
+    assert(bytesToBase64(bytesEmpty()) == "", "vazio")
+}
+
+test "bytes: base64 decodifica tolerante (ignora invalido, para no '=')" {
+    assert(bytesToString(bytesFromBase64("TWFu\n")) == "Man", "espaco em branco ignorado")
+    assert(bytesToString(bytesFromBase64("TQ==")) == "M", "1 byte com padding")
+    assert(bytesToString(bytesFromBase64("TWE=")) == "Ma", "2 bytes com padding")
+    assert(bytesFromBase64("").length == 0, "vazio")
+}
+
 test "bytes: concat e slice" {
     var a = bytesFromString("abc")
     var b = bytesFromString("de")

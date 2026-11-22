@@ -93,11 +93,11 @@ Int limitFrameBytes() {
 }
 
 // Bloco de envio de cada frame DATA. Bem menor que o teto: blocos pequenos
-// chegam mais cedo (time-to-first-byte), usam menos memoria por frame e,
-// sobre tudo, evitam o custo O(n^2) de `bytesToString` em blocos grandes
-// (medido: ~1 s para 100 KiB em bytesToBase64; o custo total e n*tamanho —
-// ver 17-limitations). O teto (limitFrameBytes) continua valendo na recepcao.
-// ver 17-limitations). O teto (limitFrameBytes) continua valendo na recepcao.
+// chegam mais cedo (time-to-first-byte) e usam menos memoria por frame. O
+// custo de codificar deixou de justificar o tamanho — o base64 proprio e
+// linear em bytes (medido: 100 KiB em ~46 ms; ver 17-limitations) —, entao o
+// bloco existe por latencia e memoria, nao para escapar de O(n^2). O teto
+// (limitFrameBytes) continua valendo na recepcao.
 //
 // Ociosidade maxima sem frames uteis (nao-PING) antes de derrubar a sessao
 // (ms). Heartbeat sozinho nao renova: tunel parado e tunel morto para fins

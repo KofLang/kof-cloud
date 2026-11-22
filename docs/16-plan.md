@@ -1173,10 +1173,11 @@ best-effort, como hoje).
 ## Fase 14 — baixa latência (cloud rápida de verdade)
 
 **Motivação:** hoje há UM Edge (`serve` único) e relay em chunks de 16 KiB
-com `bytesToString` O(n²) no caminho. Funciona, mas latência é distância +
-custo por byte — cloud rápida precisa dos dois endereçados com medição.
+(antes com `bytesToString` O(n²) no caminho; desde o slice 3 o base64 é
+linear em bytes). Funciona, mas latência é distância + custo por byte —
+cloud rápida precisa dos dois endereçados com medição.
 
-**Estado: slice 1 ✅ (latência + tamanho); slice 2 ✅ (ranking de Edges); slice 3 pendente.**
+**Estado: slice 1 ✅ (latência + tamanho); slice 2 ✅ (ranking de Edges); slice 3 parcial (base64 linear ✅, handshake comprimido pendente).**
 Desenho fatiado (cada slice com benchmark antes/depois, mesmo protocolo,
 sem mudar formato público):
 
@@ -1273,8 +1274,23 @@ sem mudar formato público):
 
   Prova: `tests/relay_limit_test.kf` (4: código/Hint, 502 KCF115 fim a fim
   com vaga liberada e métrica, 431 KCF116, 413 de leitura com `Content-Length`
-  acima e abaixo do real). **Pendente:** o ganho O(n) de verdade
-  (base64/slice sobre bytes no stdlib) e o handshake comprimido.
+  acima e abaixo do real). **Pendente:** o handshake comprimido.
+
+  **Implementado (base64 linear em bytes — o ganho O(n) de verdade).** O
+  codificador deixou de ser `bytesToString` (concatenação `out = out + c`,
+  O(n²)) + `encoding.base64Encode` do stdlib. `protocol/Bytes.kf` agora tem
+  tabela RFC 4648 própria, mapeando cada byte direto da tabela e
+  concatenando em blocos de ~3 KiB por `String.concat` (no JVM, o
+  `java.lang.String.concat` nativo) — custo linear no número de bytes. O
+  decodificador também é próprio (tolerante, sem passar por String). Prova
+  com número antes/depois medido no mesmo processo: **100 KiB 1137 ms →
+  46 ms (~25×)**; 512 KiB em 331 ms; 9000 bytes → 12000 chars (sem a
+  expansão UTF-8 que o stdlib fazia). Testes: `tests/protocol_test.kf`
+  (`bytes: base64 e byte-exato`, `base64 decodifica tolerante`),
+  `tests/frames_test.kf` (1.5 MiB em chunks continua recompondo byte a
+  byte). O bloco de envio (16 KiB) agora existe por latência/memória, não
+  para escapar de O(n²). **Pendente ainda:** handshake comprimido e
+  `bytesConcat`/`bytesToString` em corpos grandes.
 
   **Implementado (SERVICES empurrado — caminho hot do hot-reload):** o
   hot-reload pagava uma requisição HTTP ao control plane a cada ciclo

@@ -38,11 +38,12 @@ Int maxChunkLineBytes() {
 }
 
 // Fatia um payload em blocos ja codificados, um por frame DATA, GARANTINDO
-// que cada chunk cabe numa linha do tunel. Necessario porque o base64 do
-// stdlib passa por String (UTF-8): bytes altos expandem ate ~2x, entao o
-// tamanho codificado nao e funcao fixa do tamanho em bytes. O bloco comeca
-// em limitFrameBytes() e encolhe ate caber (termina: bloco de 1 byte sempre
-// cabe); no caso comum ASCII, uma passagem basta.
+// que cada chunk cabe numa linha do tunel. O base64 proprio e byte-exato
+// (4 caracteres por 3 bytes, sem passar por String/UTF-8), entao nesse ramo
+// o tamanho codificado ja e funcao fixa do tamanho em bytes; o ramo CIFRADO
+// nao tem essa garantia (o ciphertext do AES-GCM carrega tag/IV), entao o
+// bloco comeca em limitFrameBytes() e encolhe ate caber (termina: bloco de
+// 1 byte sempre cabe). No caso comum, uma passagem basta.
 List<String> encodeChunks(Byte[] raw, String sessionKeyHex) {
     var out = listOf<String>()
     var size = sendChunkBytes()
