@@ -10,6 +10,7 @@ import kofcloud.model.CustomDomain
 import kofcloud.model.Device
 import kofcloud.model.Errors
 import kofcloud.model.Exposure
+import kofcloud.model.Incident
 import kofcloud.model.Service
 import kofcloud.util.Hosts
 import kofcloud.util.Limits
@@ -963,6 +964,9 @@ String incidentJson(Incident incident) {
     var out = mapOf()
     out.put("id", incident.id)
     out.put("kind", incident.kind)
+    // Base do sinal (aditivo; a reincidencia e este `kind` com o sufixo
+    // `_reopened`): cliente antigo le `kind` igual.
+    out.put("baseKind", incidentBaseKind(incident.kind))
     out.put("severity", incident.severity)
     out.put("accountId", incident.accountId)
     out.put("summary", incident.summary)

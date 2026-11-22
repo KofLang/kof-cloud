@@ -850,6 +850,22 @@ Long limitBulkRevokeWindowMs() {
     return window
 }
 
+// Janela do plato de incidentes (Fase 17 slice 1): com incidente ABERTO e
+// sinal ainda disparando, o mesmo (sinal, conta) so reabre depois desta
+// janela — e a reabertura e contada (a severidade sobe para CRIT). Antes,
+// qualquer evento com o incidente fechado reabria na hora: um ataque
+// continuo virava um incidente por evento (o `freeze` de conta abre um a
+// cada servico do alvo, todos no mesmo instante). Recuo seguro: zerada ou
+// negativa recai no default (janela zerada voltaria ao incidente por
+// evento; um plato de horas esconderia a reincidencia).
+Long limitIncidentPlateauWindowMs() {
+    var window = config.int("kofcloud.limits.incidentPlateauWindowMs", 3600000)
+    if (window <= 0) {
+        window = 3600000
+    }
+    return window
+}
+
 // Limiar do detector de expiracao em massa de `kfs_` (por conta, Fase 17
 // slice 1): quantas credenciais VENCIDAS na janela abrem o incidente. Um
 // vencimento isolado e rotina (a rotacao por TTL faz isso de proposito);

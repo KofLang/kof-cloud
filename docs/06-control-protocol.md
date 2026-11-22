@@ -39,7 +39,7 @@ Base: `http://<control-host>/v1`
 | `POST` | `/v1/services/unsuspend` | conta | `{serviceId}` → `{suspended:false}` |
 | `POST` | `/v1/freeze` | conta | contenção reversível `{target:service\|device,id}` → `{frozen,revoked,incidentId}` (sem id → 400 `KCF126`; alvo fora de service/device → 400 `KCF127`; alheio/inexistente → 404 `KCF128` opaco) |
 | `POST` | `/v1/unfreeze` | conta | `{target,id}` → `{frozen:0,restored}` — restaura o status anterior de um alvo **congelado** (alheio/inexistente → 404 `KCF128` opaco; alvo que não estava congelado → 409 `KCF141` e o status fica intocado, inclusive uma suspensão deliberada) |
-| `POST` | `/v1/incidents` | conta | lista incidentes da conta + globais (resolve com `{resolveId}`; alheio → 404 `KCF125` opaco; `all:true` = só globais) |
+| `POST` | `/v1/incidents` | conta | lista incidentes da conta + globais (resolve com `{resolveId}`; alheio → 404 `KCF125` opaco; `all:true` = só globais). Cada item vem com `id`, `kind`, `baseKind` (aditivo: sem o sufixo `_reopened`), `severity`, `accountId`, `summary`, `openedAt`, `resolvedAt`. Reincidência depois de resolvido e fora da janela do platô abre `<baseKind>_reopened` com severidade `CRIT` |
 | `GET` | `/v1/audit` | conta | últimos eventos da conta (anel de 100, só metadados) |
 | `POST` | `/v1/services/status` | conta | `{serviceId,status}` (health reportado pelo Agent); status fora de `ONLINE`/`OFFLINE`/`DEGRADED`/`UNKNOWN` → `400 KCF048` (e `SUSPENDED` nunca é reportável: suspender é ação do operador) |
 | `POST` | `/v1/heartbeat` | dispositivo | `{deviceId}` → `{ok:true, serverTime}` |

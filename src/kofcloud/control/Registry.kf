@@ -42,7 +42,7 @@ record UnfreezeResult(Bool ok, Bool restored)
 // Resultado da rotacao assistida (Fase 19 slice 3).
 record RotateResult(String token, Int revoked, Int pending)
 
-record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens, List<CustomDomain> customDomains, List<AuditEvent> audit, List<Incident> incidents, List<WebhookConfig> webhooks, List<FreezeMark>? freezeMarks, List<UsageEntry>? usage)
+record ControlState(List<Account> accounts, List<Device> devices, List<Service> services, List<TokenEntry> tokens, List<ServiceToken> serviceTokens, List<CustomDomain> customDomains, List<AuditEvent> audit, List<Incident> incidents, List<WebhookConfig> webhooks, List<FreezeMark>? freezeMarks, List<UsageEntry>? usage, List<IncidentPlateau>? plateaus)
 
 // Marca de freeze persistida: `<alvo>/<id>` -> status anterior. NULAVEL de
 // proposito: estado gravado antes da Fase 17 s2 nao tem a chave e o decode
@@ -106,6 +106,11 @@ class Registry {
     Map<String, String> expiryProbes
     // Uso por conta: accountId -> "requests;bytesIn;bytesOut" (L11: String).
     Map<String, String> usageByAccount
+    // Embasamento dos sinais de incidente (Fase 17 slice 1 — plato):
+    // "<sinal>/<conta>" -> `<openedAt>;<lastFiredAt>;<reopenCount>` (L11:
+    // String). PERSISTIDO, ao contrario das sondas de janela: o plato vale
+    // entre restarts (um reinicio no meio de um ataque nao zera o sinal).
+    Map<String, String> plateaus
 
     constructor(path: String) {
         this.path = path
@@ -122,6 +127,7 @@ class Registry {
         this.edgeOnline = mapOf()
         this.expiryProbes = mapOf()
         this.usageByAccount = mapOf()
+        this.plateaus = mapOf()
         this.loginProbes = mapOf()
         this.maxDevices = limitDevices()
         this.maxServices = limitServices()
@@ -155,6 +161,12 @@ class Registry {
     // pequeno sem depender do env do processo.
     void setWormCapBytes(Int cap) {
         this.wormCapBytes = cap
+    }
+
+    // Permite aos testes envelhecerem a guarda do plato sem esperar a janela
+    // (mesmo papel do `setLimits`: a janela e lida uma vez, do config).
+    void setPlateauForTest(String kind, String accountId, String raw) {
+        this.plateaus.put(kind + "/" + accountId, raw)
     }
 
     Int activeDeviceCount(String accountId) {
@@ -204,6 +216,18 @@ class Registry {
                     var entry = usage.get(u)
                     this.usageByAccount.put(entry.accountId, entry.requests + ";" + entry.bytesIn + ";" + entry.bytesOut)
                     u = u + 1
+                }
+            }
+            // Embasamento dos sinais: estado antigo nao tem a chave (decode
+            // null) — o plato comeca vazio, como antes. Copia por indice
+            // (nao for-in: ver comentario do record FreezeMark).
+            var plateaus = state.plateaus
+            if (plateaus != null) {
+                var p = 0
+                while (p < plateaus.size) {
+                    var entry = plateaus.get(p)
+                    this.plateaus.put(entry.kind + "/" + entry.accountId, entry.openedAt + ";" + entry.lastFiredAt + ";" + entry.reopenCount)
+                    p = p + 1
                 }
             }
             var marks = state.freezeMarks
@@ -394,15 +418,92 @@ class Registry {
         return postWebhook(config.url, payload, header)
     }
 
-    Incident? raiseIncident(String kind, String accountId) {
-        for (var existing in this.incidents) {
-            if (existing.kind == kind && existing.accountId == accountId && existing.resolvedAt == 0) {
-                return null
+    // Teto higienico do embasamento: acima dele o save seguinte poda os mais
+    // antigos (a janela do plato ja os tornou inertes) — nunca recusa um
+    // incidente: se o sinal esta disparando, ele abre do mesmo jeito.
+    Int removeStalePlateaus() {
+        var removed = 0
+        if (this.plateaus.size <= limitIncidentRing()) {
+            return removed
+        }
+        var oldestKey = ""
+        var oldest = 0L
+        for (var key in this.plateaus.keys()) {
+            var raw = this.plateaus.get(key)
+            if (raw != null) {
+                var sep = raw.indexOf(";")
+                var fired = incidentLongOr(raw.substring(sep + 1), 0L)
+                if (oldestKey.length == 0 || fired < oldest) {
+                    oldest = fired
+                    oldestKey = key
+                }
             }
         }
+        if (oldestKey.length > 0) {
+            this.plateaus.remove(oldestKey)
+            removed = 1
+        }
+        return removed
+    }
+
+    // Abre o incidente de UM sinal com o plato (Fase 17 slice 1). Substitui
+    // o `raiseIncident` idempotente antigo: o incidente aberto continua
+    // deduplicando (um por sinal+conta), mas depois de RESOLVIDO o mesmo
+    // sinal nao reabre a cada evento — dentro da janela do plato a
+    // reincidencia so e contada, e fora dela o incidente nasce CRIT
+    // (`<kind>_reopened`). A decisao e pura (`signalOutcomeWith`); aqui so
+    // mora o IO (estado + webhook).
+    Incident? raiseIncident(String kind, String accountId) {
+        var open = false
+        for (var existing in this.incidents) {
+            if (existing.kind == kind && existing.accountId == accountId && existing.resolvedAt == 0) {
+                open = true
+            }
+        }
+        var key = kind + "/" + accountId
+        var saved = this.plateaus.get(key)
+        var now = time.now()
+        var outcome = signalFromPlateaus(this.plateaus, open, key, kind, accountId, now, limitIncidentPlateauWindowMs())
+        if (outcome.open == "none") {
+            // Sem incidente novo. Duas escritas possiveis: a reincidencia
+            // contada no plato FECHADO (dentro da janela) e o `refire` do
+            // plato aberto fora da janela. So a segunda vai ao arquivo (a
+            // `lastFiredAt` do embasamento aberto e o que o restart le);
+            // a contagem e guarda de ruido, fica em memoria.
+            if (open == false && saved != null) {
+                var parts = saved.split(";")
+                if (parts.length == 3) {
+                    this.plateaus.put(key, parts[0] + ";" + longToString(outcome.lastFiredAt) + ";" + intToString(outcome.reopenCount))
+                }
+            }
+            return null
+        }
+        if (outcome.open == "refire") {
+            if (saved != null) {
+                var parts = saved.split(";")
+                if (parts.length == 3) {
+                    this.plateaus.put(key, parts[0] + ";" + longToString(now) + ";" + intToString(outcome.reopenCount))
+                    this.save()
+                }
+            }
+            return null
+        }
+        // Abre: o embasamento nasce (primeira vez) ou mantem o `openedAt`
+        // original (reincidencia depois da janela).
+        if (saved != null) {
+            var parts = saved.split(";")
+            if (parts.length == 3) {
+                this.plateaus.put(key, parts[0] + ";" + longToString(now) + ";" + intToString(outcome.reopenCount))
+            } else {
+                this.plateaus.put(key, longToString(now) + ";" + longToString(now) + ";" + intToString(outcome.reopenCount))
+            }
+        } else {
+            this.plateaus.put(key, longToString(now) + ";" + longToString(now) + ";" + intToString(outcome.reopenCount))
+        }
+        this.removeStalePlateaus()
         var incident = Incident(
-            uuid.v4(), kind, incidentSeverityFor(kind), accountId,
-            incidentSummaryFor(kind), time.now(), 0
+            uuid.v4(), outcome.kind, incidentSeverityFor(outcome.kind), accountId,
+            incidentSummaryFor(outcome.kind), now, 0
         )
         this.incidents.add(incident)
         var cap = limitIncidents()
@@ -701,7 +802,22 @@ class Registry {
                 }
             }
         }
-        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens, this.serviceTokens, this.customDomains, this.audit, this.incidents, this.webhooks, marks, usage)))
+        var plateaus = listOf<IncidentPlateau>()
+        for (var key in this.plateaus.keys()) {
+            var raw = this.plateaus.get(key)
+            if (raw != null) {
+                var sep1 = raw.indexOf(";")
+                var sep2 = raw.indexOf(";", sep1 + 1)
+                var slash = key.indexOf("/")
+                if (sep1 > 0 && sep2 > sep1 && slash >= 0) {
+                    plateaus.add(IncidentPlateau(
+                        key.substring(0, slash), key.substring(slash + 1),
+                        raw.substring(0, sep1), raw.substring(sep1 + 1, sep2), raw.substring(sep2 + 1)
+                    ))
+                }
+            }
+        }
+        writeTextTo(this.path, json.encode(ControlState(this.accounts, this.devices, this.services, this.tokens, this.serviceTokens, this.customDomains, this.audit, this.incidents, this.webhooks, marks, usage, plateaus)))
     }
 
     // ---- contas ----

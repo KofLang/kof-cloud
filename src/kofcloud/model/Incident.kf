@@ -111,6 +111,11 @@ String incidentSeverityFor(String kind) {
     if (kind == incidentFreezeService() || kind == incidentFreezeDevice() || kind == incidentFreezeAccount()) {
         return severityWarn()
     }
+    // Reincidencia: o mesmo sinal depois de resolvido e depois da janela do
+    // plato nao e ruido novo — e o que voltou.
+    if (incidentIsReopen(kind)) {
+        return severityCrit()
+    }
     return severityInfo()
 }
 
@@ -152,6 +157,115 @@ String incidentSummaryFor(String kind) {
     return kind
 }
 
+// Veredito do embasamento de um sinal (Fase 17 slice 1 — plato). Pura: o
+// Registry so escreve o estado e chama `raiseIncident`. `kind` pode vir
+// diferente do sinal que chegou (reincidencia vira `<kind>_reopened`).
+record SignalOutcome(String open, String kind, String accountId, Int reopenCount, Long lastFiredAt)
+
+// Sinal embasado: (sinal, conta) que ja disparou e ainda esta na janela,
+// aberto ou fechado — persistido no estado, para o plato sobreviver ao
+// restart (as sondas de janela, efemeras, decidem QUANDO o sinal dispara).
+record IncidentPlateau(String kind, String accountId, String openedAt, String lastFiredAt, String reopenCount)
+
+// Decisao do `Registry.raiseIncident`, sem IO. Duas entradas:
+//  - `incidentOpen`: ha incidente ABERTO do mesmo (sinal, conta) agora?
+//  - `plateau`: o embasamento gravado no estado (`null` = nunca disparou).
+// Estados, do mais explicito ao mais silencioso:
+//  - aberto e ainda disparando: nada (o incidente ja diz);
+//  - aberto e fora da janela: volta a disparar e a guarda do embasamento
+//    se atualiza (sinal vivo de novo, sem incidente novo);
+//  - fechado dentro da janela: plato — nada, so contabiliza a reincidencia
+//    (o operador resolveu e o sinal voltou; um incidente por evento
+//    afogaria o anel e o webhook);
+//  - fechado e fora da janela (ou nunca disparou): reabre; se ja disparou
+//    antes, o incidente nasce CRIT (reincidencia, nao ruido novo).
+// "Fechado" inclui incidente evicted do anel pelo teto: os dois levam ao
+// mesmo veredito, e o operador nao perde o sinal.
+SignalOutcome signalOutcomeWith(Bool incidentOpen, List<IncidentPlateau> saved, String kind, String accountId, Long nowMs, Long windowMs) {
+    if (windowMs <= 0) {
+        windowMs = 3600000
+    }
+    var lastFired = nowMs
+    var reopened = 0
+    var firedBefore = false
+    for (var plateau in saved) {
+        lastFired = incidentLongOr(plateau.lastFiredAt, nowMs)
+        reopened = incidentIntOr(plateau.reopenCount, 0)
+        firedBefore = true
+    }
+    var within = nowMs - lastFired < windowMs
+    if (incidentOpen) {
+        if (within) {
+            return SignalOutcome("none", kind, accountId, reopened, lastFired)
+        }
+        return SignalOutcome("refire", kind, accountId, reopened, nowMs)
+    }
+    if (firedBefore && within) {
+        return SignalOutcome("none", kind, accountId, reopened + 1, lastFired)
+    }
+    return SignalOutcome("open", incidentReopenKind(kind, firedBefore, accountId), accountId, reopened, nowMs)
+}
+
+// Sinal de reincidencia: `<kind>_reopened`. Fica fora do vocabulario do
+// Edge (cada sinal e um construtor); a severidade e derivada do tipo-base
+// e sobe para CRIT. O CLI mostra o tipo-base ao lado (a rota do sinal que
+// voltou), e o prefixo `kind` e prefixo exato do sinal-base.
+String incidentReopenKind(String kind, Bool firedBefore, String accountId) {
+    if (firedBefore == false || kind.endsWith("_reopened")) {
+        return kind
+    }
+    return kind + "_reopened"
+}
+
+String incidentBaseKind(String kind) {
+    if (kind.endsWith("_reopened")) {
+        return kind.substring(0, kind.length - 9)
+    }
+    return kind
+}
+
+Bool incidentIsReopen(String kind) {
+    return incidentBaseKind(kind) != kind
+}
+
+// Inteiro de String vinda do estado (os campos do embasamento sao String,
+// L11). Pura e local: o parse do Registry e de `Long` e nao serve aqui.
+Int incidentIntOr(String text, Int fallback) {
+    if (text.length == 0) {
+        return fallback
+    }
+    var i = 0
+    var acc = 0
+    while (i < text.length) {
+        var c = text.charAt(i) as Int
+        if (c < 48 || c > 57) {
+            return fallback
+        }
+        acc = acc * 10 + (c - 48)
+        i = i + 1
+    }
+    return acc
+}
+
+// Instante de String vinda do estado (epoch ms, L11). Vazio/ilegivel =
+// `fallback` (o plato de um campo adulterado vence, nunca trava o sinal).
+Long incidentLongOr(String text, Long fallback) {
+    if (text.length == 0) {
+        return fallback
+    }
+    var i = 0
+    var acc = 0L
+    while (i < text.length) {
+        var c = text.charAt(i) as Int
+        if (c < 48 || c > 57) {
+            return fallback
+        }
+        acc = acc * 10L + (c - 48)
+        i = i + 1
+    }
+    return acc
+}
+
 // Limite do anel de incidentes (os mais antigos ja resolvidos saem primeiro).
 // Delega na fonte unica (`util/Limits.kf`) — mesma regra dos detectores.
 Int limitIncidents() {
@@ -168,4 +282,27 @@ Int bulkRevokeThreshold() {
 
 Long bulkRevokeWindowMs() {
     return limitBulkRevokeWindowMs()
+}
+
+// Consulta do embasamento exato (`<sinal>/<conta>`): tira a chave do map
+// (nulavel por SEM049), valida a tripla e delega a decisao sem IO. Digitado
+// aqui, justo porque o campo do registro e String (L11) e o Registry nao
+// tem como chamar a pura com um valor nulavel.
+SignalOutcome signalFromPlateaus(Map<String, String> plateaus, Bool incidentOpen, String key, String kind, String accountId, Long nowMs, Long windowMs) {
+    var raw = plateaus.get(key)
+    if (raw == null) {
+        return signalOutcomeWith(incidentOpen, emptyPlateauList(), kind, accountId, nowMs, windowMs)
+    }
+    var parts = raw.split(";")
+    var found = listOf<IncidentPlateau>()
+    if (parts.length == 3) {
+        found.add(IncidentPlateau(kind, accountId, parts[0], parts[1], parts[2]))
+    }
+    return signalOutcomeWith(incidentOpen, found, kind, accountId, nowMs, windowMs)
+}
+
+// Sem embasamento: lista vazia para o par de assinaturas com `found` acima.
+// A pura decide "nunca disparou" pela LISTA vazia.
+List<IncidentPlateau> emptyPlateauList() {
+    return listOf<IncidentPlateau>()
 }

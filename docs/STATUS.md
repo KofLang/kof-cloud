@@ -80,7 +80,7 @@ o run total imprime `71 passed, 0 failed`. Falha = nome do teste + assert
 | painel somente-leitura | `tests/panel_test.kf` | 3 |
 | rotacao de kfs_ (Fase 19 s3) | `tests/rotate_test.kf` | 6 |
 | `security.txt` + `SECURITY.md` (Fase 19 s1 parcial) | `tests/security_test.kf` | 4 |
-| incidentes (Fase 17 s1 + template pós-mortem s3) | `tests/incidents_test.kf` | 19 |
+| incidentes (Fase 17 s1 + platô + template pós-mortem s3) | `tests/incidents_test.kf` | 24 |
 | contenção (Fase 17 s2) | `tests/freeze_test.kf` | 17 |
 | status page (Fase 17 s3 parcial) | `tests/status_page_test.kf` | 6 |
 | publish com allowlist pela CLI (F10 s3) | `tests/publish_allow_test.kf` | 4 |
@@ -118,4 +118,4 @@ o run total imprime `71 passed, 0 failed`. Falha = nome do teste + assert
 | push do uso para billing (F18 s4) | `tests/usage_push_test.kf` | 4 |
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 6 |
 
-Total: 486 testes. Ver `15-tests.md` para a matriz.
+Total: 491 testes. Ver `15-tests.md` para a matriz.

@@ -339,6 +339,20 @@ logo abaixo, na mesma lista:
   isso os testes evitam materializar 1.5 MiB em String (`frames_test.kf` lê em
   chunks e confere tamanho + pontas).
 
+* **O platô do incidente segura reabertura por até 1 h (por sinal e conta).**
+  Depois de resolvido, o mesmo sinal que volta dentro de
+  `kofcloud.limits.incidentPlateauWindowMs` (default 3600000 ms) não abre
+  incidente novo: a reincidência so é contada no embasamento persistido no
+  estado (`plateaus`), e o sinal só reaparece como `<kind>_reopened` CRIT
+  depois da janela. É deliberado — um ataque contínuo virava um incidente
+  por evento (o `freeze` de conta abria um por serviço, todos no mesmo
+  instante) e afogava o anel de 100 e o webhook. O custo honesto: um
+  resolvedor apressado que fecha o incidente e vê o sinal voltar 5 min
+  depois não recebe webhook novo; a contagem fica no estado, e o histórico
+  está no audit. Teto higiênico (`limitIncidentRing`) poda embasamentos
+  antigos — podar nunca recusa um incidente, só devolve o sinal ao estado
+  "primeira vez" (WARN) se ele voltar.
+
 ## O que o KofCloud deliberadamente NÃO é
 
 Não é VPS, VM, plataforma de containers, Kubernetes, PaaS, object storage

@@ -1516,6 +1516,28 @@ game-day: simula o incidente de propósito e mede o tempo de resposta):
   — o rate limit já conta por hostname, mas abrir incidente por hostname
   violaria a regra de não ter cardinalidade por cliente.
 
+  **Implementado (platô do sinal):** o `raiseIncident` deduplicava enquanto
+  o incidente estava ABERTO, mas qualquer evento com ele FECHADO reabria na
+  hora — um ataque contínuo virava um incidente por evento (o `freeze` de
+  conta abre um a cada serviço do alvo, todos no mesmo instante) e afogava
+  o anel de 100 e o webhook. Agora cada (sinal, conta) tem um embasamento
+  (`plateaus` no estado, **persistido**: um restart no meio do ataque não
+  zera o sinal) e a decisão é pura (`model/Incident.kf`
+  `signalOutcomeWith`): aberto e ainda disparando → nada; aberto e a guarda
+  venceu → volta a disparar sem abrir; fechado dentro da janela
+  (`kofcloud.limits.incidentPlateauWindowMs`, default 1 h, recuo seguro) →
+  platô, só conta a reincidência; fechado e fora da janela → reabre como
+  `<kind>_reopened` com severidade **CRIT** (reincidência não é ruído
+  novo). O fio continua compatível (`kind` intacto; campo aditivo
+  `baseKind`); a CLI explica a reincidência na linha do incidente. O
+  embasamento é guarda de ruído, não dado de cliente (só sinal, escopo e
+  instantes) e tem teto higiênico (poda os mais antigos, nunca recusa um
+  incidente). Prova: `incidents_test.kf` (`incident-plateau` ×5: pura nos
+  quatro estados + guarda vencida + embasamento ilegível, reincidência
+  externa CRIT com restart, freeze de conta abre UM incidente e não um por
+  serviço; `incident-unit` atualizado: resolver fecha e o mesmo sinal
+  dentro do platô não reabre).
+
   **Implementado (suspensão em lote):** os detectores cobriam revoke em
   lote, mas a SUSPENSÃO não revoga nada — um token de conta comprometido
   podia suspender todos os serviços (cada site sai do ar com 404 opaco) sem

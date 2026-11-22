@@ -112,7 +112,7 @@ test "incidentes: revogacao em lote abre incidente da conta", "incident-unit" {
     assert(registry.incidentsForAccount(account.id, true).size == 1, "nao duplica")
 }
 
-test "incidentes: resolver fecha e permite abrir de novo depois", "incident-unit" {
+test "incidentes: resolver fecha; o mesmo sinal dentro do plato NAO reabre", "incident-unit" {
     var registry = Registry(incidentsPath("resolve"))
     var account = registry.createAccount("mel", "m@e.com", "segredo")
     var opened = registry.raiseIncident(incidentBulkDeviceRevokes(), account.id)
@@ -123,8 +123,11 @@ test "incidentes: resolver fecha e permite abrir de novo depois", "incident-unit
     }
     assert(registry.resolveIncident(id) == true, "fecha")
     assert(registry.resolveIncident(id) == false, "fechar de novo nao acha")
+    // Fase 17 s1 — plato: o sinal que ainda dispara dentro da janela nao
+    // reabre a cada evento (era o incidente por evento).
     var again = registry.raiseIncident(incidentBulkDeviceRevokes(), account.id)
-    assert(again != null, "pode reabrir depois de resolvido")
+    assert(again == null, "plato: dentro da janela nao reabre")
+    assert(registry.incidentsForAccount(account.id, true).size == 1, "continua um so")
 }
 
 test "incidentes: escopo global aparece para a conta, escopo alheio nao", "incident-unit" {
@@ -916,4 +919,115 @@ test "incidentes: varredura periodica poda credenciais ociosas e abre o incident
     // O laco para no stopFile (mesma sentenca do serve).
     writeTextTo(stop, "pare")
     await loop
+}
+
+// Fase 17 slice 1 — plato do sinal: decidir e abrir sao lugares distintos.
+// A pura nao tem relogio; o Registry passa o estado e o instante.
+
+test "plato: decisao pura (aberto, fechado na janela, reincidencia CRIT)", "incident-plateau" {
+    var now = 5000000L
+    var window = 3600000L
+    // Nunca disparou: abre com o sinal de sempre, WARN.
+    var fresh = signalOutcomeWith(false, listOf<IncidentPlateau>(), incidentEdgeRefusals(), "acc", now, window)
+    assert(fresh.open == "open", "primeira vez abre")
+    assert(fresh.kind == incidentEdgeRefusals(), "primeira vez nao reincide")
+    // Aberto e ainda na janela: nada (o incidente ja diz).
+    var saved = listOf(IncidentPlateau(incidentEdgeRefusals(), "acc", "4000000", "4900000", "0"))
+    var stillOpen = signalOutcomeWith(true, saved, incidentEdgeRefusals(), "acc", now, window)
+    assert(stillOpen.open == "none", "aberto na janela cala")
+    // Fechado dentro da janela: plato, reincidencia contada, nada abre.
+    var closed = signalOutcomeWith(false, saved, incidentEdgeRefusals(), "acc", now, window)
+    assert(closed.open == "none", "fechado na janela cala")
+    assert(closed.reopenCount == 1, "reincidencia contada")
+    // Fechado e fora da janela: reincidencia — abre como `<kind>_reopened`.
+    var stale = listOf(IncidentPlateau(incidentEdgeRefusals(), "acc", "100000", "100000", "0"))
+    var late = signalOutcomeWith(false, stale, incidentEdgeRefusals(), "acc", now, window)
+    assert(late.open == "open", "fora da janela reabre")
+    assert(late.kind == incidentEdgeRefusals() + "_reopened", "sinal de reincidencia")
+    assert(incidentSeverityFor(late.kind) == "CRIT", "reincidencia e CRIT")
+    assert(incidentBaseKind(late.kind) == incidentEdgeRefusals(), "base preservada")
+    assert(incidentIsReopen(incidentBulkDeviceRevokes()) == false, "base nao e reincidencia")
+}
+
+test "plato: guarda vencida com o incidente aberto volta a disparar sem abrir", "incident-plateau" {
+    var now = 5000000L
+    var stale = listOf(IncidentPlateau(incidentEdgeRefusals(), "acc", "100000", "100000", "0"))
+    var refire = signalOutcomeWith(true, stale, incidentEdgeRefusals(), "acc", now, 3600000L)
+    assert(refire.open == "refire", "aberto e vencido reinicia a guarda")
+    assert(refire.lastFiredAt == now, "guarda atualizada")
+    // Janela de 1 h contada de `lastFiredAt`: 100000 + 3600000 = 3700000 < 5000000.
+    assert(now - 100000L > 3600000L, "cenario: guarda vencida")
+    // Janela invalida recai no default (1 h): ninguem desliga o plato pelo config.
+    var saved = listOf(IncidentPlateau(incidentEdgeRefusals(), "acc", "4000000", "4900000", "0"))
+    var degenerated = signalOutcomeWith(false, saved, incidentEdgeRefusals(), "acc", now, 0L)
+    assert(degenerated.open == "none", "janela 0 usa o default")
+    assert(limitIncidentPlateauWindowMs() == 3600000L, "janela do plato travada")
+}
+
+test "plato: embasamento ilegivel no estado abre como primeira vez", "incident-plateau" {
+    var now = 1000000L
+    var corrupt = signalFromPlateaus(mapOf(), false, "x/y", incidentEdgeRefusals(), "", now, 3600000L)
+    assert(corrupt.open == "open", "sem plato abre")
+    assert(corrupt.kind == incidentEdgeRefusals(), "sem plato nao e reincidencia")
+    var fakeMap = mapOf()
+    fakeMap.put("bulk_device_revokes/acc", "lixo")
+    var junk = signalFromPlateaus(fakeMap, false, "bulk_device_revokes/acc", incidentBulkDeviceRevokes(), "acc", now, 3600000L)
+    assert(junk.open == "open", "embasamento ilegivel abre como primeira vez")
+    assert(incidentIntOr("", 7) == 7, "vazio usa fallback")
+    assert(incidentIntOr("12x", 7) == 7, "ilegivel usa fallback")
+    assert(incidentIntOr("42", 7) == 42, "numero lido")
+    assert(incidentLongOr("", 5L) == 5L, "Long vazio usa fallback")
+    assert(incidentLongOr("1700000000001", 0L) == 1700000000001L, "Long lido sem estouro 32 bits")
+}
+
+test "plato: reincidencia externa (fora da janela) abre CRIT e sobrevive ao restart", "incident-plateau" {
+    var path = incidentsPath("plateau")
+    var registry = Registry(path)
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    var first = registry.raiseIncident(incidentEdgeRefusals(), "")
+    assert(first != null, "primeira vez abre")
+    // Fecha e envelhece a guarda alem da janela: o sinal voltou tarde.
+    if (first != null) {
+        assert(first.severity == "WARN", "primeira vez WARN")
+        registry.resolveIncident(first.id)
+    }
+    registry.setPlateauForTest(incidentEdgeRefusals(), "", "1000;1000;0")
+    registry.save()
+    var reopened = registry.raiseIncident(incidentEdgeRefusals(), "")
+    assert(reopened != null, "fora da janela reabre")
+    if (reopened != null) {
+        assert(reopened.kind == incidentEdgeRefusals() + "_reopened", "sinal de reincidencia")
+        assert(reopened.severity == "CRIT", "reincidencia nasce CRIT")
+        assert(reopened.accountId == "", "escopo preservado")
+    }
+    // O plato e PERSISTIDO: um restart no meio do ataque nao zera o sinal.
+    var reloaded = Registry(path)
+    var third = reloaded.raiseIncident(incidentEdgeRefusals(), "")
+    assert(third == null, "depois do restart o plato continua valendo")
+    // Outro sinal/outra conta tem plato proprio.
+    var other = reloaded.raiseIncident(incidentBulkTokenRevokes(), account.id)
+    assert(other != null, "sinal distinto abre")
+    if (other != null) {
+        assert(other.severity == "WARN", "sinal distinto nao herda a reincidencia")
+    }
+}
+
+test "plato: freeze de conta abre UM incidente, nao um por servico", "incident-plateau" {
+    var registry = Registry(incidentsPath("plateau-freeze"))
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    registry.registerDevice(account, "note", "pk")
+    var deviceId = registry.devicesForAccount(account.id).get(0).id
+    registry.publishService(account, deviceId, "site", "127.0.0.1", 3000, "http", "PUBLIC", "", "")
+    registry.publishService(account, deviceId, "api", "127.0.0.1", 3001, "http", "PUBLIC", "", "")
+    registry.publishService(account, deviceId, "docs", "127.0.0.1", 3002, "http", "PUBLIC", "", "")
+    var result = registry.freezeAccount(account.id)
+    assert(result.ok, "congelou")
+    var freezes = 0
+    for (var incident in registry.incidentsForAccount(account.id, true)) {
+        if (incidentBaseKind(incident.kind) == incidentFreezeAccount()) {
+            freezes = freezes + 1
+        }
+    }
+    assert(freezes == 1, "um incidente de freeze de conta, nao um por servico: " + intToString(freezes))
+    assert(result.incidentId.length > 0, "o id devolvido e o do incidente aberto")
 }

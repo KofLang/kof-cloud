@@ -14,6 +14,7 @@ import kofcloud.identity.Keys
 import kofcloud.model.Device
 import kofcloud.model.Errors
 import kofcloud.model.Exposure
+import kofcloud.model.Incident
 import kofcloud.model.Service
 import kofcloud.model.StateCopy
 import kofcloud.model.Webhook
@@ -2932,6 +2933,9 @@ Int cmdIncidents(List<String> args) {
             }
             println(incident.severity + "  " + incident.kind + "  " + state + "  " + incident.id)
             println("  " + incident.summary)
+            if (incidentIsReopen(incident.kind)) {
+                println("  reincidencia de " + incidentBaseKind(incident.kind) + " depois de resolvido — CRIT de proposito; o historico esta no audit")
+            }
         }
         return 0
     } catch (String e) {
