@@ -1943,7 +1943,16 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   literal (exit 1 com achado, 0 limpo) — sem login, sem rede, para rodar
   no CI a cada push. Pura `scanManifestSecrets` (nomeia o serviço sem
   vazar o valor). Prova: `tests/deploy_test.kf` (`deploy-scan`) + trava
-  da ajuda. Pendente: dependências (exigem rede para resolver `kofdeps`).
+  da ajuda. **Dependências ✅ (offline por desenho):** resolver `kofdeps`
+  exige rede e o CI isolado não tem — mas o que se sabe sem rede é dito:
+  `scanDependencyPins` (pura) lê `kof.toml`/`package.json`/`Cargo.toml`/
+  `go.mod`/`requirements.txt` no diretório do manifesto e acusa pin aberto
+  (`latest`/`*`/`^`/`~`/faixa/sem versão — build não reproduzível) e pin
+  exato antigo quando o comentário da linha traz a data (`# pinned
+  YYYY-MM-DD`, limite `kofcloud.limits.depPinMaxAgeDays`, 365). Nunca diz
+  CVE nem versão atual: isso exige rede, e um scan offline que inventasse
+  "vulnerável" seria pior que nenhum. Prova:
+  `tests/scan_extra_test.kf` (`scan-deps`).
   O item "`kfs_` sem TTL em serviço crítico" pousou como Higiene de
   credenciais abaixo (`kof cloud service tokens` / `POST
   /v1/services/token-hygiene`).
@@ -1956,8 +1965,8 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   estava na lista — mutação removendo-o quebra no assert exato) — e o **PEM do
   operador** (`--tls-cert`: expirado ou expirando em 30 dias, via
   `openssl x509 -checkend`). Nunca imprime valor, só o nome. Prova:
-  `tests/scan_extra_test.kf` (5). **Pendente:** dependências (exige resolver
-  `kofdeps`/rede). O "`kfs_` sem TTL em serviço crítico" está fechado pela
+  `tests/scan_extra_test.kf` (6, inclui `scan-deps`). Dependências: a parte
+  offline está acima; CVE/versão atual continua fora (rede). O "`kfs_` sem TTL em serviço crítico" está fechado pela
   Higiene de credenciais abaixo — quem lista é o `service tokens`, não o
   `scan` (o scan continua local: sem conta, sem rede).
 

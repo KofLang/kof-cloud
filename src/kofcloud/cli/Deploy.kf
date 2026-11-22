@@ -441,6 +441,253 @@ List<String> scanManifestSecrets(String raw) {
     return findings
 }
 
+// Dependencias pinadas (F19 s2 — a parte de dependencias do `scan`, offline
+// por desenho). Le um manifest de DEPENDENCIA do repo (`kof.toml`,
+// `package.json`, `Cargo.toml`, `go.mod`, `requirements.txt`) e devolve um
+// achado por pin que parece risco: pin "aberto" (`latest`, `*`, `^`, `~`,
+// faixa) = build nao reproduzivel; pin exato antigo (so quando o comentario
+// da linha traz a data, ex.: `# pinned 2023-05-01`) = dependencia nao
+// revisada. O scan NAO diz CVE nem versao atual: isso exige rede, e um
+// scan de CI offline que inventasse "vulneravel" seria pior que nenhum.
+// Puro sobre o texto (a data de hoje entra como parametro); nunca avalia o
+// valor, so nomeia a dependencia.
+List<String> scanDependencyPins(String fileName, String raw, Long nowMs, Int maxAgeDays) {
+    var findings = listOf<String>()
+    if (maxAgeDays <= 0) {
+        maxAgeDays = 365
+    }
+    var pinnedCount = 0
+    var isToml = fileName.endsWith(".toml")
+    var isJson = fileName.endsWith(".json")
+    var isGo = fileName == "go.mod"
+    var isRequirements = fileName.endsWith(".txt")
+    for (var line in raw.split("\n")) {
+        var trimmed = line.trim()
+        if (skipDependencyLine(trimmed)) {
+            continue
+        }
+        var pin = dependencyPin(trimmed, isToml, isJson, isGo, isRequirements)
+        var sep = pin.indexOf("|")
+        if (sep <= 0) {
+            continue
+        }
+        var name = pin.substring(0, sep)
+        var value = pin.substring(sep + 1)
+        pinnedCount = pinnedCount + 1
+        if (isLoosePin(value)) {
+            findings.add(fileName + ": dependencia \"" + name + "\" com pin aberto (\"" + value + "\") — fixe uma versao para o build ser reproduzivel")
+            continue
+        }
+        var pinnedAt = pinCommentDate(trimmed)
+        if (pinnedAt > 0L) {
+            var ageDays = (nowMs - pinnedAt) / 86400000L
+            if (ageDays > (maxAgeDays as Long)) {
+                findings.add(fileName + ": dependencia \"" + name + "\" pinada ha " + longToString(ageDays) + " dias (limite " + intToString(maxAgeDays) + ") — revise a versao")
+            }
+        }
+    }
+    if (pinnedCount == 0 && fileName == "kof.lock") {
+        findings.add(fileName + ": lockfile sem nenhuma dependencia reconhecida — confira o formato")
+    }
+    return findings
+}
+
+// Linhas que nao sao dependencia: vazia, comentario, secao (`[deps]`),
+// chave estrutural do JSON e os campos de identidade do package.json
+// (nome/versao do proprio projeto, nao dependencia).
+Bool skipDependencyLine(String line) {
+    if (line.length == 0) {
+        return true
+    }
+    var c = line.charAt(0) as Int
+    if (c == 35) {
+        return true
+    }
+    if (line.startsWith("//")) {
+        return true
+    }
+    if (c == 91 || c == 123 || c == 125) {
+        return true
+    }
+    if (line.startsWith("\"name\":") || line.startsWith("\"version\":") || line.startsWith("\"description\":") || line.startsWith("\"private\":") || line.startsWith("\"license\":") || line.startsWith("\"type\":") || line.startsWith("\"main\":") || line.startsWith("\"scripts\":") || line.startsWith("\"engines\":") || line.startsWith("\"devDependencies\":") || line.startsWith("\"dependencies\":")) {
+        return true
+    }
+    return false
+}
+
+// "nome|valor" do pin na linha ("" quando a linha nao tem pin). Cada
+// formato le so o que ele tem: JSON (duas strings), go.mod (versao sem o
+// rascunho pseudo-versao do commit), requirements (`==`), TOML (chave=valor).
+String dependencyPin(String line, Bool isToml, Bool isJson, Bool isGo, Bool isRequirements) {
+    if (isJson) {
+        var firstQuote = line.indexOf("\"")
+        if (firstQuote < 0) {
+            return ""
+        }
+        var secondQuote = line.indexOf("\"", firstQuote + 1)
+        var thirdQuote = line.indexOf("\"", secondQuote + 1)
+        if (secondQuote < 0 || thirdQuote < 0) {
+            return ""
+        }
+        var fourthQuote = line.indexOf("\"", thirdQuote + 1)
+        if (fourthQuote < 0) {
+            return ""
+        }
+        return line.substring(firstQuote + 1, secondQuote) + "|" + line.substring(thirdQuote + 1, fourthQuote)
+    }
+    if (isGo) {
+        // go.mod: `github.com/x/y v1.2.3` (lista de `require` ou linha
+        // solta do bloco — `go 1.22` e `module x` nao casam porque nao tem
+        // caminho com barra na primeira coluna).
+        var sp = line.indexOf(" ")
+        if (sp <= 0) {
+            return ""
+        }
+        var path = line.substring(0, sp)
+        if (path.indexOf("/") < 0) {
+            return ""
+        }
+        var rest = line.substring(sp + 1).trim()
+        if (rest.startsWith("(")) {
+            return ""
+        }
+        if (rest.indexOf("indirect") >= 0) {
+            return ""
+        }
+        var sp2 = rest.indexOf(" ")
+        var version = rest
+        if (sp2 > 0) {
+            version = rest.substring(0, sp2)
+        }
+        return path + "|" + version
+    }
+    if (isRequirements) {
+        var eq = line.indexOf("==")
+        if (eq > 0) {
+            return line.substring(0, eq).trim() + "|" + line.substring(eq + 2).trim()
+        }
+        if (line.indexOf("=") >= 0 || line.indexOf("<") >= 0 || line.indexOf(">") >= 0) {
+            return ""
+        }
+        var spc = line.indexOf(" ")
+        var bare = line
+        if (spc > 0) {
+            bare = line.substring(0, spc)
+        }
+        return bare + "|latest"
+    }
+    if (isToml) {
+        var eq = line.indexOf("=")
+        if (eq <= 0) {
+            return ""
+        }
+        return trimQuotes(line.substring(0, eq)) + "|" + trimQuotes(line.substring(eq + 1))
+    }
+    return ""
+}
+
+Bool isLoosePin(String value) {
+    if (value == "latest" || value == "*" || value == "main" || value == "master") {
+        return true
+    }
+    if (value.startsWith("^") || value.startsWith("~") || value.startsWith(">") || value.startsWith("<") || value.startsWith("=")) {
+        return true
+    }
+    if (value.indexOf("*") >= 0) {
+        return true
+    }
+    // Faixa npm (`1.x`, `1.2.x`).
+    if (value.indexOf("x") >= 0 && value.length < 8) {
+        return true
+    }
+    return false
+}
+
+// Data de pin no comentario da linha: `# pinned 2023-05-01`, `// 2023-05-01`.
+// 0 quando nao ha data legivel (sem data, o scan nao inventa idade).
+Long pinCommentDate(String line) {
+    var hash = line.indexOf("#")
+    if (hash >= 0) {
+        return parseIsoDateMs(line.substring(hash))
+    }
+    var slash = line.indexOf("//")
+    if (slash >= 0) {
+        return parseIsoDateMs(line.substring(slash))
+    }
+    return 0L
+}
+
+// `YYYY-MM-DD` em epoch ms (UTC). Entrada invalida = 0. Pura e estrita
+// (ano >= 1970, mes 1-12, dia 1-31); data torta nao vira idade.
+Long parseIsoDateMs(String text) {
+    var k = 0
+    while (k + 10 <= text.length) {
+        if (isIsoDateAt(text, k)) {
+            var year = parseIntBounded(text.substring(k, k + 4), -1, 9999)
+            var mon = parseIntBounded(text.substring(k + 5, k + 7), -1, 12)
+            var day = parseIntBounded(text.substring(k + 8, k + 10), -1, 31)
+            if (year >= 1970 && mon >= 1 && mon <= 12 && day >= 1 && day <= 31) {
+                return civilDaysMs(year, mon, day)
+            }
+        }
+        k = k + 1
+    }
+    return 0L
+}
+
+// Dias desde 1970-01-01 pela formula civil (Hinnant), sem biblioteca.
+Long civilDaysMs(Int year, Int mon, Int day) {
+    var y = year
+    var mp = mon - 3
+    if (mon <= 2) {
+        y = y - 1
+        mp = mon + 9
+    }
+    var era = y / 400
+    var yoe = y - era * 400
+    var doy = (153 * mp + 2) / 5 + day - 1
+    var doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+    var days = (era * 146097 + doe - 719468) as Long
+    return days * 86400000L
+}
+
+// "texto[i..i+10) e YYYY-MM-DD com digitos" — sem exception.
+Bool isIsoDateAt(String text, Int i) {
+    var k = 0
+    while (k < 10) {
+        var c = text.charAt(i + k) as Int
+        if (k == 4 || k == 7) {
+            if (c != 45) {
+                return false
+            }
+        } else {
+            if (c < 48 || c > 57) {
+                return false
+            }
+        }
+        k = k + 1
+    }
+    return true
+}
+
+String trimQuotes(String text) {
+    var out = text.trim()
+    if (out.startsWith("\"")) {
+        out = out.substring(1)
+    }
+    if (out.endsWith("\"")) {
+        out = out.substring(0, out.length - 1)
+    }
+    return out.trim()
+}
+
+// Manifestos de dependencia que o scan le no diretorio do manifesto (ordem
+// fixa: a saida do scan e estavel para CI). Fonte unica do laco do
+// cmdScan e da doc.
+List<String> dependencyManifestNames() {
+    return listOf("kof.toml", "kof.lock", "package.json", "Cargo.toml", "go.mod", "requirements.txt")
+}
+
 // Nomes de variavel de ambiente que, se definidos, indicam credencial no
 // ambiente do shell (o Kof nao enumera env: `config.env(nome)` le um nome
 // por vez — por isso a lista e curada, nao uma varredura de tudo). Inclui
@@ -1402,8 +1649,20 @@ Int cmdScan(List<String> args) {
             cursor = nl + 1
         }
     }
+    // 5) Dependencias pinadas (F19 s2): pins abertos em manifestos de
+    //    dependencia no diretorio do manifesto (arquivos ausentes nao
+    //    inventam achado; o repo do KofCloud nao tem nenhum).
+    for (var fileName in dependencyManifestNames()) {
+        var depRaw = readTextOr(repoDir + "/" + fileName, "")
+        if (depRaw.length == 0) {
+            continue
+        }
+        for (var finding in scanDependencyPins(fileName, depRaw, time.now(), limitDepPinMaxAgeDays())) {
+            findings.add(finding)
+        }
+    }
     if (findings.size == 0) {
-        println("scan ok: nenhum segredo no manifesto/ambiente, nenhum PEM expirando e nenhuma credencial commitada")
+        println("scan ok: nenhum segredo no manifesto/ambiente, nenhum PEM expirando, nenhuma credencial commitada e nenhum pin de dependencia aberto")
         return 0
     }
     for (var finding in findings) {

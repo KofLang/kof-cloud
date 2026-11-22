@@ -100,7 +100,8 @@ operacional, não código.
 | varredura de segredo em manifesto/ambiente/PEM | `kof cloud scan` | `tests/deploy_test.kf` (`deploy-scan`), `tests/scan_extra_test.kf` |
 
 **Não cobre:** rotação programada de PEM (é manual, por reinício); scan de
-dependências exige rede/`kofdeps` (fora).
+dependências só offline (pin aberto e pin datado antigo, `scan-deps`); CVE e
+versão atual exigem rede/`kofdeps` (fora).
 
 ## CC8.1 — mudança controlada (CI)
 

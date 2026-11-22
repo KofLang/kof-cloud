@@ -80,6 +80,8 @@ kof-cloud/
 
 ## Dependências externas
 
-Nenhuma. O KofCloud usa **somente** stdlib do Kof. `kofdeps` não é usado.
+Nenhuma. O KofCloud usa **somente** stdlib do Kof. `kofdeps` não é usado —
+e o `kof cloud scan` acusa pin aberto/pin datado antigo nos manifestos de
+dependência do repo (`scan-deps`) sem resolver nada pela rede.
 Bibliotecas candidatas no futuro: `libs/file` (TOML/YAML de config),
 `libs/kofmd` (docs). Nenhuma é necessária hoje.

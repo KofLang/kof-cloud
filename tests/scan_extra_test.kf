@@ -102,3 +102,57 @@ test "scan: credencial .kfs commitada no repo e achado (e2e com git real)", "sca
     writeTextTo(cleanDir + "/kofcloud.json", "{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
     assert(cmdScan(listOf("--file", cleanDir + "/kofcloud.json")) == 0, "repo sem kfs passa")
 }
+
+test "scan: dependencias — pin aberto e pin antigo com data (puras + e2e offline)", "scan-deps" {
+    // F19 s2: a parte de dependencias do scan, offline por desenho (resolver
+    // `kofdeps` exige rede; o CI isolado nao tem). O scan aponta o que da
+    // para saber sem rede: pin aberto (build nao reproduzivel) e pin antigo
+    // quando a linha traz a data do pin no comentario.
+    // Datas: epoch de 2025-06-01 e de 2020-01-01 (conferidas em `civilDaysMs`).
+    var now = parseIsoDateMs("2025-06-01") + 1000L
+    if (!(now > 0L)) { assert(false, "E1") }
+    // Toml no formato do kof.toml do proprio repo nao tem dependencia: secao
+    // e chave do projeto nao viram pin (o repo nao tem lock).
+    var project = scanDependencyPins("kof.toml", "[project]\nname = \"kof-cloud\"\n\n[sources]\napp = \"src\"\ntest = \"tests\"\n", now, 365)
+    if (!(project.size == 0)) { assert(false, "E2") }
+    // package.json: pin aberto e pin exato sao distinguidos pelo valor.
+    var pkg = scanDependencyPins("package.json", "{\n  \"name\": \"site\",\n  \"dependencies\": {\n    \"left-pad\": \"^1.3.0\",\n    \"express\": \"4.18.2\"\n  }\n}\n", now, 365)
+    if (!(pkg.size == 1)) { assert(false, "E3") }
+    if (!(pkg.get(0).indexOf("left-pad") >= 0)) { assert(false, "E4") }
+    if (!(pkg.get(0).indexOf("^1.3.0") >= 0)) { assert(false, "E5") }
+    if (!(pkg.get(0).indexOf("express") < 0)) { assert(false, "E6") }
+    // Pin exato com data velha no comentario vira achado; com data recente nao.
+    var oldPin = scanDependencyPins("kof.toml", "[deps]\nlucia = \"1.2.3\"  # pinned 2020-01-01\nnovo = \"2.0.0\"  # pinned 2025-05-01\n", now, 365)
+    if (!(oldPin.size == 1)) { assert(false, "E7") }
+    if (!(oldPin.get(0).indexOf("lucia") >= 0)) { assert(false, "E8") }
+    if (!(oldPin.get(0).indexOf("dias") >= 0)) { assert(false, "E9") }
+    // Sem data no comentario: o scan nao inventa idade.
+    if (!(scanDependencyPins("kof.toml", "[deps]\nmoda = \"3.1.0\"\n", now, 365).size == 0)) { assert(false, "E10") }
+    // go.mod: versao exata passa, `indirect` fica fora.
+    var gomod = scanDependencyPins("go.mod", "module exemplo\n\ngo 1.22\n\nrequire (\n\tgithub.com/x/y v1.2.3\n\tgithub.com/a/b v0.0.0-20200101000000-deadbeef // indirect\n)\n", now, 365)
+    if (!(gomod.size == 0)) { assert(false, "D11 g=" + intToString(gomod.size)) }
+    // requirements: `==` e pin exato; sem versao e pin aberto.
+    var req = scanDependencyPins("requirements.txt", "flask==3.0.0\nrequests\n", now, 365)
+    if (!(req.size == 1)) { assert(false, "E11") }
+    if (!(req.get(0).indexOf("requests") >= 0)) { assert(false, "E12") }
+    // Faixas: `1.x`, `*`, `latest`, `~` — todos abertos.
+    if (!(isLoosePin("1.x") && isLoosePin("*") && isLoosePin("latest") && isLoosePin("~2.0") && isLoosePin(">=1.0"))) { assert(false, "E13") }
+    if (!(isLoosePin("1.2.3") == false && isLoosePin("v1.2.3") == false)) { assert(false, "E14") }
+    // Data: ISO estrita; invalida nao vira idade.
+    if (!(parseIsoDateMs("2023-05-01") == civilDaysMs(2023, 5, 1))) { assert(false, "E15") }
+    if (!(parseIsoDateMs("2023-13-01") == 0L)) { assert(false, "E16") }
+    if (!(parseIsoDateMs("2023-05-32") == 0L)) { assert(false, "E17") }
+    if (!(parseIsoDateMs("sem data") == 0L)) { assert(false, "E18") }
+    if (!(parseIsoDateMs("1969-12-31") == 0L)) { assert(false, "E19") }
+    if (!(limitDepPinMaxAgeDays() == 365)) { assert(false, "E20") }
+    if (!(depPinMaxAgeDaysFrom(0) == 365)) { assert(false, "E21") }
+
+    // e2e: cmdScan le os manifestos de dependencia do diretorio do manifesto.
+    var dir = "/tmp/kofcloud-scan-deps-" + crypto.randomHex(4)
+    Directory(dir).createDirectories()
+    writeTextTo(dir + "/kofcloud.json", "{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
+    if (!(cmdScan(listOf("--file", dir + "/kofcloud.json")) == 0)) { assert(false, "E22") }
+    writeTextTo(dir + "/package.json", "{\n  \"name\": \"site\",\n  \"dependencies\": {\n    \"esquerda\": \"latest\"\n  }\n}\n")
+    if (!(cmdScan(listOf("--file", dir + "/kofcloud.json")) == 1)) { assert(false, "E23") }
+    if (!(dependencyManifestNames().size == 6)) { assert(false, "E24") }
+}

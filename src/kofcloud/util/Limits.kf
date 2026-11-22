@@ -250,6 +250,23 @@ Int limitUsagePushMs() {
     return usagePushMsFrom(config.int("kofcloud.limits.usagePushMs", 60000))
 }
 
+// Aviso de dependencia com "cara de versao" (F19 s2 `scan`): idade maxima
+// (dias) de um pin de versao para o scan avisar. Um pin parado e dependencia
+// nao revisada — e o unico sinal de "velha" que existe SEM rede (o scan e
+// offline por desenho: resolver `kofdeps` exige rede e nao roda no CI
+// isolado). Recuo seguro: zero/negativo recai no default 365 (com 0 todo
+// pin avisaria sempre — o scan viraria ruido e ninguem o rodaria).
+Int depPinMaxAgeDaysFrom(Int configured) {
+    if (configured <= 0) {
+        return 365
+    }
+    return configured
+}
+
+Int limitDepPinMaxAgeDays() {
+    return depPinMaxAgeDaysFrom(config.int("kofcloud.limits.depPinMaxAgeDays", 365))
+}
+
 // Teto dos backups de estado do `serve` (F16 s1): com `--backup-dir`, cada
 // SUBIDA do serve grava uma copia do estado ESTÁVEL (sem mutacao ha
 // `backupStateMsFrom` ms — backup de escrita no meio perde a mutacao

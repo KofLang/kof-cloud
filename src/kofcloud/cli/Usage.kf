@@ -45,7 +45,7 @@ String usageText() {
     out = out + "  daemon install|status|uninstall   (artefato por SO — systemd/launchd/Windows — sem root, ativacao manual)\n"
     out = out + "  doctor [--file " + defaultManifestPath() + "] [--tls-cert <pem>]       (diagnostico: login, control, device, tunel, auditoria, tls, servicos)\n"
     out = out + "  metrics [--grep <texto>] [--percentiles] [--control <url>]   (export Prometheus; --percentiles = p50/p95/p99 de latencia do Edge; sem auth, so agregados)\n  usage [--export]   (uso da conta: requests e bytes roteados pelo Edge; --export fecha a janela — le e zera, para billing externo)\n  audit [--sbom] [--verify] [--action <acao>] [--tail <n>]  (trilha da conta; --sbom = inventario local; --action filtra, --tail corta)\n"
-    out = out + "  scan [--file <caminho>] [--tls-cert <pem>]  (segredos no manifesto/ambiente, PEM expirando e .kfs commitado no repo; exit 1 com achado)\n"
+    out = out + "  scan [--file <caminho>] [--tls-cert <pem>]  (segredos no manifesto/ambiente, PEM expirando, .kfs commitado e pins de dependencia abertos no repo; exit 1 com achado)\n"
     out = out + "  webhook set <url> --secret <s> | show | remove | test   (incidentes; HMAC-SHA256)\n"
     out = out + "  freeze service|device <nome|id>     (contencao: suspende + revoga credenciais + incidente)\n"
     out = out + "  freeze account                      (a conta inteira: devices + servicos + kfs_)\n"

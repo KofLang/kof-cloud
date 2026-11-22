@@ -86,7 +86,7 @@ o run total imprime `72 passed, 0 failed`. Falha = nome do teste + assert
 | publish com allowlist pela CLI (F10 s3) | `tests/publish_allow_test.kf` | 4 |
 | webhook de incidentes (F17 s3) + extração de host de URL | `tests/webhook_test.kf` | 12 |
 | cadeia de auditoria (F19 s4) | `tests/audit_chain_test.kf` | 21 |
-| scan de ambiente e PEM (F19 s2) | `tests/scan_extra_test.kf` | 5 |
+| scan de ambiente, PEM e dependências (F19 s2) | `tests/scan_extra_test.kf` | 6 |
 | higiene de credenciais (F19 s2) | `tests/token_hygiene_test.kf` | 5 |
 | painel de gestão completa (F12 s2) + webhook, diagnóstico, onboarding, fluxo guiado e contenção (F12 s2/s3) | `tests/panel_actions_test.kf` | 21 |
 | ranking de Edges (F14 s2) | `tests/edge_select_test.kf` | 5 |
@@ -119,7 +119,7 @@ o run total imprime `72 passed, 0 failed`. Falha = nome do teste + assert
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 6 |
 | backup automático do estado (F16 s1) | `tests/backup_dir_test.kf` | 3 |
 
-Total: 504 testes. Ver `15-tests.md` para a matriz.
+Total: 505 testes. Ver `15-tests.md` para a matriz.
 
 ## Desempenho medido
 
