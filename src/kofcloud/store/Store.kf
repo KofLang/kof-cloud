@@ -46,6 +46,135 @@ Bool appendLineCapped(String path, String line, Int capBytes) {
     }
 }
 
+// Timestamp em ms como digitos de largura fixa (puro): a pasta de backups
+// por nome (ts-backup) e o nome do backup automatico usam a mesma forma, e
+// a poda ordena por nome contando com ela. Zero-padded em 16 digitos.
+String longStamp(Long value) {
+    var digits = longToString(value)
+    if (digits.length >= 16) {
+        return digits
+    }
+    var pad = ""
+    var i = digits.length
+    while (i < 16) {
+        pad = pad + "0"
+        i = i + 1
+    }
+    return pad + digits
+}
+
+// Backups automaticos do estado (F16 s1): `<dir>/<estado>-<stamp>.json`,
+// onde `<estado>` e o nome-base sem a extensao. O prefixo e exato e
+// TERMINADO POR "-" para um estado `control-state` nunca casar os backups
+// de um estado `control-state-old` (o prefixo cru casaria, e a poda de um
+// apagaria a historia do outro). Timestamps sao epoch em ms (digit
+// zero-padded), entao a ordem lexicografica do prefixo e a ordem temporal
+// — a poda nao precisa parsear data. Puras sobre nomes (sem IO).
+
+String stateBackupPrefix(String statePath) {
+    var base = statePath
+    // Split manual (precedente do CustomDomain): `String.split(".")` trata o
+    // ponto como regex e nao serve para extensao.
+    var slash = statePath.lastIndexOf("/")
+    if (slash >= 0) {
+        base = statePath.substring(slash + 1)
+    }
+    if (base.endsWith(".json")) {
+        base = base.substring(0, base.length - 5)
+    }
+    return base + "-"
+}
+
+// Nome do backup para o instante `stampMs` (puro).
+String stateBackupName(String statePath, Long stampMs) {
+    return stateBackupPrefix(statePath) + longStamp(stampMs) + ".json"
+}
+
+// Escreve o backup (cria o diretorio). Devolve o caminho, ou "" em falha.
+// O conteudo do estado ja validado chega de fora: quem escolhe o que
+// copiar e o chamador (o `serve` nunca copia estado ilegivel).
+String writeStateBackup(String dir, String statePath, String content, Long stampMs) {
+    var target = dir + "/" + stateBackupName(statePath, stampMs)
+    if (writeTextTo(target, content) == false) {
+        return ""
+    }
+    return target
+}
+
+// Nomes a PODAR para caber no teto, do mais antigo ao mais novo (pura,
+// ordem lexicografica = ordem temporal porque o stamp e zero-padded). Nomes
+// fora do padrao ficam de fora: a poda so toca o que ela mesma criou.
+List<String> stateBackupsToPrune(List<String> names, String statePath, Int keep) {
+    var prefix = stateBackupPrefix(statePath)
+    var valid = listOf<String>()
+    for (var name in names) {
+        if (name.startsWith(prefix) && name.endsWith(".json")) {
+            var middle = name.substring(prefix.length, name.length - 5)
+            var digits = middle.length > 0
+            for (var i = 0; i < middle.length; i++) {
+                var c = middle.charAt(i) as Int
+                if (c < 48 || c > 57) {
+                    digits = false
+                }
+            }
+            if (digits) {
+                valid.add(name)
+            }
+        }
+    }
+    // Ordenacao por selecao (sem dependencia de ordem do list() do SO):
+    // mais antigo primeiro.
+    var sorted = listOf<String>()
+    for (var name in valid) {
+        var at = 0
+        while (at < sorted.size && sorted.get(at).compareTo(name) < 0) {
+            at = at + 1
+        }
+        sorted.add("")
+        var j = sorted.size - 1
+        while (j > at) {
+            sorted.set(j, sorted.get(j - 1))
+            j = j - 1
+        }
+        sorted.set(at, name)
+    }
+    var out = listOf<String>()
+    var excess = sorted.size - keep
+    if (excess > 0) {
+        var k = 0
+        while (k < excess) {
+            out.add(sorted.get(k))
+            k = k + 1
+        }
+    }
+    return out
+}
+
+// Podar agora: lista o diretorio e apaga os excedentes. Best-effort (nunca
+// lanca: backup e assistencia, nao caminho da requisicao). Devolve quantos
+// sairam; -1 quando o diretorio nao pode ser lido.
+Int pruneStateBackups(String dir, String statePath, Int keep) {
+    var names = listOf<String>()
+    try {
+        var listed = File(dir).list()
+        if (listed == null) {
+            return -1
+        }
+        names = listed
+    } catch (String e) {
+        return -1
+    }
+    var removed = 0
+    for (var name in stateBackupsToPrune(names, statePath, keep)) {
+        try {
+            File(dir + "/" + name).delete()
+            removed = removed + 1
+        } catch (String e) {
+        }
+    }
+    return removed
+}
+
 String parentDir(String path) {
     var index = -1
     for (var i = 0; i < path.length; i++) {

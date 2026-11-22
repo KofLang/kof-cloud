@@ -670,6 +670,53 @@ class Registry {
         return target
     }
 
+    // Backup automatico de subida (F16 s1, `serve --backup-dir`): copia o
+    // estado ESTAVEL (sem mutacao ha `minAgeMs`) com o nome canonico,
+    // poda acima de `keep` (mais antigos primeiro) e devolve o resultado
+    // para a linha do banner: o caminho gravado, "" (estado ausente ou
+    // novo demais — escrita recente no meio), ou "!<motivo>" (falha de IO;
+    // nunca lanca). Estado ilegivel nunca chega aqui com conteudo: o
+    // `loadStatus` ja recusou (fail-closed do serve).
+    String backupOnBoot(String dir, Long minAgeMs, Int keep) {
+        // Leitura DEFENSIVA (mesmo padrao do `save`): qualquer pre-condicao
+        // (sem estado, arquivo vazio) devolve "" e o banner diz "nada a
+        // copiar". "!" so para falha de ESCRITA — o unico caso em que o
+        // operador precisa ser avisado.
+        var content = ""
+        try {
+            content = readTextOr(this.path, "")
+        } catch (String e) {
+            return ""
+        }
+        if (content.trim().length == 0) {
+            return ""
+        }
+        // Idade do arquivo: o Kof nao expoe mtime (File.lastModified nao
+        // existe — medido), entao `stat -c %Y` (segundos) decide. `stat`
+        // ausente/falho = idade desconhecida: o backup SEGUE (o
+        // `--backup-dir` e caminho explicito do operador).
+        var mtimeSec = ""
+        try {
+            var stat = process.run("stat", "-c", "%Y", this.path)
+            if (stat.exitCode == 0) {
+                mtimeSec = stat.stdout.trim()
+            }
+        } catch (String e) {
+        }
+        if (mtimeSec.length > 0) {
+            var age = time.now() - (parseLongSafe(mtimeSec, 0L) * 1000L)
+            if (age < minAgeMs) {
+                return ""
+            }
+        }
+        var target = writeStateBackup(dir, this.path, content, time.now())
+        if (target.length == 0) {
+            return "!falha de escrita em " + dir
+        }
+        pruneStateBackups(dir, this.path, keep)
+        return target
+    }
+
     // Uso do servico (F18 s4): o Edge chama UMA vez por requisicao ROTEADA
     // (recusas de plataforma — 404/429/401 — nao sao uso do servico local e
     // nao contam; o billing externo precifica o que o dono serviu). Puro

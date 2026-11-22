@@ -1,0 +1,86 @@
+import kofcloud.cli.Commands
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
+import kofcloud.store.Store
+import kofcloud.util.Limits
+
+// F16 s1 — backup automatico do estado no `serve --backup-dir`. O estado
+// em arquivo e o ponto unico de falha do MVP (17-limitations): atrasar a
+// assistencia (backup + retencao) por causa do banco deixava o operador sem
+// nada depois de uma subida que tirou o control plane do ar. Fatia sem
+// banco: a copia do estado ESTAVEL na partida, com poda por teto.
+
+String backupTmp(String name) {
+    return "/tmp/kofcloud-bk-" + name + "-" + crypto.randomHex(4)
+}
+
+test "backup: poda remove os mais antigos e ignora nome de outro estado", "backup-unit" {
+    // Puro sobre nomes. Timestamp zero-padded: ordem lexicografica = temporal.
+    var names = listOf(
+        "control-state-0000000000000100.json",
+        "control-state-0000000000000300.json",
+        "control-state-0000000000000200.json",
+        "control-state-old-0000000000000001.json",
+        "outro.txt",
+        "control-state-notdigits.json"
+    )
+    var prune = stateBackupsToPrune(names, "/var/lib/control-state.json", 2)
+    assert(prune.size == 1, "um excedente: " + intToString(prune.size))
+    assert(prune.get(0) == "control-state-0000000000000100.json", "sai o mais antigo: " + prune.get(0))
+    assert(stateBackupsToPrune(names, "/var/lib/control-state.json", 5).size == 0, "sob o teto nao poda")
+    assert(stateBackupsToPrune(names, "/var/lib/control-state.json", 0).size == 3, "teto 0 leva os tres do estado")
+    // Prefixo terminado por "-": o estado `control-state-old` nunca casa os
+    // backups de `control-state` (os nomes de `old` ficam para os dele).
+    assert(stateBackupsToPrune(names, "/var/lib/control-state-old.json", 0).size == 1, "estado old poda so o proprio")
+    assert(stateBackupName("/var/lib/control-state.json", 1234L) == "control-state-0000000000001234.json", "nome canonico: " + stateBackupName("/var/lib/control-state.json", 1234L))
+    assert(longStamp(99999999999999999L) == "99999999999999999", "stamp maior que 16 digitos passa inteiro")
+    // Recuo seguro dos limites: zero/negativo recai no default (sem poda =
+    // o problema que o teto resolve; idade 0 copiaria toda subida).
+    assert(stateBackupsFrom(0) == 5, "teto 0 usa default")
+    assert(limitStateBackups() == stateBackupsFrom(config.int("kofcloud.limits.stateBackups", 5)), "teto delega na fonte")
+    assert(backupStateMsFrom(-1) == 30000L, "idade 0 usa default")
+    assert(limitBackupStateMs() == 30000L, "idade travada")
+}
+
+test "backup: linha do banner e honesta nos tres estados", "backup-unit" {
+    assert(stateBackupLine("absent", "/x/estado.json", "/b", "").indexOf("sem estado") >= 0, "ausente: nada a copiar")
+    assert(stateBackupLine("corrupt", "/x/estado.json", "/b", "").indexOf("ilegivel") >= 0, "corrupto: nada copiado")
+    assert(stateBackupLine("ok", "/x/estado.json", "/b", "!falha de escrita").indexOf("AVISO") >= 0, "falha de IO: aviso")
+    assert(stateBackupLine("ok", "/x/estado.json", "/b", "!falha de escrita").indexOf("segue") >= 0, "falha de IO: serve segue")
+    assert(stateBackupLine("ok", "/x/estado.json", "/b", "/b/control-state-1.json").indexOf("/b/control-state-1.json") >= 0, "sucesso: caminho")
+}
+
+test "backup: subida copia o estado estavel, poda no teto e recusa estado novo", "backup-e2e" {
+    var dir = backupTmp("e2e")
+    Directory(dir).createDirectories()
+    var statePath = dir + "/control-state.json"
+    var registry = Registry(statePath)
+    assert(registry.loadStatus == "absent", "comeca sem estado")
+    // Sem estado: nada a copiar (nao inventa backup vazio).
+    assert(registry.backupOnBoot(dir + "/bk", 0L, 2) == "", "sem estado nao copia")
+
+    registry.createAccount("mel", "m@e.com", "segredo")
+    // Estado novo demais (escrita recente): idade minima barra a copia.
+    assert(registry.backupOnBoot(dir + "/bk", 3600000L, 2) == "", "idade minima barra estado recente")
+    // Idade 0: copia o conteudo ESTAVEL (o que estava em disco na subida,
+    // antes de qualquer mutacao do processo) para o nome canonico.
+    // Deriva o estado ate o disco (precedente do backupStateFile da CLI).
+    writeTextTo(statePath, readTextOr(statePath, "") + " ")
+    var first = registry.backupOnBoot(dir + "/bk", 0L, 2)
+    assert(fileExists(first), "primeiro backup existe: " + first)
+    assert(readTextOr(first, "").length > 0, "backup tem conteudo")
+    registry.createAccount("ana", "a@e.com", "segredo")
+    var second = registry.backupOnBoot(dir + "/bk", 0L, 2)
+    registry.createAccount("bia", "b@e.com", "segredo")
+    var third = registry.backupOnBoot(dir + "/bk", 0L, 2)
+    assert(fileExists(second) && fileExists(third), "os dois mais novos ficam")
+    // O mais antigo sai no teto 2 — ou, se os stamps colidiram no mesmo ms,
+    // o mesmo arquivo foi reescrito: nunca mais de 2 arquivos.
+    var count = 0
+    for (var name in File(dir + "/bk").list()) {
+        count = count + 1
+    }
+    assert(count <= 2, "teto de 2 backups respeitado: " + intToString(count))
+    assert(readTextOr(third, "") == readTextOr(statePath, ""), "backup e copia do estado em disco")
+}
+

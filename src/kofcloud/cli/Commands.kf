@@ -83,7 +83,7 @@ String usoDaemonDispatchLine() {
 }
 
 String usoServeLine() {
-    return "uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--waf detectar|enforce] [--panel] [--tls-cert <pem> --tls-key <pem> | --tls-cert-cmd <cmd> --tls-key-cmd <cmd>] [--tunnel-secret-file <arq> | --tunnel-secret-cmd <cmd>] (portas 1-65535)"
+    return "uso: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--backup-dir <dir>] [--waf detectar|enforce] [--panel] [--tls-cert <pem> --tls-key <pem> | --tls-cert-cmd <cmd> --tls-key-cmd <cmd>] [--tunnel-secret-file <arq> | --tunnel-secret-cmd <cmd>] (portas 1-65535)"
 }
 
 // Modo WAF do `serve --waf`: ausente, vazio ou so-espacos = detectar
@@ -415,7 +415,7 @@ List<String> valueFlags() {
     return listOf(
         "--port", "--address", "--exposure", "--device", "--ttl", "--tail",
         "--control", "--control-port", "--tunnel-port", "--http-port",
-        "--state", "--waf", "--tls-cert", "--tls-key", "--service", "--file",
+        "--state", "--backup-dir", "--waf", "--tls-cert", "--tls-key", "--service", "--file",
         "--password", "--from", "--to", "--resolve", "--secret",
         "--allow-method", "--allow-path", "--action", "--dns-webhook", "--max-body",
         "--tunnel-secret-file", "--tunnel-secret-cmd", "--tls-cert-cmd", "--tls-key-cmd",
@@ -3510,7 +3510,7 @@ Int cmdServe(List<String> args) {
     // duplicada leria a primeira. Ambas rejeitadas antes de validar faixa.
     // --state segue a mesma regra (precedente: --file/--control/--device):
     // solto caia no default em silencio, duplicado lia a primeira.
-    if (flagMissingValue(args, "--control-port") || flagMissingValue(args, "--tunnel-port") || flagMissingValue(args, "--http-port") || flagMissingValue(args, "--state") || flagMissingValue(args, "--waf") || flagMissingValue(args, "--tls-cert") || flagMissingValue(args, "--tls-key") || flagMissingValue(args, "--tunnel-secret-file") || flagMissingValue(args, "--tunnel-secret-cmd") || flagMissingValue(args, "--tls-cert-cmd") || flagMissingValue(args, "--tls-key-cmd")) {
+    if (flagMissingValue(args, "--control-port") || flagMissingValue(args, "--tunnel-port") || flagMissingValue(args, "--http-port") || flagMissingValue(args, "--state") || flagMissingValue(args, "--backup-dir") || flagMissingValue(args, "--waf") || flagMissingValue(args, "--tls-cert") || flagMissingValue(args, "--tls-key") || flagMissingValue(args, "--tunnel-secret-file") || flagMissingValue(args, "--tunnel-secret-cmd") || flagMissingValue(args, "--tls-cert-cmd") || flagMissingValue(args, "--tls-key-cmd")) {
         println(usoServeLine())
         return 1
     }
@@ -3520,8 +3520,8 @@ Int cmdServe(List<String> args) {
         println(usoServeLine())
         return 1
     }
-    if (flagDuplicated(args, "--control-port") || flagDuplicated(args, "--tunnel-port") || flagDuplicated(args, "--http-port") || flagDuplicated(args, "--state") || flagDuplicated(args, "--waf") || flagDuplicated(args, "--tls-cert") || flagDuplicated(args, "--tls-key") || flagDuplicated(args, "--tunnel-secret-file") || flagDuplicated(args, "--tunnel-secret-cmd") || flagDuplicated(args, "--tls-cert-cmd") || flagDuplicated(args, "--tls-key-cmd") || flagDuplicated(args, "--panel") || flagDuplicated(args, "--status-page")) {
-        println("flag repetida — informe uma so vez: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]")
+    if (flagDuplicated(args, "--control-port") || flagDuplicated(args, "--tunnel-port") || flagDuplicated(args, "--http-port") || flagDuplicated(args, "--state") || flagDuplicated(args, "--backup-dir") || flagDuplicated(args, "--waf") || flagDuplicated(args, "--tls-cert") || flagDuplicated(args, "--tls-key") || flagDuplicated(args, "--tunnel-secret-file") || flagDuplicated(args, "--tunnel-secret-cmd") || flagDuplicated(args, "--tls-cert-cmd") || flagDuplicated(args, "--tls-key-cmd") || flagDuplicated(args, "--panel") || flagDuplicated(args, "--status-page")) {
+        println("flag repetida — informe uma so vez: kof cloud serve [--control-port N] [--tunnel-port N] [--http-port N] [--state <caminho>] [--backup-dir <dir>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem>]")
         return 1
     }
     var controlPort = portFlagValue(flagValue(args, "--control-port"), defaultControlPort())
@@ -3656,6 +3656,16 @@ Int cmdServe(List<String> args) {
         println(serveCorruptRefusal(statePath))
         return 1
     }
+    // Backups automaticos do estado (F16 s1): a copia e do estado ESTAVEL
+    // (sem mutacao ha kofcloud.limits.backupStateMs — backup de escrita no
+    // meio perde a mutacao seguinte) e o estado ilegivel nao e copiado
+    // (o fail-closed acima ja recusou). Acima do teto a poda remove os mais
+    // antigos. Best-effort: falha de IO vira aviso, nunca derruba o serve —
+    // disco cheio derrubaria o save() do proprio estado.
+    var backupDir = flagValue(args, "--backup-dir").trim()
+    if (backupDir.length > 0) {
+        println(stateBackupLine(registry.loadStatus, registry.path, backupDir, registry.backupOnBoot(backupDir, limitBackupStateMs(), limitStateBackups())))
+    }
     var edgeState = EdgeState(registry)
     edgeState.setWafEnforce(wafMode == "enforce")
 
@@ -3720,6 +3730,22 @@ Int cmdServe(List<String> args) {
     var usageTask = spawn { usagePushSweeper(registry, platformStop, limitUsagePushMs()) }
     await controlTask
     return 0
+}
+
+// Linha do banner do backup automatico (pura): nomeia o resultado sem
+// segredo. "estado ilegivel" e inalcancavel pelo cmdServe (o fail-closed
+// recusa antes) — fica aqui para a fatia ser reusavel sem mentir.
+String stateBackupLine(String loadStatus, String statePath, String dir, String result) {
+    if (loadStatus == "absent") {
+        return "backup: sem estado em " + statePath + " — nada a copiar"
+    }
+    if (loadStatus == "corrupt") {
+        return "backup: estado ilegivel — nada foi copiado (preserve o arquivo antes de qualquer troca)"
+    }
+    if (result.startsWith("!")) {
+        return "backup: AVISO — nao foi possivel copiar para " + dir + " (" + result.substring(1) + "); o serve segue"
+    }
+    return "backup: " + result
 }
 
 // Laco da varredura periodica de credenciais vencidas (serve): a poda

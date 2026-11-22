@@ -1437,6 +1437,25 @@ iguais).
   "resposta inesperada" (nunca verde). Prova: `doctor-control` em
   `tests/doctor_test.kf` (puro em 4 casos + e2e com control real corrupto).
 
+  **Implementado (`serve --backup-dir` — a parte sem banco do backup
+  automático):** o estado em arquivo é o ponto único de falha do MVP
+  (17-limitations); atrasar a assistência por causa do banco deixava o
+  operador sem nada depois de uma subida que tirou o control plane do ar.
+  Agora, com `--backup-dir <dir>`, cada subida do `serve` grava uma cópia
+  do estado em disco no nome canônico `<estado>-<stamp>.json` (stamp de 16
+  dígitos: ordem lexicográfica = temporal) e **poda acima do teto**
+  (`kofcloud.limits.stateBackups`, default 5 — disco cheio derrubaria o
+  `save()` do estado), com prefixo terminado em `-` para os backups de
+  `control-state` nunca se misturarem aos de `control-state-old`; e só com
+  o arquivo **estável** (idade ≥ `kofcloud.limits.backupStateMs`, default
+  30 s — o Kof não expõe mtime, `stat -c %Y` decide; `stat` indisponível =
+  backup segue). Estado ilegível não é copiado (o fail-closed já recusou) e
+  falha de escrita vira **AVISO** no banner, nunca derruba o serve. A linha
+  do banner é pura (`stateBackupLine`). Prova: `tests/backup_dir_test.kf`
+  (3: poda sobre nomes com outro estado sem colisão e recuo seguro dos
+  limites; banner nos três estados; subida real sem estado → nada, estado
+  recente barrado pela idade, cópia do estado em disco, teto respeitado e
+  arquivo ilegível sem backup).
   **Implementado (retry offline — a máquina sem rede não acorda a cada
   segundo):** notebook no avião, Wi-Fi trocando, VPN caindo — tudo virava
   "control plane inalcançável" e o laço de reconexão batia na base do

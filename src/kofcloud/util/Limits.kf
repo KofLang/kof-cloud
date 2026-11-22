@@ -250,6 +250,43 @@ Int limitUsagePushMs() {
     return usagePushMsFrom(config.int("kofcloud.limits.usagePushMs", 60000))
 }
 
+// Teto dos backups de estado do `serve` (F16 s1): com `--backup-dir`, cada
+// SUBIDA do serve grava uma copia do estado ESTÁVEL (sem mutacao ha
+// `backupStateMsFrom` ms — backup de escrita no meio perde a mutacao
+// seguinte, o `ts-backup` da CLI; o fail-closed de estado ilegível preserva
+// a versao boa anterior em vez de copiar o lixo). Num host que reinicia
+// muito (queda de energia, unit com Restart=always), um backup por subida
+// enchia o disco — e disco cheio derruba o save() do estado, que e o dado
+// que o backup existe para guardar. Acima do teto a poda remove os MAIS
+// ANTIGOS; backup nunca falha por teto. Recuo seguro: zero/negativo recai
+// no default (sem poda = o problema que o teto resolve).
+Int stateBackupsFrom(Int configured) {
+    if (configured <= 0) {
+        return 5
+    }
+    return configured
+}
+
+Int limitStateBackups() {
+    return stateBackupsFrom(config.int("kofcloud.limits.stateBackups", 5))
+}
+
+// Idade minima (ms) do estado para um backup automatico valer a pena: um
+// arquivo escrito ha menos tempo que isso tem escrita recente no meio (ou
+// acabou de ser criado) — copiar daria um backup igual ao anterior. Mesmo
+// predicado do `ts-backup` da CLI (fonte unica). Recuo seguro para o
+// default (zero faria toda subida copiar; nunca foi intencao).
+Long backupStateMsFrom(Int configured) {
+    if (configured <= 0) {
+        return 30000
+    }
+    return configured
+}
+
+Long limitBackupStateMs() {
+    return backupStateMsFrom(config.int("kofcloud.limits.backupStateMs", 30000))
+}
+
 // Passo de.poll do refresher do Agent (ms): o refresher dorme o gap
 // (`limitRefreshMs`) em passos deste tamanho, checando session.open — um
 // sleep unico de 6xhealthMs (30 s default, mais com healthMs grande em
