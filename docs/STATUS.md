@@ -114,11 +114,11 @@ o run total imprime `71 passed, 0 failed`. Falha = nome do teste + assert
 | SERVICES empurrado (F14 s3) | `tests/services_push_test.kf` | 2 |
 | deploy --watch (F13 s3 parcial) | `tests/deploy_watch_test.kf` | 4 |
 | uso por conta + ciclo de billing (F18 s4) | `tests/usage_test.kf` | 6 |
-| segredos de fonte externa (F18 s5) | `tests/secrets_test.kf` | 4 |
+| segredos de fonte externa (F18 s5) | `tests/secrets_test.kf` | 6 |
 | push do uso para billing (F18 s4) | `tests/usage_push_test.kf` | 4 |
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 6 |
 
-Total: 496 testes. Ver `15-tests.md` para a matriz.
+Total: 498 testes. Ver `15-tests.md` para a matriz.
 
 ## Desempenho medido
 

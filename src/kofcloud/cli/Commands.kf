@@ -3411,23 +3411,16 @@ String secretSourceLabel(String filePath, String cmdText) {
 // Le a fonte externa. `inlineValue` ja vem resolvida (env/config), `file`
 // le o arquivo (trim: newline final de `vault kv get -field` nao e segredo),
 // `cmd` roda via `sh -c` (precedente: build do deploy — process.run nao faz
-// split de shell). Falha vira String de erro explicita; "" so quando nao ha
-// fonte. O valor nunca entra em mensagem de erro.
+// split de shell; o exec vive em `runSecretSource`, compartilhado com os
+// PEMs por comando). Falha vira String de erro explicita; "" so quando nao
+// ha fonte. O valor nunca entra em mensagem de erro.
+//
+// O `serve` passa `inlineValue=""` de proposito: com arquivo ou comando o
+// env/config nao pode vencer (a fonte externa que o operador passou e a
+// escolhida; as fontes ja sao exclusivas pelo `secretSourceError`).
 String readSecretSource(String inlineValue, String filePath, String cmdText, String label) {
     if (cmdText.trim().length > 0) {
-        try {
-            var result = process.run("sh", "-c", cmdText)
-            if (result.exitCode != 0) {
-                return label + ": comando falhou (exit " + intToString(result.exitCode) + ") — nada foi lido"
-            }
-            var value = result.stdout.trim()
-            if (value.length == 0) {
-                return label + ": comando nao devolveu valor (saida vazia)"
-            }
-            return value
-        } catch (String e) {
-            return label + ": comando nao executou (" + e + ")"
-        }
+        return runSecretSource(cmdText, label)
     }
     if (filePath.trim().length > 0) {
         var fromFile = readTextOr(filePath.trim(), "")
@@ -3437,6 +3430,27 @@ String readSecretSource(String inlineValue, String filePath, String cmdText, Str
         return fromFile.trim()
     }
     return inlineValue
+}
+
+// Fonte por COMANDO de qualquer segredo (tunnel secret e os dois PEMs):
+// execucao unica, para os tres caminhos nao divergirem no contrato de falha
+// ("<label>: comando falhou (exit N) — nada foi lido", "saida vazia",
+// "comando nao executou") — que e o que `secretSourceFailed` reconhece.
+// Mesmo contrato, mesmo trim do newline final, mesmo comando via `sh -c`.
+String runSecretSource(String cmdText, String label) {
+    try {
+        var result = process.run("sh", "-c", cmdText)
+        if (result.exitCode != 0) {
+            return label + ": comando falhou (exit " + intToString(result.exitCode) + ") — nada foi lido"
+        }
+        var value = result.stdout.trim()
+        if (value.length == 0) {
+            return label + ": comando nao devolveu valor (saida vazia)"
+        }
+        return value
+    } catch (String e) {
+        return label + ": comando nao executou (" + e + ")"
+    }
 }
 
 // Falha (mensagem de erro/aviso) vs. valor: o chamador distingue pelo
@@ -3529,11 +3543,24 @@ Int cmdServe(List<String> args) {
         println(usoServeLine())
         return 1
     }
-    var tunnelSecret = readSecretSource(tunnelBase, tunnelFile, tunnelCmd, "tunnel secret")
+    // Toda fonte e conferida na PARTIDA, antes de qualquer listener: a linha
+    // "tunnel secret: fonte comando (...)" era anunciada e o comando so rodava
+    // depois, DENTRO do spawn — um comando de provedor (Vault caido, token
+    // expirado) derrubava a task do tunel e o serve seguia anunciando a
+    // borda com a porta muda. Falha = recusa visivel (exit 1, nada no ar).
+    var tunnelSecret = readSecretSource("", tunnelFile, "", "tunnel secret")
     if (secretSourceFailed("tunnel secret", tunnelSecret)) {
         println(tunnelSecret)
         println(usoServeLine())
         return 1
+    }
+    if (tunnelCmd.trim().length > 0) {
+        tunnelSecret = runSecretSource(tunnelCmd, "tunnel secret")
+        if (secretSourceFailed("tunnel secret", tunnelSecret)) {
+            println(tunnelSecret)
+            println(usoServeLine())
+            return 1
+        }
     }
     var maxBytes = limitMaxBodyBytes()
     // TLS do control plane (Fase 9 slice 1 parcial): par cert+key em PEM;
@@ -3667,8 +3694,8 @@ Int cmdServe(List<String> args) {
         // nao existe no serve; ler so no momento de subir evita segredo na
         // memoria por mais tempo que o necessario). Falha = nao sobe HTTPS
         // com PEM vazio (erro explicito).
-        var certFromCmd = readSecretSource("", "", certCmd, "tls cert")
-        var keyFromCmd = readSecretSource("", "", keyCmd, "tls key")
+        var certFromCmd = runSecretSource(certCmd, "tls cert")
+        var keyFromCmd = runSecretSource(keyCmd, "tls key")
         if (secretSourceFailed("tls cert", certFromCmd)) {
             println(certFromCmd)
             println(usoServeLine())

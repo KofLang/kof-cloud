@@ -1842,10 +1842,22 @@ env, credencial nunca em log, teste com fake local + e2e opcional real):
   = erro explícito, nunca segredo vazio indo para o handler. **Divergência
   honesta:** rotação é por reiniciar o `serve` — SIGHUP não existe (L3, sem
   sinais), então o "reload" do desenho original não tem mecanismo; o
-  operador rotaciona no provedor e reinicia. Prova:
-  `tests/secrets_test.kf` (4: leitura de comando/arquivo com falha honesta,
-  combinação de fontes, help, e2e — `ControlPlane.enableTls` com PEMs lidos
-  por comando sobe HTTPS de verdade).
+  operador rotaciona no provedor e reinicia. **Fatia: falha da fonte é
+  recusa na partida, não task morta.** O tunnel secret ia por
+  `readSecretSource(tunnelCmd)` e o comando só rodava DENTRO do `spawn` do
+  túnel: provedor caído (Vault, token expirado) derrubava a task e o `serve`
+  anunciava a borda com a porta muda — o oposto do "erro explícito" que a
+  fatia promete. Agora as fontes do tunnel secret (e os dois PEMs por
+  comando) são lidas ANTES de anunciar/subir: falha = linha de recusa +
+  exit 1, nada no ar. Os três comandos de segredo passam por um único
+  `runSecretSource` (um exec, um contrato de falha `"<label>: ..."`, mesmo
+  trim, erro nunca ecoa o valor), e com arquivo/comando o env/config não
+  vence a fonte que o operador escolheu. Prova:
+  `tests/secrets_test.kf` (6: `secret-unit` ×3 — leitura de comando/arquivo
+  com falha honesta, combinação de fontes, exec único —, `secret-usage` e
+  `secret-e2e` ×2 — `ControlPlane.enableTls` com PEMs lidos por comando sobe
+  HTTPS de verdade e o `serve` com `--tunnel-secret-cmd` falho recusa antes
+  de subir).
 
 **Regras:** todo conector é opcional e sem lock-in (o caminho manual
 continua funcionando); credencial de terceiro nunca atravessa o túnel
