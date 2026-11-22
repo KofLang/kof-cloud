@@ -1205,7 +1205,7 @@ Int cmdUnpublish(List<String> args) {
         }
         var target = match.uniqueId
         if (target.length == 0) {
-            println(serviceNotFoundLine(name))
+            printServiceNotFound(services, name)
             return 1
         }
         var body = mapOf()
@@ -1441,7 +1441,7 @@ Int cmdServiceStatus(List<String> args) {
                 return 0
             }
         }
-        println(serviceNotFoundLine(name))
+        printServiceNotFound(services, name)
         return 1
     } catch (String e) {
         printFail("falha", e)
@@ -1538,6 +1538,17 @@ String serviceAmbiguousLine(String name, List<String> deviceIds) {
     return "servico \"" + name + "\" existe em " + intToString(deviceIds.size) + " dispositivos — use `service unpublish|status` do dispositivo certo e remova o duplicado (" + joinCsv(deviceIds) + ")"
 }
 
+// "nao encontrado" + dica de caixa (quando ha candidato). Ponto unico das
+// mensagens: o aviso de `serviceCaseHint` nunca aparece sem o "nao
+// encontrado" e vice-versa — dois prints que se separariam em silencio.
+void printServiceNotFound(List<Service> services, String name) {
+    println(serviceNotFoundLine(name))
+    var hint = serviceCaseHint(services, name)
+    if (hint.length > 0) {
+        println(hint)
+    }
+}
+
 // Nome de servico aparado para comparacao (os 4 comandos que leem nome
 // posicional: unpublish/status/token/token-revoke + o --service do domain
 // add verificam via `trimmed == service.name`; sem isso, `" site "` nao
@@ -1546,6 +1557,51 @@ String serviceAmbiguousLine(String name, List<String> deviceIds) {
 // ambiguo — quem precisa distinguir usa `resolveServiceName`.
 String matchServiceName(List<Service> services, String name) {
     return resolveServiceName(services, name).uniqueId
+}
+
+// Nome de servico que NAO existe mas casa com um publicado sem distinguir
+// maiusculas: "Site" nao resolve "site" — o manifesto/CLI casam EXATO, e
+// adivinhar (abaixar tudo) mudaria a chave do manifesto em silencio. Mas
+// dizer so "nao encontrado" faz o operador conferir o nome no `service list`
+// e achar que esta certo. O aviso nomeia o servico e a regra; "" quando nao
+// ha candidato (nao inventa dica). Pura, sem IO.
+String serviceCaseHint(List<Service> services, String name) {
+    var wanted = name.trim()
+    if (wanted.length == 0) {
+        return ""
+    }
+    for (var service in services) {
+        if (service.name != wanted && sameLettersIgnoringCase(service.name, wanted)) {
+            return "aviso: o nome importa a caixa — \"" + service.name + "\" existe (informado: \"" + wanted + "\")"
+        }
+    }
+    return ""
+}
+
+// Mesmas letras, caixa diferente? Pura sem `toLowerCase` (a caixa e uma
+// lacuna medida do runtime — L20): compara caractere a caractere, e para
+// A-Z/a-z aceita as duas formas de um MESMO papel (a<->A etc.).
+Bool sameLettersIgnoringCase(String a, String b) {
+    if (a.length != b.length) {
+        return false
+    }
+    var i = 0
+    while (i < a.length) {
+        if (loweredChar(a.charAt(i) as Int) != loweredChar(b.charAt(i) as Int)) {
+            return false
+        }
+        i = i + 1
+    }
+    return true
+}
+
+// Minusculo so para ASCII A-Z; qualquer outro codigo fica igual. Usado SO
+// na comparacao acima (nunca para montar texto).
+Int loweredChar(Int c) {
+    if (c >= 65 && c <= 90) {
+        return c + 32
+    }
+    return c
 }
 
 // Resolve o nome para um id e imprime o motivo quando nao da: inexistente
@@ -1562,7 +1618,7 @@ String resolveServiceOrReport(LocalSession session, String name) {
         return ""
     }
     if (match.uniqueId.length == 0) {
-        println(serviceNotFoundLine(name))
+        printServiceNotFound(services, name)
         return ""
     }
     return match.uniqueId
@@ -1655,7 +1711,7 @@ Int cmdServiceToken(List<String> args) {
             }
         }
         if (target.length == 0) {
-            println(serviceNotFoundLine(name))
+            printServiceNotFound(services, name)
             return 1
         }
         if (exposureRequiresAuth(exposure) == false) {
@@ -1878,7 +1934,7 @@ Int cmdServiceTokenRevoke(List<String> args) {
         }
         var target = match.uniqueId
         if (target.length == 0) {
-            println(serviceNotFoundLine(name))
+            printServiceNotFound(services, name)
             return 1
         }
         var body = mapOf()
@@ -2007,7 +2063,7 @@ Int cmdServiceRotate(List<String> args) {
         }
         var target = match.uniqueId
         if (target.length == 0) {
-            println(serviceNotFoundLine(name))
+            printServiceNotFound(services, name)
             return 1
         }
         var body = mapOf()
@@ -2439,7 +2495,7 @@ Int cmdServiceRotation(List<String> args) {
         }
         var target = match.uniqueId
         if (target.length == 0) {
-            println(serviceNotFoundLine(name))
+            printServiceNotFound(services, name)
             return 1
         }
         var body = mapOf()
@@ -2843,7 +2899,7 @@ Int runContainment(List<String> args, Bool freezing) {
             }
             var matched = match.uniqueId
             if (matched.length == 0) {
-                println(serviceNotFoundLine(name))
+                printServiceNotFound(services, name)
                 return 1
             }
             targetId = matched

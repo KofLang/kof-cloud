@@ -51,7 +51,7 @@ o run total imprime `72 passed, 0 failed`. Falha = nome do teste + assert
 | forca bruta no login (F5) | `tests/login_limit_test.kf` | 3 |
 | vocabulario fechado do status (F5) | `tests/status_report_test.kf` | 2 |
 | backoff + drift de Edge + retry offline | `tests/backoff_test.kf` | 5 |
-| registry | `tests/registry_test.kf` | 12 |
+| registry | `tests/registry_test.kf` | 13 |
 | limites + varredura + push de SERVICES + trava de citação + família em fonte única | `tests/limits_test.kf` | 11 |
 | service token | `tests/service_token_test.kf` | 15 |
 | erros R6 | `tests/errors_test.kf` | 11 |
@@ -86,7 +86,7 @@ o run total imprime `72 passed, 0 failed`. Falha = nome do teste + assert
 | publish com allowlist pela CLI (F10 s3) | `tests/publish_allow_test.kf` | 4 |
 | webhook de incidentes (F17 s3) + extração de host de URL | `tests/webhook_test.kf` | 12 |
 | cadeia de auditoria (F19 s4) | `tests/audit_chain_test.kf` | 21 |
-| scan de ambiente, PEM e dependências (F19 s2) | `tests/scan_extra_test.kf` | 6 |
+| scan de ambiente, PEM, dependências e aviso de caixa (F19 s2/F7) | `tests/scan_extra_test.kf` | 7 |
 | higiene de credenciais (F19 s2) | `tests/token_hygiene_test.kf` | 5 |
 | painel de gestão completa (F12 s2) + webhook, diagnóstico, onboarding, fluxo guiado e contenção (F12 s2/s3) | `tests/panel_actions_test.kf` | 21 |
 | ranking de Edges (F14 s2) | `tests/edge_select_test.kf` | 5 |
@@ -119,7 +119,7 @@ o run total imprime `72 passed, 0 failed`. Falha = nome do teste + assert
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 6 |
 | backup automático do estado (F16 s1) | `tests/backup_dir_test.kf` | 3 |
 
-Total: 505 testes. Ver `15-tests.md` para a matriz.
+Total: 507 testes. Ver `15-tests.md` para a matriz.
 
 ## Desempenho medido
 

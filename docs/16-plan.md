@@ -247,6 +247,18 @@ declarados, diz quantos órfãos o `--prune` levaria e aponta o `down --yes`.
 Prova: `tests/deploy_test.kf` (`deploy-down-guard`: pura + `--yes` repetido
 barra no uso) + `deploy_test.kf` (`valueflags-unit`: `down --prune --yes`
 passa, `--yes --yes` barra).
+**Fatia: nome de serviço com caixa errada ganha diagnóstico.** O nome de
+serviço é chave EXATA (manifesto, rota, hostname) — "Site" não resolve
+"site", e adivinhar mudaria a chave em silêncio. Mas os comandos por nome
+diziam só "não encontrado", e o operador conferia o `service list` e
+achava o nome certo. Agora `serviceCaseHint` (pura, comparação própria sem
+`toLowerCase` — a caixa é lacuna medida do runtime, L20) nomeia o serviço
+existente; `printServiceNotFound` é o ponto único das mensagens (o aviso
+nunca aparece sem o "não encontrado"). Wire em unpublish, status, token,
+token-list, token-revoke, rotate, rotation e todo comando que passa pelo
+`resolveServiceOrReport` (suspend, unsuspend, tokens). Prova:
+`tests/registry_test.kf` (`service-case-hint`) + `tests/scan_extra_test.kf`
+(`service-case-e2e`: `unpublish Site` recusa e nada é removido).
 **Fatia: artefato tem de ser arquivo
 legível** (`artifactProblem`): `File().exists()` aceita diretório, então
 `"artifact": "dist"` passava a checagem e o deploy publicava um serviço cujo

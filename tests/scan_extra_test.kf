@@ -1,6 +1,11 @@
+import kofcloud.cli.Commands
 import kofcloud.cli.Deploy
+import kofcloud.cli.Local
+import kofcloud.control.ControlPlane
+import kofcloud.control.Registry
 import kofcloud.cli.Usage
 import kofcloud.util.Text
+import testkit.Support
 
 // Fase 19 slice 2 (complemento) — o scan passa a olhar tambem o ambiente e
 // o PEM do operador, nao so o manifesto.
@@ -155,4 +160,33 @@ test "scan: dependencias — pin aberto e pin antigo com data (puras + e2e offli
     writeTextTo(dir + "/package.json", "{\n  \"name\": \"site\",\n  \"dependencies\": {\n    \"esquerda\": \"latest\"\n  }\n}\n")
     if (!(cmdScan(listOf("--file", dir + "/kofcloud.json")) == 1)) { assert(false, "E23") }
     if (!(dependencyManifestNames().size == 6)) { assert(false, "E24") }
+}
+
+test "scan: e2e — nome com caixa errada no comando rejeita e aponta o certo", "service-case-e2e" {
+    // O caminho real: `unpublish Site` contra um `site` publicado. Exit 1
+    // (nada e removido — semantica exata) e o aviso de caixa no stdout.
+    var dir = "/tmp/kofcloud-case-" + crypto.randomHex(4)
+    Directory(dir).createDirectories()
+    var statePath = dir + "/control-state.json"
+    var registry = Registry(statePath)
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    registry.registerDevice(account, "nb", "pk")
+    var deviceId = registry.devicesForAccount(account.id).get(0).id
+    registry.publishService(account, deviceId, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    var port = 19741
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control no ar")
+    var url = "http://127.0.0.1:" + intToString(port)
+    var token = loginOrCreate(url, "mel", "segredo")
+    var priorSession = readTextOr(sessionPath(), "")
+    saveSession(LocalSession("", "mel", token, url))
+    assert(cmdUnpublish(listOf("Site")) == 1, "caixa errada recusa")
+    assert(cmdServiceSuspend(listOf("SITE")) == 1, "suspend com caixa errada recusa")
+    assert(registry.servicesForAccount(account.id).size == 1, "nada foi removido nem suspenso")
+    if (priorSession.length == 0) {
+        File(sessionPath()).delete()
+    } else {
+        writeTextTo(sessionPath(), priorSession)
+    }
 }

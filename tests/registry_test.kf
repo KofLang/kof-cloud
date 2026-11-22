@@ -1,3 +1,4 @@
+import kofcloud.cli.Commands
 
 import kofcloud.control.Registry
 import kofcloud.model.Account
@@ -245,4 +246,31 @@ test "registry: re-registrar nome revogado cria device NOVO (id e chave novos)",
         assert(active.id == second.id, "activeDeviceByName acha o vivo")
     }
     assert(registry.activeDeviceCount(account.id) == 1, "revogado nao conta no teto")
+}
+
+test "registry: nome com caixa diferente nao resolve, mas o aviso nomeia o existente", "service-case-hint" {
+    // O nome de servico e chave EXATA (manifesto, rota, hostname): "Site" nao
+    // resolve "site" — e adivinhar mudaria a chave em silencio. O que faltava
+    // era o diagnostico: "nao encontrado" sozinho fazia o operador conferir
+    // o `service list` e achar que o nome estava certo.
+    var live = listOf<Service>()
+    live.add(Service("id-a", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
+    live.add(Service("id-b", "acc", "devA", "api-v2", "127.0.0.1", 9000, "http", "api-v2.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
+    // Exato continua resolvendo (sem mudanca de semantica).
+    assert(matchServiceName(live, "site") == "id-a", "exato resolve")
+    assert(matchServiceName(live, "Site") == "", "caixa diferente NAO resolve")
+    assert(serviceCaseHint(live, "Site").indexOf("site") >= 0, "o aviso nomeia o existente")
+    assert(serviceCaseHint(live, " Site ").indexOf("site") >= 0, "aplica trim")
+    assert(serviceCaseHint(live, "API-V2").indexOf("api-v2") >= 0, "maiusculas no nome tambem casam")
+    assert(serviceCaseHint(live, "outro") == "", "sem candidato, sem aviso")
+    assert(serviceCaseHint(live, "") == "", "vazio sem aviso")
+    assert(serviceCaseHint(listOf<Service>(), "Site") == "", "conta vazia sem aviso")
+    // Comparacao propria (a caixa e lacuna medida do runtime — L20): so ASCII.
+    assert(sameLettersIgnoringCase("Site", "sITE"), "mesmas letras")
+    assert(sameLettersIgnoringCase("site", "site") == true, "exato nao confunde")
+    assert(sameLettersIgnoringCase("site", "sity") == false, "letra diferente")
+    assert(sameLettersIgnoringCase("site", "sites") == false, "tamanho diferente")
+    assert(loweredChar(65) == 97, "A vira a")
+    assert(loweredChar(97) == 97, "a fica a")
+    assert(loweredChar(45) == 45, "hifen intacto")
 }
