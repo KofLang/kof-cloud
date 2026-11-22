@@ -991,3 +991,50 @@ test "text: provas citadas no plano batem com os arquivos", "prova-counts" {
     assert(totalChecks >= 28, "totais conferidos=" + intToString(totalChecks))
     assert(pieceChecks >= 4, "pecas ×N conferidas=" + intToString(pieceChecks))
 }
+
+test "text: toda lacuna Lnn dos dois docs existe nos dois", "lacunas-docs" {
+    // Duas listas dizem a MESMA coisa: a tabela do 17-limitations (L1–L15,
+    // L18) e as seções `### Lnn` do 13-kof-apis (L1–L20). A L18 (caixa/
+    // caractere/ternário/assert, medidos na trava dos controles) entrou só
+    // no 17 — e a lacuna que já mordeu o código é a que mais precisa estar
+    // no doc de APIs. Por isso a paridade é bidirecional, não "um contém o
+    // outro".
+    var limits = readTextOr("docs/17-limitations.md", "")
+    var apis = readTextOr("docs/13-kof-apis.md", "")
+    assert(limits.length > 0 && apis.length > 0, "os dois docs existem")
+    var inLimits = listOf<String>()
+    for (var i = 1; i <= 25; i++) {
+        var id = "L" + intToString(i)
+        if (limits.indexOf("| " + id + " |") >= 0) {
+            inLimits.add(id)
+        }
+    }
+    var inApis = listOf<String>()
+    for (var i = 1; i <= 25; i++) {
+        var id = "L" + intToString(i)
+        if (apis.indexOf("### " + id + " — ") >= 0) {
+            inApis.add(id)
+        }
+    }
+    // Sanidade: formato mudou e nada casou = falha, nunca verde por vazio.
+    if (inLimits.size < 15) {
+        throw "17-limitations com poucas lacunas: " + intToString(inLimits.size)
+    }
+    if (inApis.size < 15) {
+        throw "13-kof-apis com poucas lacunas: " + intToString(inApis.size)
+    }
+    for (var id in inLimits) {
+        if (inApis.contains(id) == false) {
+            throw "lacuna no 17-limitations sem seção no 13-kof-apis: " + id
+        }
+    }
+    for (var id in inApis) {
+        if (inLimits.contains(id) == false) {
+            throw "lacuna no 13-kof-apis fora da tabela do 17-limitations: " + id
+        }
+    }
+    // A L18 é o caso concreto que motivou a trava: o contorno citado nos
+    // dois docs é o mesmo (lista fechada + helper de rótulo).
+    assert(limits.indexOf("protocolWireLiterals") >= 0, "17-limitations cita o contorno")
+    assert(apis.indexOf("protocolWireLiterals") >= 0, "13-kof-apis cita o contorno")
+}

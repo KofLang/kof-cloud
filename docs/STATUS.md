@@ -46,7 +46,7 @@ o run total imprime `71 passed, 0 failed`. Falha = nome do teste + assert
 | Suite | Arquivo | Testes |
 |---|---|---|
 | framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 12 |
-| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls/audit-sbom/host-normalize/u-matrix/u-counts/prova-counts/limits-docs | `tests/hosts_test.kf` | 34 |
+| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls/audit-sbom/host-normalize/u-matrix/u-counts/prova-counts/limits-docs/lacunas-docs | `tests/hosts_test.kf` | 35 |
 | identidade/cifra/tokens | `tests/identity_test.kf` | 6 |
 | forca bruta no login (F5) | `tests/login_limit_test.kf` | 3 |
 | vocabulario fechado do status (F5) | `tests/status_report_test.kf` | 2 |
@@ -118,4 +118,4 @@ o run total imprime `71 passed, 0 failed`. Falha = nome do teste + assert
 | push do uso para billing (F18 s4) | `tests/usage_push_test.kf` | 4 |
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 6 |
 
-Total: 491 testes. Ver `15-tests.md` para a matriz.
+Total: 492 testes. Ver `15-tests.md` para a matriz.

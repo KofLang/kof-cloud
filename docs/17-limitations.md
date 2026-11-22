@@ -22,7 +22,12 @@ esconder atrás de workaround. É a contraparte de `13-kof-apis.md`.
 | L13 | `web.app()` fecha a conexão sem headers para corpo de ~1.5 MiB | handler com resposta grande não serve | testar payload grande com servidor TCP cru |
 | L14 | EOF remoto chega como exceção (`kof.net: ... Socket closed`), não como vazio | queda silenciosa não existe: todo fim de túnel vira throw | throw → backoff + reconexão; saída limpa só com stopFile/GOAWAY |
 | L15 | argumento de task (`spawn`) é copiado por valor | `Map` passado para task vira cópia: `put` dentro não aparece fora | estado compartilhado vive em objeto (classe), não em Map solto |
+| L16 | o handler do `web.app()` devolve `String`: byte alto passa por UTF-8 e vira dois (`00 C8 FF 0A` → `00 C3 88 C3 BF 0A`) | Edge não pode usar `web.app()` como front (TLS/HTTPS no Edge fica bloqueado) | parser HTTP próprio sobre `net.listen`; `web.app()` só no control plane (JSON) |
+| L17 | Ed25519 documentado mas inutilizável (`keyExchange.privateKey("ed25519")` lança `SECN014`) | não há assinatura assimétrica com chave gerada pela aplicação | HMAC-SHA256 no webhook de incidentes; assinatura assimétrica pendente |
+| L18 | `toUpperCase`/`toLowerCase` não mudam a caixa no JVM (medido no CLI 0.6.3); `charAt(i)` comparado com literal de char não casa quando o índice vem de variável; `strings.isUpperCase` também não classifica (`"AUTHENTICATED"` → falso); `a ? b : c` não parseia; `assert cond, msg` só imprime "assertion failed" | regra de "isto é MAIÚSCULO?" não pode ser escrita na linguagem | lista fechada (`protocolWireLiterals()`) ou helper com `if`; rótulo de falha por helper que faz `throw` (`assertWith`) |
 
+| L19 | não é lacuna do Kof: o anel de auditoria era encadeado global e verificado por conta (duas contas ativas "quebravam" a cadeia uma da outra) | verificação acusava adulteração inexistente | cadeia por conta na gravação e na verificação (`auditChainError`) |
+| L20 | caixa e classe de caractere não funcionam como esperado no JVM: `"X".toUpperCase()` não muda a caixa, `charAt` comparado com literal não casa e `strings.isUpperCase` não classifica; `a ? b : c` não parseia; `assert cond, msg` perde a mensagem | regra de "isto é MAIÚSCULO?" não pode ser escrita na linguagem; falha de teste sem rótulo | lista fechada (`protocolWireLiterals()`) e helper com `if`; rótulo por `throw` (`assertWith`) — medido em `tests/controls_doc_test.kf` |
 ## Fora do MVP (por decisão)
 
 * HTTP/2 e HTTP/3.

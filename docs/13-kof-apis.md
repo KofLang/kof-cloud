@@ -226,3 +226,21 @@ integro).
 verificacao (`auditChainError` guarda o ultimo hash por conta). O anel global
 continua verificavel pela mesma funcao, e adulteracao/remocao de um evento
 continua detectavel — provado por mutacao nos dois lados.
+
+### L20 — Caixa e caixa de caractere nao funcionam do jeito esperado ⚠️ **medido na trava dos controles**
+
+Medido no CLI 0.6.3 (JVM), depurando a trava `docs-controls` de
+`tests/controls_doc_test.kf`: `"AUTHENTICATED".toUpperCase()` nao e igual a
+`"AUTHENTICATED"`; `tok.charAt(i)` comparado com `65`/`90` nao casa quando
+`s` veio de variavel (o mesmo `charOf` sobre literal funcionava); e
+`strings.isUpperCase("AUTHENTICATED")` devolve **falso**. Tambem medidos na
+mesma sessao: `a ? b : c` nao parseia (PARSE041) e `assert cond, msg` so
+imprime "assertion failed" — a mensagem se perde (so `throw` carrega texto;
+`assertTrue` de `kof.test` nao e importavel). `println` de dentro do teste
+nao aparece no log do `kof test`.
+
+**Consequencia:** nenhuma regra de "isto e MAIUSCULO/identificador?" pode ser
+escrita por classe de caractere. A trava usa lista fechada
+(`protocolWireLiterals()`) e helpers com `if` (`assertWith`). Sempre que um
+guard nova precisar disso, liste — e registre a medicao aqui antes de
+confiar na semantica.
