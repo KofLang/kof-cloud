@@ -1,4 +1,5 @@
 import kofcloud.cli.Commands
+import kofcloud.cli.Doctor
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.store.Store
@@ -64,4 +65,57 @@ test "readiness: e2e — corrupt responde 503 e o serve recusa subir", "readines
     assert(code == 1, "serve recusa com estado ilegivel: " + intToString(code))
     var still = readTextOr(path, "")
     assert(still.indexOf("isto nao e estado") >= 0, "o arquivo ilegivel nao foi tocado")
+}
+
+test "readiness: estado divergente no disco desvia do ready (503 drifted)", "readiness-drift" {
+    // F16 s3-cont: outro processo escrevendo o MESMO --state faz o proximo
+    // save() deste sobrescrever o que la estava. O health precisa dizer
+    // "nao-pronto" (degrau para fora da rota) — e o doctor precisa dizer
+    // que NAO e corrupcao (a acao e parar o outro, nao restaurar backup).
+    var port = 18091
+    var path = "/tmp/kofcloud-drift-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    assert(registry.stateChangedOnDisk() == false, "sem arquivo e sem escrita: sem divergencia")
+    registry.createAccount("mel", "m@e.com", "segredo")
+    var stable = readTextOr(path, "")
+    assert(stable.length > 0, "estado gravado")
+    var loaded = Registry(path)
+    assert(loaded.stateChangedOnDisk() == false, "arquivo igual ao carregado: sem divergencia")
+    // Outro processo (ou o operador) escreve o mesma arquivo.
+    writeTextTo(path, stable + " ")
+    assert(loaded.stateChangedOnDisk(), "arquivo mudou: divergencia detectada")
+    var drifted = readinessForWith(loaded.loadStatus, loaded.stateChangedOnDisk())
+    assert(drifted.code == 503, "drift = 503")
+    assert(drifted.body.indexOf("\"state\":\"drifted\"") >= 0, "drift nomeia o estado")
+    assert(drifted.body.indexOf("\"ready\":\"false\"") >= 0, "drift diz ready=false")
+    assert(drifted.body.indexOf("kfc_") < 0, "drift nao vaza credencial")
+    // Corrupcao tem precedencia sobre divergencia.
+    var corruptWins = readinessForWith("corrupt", true)
+    assert(corruptWins.body.indexOf("\"state\":\"corrupt\"") >= 0, "corrupt vem antes")
+    // Health limpo nao muda.
+    assert(readinessForWith("ok", false).code == 200, "sem drift: 200")
+    // Doctor: divergencia NAO manda fazer backup nem restaurar.
+    var driftLine = doctorControlLine("http://127.0.0.1:" + intToString(port), "{\"state\":\"drifted\"}", "HTTP 503 from http://127.0.0.1/v1/health")
+    assert(driftLine.startsWith("FALHA"), "doctor falha no drift")
+    assert(driftLine.indexOf("outro processo") >= 0, "doctor nomeia a causa")
+    assert(driftLine.indexOf("NAO faca backup") >= 0, "doctor descarta a acao errada")
+    assert(driftLine.indexOf("ilegivel") < 0, "doctor nao chama de corrupcao")
+    var corruptLine = doctorControlLine("http://127.0.0.1:1", "{\"state\":\"corrupt\"}", "HTTP 503 from x/v1/health")
+    assert(corruptLine.indexOf("ilegivel") >= 0, "corrupt continua ilegivel")
+}
+
+test "readiness: e2e — escritor concorrente derruba o ready do processo vivo", "readiness-drift-e2e" {
+    var port = 18092
+    var path = "/tmp/kofcloud-drift-e2e-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(path)
+    registry.createAccount("mel", "m@e.com", "segredo")
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control no ar")
+    // Outro processo com o mesmo --state grava ANTES de a sonda perguntar.
+    writeTextTo(path, readTextOr(path, "") + " ")
+    var driftedRaw = httpGetRaw(port, "/v1/health", "127.0.0.1")
+    var drifted = statusOf(driftedRaw)
+    assert(drifted == 503, "escritor externo: 503 (got " + intToString(drifted) + ")")
+    assert(bodyOf(driftedRaw).indexOf("\"state\":\"drifted\"") >= 0, "503 nomeia drifted")
 }

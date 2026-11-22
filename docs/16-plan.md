@@ -1438,10 +1438,18 @@ iguais).
   `state-backup`) — antes subia VAZIO e publicar criava conta nova por
   cima da perda. Nenhum corpo carrega conta/credencial. O estado corrupto
   pós-partida (arquivo trocado em disco com o processo vivo) já tinha a
-  status page; agora o health também conta. Prova:
-  `tests/readiness_test.kf` (2: sonda pura nos três estados + recusa do
+  status page; agora o health também conta. **Divergência no disco ✅
+  (s3-cont):** outro processo com o mesmo `--state` (nó antigo ainda vivo,
+  editor) faz o próximo `save()` sobrescrever o que lá estava —
+  `Registry.stateChangedOnDisk` (texto carregado × arquivo) e
+  `readinessForWith` respondem **503 `state:drifted`** (degrau para fora da
+  rota, melhor que derrubar o que servia; corrupção tem precedência) e o
+  `doctorControlLine` diz "outro processo, NÃO faça backup" — o 503 de
+  divergência e o de corrupção pedem ações opostas. Prova:
+  `tests/readiness_test.kf` (4: sonda pura nos três estados + recusa do
   texto, e2e com o Registry carregando arquivo ilegível — 503 pelo fio e
-  `cmdServe` exit 1 com o arquivo intacto). **Doctor ✅:** o `http.get` lança
+  `cmdServe` exit 1 com o arquivo intacto —, sonda de divergência pura com
+  a linha do doctor e e2e com escritor externo → 503 drifted). **Doctor ✅:** o `http.get` lança
   em ≥500, então o 503 do estado ilegível virava "control plane inacessível
   ou fora do ar" — rede quando o problema era o ARQUIVO. A camada agora é
   pura (`doctorControlLine`): 503 nomeia o estado ilegível e aponta o

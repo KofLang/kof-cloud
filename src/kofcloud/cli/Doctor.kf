@@ -50,6 +50,14 @@ String doctorWarnLine(String label, String why) {
 String doctorControlLine(String controlUrl, String healthBody, String fetchError) {
     if (fetchError.length > 0) {
         if (fetchError.indexOf("503") >= 0) {
+            // O 503 tem DUAS causas e elas pedem acoes opostas: estado
+            // ilegivel (restaurar backup — nada a preservar) e estado
+            // divergente (outro processo escreveu o MESMO --state; o backup
+            // aqui seria do arquivo do OUTRO processo). O corpo do fio diz
+            // qual: mente quem trata toda divergencia como corrupcao.
+            if (healthBody.indexOf("\"state\":\"drifted\"") >= 0) {
+                return doctorFailLine("control plane", controlUrl + " respondeu 503: estado em disco mudou desde que este processo carregou (outro processo serve o MESMO --state) — NAO faca backup nem restaure aqui antes de parar o outro: kof cloud state-backup so depois de um unico escritor")
+            }
             return doctorFailLine("control plane", controlUrl + " respondeu 503: estado do control ilegivel (o arquivo existe mas nao decodifica) — faca backup e restaure: kof cloud state-backup --file <estado.json>")
         }
         return doctorFailLine("control plane", controlUrl + " inacessivel ou fora do ar (" + fetchError + ")")

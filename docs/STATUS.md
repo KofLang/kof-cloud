@@ -92,7 +92,7 @@ o run total imprime `72 passed, 0 failed`. Falha = nome do teste + assert
 | ranking de Edges (F14 s2) | `tests/edge_select_test.kf` | 5 |
 | porta do Edge sem wrap (F14 s2) | `tests/edge_select_test.kf` + `tests/webhook_test.kf` | +13 asserts |
 | carga explícita + migrate (F16 s1) | `tests/migrate_test.kf` | 5 |
-| readiness + fail-closed (F16 s3) | `tests/readiness_test.kf` | 2 |
+| readiness + fail-closed + divergência no disco (F16 s3) | `tests/readiness_test.kf` | 4 |
 | falha de bind visível do serve (F16 s3) | `tests/serve_bind_test.kf` | 3 |
 | leitura de métricas pela CLI | `tests/metrics_cmd_test.kf` | 2 |
 | listagens em `--json` (CI) | `tests/json_output_test.kf` | 2 |
@@ -119,7 +119,7 @@ o run total imprime `72 passed, 0 failed`. Falha = nome do teste + assert
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 6 |
 | backup automático do estado (F16 s1) | `tests/backup_dir_test.kf` | 3 |
 
-Total: 507 testes. Ver `15-tests.md` para a matriz.
+Total: 509 testes. Ver `15-tests.md` para a matriz.
 
 ## Desempenho medido
 

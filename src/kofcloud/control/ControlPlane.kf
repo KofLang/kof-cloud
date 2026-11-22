@@ -210,7 +210,25 @@ HttpResult readinessFor(String loadStatus) {
     return HttpResult(200, json.encode(out))
 }
 
-HttpResult handleHealth(String loadStatus) {
+HttpResult handleHealth(String loadStatus, Bool drifted) {
+    return readinessForWith(loadStatus, drifted)
+}
+
+// Readiness com a sonda de divergencia (o health le o REGISTRY, nao so o
+// veredito da carga): o arquivo escrito por outro processo com o mesmo
+// `--state` faz o proximo save() deste sobrescrever o que la estava —
+// desviar trafego (503, `ready:false`) e o degrau certo, melhor que
+// derrubar o que ja servia. Estado ilegivel continua tendo precedencia.
+HttpResult readinessForWith(String loadStatus, Bool drifted) {
+    if (loadStatus != "corrupt" && drifted) {
+        var drift = mapOf()
+        drift.put("service", "kofcloud-control")
+        drift.put("version", intToString(protocolVersion()))
+        drift.put("ok", "false")
+        drift.put("ready", "false")
+        drift.put("state", "drifted")
+        return HttpResult(503, json.encode(drift))
+    }
     return readinessFor(loadStatus)
 }
 
@@ -1450,7 +1468,7 @@ class ControlPlane {
         }
 
         app.get("/v1/health") {
-            var result = handleHealth(reg.loadStatus)
+            var result = handleHealth(reg.loadStatus, reg.stateChangedOnDisk())
             if (result.code == 200) {
                 return result.body
             }

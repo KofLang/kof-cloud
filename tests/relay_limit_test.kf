@@ -120,7 +120,21 @@ test "relay limite: resposta acima do teto vira 502 KCF115, nunca 200 truncado",
     assert(statusOf(again) == 502, "segundo pedido tambem 502 (vaga liberada)")
 
     assert(metricValue(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_response_too_large") >= 1, "recusa contada")
-    var afterBig = readTextOr(edgeRuntimeLogPath(), "")
+    // Espera a palavra chegar ao arquivo: o evento do Edge e escrito por
+    // outra task e a leitura imediata apos o 502 vira corrida (esta suite ja
+    // oscilou entre passar e falhar assim). Teto curto, nunca "assert com
+    // espera infinita".
+    var afterBig = ""
+    var waited = 0
+    while (waited < 100) {
+        afterBig = readTextOr(edgeRuntimeLogPath(), "")
+        if (afterBig.indexOf("upstream: resposta acima do teto (1024 bytes) — 502") >= 0) {
+            waited = 100
+        } else {
+            time.sleep(20)
+            waited = waited + 1
+        }
+    }
     assert(afterBig.indexOf("upstream: resposta acima do teto (1024 bytes) — 502") >= 0, "palavra do teto de resposta no arquivo")
     assert(afterBig.indexOf("xxxx") < 0, "o corpo do servico nunca vai para o arquivo")
 

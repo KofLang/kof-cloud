@@ -73,6 +73,8 @@ class Registry {
     // Antes a corrupcao virava estado vazio em silencio — o operador via a
     // conta sumida sem aviso. O serve agora anuncia "corrupt".
     String loadStatus
+    // Texto que esta instancia carregou (sonda de divergencia do arquivo).
+    String loadedText
     String path
     Int maxDevices
     Int maxServices
@@ -114,6 +116,7 @@ class Registry {
 
     constructor(path: String) {
         this.path = path
+        this.loadedText = ""
         this.accounts = listOf<Account>()
         this.devices = listOf<Device>()
         this.services = listOf<Service>()
@@ -182,6 +185,7 @@ class Registry {
     void load() {
         this.loadStatus = "absent"
         var raw = readTextOr(this.path, "")
+        this.loadedText = raw
         if (raw.length == 0) {
             return
         }
@@ -715,6 +719,23 @@ class Registry {
         }
         pruneStateBackups(dir, this.path, keep)
         return target
+    }
+
+    // Estado mudou desde a ultima CARGA (arquivo em disco diverge do que o
+    // processo carregou). Pura sobre os dois textos: qualquer mudanca
+    // — escrita de OUTRO processo (nó antigo ainda vivo, editor, deploy
+    // paralelo) ou edicao manual — faz o processo divergir do arquivo, e o
+    // proximo save() sobrescreve o que estava la. O `/v1/health` usa isso
+    // para responder `ready:false` (nao-pronto, degrau para fora da rota)
+    // sem derrubar o que ja estava servindo.
+    Bool stateChangedOnDisk() {
+        if (this.loadStatus == "absent") {
+            return readTextOr(this.path, "").length > 0
+        }
+        if (this.loadStatus != "ok") {
+            return false
+        }
+        return readTextOr(this.path, "") != this.loadedText
     }
 
     // Uso do servico (F18 s4): o Edge chama UMA vez por requisicao ROTEADA
