@@ -154,13 +154,15 @@ List<String> stateBackupsToPrune(List<String> names, String statePath, Int keep)
 // lanca: backup e assistencia, nao caminho da requisicao). Devolve quantos
 // sairam; -1 quando o diretorio nao pode ser lido.
 Int pruneStateBackups(String dir, String statePath, Int keep) {
+    // Leitura DEFENSIVA (o contrato do pacote: assistencia nunca lanca).
+    // Medido no 1o run da fatia: o `File(dir).list()` de um diretorio que nao
+    // existe nao virava lista vazia como se esperava — a excecao atravessava
+    // o `try/catch (String)` e derrubava a suite inteira.
     var names = listOf<String>()
     try {
-        var listed = File(dir).list()
-        if (listed == null) {
-            return -1
+        if (fileExists(dir)) {
+            names = File(dir).list()
         }
-        names = listed
     } catch (String e) {
         return -1
     }

@@ -119,7 +119,7 @@ o run total imprime `72 passed, 0 failed`. Falha = nome do teste + assert
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 6 |
 | backup automático do estado (F16 s1) | `tests/backup_dir_test.kf` | 3 |
 
-Total: 501 testes. Ver `15-tests.md` para a matriz.
+Total: 504 testes. Ver `15-tests.md` para a matriz.
 
 ## Desempenho medido
 
