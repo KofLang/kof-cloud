@@ -13,7 +13,7 @@
 | Fase 5 (AUTHENTICATED kfs_ + revoke + token-list + TTL) | ✅ verde | `service_token_test.kf` (15), `e2e_authenticated_test.kf` |
 | Fase 6 slice 1 (dominio proprio) | ✅ verde | `domains_test.kf` (sem TLS/SNI — externo; `domain verify --tls-cert` julga o PEM localmente) |
 | Observabilidade (3 slices) | ✅ verde | `metrics_test.kf`, `agent_metrics_test.kf` |
-| Enquadramento HTTP no Edge | ✅ verde | `framing_test.kf` (14: Long, 400 KCF118/119/132/133, 1xx, query, hop-by-hop nos dois sentidos, chunked, status sem corpo, CL da resposta, upstream inválido, corpo relayado fatiado) |
+| Enquadramento HTTP no Edge | ✅ verde | `framing_test.kf` (15: Long, 400 KCF118/119/132/133, 1xx, query, hop-by-hop nos dois sentidos, chunked, status sem corpo, CL da resposta, upstream inválido, corpo relayado fatiado, 512 KiB em blocos byte-exato) |
 | Abuse prevention (2 slices) | ✅ verde | `ratelimit_test.kf`, `abuse_test.kf` |
 | Debitos de limites (frame, idle, conns) | ✅ verde | `frames_test.kf`, `idle_test.kf`, `conns_test.kf` |
 | Fase 7 slices 1–4 (deploy, --check, daemon, doctor) | ✅ verde | `deploy_test.kf`, `daemon_test.kf`, `doctor_test.kf` |
@@ -45,7 +45,7 @@ o run total imprime `71 passed, 0 failed`. Falha = nome do teste + assert
 
 | Suite | Arquivo | Testes |
 |---|---|---|
-| framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 14 |
+| framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 16 |
 | hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls/audit-sbom/host-normalize/u-matrix/u-counts/prova-counts/limits-docs/lacunas-docs | `tests/hosts_test.kf` | 35 |
 | identidade/cifra/tokens | `tests/identity_test.kf` | 6 |
 | forca bruta no login (F5) | `tests/login_limit_test.kf` | 3 |
@@ -104,7 +104,7 @@ o run total imprime `71 passed, 0 failed`. Falha = nome do teste + assert
 | teto de resposta + cabeçalho + leitura (F14 s3 parcial) | `tests/relay_limit_test.kf` | 4 |
 | profundidade de fila por stream (F4) | `tests/queue_depth_test.kf` | 3 |
 | teto de conexões públicas (F4) | `tests/conn_limit_test.kf` | 2 |
-| enquadramento HTTP nos dois sentidos (F10/F14) | `tests/framing_test.kf` | 14 |
+| enquadramento HTTP nos dois sentidos (F10/F14) | `tests/framing_test.kf` | 15 |
 | presença no `device list` (F4) | `tests/device_presence_test.kf` | 5 |
 | origem do serviço + presença no `service status` (F4) | `tests/service_device_test.kf` | 6 |
 | PEM visível no `service status` (F9 s3) | `tests/status_cert_test.kf` | 3 |
@@ -118,7 +118,7 @@ o run total imprime `71 passed, 0 failed`. Falha = nome do teste + assert
 | push do uso para billing (F18 s4) | `tests/usage_push_test.kf` | 4 |
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 6 |
 
-Total: 498 testes. Ver `15-tests.md` para a matriz.
+Total: 501 testes. Ver `15-tests.md` para a matriz.
 
 ## Desempenho medido
 
@@ -129,4 +129,6 @@ processo (`kof run --target jvm`), payload ASCII de 100 KiB.
 |---|---|---|---|
 | base64 do relay (`bytesToBase64`) | ~1137 ms | ~46 ms (~25×) | F14 s3: tabela RFC 4648 própria + `String.concat` em blocos; saída byte-exata (antes o stdlib inflava byte ≥ 0x80 via UTF-8) |
 | base64 512 KiB (encode/decode) | (projetado ~28 s) | 331 ms / 61 ms | confirma linearidade |
+| acumulação do pedido no Edge (1 MiB em blocos de 8 KiB) | ~4815 ms | ~16 ms (~300×) | F14 s3: `bytesGrown` com folga em vez de `bytesConcat(acc, chunk)` a cada bloco |
+| upload de 512 KiB pelo túnel (leitura + WAF + relay) | ~22,4 s | ~0,7 s | F14 s3: `bytesToString` linear + `wafBodyPrefix` (antes o corpo inteiro virava String para o WAF descartar >64 KiB) |
 

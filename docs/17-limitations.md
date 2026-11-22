@@ -235,6 +235,8 @@ logo abaixo, na mesma lista:
   nos três lanes:** `..\` cru e a forma JSON-escapada `..\\` (que contém a
   crua como prefixo) casam em path, corpo e header — sem normalizar a
   string (concatenar em Kof é O(n²)); o pedido repassado segue byte a byte.
+  O corpo é convertido para String **só até o teto** de 64 KiB antes da
+  varredura (`wafBodyPrefix`): bytes além dele nunca entram na inspeção.
   **Falta** um WAF mais
   profundo: regras por conta e corpo estruturalmente decodificado (JSON
   base64).
@@ -252,8 +254,14 @@ logo abaixo, na mesma lista:
   recusa sem drenar o corpo quando o declarado já estoura e também quando os
   bytes **reais** passam do teto — um `Content-Length` subdeclarado não
   escapa. A memória do Edge fica limitada a cerca de `maxBytes` por conexão
-  (mais o bloco de `receive`), não ao declarado; o que continua fora da
-  garantia é o custo de CPU do `bytesConcat` O(n²) nesse caminho.
+  (mais o bloco de `receive`, mais a folga do acumulador: no pior caso menos
+  de 2× o lido), não ao declarado. O custo de CPU da acumulação deixou de ser
+  quadrático: a leitura anexa num buffer com folga (`bytesGrown`) em vez de
+  `acc = bytesConcat(acc, chunk)`, que copiava tudo a cada bloco (medido: 1 MiB
+  em blocos de 8 KiB custava ~4,8 s, hoje ~16 ms). O corpo só é varrido pelo
+  WAF até o teto de 64 KiB — e agora só esse prefixo é convertido para String
+  (antes o corpo inteiro era convertido para depois descartar: ~22 s num
+  upload de 512 KiB, hoje ~0,7 s).
 * **Logs em três arquivos, por desenho (débito quitado).** `kof cloud logs`
   lê `~/.kofcloud/agent.log` (marcos de sessão gravados pela CLI: `connect`,
   `disconnect`). `kof cloud logs --runtime` lê
@@ -345,11 +353,15 @@ logo abaixo, na mesma lista:
   Medido: 100 KiB em **~46 ms** (antes ~1137 ms, ~25×) e 512 KiB em ~331 ms;
   a saída é byte-exata (9000 bytes → 12000 chars, sem expansão). Por isso o
   bloco de envio (16 KiB) hoje existe por latência/memória, não para escapar
-  de O(n²). O que **permanece** O(n²): `bytesToString` em si (usado por
-  `Http.kf` para cabeçalhos e por `Health.kf`) e `bytesConcat` — ambos em
-  trechos pequenos, mas um corpo grande reconstruído caractere a caractere
-  ainda custaria caro. O teto de `maxResponseBytes` continua; respostas de
-  dezenas de MiB funcionam.
+  de O(n²). `bytesToString` também passou a concatenar em blocos de ~3 KiB
+  (mesma técnica; o bloco vazio do fim não é concatenado — um `concat("")`
+  devolvia o buffer com folga e dobrava o resultado em múltiplos exatos do
+  bloco), então a conversão bytes→String é linear; o que **permanece**
+  O(n²) é `bytesConcat`, e ele só resta em trechos pequenos (resposta de
+  health, reconstrução de resposta no Edge e acumulação do Agent). O teto de
+  `maxResponseBytes` continua; respostas de dezenas de MiB funcionam — o
+  caminho de acumulação do Edge é o que ainda paga cópia repetida nesse
+  tamanho.
 
 * **O platô do incidente segura reabertura por até 1 h (por sinal e conta).**
   Depois de resolvido, o mesmo sinal que volta dentro de

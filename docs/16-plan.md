@@ -633,7 +633,7 @@ quebrar o legítimo (fail-open com log vs fail-closed configurável).
   divergente, valor não numérico/vazio/com sinal, nome fora da forma canônica,
   `Transfer-Encoding`), o Edge responde `400 KCF118` antes de rotear e o corpo
   relayado é fatiado **exatamente** no declarado. Prova:
-  `tests/framing_test.kf` (14 testes; os 3 do teto de corpo — ver U54: unit, e2e 400/413, relay com corpo mentiroso).
+  `tests/framing_test.kf` (15 testes; os 3 do teto de corpo — ver U54: unit, e2e 400/413, relay com corpo mentiroso).
 * **Slice 2d — `Host` não ambíguo ✅.** Fechado o outro lado da mesma classe:
   o Edge roteia pelo `Host` e reconstrói o pedido para o serviço local, mas
   com **dois** `Host` ele roteava pelo primeiro e repassava os dois — o
@@ -1177,7 +1177,7 @@ best-effort, como hoje).
 linear em bytes). Funciona, mas latência é distância + custo por byte —
 cloud rápida precisa dos dois endereçados com medição.
 
-**Estado: slice 1 ✅ (latência + tamanho); slice 2 ✅ (ranking de Edges); slice 3 parcial (base64 linear ✅, handshake comprimido pendente).**
+**Estado: slice 1 ✅ (latência + tamanho); slice 2 ✅ (ranking de Edges); slice 3 parcial (base64 e leitura linear ✅, handshake comprimido pendente).**
 Desenho fatiado (cada slice com benchmark antes/depois, mesmo protocolo,
 sem mudar formato público):
 
@@ -1289,8 +1289,32 @@ sem mudar formato público):
   (`bytes: base64 e byte-exato`, `base64 decodifica tolerante`),
   `tests/frames_test.kf` (1.5 MiB em chunks continua recompondo byte a
   byte). O bloco de envio (16 KiB) agora existe por latência/memória, não
-  para escapar de O(n²). **Pendente ainda:** handshake comprimido e
-  `bytesConcat`/`bytesToString` em corpos grandes.
+  para escapar de O(n²).
+
+  **Implementado (leitura do pedido e conversão bytes→String lineares).** Dois
+  quadráticos do caminho público, medidos antes/depois:
+  1. **Acumulação do pedido.** `readRequestBytes` fazia `acc = bytesConcat(acc,
+     chunk)` a cada bloco lido — custo quadrático no número de blocos, e o
+     teto de leitura (16 MiB) é justamente quem deixa o número crescer.
+     Agora anexa num buffer com folga (`Bytes.bytesGrown`, dobra quando enche,
+     devolve o exato no fim via `bytesSlice`). Medido em bench: **1 MiB em
+     blocos de 8 KiB 4815 ms → 16 ms (~300×)**.
+  2. **Corpo inteiro convertido para o WAF.** `bytesToString(request.body)`
+     era chamado e só DEPOIS o teto de 64 KiB descartava o excedente — e a
+     conversão era `out = out + c` por caractere, O(n²). Agora `wafBodyPrefix`
+     corta no teto antes de converter e `bytesToString` concatena em blocos de
+     ~3 KiB (linear). Medido fim a fim (upload de 512 KiB pelo túnel):
+     **~22,4 s → ~0,7 s**; a leitura em si já entregava os blocos em ~50 ms.
+  Junto, bug do `concat` final: quando o total era múltiplo exato do bloco, o
+  `concat("")` do fim devolvia o buffer interno do concat com folga (medido:
+  200 KiB viravam 400 KiB). Agora o bloco vazio não é concatenado — o mesmo
+  guard vale no base64.
+  Sem mudança de protocolo, de estado ou de semântica do WAF (os bytes além
+  do teto nunca eram varridos). Testes: `tests/protocol_test.kf`
+  (`bytesGrown` pura e `bytesToString` linear em 200 KiB) e
+  `tests/framing_test.kf` (`framing-accum`: 512 KiB em blocos de 16 KiB com
+  pausa entre eles chega byte-exato ao serviço local). **Pendente ainda:**
+  handshake comprimido e `bytesConcat` na reconstrução de resposta.
 
   **Implementado (SERVICES empurrado — caminho hot do hot-reload):** o
   hot-reload pagava uma requisição HTTP ao control plane a cada ciclo

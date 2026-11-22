@@ -15,16 +15,33 @@ Byte[] bytesFromString(String text) {
     return out
 }
 
+// Blocos de ~3 KiB por `String.concat` (mesma razao do base64): `out = out +
+// c` por caractere e O(n^2) e um corpo de 64 KiB custava segundos de CPU —
+// medido no caminho do WAF, que converte o corpo inteiro para varrer.
+Int bytesBlockChars() {
+    return 3072
+}
+
 String bytesToString(Byte[] data) {
     var out = ""
+    var block = ""
     for (var i = 0; i < data.length; i++) {
         var v = data[i] as Int
         if (v < 0) {
             v = v + 256
         }
-        out = out + (v as Char)
+        block = block + (v as Char)
+        if (block.length >= bytesBlockChars()) {
+            out = out.concat(block)
+            block = ""
+        }
     }
-    return out
+    if (block.length == 0) {
+        // multiplo exato do bloco: um `concat` com "" aqui devolveria o
+        // buffer interno do concat com folga (medido: 200 KiB viravam 400)
+        return out
+    }
+    return out.concat(block)
 }
 
 // ── base64 proprio, linear em BYTES ─────────────────────────────────────
@@ -80,6 +97,9 @@ String bytesToBase64(Byte[] data) {
             block = block + alphabet.charAt(n >> 18) + alphabet.charAt((n >> 12) & 63)
                 + alphabet.charAt((n >> 6) & 63) + "="
         }
+    }
+    if (block.length == 0) {
+        return out
     }
     return out.concat(block)
 }
@@ -160,6 +180,33 @@ Byte[] bytesConcat(Byte[] a, Byte[] b) {
         out[a.length + i] = b[i]
     }
     return out
+}
+
+// Acumulador de leitura com folga: o chamador copia o bloco para dentro de
+// `buffer` (na posicao `size`) depois de `bytesGrown(buffer, size +
+// chunk.length)`. O padrao `acc = bytesConcat(acc, chunk)` que este substitui
+// COPIA tudo o que ja chegou a cada bloco — custo quadratico no numero de
+// blocos — e o teto de leitura do Edge (`maxBytes`, 16 MiB) e justamente
+// quem deixa o numero de blocos crescer. Medido: 1 MiB em blocos de 8 KiB
+// custava ~4,8 s e passa a ~16 ms (~300x). A folga e interna ao buffer; o
+// chamador devolve exatamente o lido (`bytesSlice`).
+Byte[] bytesGrown(Byte[] buffer, Int needed) {
+    if (needed <= buffer.length) {
+        return buffer
+    }
+    var ncap = buffer.length * 2
+    if (ncap < needed) {
+        ncap = needed
+    }
+    var bigger = new Byte[ncap]
+    var keep = buffer.length
+    if (keep > needed) {
+        keep = needed
+    }
+    for (var j = 0; j < keep; j++) {
+        bigger[j] = buffer[j]
+    }
+    return bigger
 }
 
 Byte[] bytesSlice(Byte[] data, Int start, Int end) {

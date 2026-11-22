@@ -18,6 +18,17 @@ import kofcloud.util.Text
 // repassa pelo tunel e escreve a resposta. Sem keep-alive no MVP: cada
 // requisicao e uma conexao (determinismo do "fim da resposta").
 
+// Prefixo do corpo que o WAF pode varrer (`wafBodyInspectBytes`), ja como
+// String. O chamador descartava o excedente DEPOIS de converter o corpo
+// inteiro — a conversao e o custo, nao a varredura.
+String wafBodyPrefix(Byte[] body) {
+    var cap = wafBodyInspectBytes()
+    if (body.length <= cap) {
+        return bytesToString(body)
+    }
+    return bytesToString(bytesSlice(body, 0, cap))
+}
+
 void serveHttp(EdgeState state, Int port, Int maxBytes, String stopFile) {
     var listener = net.listen(port)
     if (stopFile.length > 0) {
@@ -274,8 +285,12 @@ void servePublicConnection(EdgeState state, Conn conn, Int maxBytes) {
     if (signature.length == 0) {
         // Corpo pequeno tambem e inspecionado (o desenho do slice 1 prometia
         // "corpo pequeno"; so metodo+path deixava POST de formulario passar).
-        // Acima de wafBodyInspectBytes() o corpo nao e varrido.
-        signature = wafDetectBodySignature(bytesToString(request.body))
+        // Acima de wafBodyInspectBytes() o corpo nao e varrido. A conversao
+        // para String corta no MESMO teto ANTES de converter: converter o
+        // corpo inteiro para depois descartar era trabalho O(tamanho) por
+        // requisicao (medido: ~22 s num upload de 512 KiB) e nenhum byte alem
+        // do teto entra na varredura por construcao.
+        signature = wafDetectBodySignature(wafBodyPrefix(request.body))
     }
     if (signature.length == 0) {
         // Valores de header completam a cobertura (User-Agent/Referer/Cookie

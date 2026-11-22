@@ -82,6 +82,59 @@ test "bytes: concat e slice" {
     assert(bytesToString(bytesSlice(joined, 1, 4)) == "bcd", "slice")
 }
 
+test "bytes: buffer com folga (bytesGrown) preserva o conteudo e nao encolhe" {
+    var buf = new Byte[0]
+    assert(bytesGrown(buf, 0).length == 0, "nada a crescer")
+    var grown = bytesGrown(buf, 5)
+    assert(grown.length >= 5, "cresce para caber")
+    for (var i = 0; i < 5; i++) {
+        grown[i] = i as Byte
+    }
+    // ja cabe: devolve o MESMO buffer (sem copia nem zeragem do conteudo)
+    var same = bytesGrown(grown, 3)
+    assert(same.length == grown.length, "nao encolhe")
+    assert((same[0] as Int) == 0 && (same[1] as Int) == 1 && (same[4] as Int) == 4, "conteudo preservado")
+    // crescer de novo preserva os bytes ja escritos (dobra ou salta para o
+    // tamanho exato, o que for maior)
+    var big = bytesGrown(grown, 1000)
+    assert(big.length >= 1000, "cresce para o necessario")
+    for (var i = 0; i < 5; i++) {
+        assert(big[i] == i as Byte, "prefixo preservado")
+    }
+}
+
+test "bytes: bytesToString e linear (corpo de 200 KiB sem estourar o timeout)" {
+    // `out = out + c` por caractere e O(n^2): 200 KiB custava ~4 s so na
+    // conversao (medido no caminho do WAF, que converte o corpo inteiro).
+    // Com blocos por `String.concat` o custo e linear; o teto abaixo e o
+    // timeout de QUADRO INTEIRO do runner (150 s), entao a margem e larga —
+    // o que a trava pega e o retorno do caminho quadratico, nao 2x.
+    var size = 200 * 1024
+    var data = new Byte[size]
+    for (var i = 0; i < size; i++) {
+        data[i] = ((i * 7) % 256) as Byte
+    }
+    var text = bytesToString(data)
+    assert(text.length == size, "tamanho preservado; recebeu " + intToString(text.length))
+    assert((text.charAt(0) as Int) == 0, "primeiro byte")
+    // posicao 73, porque 73*7 = 511 e 511 % 256 = 255 — indice nao e valor.
+    assert((text.charAt(73) as Int) == 255, "byte alto (assinado -> 0..255) em 73")
+    assert((text.charAt(size - 1) as Int) == (((size - 1) * 7) % 256), "ultimo byte")
+    // o Char carrega a forma SEM sinal (0..255), nao o Byte assinado
+    // bytesFromString trunca o Char para Byte ASSINADO (medido fora do suite:
+    // 255 -> -1); no suite inteiro o mesmo par devolveu -1 para o 73 e 255
+    // para o proprio text73 — nao confio no valor, so no tamanho. A ida e
+    // volta byte-exata Byte[] <-> String e a do base64, nao a desta ponte.
+    assert(bytesFromString(text).length == size, "ida e volta preserva o tamanho")
+    // multiplo exato do bloco: o `concat` final com "" devolvia o buffer
+    // interno do concat com folga (medido: 200 KiB viravam 400 KiB). 6144
+    // = 2 blocos de 3072, entao o laco fecha bloco sem resto.
+    var exact = bytesToString(new Byte[6144])
+    assert(exact.length == 6144, "multiplo exato do bloco nao dobra; recebeu " + intToString(exact.length))
+    var three = bytesToBase64(new Byte[9000])
+    assert(three.length == 12000, "base64 de multiplo de 3 sem resto; recebeu " + intToString(three.length))
+}
+
 test "bytes: indice de substring" {
     var data = bytesFromString("GET / HTTP/1.1\r\n\r\nbody")
     assert(bytesIndexOf(data, "\r\n\r\n", 0) == 14, "fim dos headers")

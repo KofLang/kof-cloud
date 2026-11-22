@@ -759,3 +759,123 @@ test "framing: corpo relayado tem exatamente o tamanho declarado", "framing-rela
     File(agentStop).delete()
     File(edgeStop).delete()
 }
+
+// Leitura do pedido em muitos blocos (F14 s3, parte ocupada antes por
+// `bytesConcat`): o acumulador copiava tudo o que ja chegou a cada bloco lido,
+// custo quadratico no numero de blocos — 1 MiB em blocos de 8 KiB custava
+// ~4,8 s de CPU por conexao (medido em bench). Agora o buffer cresce com folga
+// (`bytesGrown`). O teste manda um corpo de 512 KiB em blocos de 16 KiB por
+// vez com pausa curta entre eles (para o SO nao coalescer num recebimento
+// so) e prova que o servico local recebe os bytes EXATOS, na ordem, com o
+// tamanho do Content-Length — o buffer com folga nunca entrega a area nao
+// usada. Meio MiB e de proposito: o caminho LENTO (bytesConcat) levava
+// ~1,2 s nele, compatível com o timeout; o MiB inteiro levava ~4,8 s.
+test "framing: pedido grande em muitos blocos chega byte-exato ao servico", "framing-accum" {
+    var localSvc = 19964
+    var controlPort = 19965
+    var tunnelPort = 19966
+    var httpPort = 19967
+    var bodySize = 512 * 1024
+    var blockSize = 16384
+
+    var received = new String[1]
+    received[0] = ""
+    var localListener = net.listen(localSvc)
+    var localTask = spawn {
+        var serving = true
+        while (serving) {
+            try {
+                var peer = localListener.accept()
+                var worker = spawn { captureLocal(peer, received, new String[1]) }
+            } catch (String e) {
+                serving = false
+            }
+        }
+    }
+    assert(waitForPort(localSvc, 60), "servico local no ar")
+
+    var registry = Registry("/tmp/kofcloud-framing-acc-" + crypto.randomHex(4) + ".json")
+    var edgeState = EdgeState(registry)
+    var edgeStop = "/tmp/kofcloud-framing-acc-edge-" + crypto.randomHex(4) + ".txt"
+    var agentStop = "/tmp/kofcloud-framing-acc-agent-" + crypto.randomHex(4) + ".txt"
+    File(edgeStop).delete()
+    File(agentStop).delete()
+    var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
+    var controlTask = spawn { control.start() }
+    var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
+    // Teto de leitura acima do corpo e teto de politica igual ao default
+    // (1 MiB, acima dos 512 KiB): quem acumula e a LEITURA, nao uma recusa
+    // de tamanho em nenhuma das duas camadas.
+    var httpTask = spawn { serveHttp(edgeState, httpPort, 4 * 1024 * 1024, edgeStop) }
+    edgeState.setBodyLimit(1024 * 1024)
+    assert(waitForPort(controlPort, 60), "control no ar")
+    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    assert(waitForPort(httpPort, 60), "http no ar")
+
+    var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
+    var account = json.decode<Map<String, String>>(bodyOf(created))
+    var accountToken = mapField(account, "token")
+    var accountId = mapField(account, "accountId")
+    var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
+    var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
+    var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
+    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+
+    var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
+    var agentTask = spawn { runAgent(config, true) }
+    var online = false
+    var attempts = 100
+    while (attempts > 0 && online == false) {
+        online = edgeState.isOnline(deviceId)
+        if (online == false) {
+            time.sleep(50)
+            attempts = attempts - 1
+        }
+    }
+    assert(online, "agent online")
+
+    // Corpo deterministico com bytes altos (>127) de proposito: a copia e de
+    // BYTES, entao nem o buffer com folga nem o caminho do relay podem
+    // reinterpretar como texto.
+    var body = ""
+    var i = 0
+    while (i < bodySize) {
+        body = body + ((i % 251) as Char)
+        i = i + 1
+    }
+    var host = "site.mel.kofcloud.io"
+    var conn = net.connect("127.0.0.1", httpPort)
+    conn.send(bytesFromString("POST / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: " + intToString(bodySize) + "\r\nConnection: close\r\n\r\n"))
+    var at = 0
+    while (at < body.length) {
+        var end = at + blockSize
+        if (end > body.length) {
+            end = body.length
+        }
+        conn.send(bytesFromString(body.substring(at, end)))
+        at = end
+        time.sleep(2)
+    }
+    var response = ""
+    var reading = true
+    while (reading) {
+        var chunk = conn.receive(8192)
+        if (chunk.length == 0) {
+            reading = false
+        } else {
+            response = response + bytesToString(chunk)
+        }
+    }
+    conn.close()
+    assert(statusOf(response) == 200, "pedido grande entregue; recebido status " + intToString(statusOf(response)))
+    assert(received[0].length == bodySize, "servico local recebe " + intToString(bodySize) + " bytes; recebeu " + intToString(received[0].length))
+    assert(received[0] == body, "corpo byte-exato e na ordem")
+
+    writeTextTo(agentStop, "stop")
+    time.sleep(1500)
+    writeTextTo(edgeStop, "stop")
+    time.sleep(1000)
+    localListener.close()
+    File(agentStop).delete()
+    File(edgeStop).delete()
+}
