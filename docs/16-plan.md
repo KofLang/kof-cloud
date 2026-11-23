@@ -2000,7 +2000,9 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   YYYY-MM-DD`, limite `kofcloud.limits.depPinMaxAgeDays`, 365). Nunca diz
   CVE nem versão atual: isso exige rede, e um scan offline que inventasse
   "vulnerável" seria pior que nenhum. Prova:
-  `tests/scan_extra_test.kf` (`scan-deps`).
+  `tests/scan_extra_test.kf` (`scan-deps`). **`--summary` ✅ (CI legível):** o `scan` imprime uma linha
+  ("scan: N achado(s) — detalhe: rode de novo sem --summary") mantendo o exit
+  code; `--summary` repetido barra no uso. Prova: `scan-summary`.
   O item "`kfs_` sem TTL em serviço crítico" pousou como Higiene de
   credenciais abaixo (`kof cloud service tokens` / `POST
   /v1/services/token-hygiene`).

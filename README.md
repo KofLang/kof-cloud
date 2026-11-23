@@ -135,7 +135,7 @@ doctor [--file kofcloud.json] [--tls-cert <pem>]  (diagnostico: login, control, 
 usage [--export]   (uso da conta: requests e bytes roteados pelo Edge; --export fecha a janela — le e zera, para billing externo)
 metrics [--grep <texto>] [--percentiles] [--control <url>]   (export Prometheus do control; --percentiles = p50/p95/p99 agregados, teto de faixa; sem auth, so agregados)
 audit [--sbom] [--verify] [--action <acao>] [--tail <n>]   (trilha da conta; --sbom = inventario local; --action filtra, --tail corta)
-scan [--file <caminho>] [--tls-cert <pem>]   (segredos no manifesto/ambiente, PEM expirando e .kfs commitado no repo; exit 1 com achado)
+scan [--file <caminho>] [--tls-cert <pem>] [--summary]   (segredos no manifesto/ambiente, PEM expirando e .kfs commitado no repo; exit 1 com achado; --summary = so a contagem)
 webhook set <url> --secret <s> | show | remove | test
 freeze service|device <nome|id> | account
 unfreeze service|device <nome|id> | account

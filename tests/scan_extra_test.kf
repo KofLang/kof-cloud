@@ -190,3 +190,18 @@ test "scan: e2e — nome com caixa errada no comando rejeita e aponta o certo", 
         writeTextTo(sessionPath(), priorSession)
     }
 }
+
+test "scan: --summary resume o achado em uma linha (exit 1 mantido)", "scan-summary" {
+    // CI legivel: o detalhe pode ser longo; a linha que o build le e o total.
+    // Nunca esconde o EXIT CODE — so o texto.
+    var dir = "/tmp/kofcloud-scan-summary-" + crypto.randomHex(4)
+    Directory(dir).createDirectories()
+    writeTextTo(dir + "/kofcloud.json", "{\"services\":[{\"name\":\"site\",\"port\":8080,\"password\":\"x\"}]}")
+    assert(cmdScan(listOf("--file", dir + "/kofcloud.json", "--summary")) == 1, "achado com --summary segue exit 1")
+    assert(cmdScan(listOf("--file", dir + "/kofcloud.json")) == 1, "sem --summary: mesmo exit")
+    var clean = "/tmp/kofcloud-scan-summary-clean-" + crypto.randomHex(4)
+    Directory(clean).createDirectories()
+    writeTextTo(clean + "/kofcloud.json", "{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
+    assert(cmdScan(listOf("--file", clean + "/kofcloud.json", "--summary")) == 0, "limpo segue 0")
+    assert(cmdScan(listOf("--file", clean + "/kofcloud.json", "--summary", "--summary")) == 1, "--summary repetido barra no uso")
+}

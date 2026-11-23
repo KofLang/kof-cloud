@@ -1581,8 +1581,8 @@ String scanKfsFinding(String trackedPath) {
 }
 
 Int cmdScan(List<String> args) {
-    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file") || flagMissingValue(args, "--tls-cert") || flagDuplicated(args, "--tls-cert")) {
-        println("uso: kof cloud scan [--file <caminho>] [--tls-cert <pem>]")
+    if (extraPositional(args, 0) || flagMissingValue(args, "--file") || flagDuplicated(args, "--file") || flagMissingValue(args, "--tls-cert") || flagDuplicated(args, "--tls-cert") || flagDuplicated(args, "--summary")) {
+        println("uso: kof cloud scan [--file <caminho>] [--tls-cert <pem>] [--summary]")
         return 1
     }
     var findings = listOf<String>()
@@ -1669,6 +1669,13 @@ Int cmdScan(List<String> args) {
     if (findings.size == 0) {
         println("scan ok: nenhum segredo no manifesto/ambiente, nenhum PEM expirando, nenhuma credencial commitada e nenhum pin de dependencia aberto")
         return 0
+    }
+    if (hasFlag(args, "--summary")) {
+        // CI legivel: a linha que o build le e o total; o detalhe fica no log
+        // de quem quiser (mesmo comando sem --summary). Nunca esconde o
+        // EXIT CODE — so o texto.
+        println("scan: " + intToString(findings.size) + " achado(s) — detalhe: rode de novo sem --summary")
+        return 1
     }
     for (var finding in findings) {
         println(finding)
