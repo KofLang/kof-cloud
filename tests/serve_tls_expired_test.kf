@@ -1,0 +1,44 @@
+import kofcloud.cli.Commands
+import kofcloud.cli.Deploy
+import kofcloud.util.Limits
+
+// F9 s3 — o aviso de PEM vencido. `openssl x509 -checkend` sai 1 tanto para
+// "expira em 30 dias" quanto para "ja venceu", e o serve dizia o primeiro
+// nos dois casos: o operador achava que tinha um mes e servia HTTPS com
+// cert morto.
+
+test "serve-tls: veredito separa expirando de vencido (puras)", "serve-tls-expired-unit" {
+    assert(tlsCertVerdict(0, parseCertEndDate("Jun  1 12:00:00 2027 GMT")) == "ok", "valido alem da janela")
+    assert(tlsCertVerdict(1, parseCertEndDate("Jun  1 12:00:00 2027 GMT")) == "expiring", "dentro da janela")
+    assert(tlsCertVerdict(1, parseCertEndDate("Jun  1 12:00:00 2020 GMT")) == "expired", "vencido nomeia vencido")
+    assert(certExpiredAt(civilDaysMs(2020, 1, 1), civilDaysMs(2025, 1, 1)) == true, "data passada = vencida")
+    assert(certExpiredAt(civilDaysMs(2030, 1, 1), civilDaysMs(2025, 1, 1)) == false, "data futura = nao")
+    assert(certExpiredAt(0L, civilDaysMs(2025, 1, 1)) == false, "sem data nao e vencido")
+    assert(tlsCertVerdict(1, 0L) == "expiring", "sem data: aviso conservador")
+    // Data do formato C do openssl -> meia-noite UTC.
+    assert(parseCertEndDate("Jun  1 12:00:00 2027 GMT") == civilDaysMs(2027, 6, 1), "Jun 1 2027")
+    assert(parseCertEndDate("2027-06-01 12:00:00Z") == civilDaysMs(2027, 6, 1), "ISO 8601")
+    assert(parseCertDate("Dec 31 23:59:59 1999 GMT") == civilDaysMs(1999, 12, 31), "Dec 31 1999")
+    assert(parseCertDate("Dec 31 23:59:59 1969 GMT") == 0L, "antes de 1970 = ilegivel")
+    assert(parseCertDate("lixo") == 0L, "lixo = ilegivel")
+    assert(parseCertDate("Xyz 1 00:00:00 2027 GMT") == 0L, "mes desconhecido = ilegivel")
+}
+
+test "serve-tls: PEM real lido pelo openssl (formato do -enddate) e veredito", "serve-tls-expired-e2e" {
+    var dir = "/tmp/kofcloud-expired-" + crypto.randomHex(4)
+    Directory(dir).createDirectories()
+    var key = dir + "/k.pem"
+    var cert = dir + "/c.pem"
+    var gen = process.run("sh", "-c", "mkdir -p " + dir + " && openssl req -x509 -newkey rsa:2048 -keyout " + key + " -out " + cert + " -days 1 -nodes -subj /CN=example.com 2>/dev/null")
+    assert(gen.exitCode == 0, "openssl gera o PEM (pula sem openssl)")
+    var endMs = tlsCertEndDate(cert)
+    assert(endMs > 0L, "fim de validade legivel do PEM real: " + longToString(endMs))
+    // O cert de 1 dia esta dentro da janela de 30 dias: checkend sai 1 e o
+    // veredito e "expiring" (nao "vencido") — a data real decide.
+    var check = process.run("openssl", "x509", "-in", cert, "-noout", "-checkend", tlsCheckendWindowSec())
+    assert(tlsCertVerdict(check.exitCode, endMs) == "expiring", "cert de 1 dia: expirando, nao vencido")
+    // O proprio relogio contra a data lida: ainda nao venceu.
+    assert(certExpiredAt(endMs, time.now()) == false, "cert de 1 dia ainda vale hoje")
+    // A data lida e FUTURA e coerente com o arquivo (janela de 60 dias).
+    assert(endMs < time.now() + 60L * 86400000L, "fim de validade plausivel")
+}

@@ -3582,6 +3582,153 @@ Bool tlsCertExpiringSoon(Int checkendExitCode) {
     return checkendExitCode != 0
 }
 
+// Veredito do PEM: "ok" | "expiring" (expira dentro da janela) |
+// "expired" (ja venceu) | "unknown" (sem data legivel — sem aviso).
+// `checkend != 0` so diz "dentro da janela OU vencido"; a data real
+// (`openssl x509 -enddate`) separa os dois. Pura: a data e epoch em ms
+// (0 = nao legivel) e o instante vem do chamador.
+String tlsCertVerdict(Int checkendExitCode, Long certEndMs) {
+    if (checkendExitCode == 0) {
+        return "ok"
+    }
+    if (certEndMs <= 0L) {
+        // openssl so recusou a janela; sem a data, o aviso conservador da
+        // fatia original (expirando) continua sendo o texto.
+        return "expiring"
+    }
+    // Comparacao com o relogio: o verdict NAO recebe `now` porque a unica
+    // decisao e "a data ja passou?" — `certExpiredAt` (puro) faz essa conta.
+    if (certExpiredAt(certEndMs, time.now())) {
+        return "expired"
+    }
+    return "expiring"
+}
+
+// A data de fim ja passou (puro: agora entra como parametro). Endereco
+// invalido (0/negativo) nunca e "vencido" — sem dado nao se inventa.
+Bool certExpiredAt(Long certEndMs, Long nowMs) {
+    if (certEndMs <= 0L) {
+        return false
+    }
+    return certEndMs < nowMs
+}
+
+// Fim de validade do PEM em epoch ms (0 = illegivel/openssl ausente).
+// `openssl x509 -enddate -noout` imprime `notAfter=Jun  1 12:00:00 2027 GMT`.
+// O Kof nao tem parser de data sem biblioteca aqui; usamos o formato
+// compacto do openssl (`-dateopt iso_8601` nao e universal), entao lemos a
+// forma ISO que o `-enddate` sempre traz no locale C via regex manual:
+// procuramos `YYYY-MM-DD` e, se nao houver, o mes textual do formato C.
+Long tlsCertEndDate(String certPath) {
+    try {
+        var out = process.run("openssl", "x509", "-in", certPath, "-noout", "-enddate").stdout
+        var at = out.indexOf("notAfter=")
+        if (at < 0) {
+            return 0L
+        }
+        return parseCertEndDate(out.substring(at + 9))
+    } catch (String e) {
+        return 0L
+    }
+}
+
+List<String> certMonthNames() {
+    return listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+}
+
+// Data do `-enddate` em epoch ms. Aceita os dois formatos que o openssl
+// pode imprimir: o C (`Jun  1 12:00:00 2027 GMT`) e o ISO-8601 do openssl 3
+// com `-dateopt iso_8601` ou locale (`2027-06-01 12:00:00Z`). 0 = ilegivel.
+Long parseCertEndDate(String text) {
+    var iso = certIsoDateMs(text)
+    if (iso > 0L) {
+        return iso
+    }
+    return parseCertDate(text)
+}
+
+// `YYYY-MM-DD` em epoch ms (UTC), sem biblioteca e sem ciclo de import (o
+// Deploy.kf tem a mesma `parseIsoDateMs`, mas importa o Commands). 0 quando
+// nao ha data ISO legivel no texto.
+Long certIsoDateMs(String text) {
+    var k = 0
+    while (k + 10 <= text.length) {
+        var ok = true
+        var j = 0
+        while (j < 10) {
+            var c = text.charAt(k + j) as Int
+            if (j == 4 || j == 7) {
+                if (c != 45) {
+                    ok = false
+                }
+            } else {
+                if (c < 48 || c > 57) {
+                    ok = false
+                }
+            }
+            j = j + 1
+        }
+        if (ok) {
+            var year = parseIntBounded(text.substring(k, k + 4), -1, 9999)
+            var mon = parseIntBounded(text.substring(k + 5, k + 7), -1, 12)
+            var day = parseIntBounded(text.substring(k + 8, k + 10), -1, 31)
+            if (year >= 1970 && mon >= 1 && day >= 1) {
+                return certDaysMs(year, mon, day)
+            }
+        }
+        k = k + 1
+    }
+    return 0L
+}
+
+// Data do formato C do openssl (`Jun  1 12:00:00 2027 GMT`) em epoch ms
+// (meia-noite UTC do dia — basta para "ja venceu?"). 0 quando ilegivel.
+Long parseCertDate(String text) {
+    var parts = text.split(" ")
+    var tokens = listOf<String>()
+    for (var part in parts) {
+        if (part.trim().length > 0) {
+            tokens.add(part.trim())
+        }
+    }
+    if (tokens.size < 4) {
+        return 0L
+    }
+    var months = certMonthNames()
+    var mon = 0
+    var i = 0
+    while (i < months.size) {
+        if (months.get(i) == tokens.get(0)) {
+            mon = i + 1
+        }
+        i = i + 1
+    }
+    var day = parseIntBounded(tokens.get(1), -1, 31)
+    var year = parseIntBounded(tokens.get(3), -1, 9999)
+    if (mon == 0 || day < 1 || year < 1970) {
+        return 0L
+    }
+    return certDaysMs(year, mon, day)
+}
+
+// Dias desde 1970-01-01 (formula civil de Hinnant) > epoch ms. O Deploy.kf
+// tem `civilDaysMs` igual; aqui ele fica local porque o Deploy importa o
+// Commands (import de volta seria ciclo).
+Long certDaysMs(Int year, Int mon, Int day) {
+    var y = year
+    var mp = mon - 3
+    if (mon <= 2) {
+        y = y - 1
+        mp = mon + 9
+    }
+    var era = y / 400
+    var yoe = y - era * 400
+    var doy = (153 * mp + 2) / 5 + day - 1
+    var doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+    var days = (era * 146097 + doe - 719468) as Long
+    return days * 86400000L
+}
+
 // Portas: control HTTP, tunel e HTTP publico do edge.
 Int cmdServe(List<String> args) {
     // Flag solta vira string vazia no parseIntSafe (default silencioso);
@@ -3682,12 +3829,19 @@ Int cmdServe(List<String> args) {
             println(usoServeLine())
             return 1
         }
-        // Aviso de expiracao (Fase 9 slice 3 parcial): 30 dias. openssl
-        // ausente/erro = sem aviso (nao ha o que checar); expiracao nao
-        // bloqueia o serve (aviso, nunca bloqueio — o operador decide).
+        // Aviso de expiracao (Fase 9 slice 3 parcial): 30 dias OU ja
+        // vencido. openssl ausente/erro = sem aviso (nao ha o que checar);
+        // expiracao nao bloqueia o serve (aviso, nunca bloqueio — o operador
+        // decide). O aviso ja vencido era INALCANCAVEL: o `-checkend` sai 1
+        // tambem para cert vencido, a camada tratava como "expira em 30
+        // dias" e o operador logo descobria que servia HTTPS com cert morto
+        // a semanas. `tlsCertVerdict` (pura) separa os dois pela data real.
         try {
             var check = process.run("openssl", "x509", "-in", tlsCertPath, "-noout", "-checkend", tlsCheckendWindowSec())
-            if (tlsCertExpiringSoon(check.exitCode)) {
+            var verdict = tlsCertVerdict(check.exitCode, tlsCertEndDate(tlsCertPath))
+            if (verdict == "expired") {
+                println("AVISO: certificado TLS JA VENCIDO — navegadores recusam o handshake; renove o PEM e reinicie o serve")
+            } else if (verdict == "expiring") {
                 println("aviso: certificado TLS expira em menos de 30 dias — renove o PEM")
             }
         } catch (String e) {

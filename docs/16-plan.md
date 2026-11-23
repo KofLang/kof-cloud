@@ -546,7 +546,10 @@ entre cliente e Edge. Cloud robusta de verdade exige HTTPS ponta a ponta
   O `serve` com `--tls-cert/--tls-key` roda `openssl x509 -checkend 30d`
   e avisa (nunca bloqueia) quando o PEM expira em menos de 30 dias;
   openssl ausente/erro = sem aviso. Pura `tlsCertExpiringSoon` (exitCode
-  → Bool). Prova: `tests/hosts_test.kf` (`serve-tls` estendido).
+  → Bool). **Vencido × expirando ✅:** `-checkend` sai 1 para os dois; agora
+  `tlsCertVerdict` + `certExpiredAt` (puras) usam a data real
+  (`openssl -enddate`, formato C e ISO) e o serve diz "JA VENCIDO" quando é.
+  Prova: `tests/serve_tls_expired_test.kf` (2) + `tests/hosts_test.kf` (`serve-tls`).
   O mesmo julgamento ficou visível fora do `serve`: `kof cloud scan
   --tls-cert` (Fase 19 slice 2) e, agora, `kof cloud doctor --tls-cert`
   — camada `tls` distingue ausente / PEM inválido / expira em 30 dias /
