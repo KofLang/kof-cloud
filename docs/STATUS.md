@@ -117,10 +117,10 @@ o run total imprime `73 passed, 0 failed`. Falha = nome do teste + assert
 | segredos de fonte externa (F18 s5) | `tests/secrets_test.kf` | 6 |
 | push do uso para billing (F18 s4) | `tests/usage_push_test.kf` | 4 |
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 6 |
-| aviso de PEM vencido × expirando (F9 s3) | `tests/serve_tls_expired_test.kf` | 2 |
+| aviso de PEM vencido × expirando (F9 s3) | `tests/serve_tls_expired_test.kf` | 3 |
 | backup automático do estado (F16 s1) | `tests/backup_dir_test.kf` | 3 |
 
-Total: 512 testes. Ver `15-tests.md` para a matriz.
+Total: 513 testes. Ver `15-tests.md` para a matriz.
 
 ## Desempenho medido
 

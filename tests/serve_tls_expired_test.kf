@@ -1,5 +1,7 @@
 import kofcloud.cli.Commands
 import kofcloud.cli.Deploy
+import kofcloud.cli.Doctor
+import kofcloud.util.Hosts
 import kofcloud.util.Limits
 
 // F9 s3 — o aviso de PEM vencido. `openssl x509 -checkend` sai 1 tanto para
@@ -41,4 +43,27 @@ test "serve-tls: PEM real lido pelo openssl (formato do -enddate) e veredito", "
     assert(certExpiredAt(endMs, time.now()) == false, "cert de 1 dia ainda vale hoje")
     // A data lida e FUTURA e coerente com o arquivo (janela de 60 dias).
     assert(endMs < time.now() + 60L * 86400000L, "fim de validade plausivel")
+}
+
+test "serve-tls: PEM vencido e FALHA no doctor, no domain verify e no service status", "serve-tls-expired-visible" {
+    // Mesma regra do serve (acima), nos outros tres comandos que julgam um
+    // PEM: "aviso" so para quem esta na janela dos 30 dias; vencido e
+    // FALHA (navegador recusa o handshake).
+    var past = civilDaysMs(2020, 1, 1)
+    var future = civilDaysMs(2030, 1, 1)
+    var san = "X509v3 Subject Alternative Name:\n    DNS:www.example.com, DNS:*.loja.example\n"
+    // domain verify
+    var expiredLine = domainCertLineWith("/c.pem", "www.example.com", true, 0, san, "", true, past)
+    assert(expiredLine.startsWith("FALHA tls"), "vencido = FALHA: " + expiredLine)
+    assert(expiredLine.indexOf("JA VENCIDO") >= 0, "nomeia vencido")
+    assert(domainCertLineWith("/c.pem", "www.example.com", true, 0, san, "", true, future).startsWith("ok   tls"), "futuro na janela = ok com aviso")
+    assert(domainCertLineWith("/c.pem", "www.example.com", true, 0, san, "", false, future).indexOf("VENCIDO") < 0, "valido = sem aviso")
+    // doctor
+    var doctorLine = doctorTlsLineWith("/c.pem", true, 0, 1, san, "", listOf("www.example.com"), past)
+    assert(doctorLine.startsWith("FALHA tls"), "doctor vencido = FALHA: " + doctorLine)
+    assert(doctorLine.indexOf("JA VENCIDO") >= 0, "doctor nomeia vencido")
+    assert(doctorTlsLineWith("/c.pem", true, 0, 1, san, "", listOf("www.example.com"), future).indexOf("30 dias") >= 0, "doctor na janela = prazo")
+    assert(doctorTlsLineWith("/c.pem", true, 0, 0, san, "", listOf("www.example.com"), future).startsWith("ok"), "doctor valido = ok")
+    // A forma antiga (sem data) preserva o comportamento para os chamadores.
+    assert(domainCertLine("/c.pem", "www.example.com", true, 0, san, "", true).indexOf("30 dias") >= 0, "sem data: aviso de janela")
 }

@@ -2666,6 +2666,7 @@ Bool domainTlsBlocks(String certPath, String hostname) {
     var sanOut = ""
     var subjectOut = ""
     var expiring = false
+    var endMs = 0L
     if (exists) {
         try {
             var parse = process.run("openssl", "x509", "-in", certPath, "-noout")
@@ -2675,12 +2676,13 @@ Bool domainTlsBlocks(String certPath, String hostname) {
                 subjectOut = process.run("openssl", "x509", "-in", certPath, "-noout", "-subject").stdout
                 var checkend = process.run("openssl", "x509", "-in", certPath, "-noout", "-checkend", tlsCheckendWindowSec())
                 expiring = tlsCertExpiringSoon(checkend.exitCode)
+                endMs = tlsCertEndDate(certPath)
             }
         } catch (String e) {
             parseExit = -1
         }
     }
-    var line = domainCertLine(certPath, hostname, exists, parseExit, sanOut, subjectOut, expiring)
+    var line = domainCertLineWith(certPath, hostname, exists, parseExit, sanOut, subjectOut, expiring, endMs)
     println(line)
     return line.startsWith("FALHA")
 }
@@ -2703,6 +2705,7 @@ List<String> serviceCertLines(String certPath, List<String> hosts) {
     var sanOut = ""
     var subjectOut = ""
     var expiring = false
+    var endMs = 0L
     if (exists) {
         try {
             parseExit = process.run("openssl", "x509", "-in", certPath, "-noout").exitCode
@@ -2711,13 +2714,14 @@ List<String> serviceCertLines(String certPath, List<String> hosts) {
                 subjectOut = process.run("openssl", "x509", "-in", certPath, "-noout", "-subject").stdout
                 var checkend = process.run("openssl", "x509", "-in", certPath, "-noout", "-checkend", tlsCheckendWindowSec())
                 expiring = tlsCertExpiringSoon(checkend.exitCode)
+                endMs = tlsCertEndDate(certPath)
             }
         } catch (String e) {
             parseExit = -1
         }
     }
     for (var host in hosts) {
-        out.add(domainCertLine(certPath, host, exists, parseExit, sanOut, subjectOut, expiring))
+        out.add(domainCertLineWith(certPath, host, exists, parseExit, sanOut, subjectOut, expiring, endMs))
     }
     return out
 }

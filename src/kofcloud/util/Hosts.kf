@@ -254,6 +254,13 @@ String certHostVerdict(String hostname, Bool exists, Int parseExit, String sanOu
 // "aviso tls" segue sem julgar. So o caminho e os nomes do certificado
 // aparecem — nunca o conteudo do PEM.
 String domainCertLine(String certPath, String hostname, Bool exists, Int parseExit, String sanOut, String subjectOut, Bool expiring) {
+    return domainCertLineWith(certPath, hostname, exists, parseExit, sanOut, subjectOut, expiring, 0L)
+}
+
+// Idem, com a data de fim do PEM (epoch ms; 0 = nao lida): vencido sai
+// como FALHA (navegador recusa o handshake — "aviso" so para quem esta na
+// janela dos 30 dias).
+String domainCertLineWith(String certPath, String hostname, Bool exists, Int parseExit, String sanOut, String subjectOut, Bool expiring, Long certEndMs) {
     if (certPath.length == 0) {
         return ""
     }
@@ -263,6 +270,9 @@ String domainCertLine(String certPath, String hostname, Bool exists, Int parseEx
     var verdict = certHostVerdict(hostname, exists, parseExit, sanOut, subjectOut)
     if (verdict.length > 0) {
         return "FALHA tls: " + certPath + " — " + verdict
+    }
+    if (certEndMs > 0L && certEndMs < time.now()) {
+        return "FALHA tls: " + certPath + " — JA VENCIDO (navegadores recusam o handshake); renove o PEM"
     }
     if (expiring) {
         return "ok   tls (" + certPath + " cobre " + hostname + "; aviso: expira em menos de 30 dias)"

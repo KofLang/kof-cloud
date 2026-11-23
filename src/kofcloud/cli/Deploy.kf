@@ -1609,7 +1609,12 @@ Int cmdScan(List<String> args) {
         } else {
             var check = process.run("openssl", "x509", "-in", certPath, "-noout", "-checkend", tlsCheckendWindowSec())
             if (tlsCertExpiringSoon(check.exitCode)) {
-                findings.add("tls: " + certPath + " expira em menos de 30 dias (ou nao e um PEM valido) — renove antes do vencimento")
+                var endMs = tlsCertEndDate(certPath)
+                if (endMs > 0L && endMs < time.now()) {
+                    findings.add("tls: " + certPath + " JA VENCIDO (navegadores recusam o handshake) — renove o PEM")
+                } else {
+                    findings.add("tls: " + certPath + " expira em menos de 30 dias (ou nao e um PEM valido) — renove antes do vencimento")
+                }
             }
         }
     }
