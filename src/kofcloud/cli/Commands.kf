@@ -912,7 +912,12 @@ Int cmdDeviceRevoke(List<String> args) {
     // notebook lixo` revogava/suspendia `notebook` em silencio (revoke ainda
     // remove servicos e credenciais do device) — typo virava acao destrutiva.
     if (deviceArg.trim().length == 0 || extraPositional(args, 1)) {
-        println("uso: kof cloud device revoke <nome|deviceId>")
+        println("uso: kof cloud device revoke <nome|deviceId> [--yes]")
+        return 1
+    }
+    // --yes repetido barra no uso (mesma regra do down/--check do deploy).
+    if (flagDuplicated(args, "--yes")) {
+        println("uso: kof cloud device revoke <nome|deviceId> [--yes]")
         return 1
     }
     var deviceId = deviceArg
@@ -924,6 +929,12 @@ Int cmdDeviceRevoke(List<String> args) {
         }
     } catch (String e) {
         printFail("falha", e)
+        return 1
+    }
+    // Guarda de destruicao: resolve o alvo antes de perguntar (a mensagem
+    // nomeia o dispositivo real) e nao toca no control plane sem --yes.
+    if (hasFlag(args, "--yes") == false) {
+        println(deviceRevokeConfirmationRequired(deviceArg.trim()))
         return 1
     }
     var body = mapOf()
@@ -1557,6 +1568,17 @@ void printServiceNotFound(List<Service> services, String name) {
 // ambiguo — quem precisa distinguir usa `resolveServiceName`.
 String matchServiceName(List<Service> services, String name) {
     return resolveServiceName(services, name).uniqueId
+}
+
+// Guarda de destruicao do `device revoke` (Fase 4/controle): revogar e
+// IRREVERSIVEL e leva junto tudo do device — servicos publicados e
+// credenciais vivas (mesma familia do `down`, que ja exige --yes). Sem
+// confirmacao explicita, um typo ou um comando colado de um script
+// derrubava a maquina inteira da plataforma. Pura, sem IO: o chamador ja
+// resolveu o nome para id antes de perguntar, entao a mensagem nomeia o
+// alvo real.
+String deviceRevokeConfirmationRequired(String name) {
+    return "device revoke remove o dispositivo \"" + name + "\" da plataforma E os servicos/credenciais dele — a revogacao e irreversivel; confirme com `kof cloud device revoke " + name + " --yes`"
 }
 
 // Nome de servico que NAO existe mas casa com um publicado sem distinguir

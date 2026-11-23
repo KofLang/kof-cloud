@@ -21,7 +21,7 @@ String usageText() {
     out = out + "  disconnect\n"
     out = out + "  status\n"
     out = out + "  device list [--json]   (--json = saida estavel para CI, com o eixo de presenca)\n"
-    out = out + "  device revoke <nome|deviceId>\n"
+    out = out + "  device revoke <nome|deviceId> [--yes]  (irreversivel: remove o device + servicos/credenciais; sem --yes so avisa)\n"
     out = out + "  device suspend <nome|deviceId>\n"
     out = out + "  device unsuspend <nome|deviceId>\n"
     out = out + "  publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>] [--allow-method VERBO]... [--allow-path /caminho]... [--max-body <bytes>]\n"

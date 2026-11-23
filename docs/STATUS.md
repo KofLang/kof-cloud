@@ -109,7 +109,7 @@ o run total imprime `72 passed, 0 failed`. Falha = nome do teste + assert
 | origem do serviço + presença no `service status` (F4) | `tests/service_device_test.kf` | 6 |
 | PEM visível no `service status` (F9 s3) | `tests/status_cert_test.kf` | 3 |
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
-| flags com valor, booleanas sem duplicação e posicional sobrando (CLI) | `tests/value_flags_test.kf` | 4 |
+| flags com valor, booleanas sem duplicação, posicional sobrando e guarda do `device revoke` (CLI) | `tests/value_flags_test.kf` | 5 |
 | eventos do Edge (`logs --edge`) | `tests/edge_events_test.kf` | 6 |
 | SERVICES empurrado (F14 s3) | `tests/services_push_test.kf` | 2 |
 | deploy --watch (F13 s3 parcial) | `tests/deploy_watch_test.kf` | 4 |
@@ -119,7 +119,7 @@ o run total imprime `72 passed, 0 failed`. Falha = nome do teste + assert
 | provedor DNS por comando (F18 s1) | `tests/dns_cmd_test.kf` | 6 |
 | backup automático do estado (F16 s1) | `tests/backup_dir_test.kf` | 3 |
 
-Total: 509 testes. Ver `15-tests.md` para a matriz.
+Total: 510 testes. Ver `15-tests.md` para a matriz.
 
 ## Desempenho medido
 

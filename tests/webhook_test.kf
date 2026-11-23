@@ -3,6 +3,7 @@ import kofcloud.cli.Local
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.model.Audit
+import kofcloud.model.Device
 import kofcloud.model.Errors
 import kofcloud.model.Webhook
 import kofcloud.store.Store
@@ -278,8 +279,16 @@ test "device: posicional sobrando barra antes de revogar/suspender", "device-gua
     assert(devAfter != null, "device nao foi revogado pelo comando com sobra")
     assert(cmdDeviceSuspend(listOf("notebook", "outro")) == 1, "suspend com sobra barra")
     assert(cmdDeviceUnsuspend(listOf("notebook", "outro")) == 1, "unsuspend com sobra barra")
-    // Sem sobra, o comando limpo revoga de verdade (exit 0).
-    assert(cmdDeviceRevoke(listOf("notebook")) == 0, "revoke limpo executa")
+    // Sem --yes o revoke so AVISA e nao toca o control plane (guarda de
+    // destruicao: revogar e irreversivel e leva servicos/credenciais juntos).
+    assert(cmdDeviceRevoke(listOf("notebook")) == 1, "revoke sem --yes so avisa")
+    var untouched = registry.deviceById(devId)
+    assert(untouched != null, "device continua existindo sem --yes")
+    if (untouched != null) {
+        assert(deviceIsRevoked(untouched.status) == false, "device nao foi revogado sem --yes")
+    }
+    // Com --yes, o comando revoga de verdade (exit 0).
+    assert(cmdDeviceRevoke(listOf("notebook", "--yes")) == 0, "revoke com --yes executa")
     // Sem posicional continua pedindo uso.
     assert(cmdDeviceRevoke(listOf<String>()) == 1, "revoke vazio pede uso")
     assert(cmdDeviceSuspend(listOf<String>()) == 1, "suspend vazio pede uso")

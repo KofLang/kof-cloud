@@ -295,3 +295,15 @@ test "flags: todo comando da CLI barra posicional sobrando (trava de fonte)", "v
     var helperBody = text.substring(helperStart, text.indexOf("Int cmdIncidents(", helperStart))
     assert(helperBody.indexOf("extraPositional(") >= 0, "runContainment tem a guarda")
 }
+
+test "flags: device revoke exige --yes (destrutivo e irreversivel)", "device-revoke-guard" {
+    // Medido (familia do down --yes): `device revoke` roda sem confirmacao
+    // nenhuma, mas REVOGA o device e leva junto os servicos e credenciais
+    // dele — irreversivel. Um typo ou uma linha colada de script derrubava
+    // a maquina inteira. A guarda e pura; o fio aborta antes do control.
+    assert(deviceRevokeConfirmationRequired("notebook").indexOf("notebook") >= 0, "nomeia o device")
+    assert(deviceRevokeConfirmationRequired("notebook").indexOf("irreversivel") >= 0, "avisa irreversibilidade")
+    assert(deviceRevokeConfirmationRequired("notebook").indexOf("--yes") >= 0, "aponta como prosseguir")
+    // --yes repetido barra no uso, sem sessao nem rede (como no down).
+    assert(cmdDeviceRevoke(listOf("notebook", "--yes", "--yes")) == 1, "--yes repetido barra")
+}

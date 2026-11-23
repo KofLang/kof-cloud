@@ -108,7 +108,7 @@ connect
 disconnect
 status
 device list [--json]   (--json = saida estavel para CI, com o eixo de presenca)
-device revoke <nome|deviceId>
+device revoke <nome|deviceId> [--yes]  # irreversivel: sem --yes so avisa
 device suspend <nome|deviceId>      (túnel recusado, nada removido)
 device unsuspend <nome|deviceId>
 publish <nome> --port <porta> [--exposure PUBLIC|AUTHENTICATED|PRIVATE] [--address <addr>] [--device <nome>]

@@ -247,6 +247,18 @@ declarados, diz quantos órfãos o `--prune` levaria e aponta o `down --yes`.
 Prova: `tests/deploy_test.kf` (`deploy-down-guard`: pura + `--yes` repetido
 barra no uso) + `deploy_test.kf` (`valueflags-unit`: `down --prune --yes`
 passa, `--yes --yes` barra).
+**Fatia: `device revoke` exige `--yes`.** O `down` ganhou guarda de
+destruição (acima); o `device revoke` ficou de fora e é o comando MAIS
+destrutivo da CLI: revogar é irreversível e leva junto os serviços
+publicados e as credenciais vivas do dispositivo. Sem confirmação, um typo
+ou uma linha colada de script derrubava a máquina inteira. Agora resolvido
+o alvo, sem `--yes` o comando só avisa (`deviceRevokeConfirmationRequired`,
+pura — nomeia o dispositivo e aponta o comando de confirmação) e não toca
+o control plane; `--yes` repetido barra no uso (mesma regra do `down`).
+Prova: `tests/value_flags_test.kf` (`device-revoke-guard`: pura + `--yes`
+repetido) e `tests/webhook_test.kf` (sem `--yes` o device continua vivo;
+com `--yes` revoga).
+
 **Fatia: nome de serviço com caixa errada ganha diagnóstico.** O nome de
 serviço é chave EXATA (manifesto, rota, hostname) — "Site" não resolve
 "site", e adivinhar mudaria a chave em silêncio. Mas os comandos por nome
