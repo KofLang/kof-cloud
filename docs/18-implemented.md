@@ -363,3 +363,5 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
   cobre anel+espelho; WORM real em storage separado pendente).
 
 Ver `16-plan.md` para as fases e `17-limitations.md` para as lacunas.
+
+| dica de credencial recusada no retry (F16) | `isControlAuthError`/`systemHint` puras: 401 `KCF004` do control plane no laço de reconexão emite o evento "rode `kof cloud login`" (não fatal — o próximo ciclo reconecta após o login); outros erros seguem sem dica | `backoff_test.kf` (`backoff-authhint`) |

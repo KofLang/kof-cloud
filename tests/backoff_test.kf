@@ -122,3 +122,27 @@ test "rede ausente: retry espera o passo offline, nunca a base (F16)", "backoff-
     // Control plane com host URL ilegivel: "nao afirma nem nega".
     assert(agentNetworkUp("", "nao-e-url") == true, "sem rotulo para sondar: nao bloqueia")
 }
+
+test "credencial recusada: o retry diz o que fazer, sem ser fatal", "backoff-authhint" {
+    // Medido: uma kfc_ revogada/vencida volta 401 KCF004 do control plane e
+    // o laco de reconexao tratava como rede — a maquina ficava tentando em
+    // silencio e o operador via erros de backoff, nao "faca login".
+    var authErr = "KCF004: unauthorized"
+    if (!(isControlAuthError(authErr))) { assert(false, "H1 reconhece KCF004") }
+    if (isFatal(authErr)) { assert(false, "H2 nao e refusa do Edge (login resolve)") }
+    if (!(systemHint(authErr).indexOf("kof cloud login") >= 0)) { assert(false, "H3 dica nomeia o login") }
+    if (!(systemHint(authErr).indexOf("recusada") >= 0)) { assert(false, "H4 dica diz o que aconteceu") }
+    if (!(systemHint("connect refused").length == 0)) { assert(false, "H5 erro de rede sem dica") }
+    if (isControlAuthError("edge closed during handshake")) { assert(false, "H6 nao confunde outros erros") }
+    // A dica nunca carrega o valor da credencial.
+    if (systemHint(authErr).indexOf("kfc_") >= 0) { assert(false, "H7 sem credencial na dica") }
+    // Trava de fonte: o laco emite a dica pelo mesmo caminho dos outros eventos.
+    var raw = File("src/kofcloud/agent/Agent.kf").readText()
+    var text = ""
+    if (raw != null) {
+        text = raw
+    }
+    var start = text.indexOf("void runAgent(")
+    var body = text.substring(start, text.length)
+    if (!(body.indexOf("systemHint(e)") >= 0)) { assert(false, "H8 laco emite a dica") }
+}

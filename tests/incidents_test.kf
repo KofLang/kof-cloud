@@ -890,14 +890,17 @@ test "incidentes: varredura periodica poda credenciais ociosas e abre o incident
     var stop = "/tmp/kofcloud-inc-expiryswl-stop-" + crypto.randomHex(4) + ".txt"
     File(stop).delete()
     var loop = spawn { credentialExpirySweeper(registry, stop, 40) }
+    // Espera os DOIS lados da poda: a kfs_ vem antes e a kfc_ depois, entao
+    // esperar so a primeira deixava a leitura da segunda correndo com o laco
+    // (sob carga da suite inteira a assercao falhava; isolada passava).
     var tries = 0
-    while (registry.serviceTokens.size > 1 && tries < 100) {
+    while ((registry.serviceTokens.size > 1 || registry.tokens.size > 1) && tries < 250) {
         time.sleep(20)
         tries = tries + 1
     }
     assert(registry.serviceTokens.size == 1, "laco podou as vencidas e manteve a valida")
+    assert(registry.tokens.size == 1, "kfc_ valida fica e a vencida saiu")
     assert(registry.pruneExpiredAccountTokens() == 0, "kfc_ vencida ja saiu no laco")
-    assert(registry.tokens.size == 1, "kfc_ valida fica")
 
     // O sinal chega na conta dona SEM nenhuma validacao (conta ociosa):
     // mel tinha 3 vencidas na janela, ana 1.

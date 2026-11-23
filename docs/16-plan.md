@@ -1506,11 +1506,20 @@ iguais).
   recuo seguro) em vez do backoff crescente, a linha do evento diz "sem
   rede local" em vez de culpar o Edge, e na volta a rede avisa "rede local
   voltou" e o backoff recomeça do zero. Prova: `tests/backoff_test.kf`
-  (5: passo fixo nas voltas offline, backoff normal online, recuo do
-  passo, linhas, sonda real com `.invalid`; 3 mutações — sem passo fixo,
+  (6: passo fixo nas voltas offline, backoff normal online, recuo do
+  passo, linhas, sonda real com `.invalid`, dica de credencial recusada; 3 mutações — sem passo fixo,
   sem recuo, sem delegação do `webhookUrlHost` — quebram).
   `urlHost` em `util/Text.kf` é a extração genérica de host (o
   `webhookUrlHost` delega nela — mesma regra, sem duas cópias).
+
+  **Implementado (credencial do control recusada não vira "rede"):** a
+  `kfc_` revogada/vencida volta 401 `KCF004` do control plane, e o laço de
+  reconexão do Agent tratava como falha transitória — martelava o control
+  em silêncio e o operador só via backoff, nunca "faça login". Agora
+  `isControlAuthError`/`systemHint` (puras) reconhecem o erro e o laço emite
+  um evento que diz o que fazer (`kof cloud login <handle>`); NÃO é fatal —
+  o login resolve e o próximo ciclo reconecta sozinho. Prova:
+  `tests/backoff_test.kf` (`backoff-authhint`).
 
   **Implementado (falha de bind visível — a borda não some em silêncio):**
   os três listeners do `serve` (control, túnel, público) abrem DENTRO de

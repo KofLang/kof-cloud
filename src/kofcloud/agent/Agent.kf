@@ -252,6 +252,10 @@ void runAgent(AgentConfig config, Bool once) {
                 }
                 var delay = reconnectWaitMs(up, attempt, defaultBackoffBase(), defaultBackoffMax(), limitOfflineRetryMs())
                 agentEvent("warn", reconnectLine(e, up, delay))
+                var hint = systemHint(e)
+                if (hint.length > 0) {
+                    agentEvent("warn", hint)
+                }
                 time.sleep(delay)
                 if (up) {
                     attempt = attempt + 1
@@ -259,6 +263,27 @@ void runAgent(AgentConfig config, Bool once) {
             }
         }
     }
+}
+
+// Camada do erro vindo do CONTROL PLANE (nao do Edge). Uma kfc_ revogada ou
+// vencida volta 401 KCF004; o laco de reconexao a tratava como rede e
+// tentava para sempre — a maquina ficava martelando o control plane, e o
+// operador so via "control plane inalcançável"/erros de backoff quando o
+// problema era o proprio login. Nao e fatal (rodar `login` resolve e o
+// proximo ciclo reconecta), mas o evento precisa dizer o que fazer.
+Bool isControlAuthError(String error) {
+    return error.indexOf("KCF004") >= 0
+}
+
+String controlAuthHint() {
+    return "credencial do control plane recusada (revogada ou vencida) — rode `kof cloud login <handle>` nesta maquina; o Agent reconecta sozinho"
+}
+
+String systemHint(String error) {
+    if (isControlAuthError(error)) {
+        return controlAuthHint()
+    }
+    return ""
 }
 
 // Recusa definitiva: nao adianta reconectar. DEVICE_SUSPENDED e fatal do
