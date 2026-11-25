@@ -16,15 +16,15 @@ String tempStatePath(String name) {
 test "registry: cria conta e recusa handle duplicado" {
     var registry = Registry(tempStatePath("account"))
     var account = registry.createAccount("mel", "mel@example.com", "segredo")
-    assert(account.handle == "mel", "handle")
-    assert(registry.accountByHandle("mel") != null, "encontrada")
+    need(account.handle == "mel", "falhou")
+    need(registry.accountByHandle("mel") != null, "falhou")
     var duplicated = false
     try {
         registry.createAccount("mel", "outro@example.com", "x")
     } catch (String e) {
         duplicated = true
     }
-    assert(duplicated, "handle duplicado recusado")
+    need(duplicated, "falhou")
 }
 
 test "registry: token autentica a conta" {
@@ -32,36 +32,36 @@ test "registry: token autentica a conta" {
     var account = registry.createAccount("mel", "mel@example.com", "segredo")
     var token = registry.issueToken(account.id)
     var resolved = registry.accountByToken(token)
-    assert(resolved != null, "token resolve")
+    need(resolved != null, "falhou")
     if (resolved != null) {
-        assert(resolved.id == account.id, "conta certa")
+        need(resolved.id == account.id, "falhou")
     }
-    assert(registry.accountByToken("kfc_invalido") == null, "token invalido recusado")
+    need(registry.accountByToken("kfc_invalido") == null, "falhou")
 }
 
 test "registry: login exige a senha correta" {
     var registry = Registry(tempStatePath("login"))
     registry.createAccount("mel", "mel@example.com", "segredo")
     var token = registry.login("mel", "segredo")
-    assert(token.startsWith("kfc_"), "token emitido")
+    need(token.startsWith("kfc_"), "falhou")
     var rejected = false
     try {
         registry.login("mel", "errada")
     } catch (String e) {
         rejected = true
     }
-    assert(rejected, "senha errada recusada")
+    need(rejected, "falhou")
 }
 
 test "registry: registra dispositivo e publica servico com hostname" {
     var registry = Registry(tempStatePath("publish"))
     var account = registry.createAccount("mel", "mel@example.com", "segredo")
     var device = registry.registerDevice(account, "notebook", "pubkey")
-    assert(device.status == "ACTIVE", "ativo")
+    need(device.status == "ACTIVE", "falhou")
     var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
-    assert(service.hostname == "site.mel.kofcloud.io", "hostname")
-    assert(service.exposure == "PUBLIC", "exposicao")
-    assert(service.status == "UNKNOWN", "status inicial")
+    need(service.hostname == "site.mel.kofcloud.io", "falhou")
+    need(service.exposure == "PUBLIC", "falhou")
+    need(service.status == "UNKNOWN", "falhou")
 }
 
 test "registry: PRIVATE nao aparece como rota publica" {
@@ -69,8 +69,8 @@ test "registry: PRIVATE nao aparece como rota publica" {
     var account = registry.createAccount("mel", "mel@example.com", "segredo")
     var device = registry.registerDevice(account, "notebook", "pubkey")
     var service = registry.publishService(account, device.id, "db", "127.0.0.1", 5432, "http", "PRIVATE", "", "")
-    assert(registry.resolveRoute(service.hostname) == null, "sem rota")
-    assert(registry.serviceById(service.id) != null, "mas o servico existe")
+    need(registry.resolveRoute(service.hostname) == null, "falhou")
+    need(registry.serviceById(service.id) != null, "falhou")
 }
 
 test "registry: revogar dispositivo remove os servicos dele" {
@@ -78,14 +78,14 @@ test "registry: revogar dispositivo remove os servicos dele" {
     var account = registry.createAccount("mel", "mel@example.com", "segredo")
     var device = registry.registerDevice(account, "notebook", "pubkey")
     var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
-    assert(registry.resolveRoute(service.hostname) != null, "rota antes")
-    assert(registry.revokeDevice(account.id, device.id) == true, "revogado")
+    need(registry.resolveRoute(service.hostname) != null, "falhou")
+    need(registry.revokeDevice(account.id, device.id) == true, "falhou")
     var after = registry.deviceById(device.id)
-    assert(after != null, "device ainda existe")
+    need(after != null, "falhou")
     if (after != null) {
-        assert(after.status == "REVOKED", "status revogado")
+        need(after.status == "REVOKED", "falhou")
     }
-    assert(registry.resolveRoute(service.hostname) == null, "rota removida")
+    need(registry.resolveRoute(service.hostname) == null, "falhou")
 }
 
 test "registry: estado persiste em disco e recarrega" {
@@ -94,8 +94,8 @@ test "registry: estado persiste em disco e recarrega" {
     var account = registry.createAccount("mel", "mel@example.com", "segredo")
     registry.registerDevice(account, "notebook", "pubkey")
     var reloaded = Registry(path)
-    assert(reloaded.accountByHandle("mel") != null, "conta recarregada")
-    assert(reloaded.devicesForAccount(account.id).size == 1, "dispositivo recarregado")
+    need(reloaded.accountByHandle("mel") != null, "falhou")
+    need(reloaded.devicesForAccount(account.id).size == 1, "falhou")
 }
 
 test "registry: republicar no mesmo device atualiza a configuracao mutavel", "republish" {
@@ -109,27 +109,27 @@ test "registry: republicar no mesmo device atualiza a configuracao mutavel", "re
     var first = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
 
     var updated = registry.publishService(account, device.id, "site", "127.0.0.1", 9090, "http", "AUTHENTICATED", "GET", "/api/*")
-    assert(updated.id == first.id, "mesma identidade (id preservado)")
-    assert(updated.hostname == first.hostname, "hostname preservado")
-    assert(updated.createdAt == first.createdAt, "createdAt preservado")
-    assert(updated.localPort == 9090, "porta atualizada")
-    assert(updated.exposure == "AUTHENTICATED", "exposure atualizada")
-    assert(updated.allowMethods == "GET", "allowlist atualizada")
-    assert(updated.allowPaths == "/api/*", "allowPaths atualizado")
+    need(updated.id == first.id, "falhou")
+    need(updated.hostname == first.hostname, "falhou")
+    need(updated.createdAt == first.createdAt, "falhou")
+    need(updated.localPort == 9090, "falhou")
+    need(updated.exposure == "AUTHENTICATED", "falhou")
+    need(updated.allowMethods == "GET", "falhou")
+    need(updated.allowPaths == "/api/*", "falhou")
 
     // O estado em memoria reflete a atualizacao (nao so o retorno).
     var live = registry.serviceById(first.id)
-    assert(live != null, "servico existe")
+    need(live != null, "falhou")
     if (live != null) {
-        assert(live.localPort == 9090, "estado atualizado")
+        need(live.localPort == 9090, "falhou")
     }
     // E persiste: recarregar do disco ve a config nova.
     var reloaded = Registry(registry.path)
     var persisted = reloaded.serviceById(first.id)
-    assert(persisted != null, "persistido")
+    need(persisted != null, "falhou")
     if (persisted != null) {
-        assert(persisted.localPort == 9090, "porta persistida")
-        assert(persisted.exposure == "AUTHENTICATED", "exposure persistida")
+        need(persisted.localPort == 9090, "falhou")
+        need(persisted.exposure == "AUTHENTICATED", "falhou")
     }
 }
 
@@ -143,13 +143,13 @@ test "registry: republicar preserva status e nao ressuscita suspenso", "republis
     registry.setServiceStatus(service.id, "ONLINE")
 
     var updated = registry.publishService(account, device.id, "site", "127.0.0.1", 9090, "http", "PUBLIC", "", "")
-    assert(updated.status == "ONLINE", "status preservado na republicacao")
+    need(updated.status == "ONLINE", "falhou")
 
     // Suspenso continua suspenso (o deploy nao dessuspende).
     registry.suspendService(account.id, service.id)
     var afterSuspend = registry.publishService(account, device.id, "site", "127.0.0.1", 7070, "http", "PUBLIC", "", "")
-    assert(afterSuspend.status == "SUSPENDED", "suspensao preservada")
-    assert(afterSuspend.localPort == 7070, "config ainda atualiza")
+    need(afterSuspend.status == "SUSPENDED", "falhou")
+    need(afterSuspend.localPort == 7070, "falhou")
 
     // Cruzamento republicar × kfs_ (deploy --watch republica em lote a cada
     // mudanca do manifesto): o publish atualiza a CONFIG do servico e nunca
@@ -158,12 +158,12 @@ test "registry: republicar preserva status e nao ressuscita suspenso", "republis
     // decisao de rotate/revoke, nunca de publish.
     var kfs1 = registry.issueServiceToken(account.id, service.id)
     var kfs2 = registry.issueServiceToken(account.id, service.id, 24)
-    assert(registry.pendingRotationCount(service.id) == 2, "duas credenciais vivas (overlap)")
+    need(registry.pendingRotationCount(service.id) == 2, "falhou")
     registry.publishService(account, device.id, "site", "127.0.0.1", 6060, "http", "AUTHENTICATED", "", "")
     registry.publishService(account, device.id, "site", "127.0.0.1", 6060, "http", "AUTHENTICATED", "", "")
-    assert(registry.serviceByServiceToken(kfs1) != null, "antiga (sem TTL) sobrevive ao republish")
-    assert(registry.serviceByServiceToken(kfs2) != null, "nova (com TTL) sobrevive ao republish")
-    assert(registry.pendingRotationCount(service.id) == 2, "overlap intacto apos republish")
+    need(registry.serviceByServiceToken(kfs1) != null, "falhou")
+    need(registry.serviceByServiceToken(kfs2) != null, "falhou")
+    need(registry.pendingRotationCount(service.id) == 2, "falhou")
 }
 
 test "registry: republicar sem mudanca nao reescreve (idempotente)", "republish-same" {
@@ -176,9 +176,9 @@ test "registry: republicar sem mudanca nao reescreve (idempotente)", "republish-
     var first = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
     var before = registry.auditCountSince(account.id, "service.updated", 0)
     var again = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
-    assert(again.id == first.id, "mesmo servico")
-    assert(registry.auditCountSince(account.id, "service.updated", 0) == before, "sem auditoria de update")
-    assert(serviceConfigEquals(first, again), "config identica")
+    need(again.id == first.id, "falhou")
+    need(registry.auditCountSince(account.id, "service.updated", 0) == before, "falhou")
+    need(serviceConfigEquals(first, again), "falhou")
 }
 
 test "registry: publicar em device revogado recusa; suspenso aceita", "publish-device-state" {
@@ -200,9 +200,9 @@ test "registry: publicar em device revogado recusa; suspenso aceita", "publish-d
         refused = true
         code = e
     }
-    assert(refused, "device revogado recusa o publish")
-    assert(code.indexOf("KCF023") >= 0, "codigo KCF023: " + code)
-    assert(registry.servicesForAccount(account.id).size == 0, "nada foi criado")
+    need(refused, "falhou")
+    need(code.indexOf("KCF023") >= 0, "falhou")
+    need(registry.servicesForAccount(account.id).size == 0, "falhou")
 
     // Suspenso: aceita (reversivel).
     var registry2 = Registry(tempStatePath("publish-suspended"))
@@ -210,8 +210,8 @@ test "registry: publicar em device revogado recusa; suspenso aceita", "publish-d
     var device2 = registry2.registerDevice(account2, "pc", "pubkey")
     registry2.suspendDevice(account2.id, device2.id)
     var service = registry2.publishService(account2, device2.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
-    assert(service.name == "site", "suspenso aceita o publish")
-    assert(registry2.servicesForAccount(account2.id).size == 1, "servico criado")
+    need(service.name == "site", "falhou")
+    need(registry2.servicesForAccount(account2.id).size == 1, "falhou")
 }
 
 test "registry: re-registrar nome revogado cria device NOVO (id e chave novos)", "reregister" {
@@ -223,32 +223,32 @@ test "registry: re-registrar nome revogado cria device NOVO (id e chave novos)",
     var registry = Registry(tempStatePath("reregister"))
     var account = registry.createAccount("mel", "mel@example.com", "segredo")
     var first = registry.registerDevice(account, "notebook", "pk-antiga")
-    assert(registry.revokeDevice(account.id, first.id), "revoga o primeiro")
+    need(registry.revokeDevice(account.id, first.id), "falhou")
 
     var second = registry.registerDevice(account, "notebook", "pk-nova")
-    assert(second.id != first.id, "id NOVO (o revogado nao volta)")
-    assert(second.status == "ACTIVE", "nasce ativo")
-    assert(second.publicKey == "pk-nova", "chave nova registrada")
+    need(second.id != first.id, "falhou")
+    need(second.status == "ACTIVE", "falhou")
+    need(second.publicKey == "pk-nova", "falhou")
 
     // O revogado continua revogado e fora do caminho.
     var firstAfter = registry.deviceById(first.id)
-    assert(firstAfter != null, "revogado ainda existe para auditoria")
+    need(firstAfter != null, "falhou")
     if (firstAfter != null) {
-        assert(firstAfter.status == "REVOKED", "segue REVOKED")
+        need(firstAfter.status == "REVOKED", "falhou")
     }
 
     // Re-registrar de novo (sem revogar o novo) dedupa no VIVO, nao no morto:
     // cada login com o mesmo nome nao cria mais um device.
     var third = registry.registerDevice(account, "notebook", "pk-outra")
-    assert(third.id == second.id, "dedup no device vivo")
-    assert(registry.devicesForAccount(account.id).size == 2, "so revogado + vivo")
+    need(third.id == second.id, "falhou")
+    need(registry.devicesForAccount(account.id).size == 2, "falhou")
     // O ativo aparece uma vez; o nome resolve para o vivo.
     var active = registry.activeDeviceByName(account.id, "notebook")
-    assert(active != null, "existe ativo com o nome")
+    need(active != null, "falhou")
     if (active != null) {
-        assert(active.id == second.id, "activeDeviceByName acha o vivo")
+        need(active.id == second.id, "falhou")
     }
-    assert(registry.activeDeviceCount(account.id) == 1, "revogado nao conta no teto")
+    need(registry.activeDeviceCount(account.id) == 1, "falhou")
 }
 
 test "registry: nome com caixa diferente nao resolve, mas o aviso nomeia o existente", "service-case-hint" {
@@ -260,22 +260,22 @@ test "registry: nome com caixa diferente nao resolve, mas o aviso nomeia o exist
     live.add(Service("id-a", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
     live.add(Service("id-b", "acc", "devA", "api-v2", "127.0.0.1", 9000, "http", "api-v2.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
     // Exato continua resolvendo (sem mudanca de semantica).
-    assert(matchServiceName(live, "site") == "id-a", "exato resolve")
-    assert(matchServiceName(live, "Site") == "", "caixa diferente NAO resolve")
-    assert(serviceCaseHint(live, "Site").indexOf("site") >= 0, "o aviso nomeia o existente")
-    assert(serviceCaseHint(live, " Site ").indexOf("site") >= 0, "aplica trim")
-    assert(serviceCaseHint(live, "API-V2").indexOf("api-v2") >= 0, "maiusculas no nome tambem casam")
-    assert(serviceCaseHint(live, "outro") == "", "sem candidato, sem aviso")
-    assert(serviceCaseHint(live, "") == "", "vazio sem aviso")
-    assert(serviceCaseHint(listOf<Service>(), "Site") == "", "conta vazia sem aviso")
+    need(matchServiceName(live, "site") == "id-a", "falhou")
+    need(matchServiceName(live, "Site") == "", "falhou")
+    need(serviceCaseHint(live, "Site").indexOf("site") >= 0, "falhou")
+    need(serviceCaseHint(live, " Site ").indexOf("site") >= 0, "falhou")
+    need(serviceCaseHint(live, "API-V2").indexOf("api-v2") >= 0, "falhou")
+    need(serviceCaseHint(live, "outro") == "", "falhou")
+    need(serviceCaseHint(live, "") == "", "falhou")
+    need(serviceCaseHint(listOf<Service>(), "Site") == "", "falhou")
     // Comparacao propria (a caixa e lacuna medida do runtime — L20): so ASCII.
-    assert(sameLettersIgnoringCase("Site", "sITE"), "mesmas letras")
-    assert(sameLettersIgnoringCase("site", "site") == true, "exato nao confunde")
-    assert(sameLettersIgnoringCase("site", "sity") == false, "letra diferente")
-    assert(sameLettersIgnoringCase("site", "sites") == false, "tamanho diferente")
-    assert(loweredChar(65) == 97, "A vira a")
-    assert(loweredChar(97) == 97, "a fica a")
-    assert(loweredChar(45) == 45, "hifen intacto")
+    need(sameLettersIgnoringCase("Site", "sITE"), "falhou")
+    need(sameLettersIgnoringCase("site", "site") == true, "falhou")
+    need(sameLettersIgnoringCase("site", "sity") == false, "falhou")
+    need(sameLettersIgnoringCase("site", "sites") == false, "falhou")
+    need(loweredChar(65) == 97, "falhou")
+    need(loweredChar(97) == 97, "falhou")
+    need(loweredChar(45) == 45, "falhou")
 }
 
 test "status: dominios proprios que apontam para os servicos desta maquina", "status-domains" {
@@ -291,16 +291,16 @@ test "status: dominios proprios que apontam para os servicos desta maquina", "st
     domains.add(DomainEntry("sem-servico.example.com", "custom", "", "VERIFIED"))
     domains.add(DomainEntry("api.mel.kofcloud.io", "service", "api", ""))
     var pointing = domainsPointingToServices(domains, services)
-    assert(pointing.size == 2, "so os dois da maquina: " + intToString(pointing.size))
+    need(pointing.size == 2, "falhou")
     var www = statusDomainLine(domains.get(0), services)
-    assert(www.indexOf("site <-") >= 0, "nomeia o servico alvo: " + www)
-    assert(www.indexOf("www.example.com") >= 0, "mostra o hostname")
-    assert(www.indexOf("VERIFIED") >= 0, "mostra o status do DNS")
+    need(www.indexOf("site <-") >= 0, "falhou")
+    need(www.indexOf("www.example.com") >= 0, "falhou")
+    need(www.indexOf("VERIFIED") >= 0, "falhou")
     var painel = statusDomainLine(domains.get(1), services)
-    assert(painel.indexOf("api <-") >= 0 && painel.indexOf("PENDING") >= 0, "PENDING visivel: " + painel)
+    need(painel.indexOf("api <-") >= 0 && painel.indexOf("PENDING") >= 0, "falhou")
     // Maquina sem servicos: nada aponta.
-    assert(domainsPointingToServices(domains, listOf<Service>()).size == 0, "sem servicos: vazio")
-    assert(domainsPointingToServices(listOf<DomainEntry>(), services).size == 0, "sem dominios: vazio")
+    need(domainsPointingToServices(domains, listOf<Service>()).size == 0, "falhou")
+    need(domainsPointingToServices(listOf<DomainEntry>(), services).size == 0, "falhou")
 }
 
 test "status: e2e — o comando mostra o dominio que leva ao servico publicado", "status-domains-e2e" {
@@ -313,31 +313,31 @@ test "status: e2e — o comando mostra o dominio que leva ao servico publicado",
     var port = 19751
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control no ar")
+    need(waitForPort(port, 60), "falhou")
     var url = "http://127.0.0.1:" + intToString(port)
     var token = loginOrCreate(url, "mel", "segredo")
     var addBody = "{\"service\":\"site\",\"hostname\":\"www.example.com\"}"
-    assert(statusOf(httpPostJson(port, "/v1/domains", addBody, token)) == 200, "dominio registrado")
+    need(statusOf(httpPostJson(port, "/v1/domains", addBody, token)) == 200, "falhou")
     // A lista do fio, decodificada como o status faz.
     var domainsRaw = httpGetToken(port, "/v1/domains", token)
     var domains = json.decode<List<DomainEntry>>(bodyOf(domainsRaw))
     var services = json.decode<List<Service>>(bodyOf(httpGetToken(port, "/v1/services", token)))
     var pointing = domainsPointingToServices(domains, services)
-    assert(pointing.size == 1, "um dominio aponta: " + intToString(pointing.size))
+    need(pointing.size == 1, "falhou")
     var line = statusDomainLine(pointing.get(0), services)
-    assert(line.indexOf("site <-") >= 0, "linha nomeia o servico: " + line)
-    assert(line.indexOf("www.example.com") >= 0, "linha mostra o hostname")
+    need(line.indexOf("site <-") >= 0, "falhou")
+    need(line.indexOf("www.example.com") >= 0, "falhou")
 }
 
 test "device: nome com caixa errada ganha aviso (irmao do servico)", "device-case-hint" {
     var devices = listOf<Device>()
     devices.add(Device("id-nb", "acc", "notebook", "pk", "ACTIVE", 0, 0))
     devices.add(Device("id-pc", "acc", "desktop", "pk", "ACTIVE", 0, 0))
-    assert(deviceCaseHint(devices, "Notebook").indexOf("notebook") >= 0, "nomeia o existente")
-    assert(deviceCaseHint(devices, " Notebook ").indexOf("notebook") >= 0, "trim")
-    assert(deviceCaseHint(devices, "DESKTOP").indexOf("desktop") >= 0, "maiuscula tambem")
-    assert(deviceCaseHint(devices, "notbook") == "", "sem candidato, sem aviso")
-    assert(deviceCaseHint(devices, "") == "", "vazio sem aviso")
-    assert(deviceCaseHint(listOf<Device>(), "Notebook") == "", "sem devices, sem aviso")
-    assert(deviceCaseHint(devices, "id-nb") == "", "id nao vira sugestao de nome")
+    need(deviceCaseHint(devices, "Notebook").indexOf("notebook") >= 0, "falhou")
+    need(deviceCaseHint(devices, " Notebook ").indexOf("notebook") >= 0, "falhou")
+    need(deviceCaseHint(devices, "DESKTOP").indexOf("desktop") >= 0, "falhou")
+    need(deviceCaseHint(devices, "notbook") == "", "falhou")
+    need(deviceCaseHint(devices, "") == "", "falhou")
+    need(deviceCaseHint(listOf<Device>(), "Notebook") == "", "falhou")
+    need(deviceCaseHint(devices, "id-nb") == "", "falhou")
 }

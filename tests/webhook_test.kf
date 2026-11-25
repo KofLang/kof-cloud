@@ -22,58 +22,58 @@ String webhookPath(String name) {
 }
 
 test "webhook: URL e segredo validados (puros)", "webhook-unit" {
-    assert(webhookUrlError("https://example.com/hook") == "", "https ok")
-    assert(webhookUrlError("https://example.com:8443/hook") == "", "porta ok")
-    assert(webhookUrlError("http://127.0.0.1:9999/hook") == "", "http loopback ok")
-    assert(webhookUrlError("http://example.com/hook") != "", "http externo recusado")
-    assert(webhookUrlError("ftp://example.com/hook") != "", "esquema recusado")
-    assert(webhookUrlError("https://user:pass@example.com/hook") != "", "credencial na URL recusada")
-    assert(webhookUrlError("https://") != "", "sem host recusado")
-    assert(webhookUrlError("https://example.com:99999/x") != "", "porta invalida")
+    need(webhookUrlError("https://example.com/hook") == "", "falhou")
+    need(webhookUrlError("https://example.com:8443/hook") == "", "falhou")
+    need(webhookUrlError("http://127.0.0.1:9999/hook") == "", "falhou")
+    need(webhookUrlError("http://example.com/hook") != "", "falhou")
+    need(webhookUrlError("ftp://example.com/hook") != "", "falhou")
+    need(webhookUrlError("https://user:pass@example.com/hook") != "", "falhou")
+    need(webhookUrlError("https://") != "", "falhou")
+    need(webhookUrlError("https://example.com:99999/x") != "", "falhou")
     // Estouro de Int: `parseIntSafe("4294968080")` devolve 784 (passaria como
     // porta valida); `parseIntSafe("4294967296")` devolve 0 (passaria pelo
     // guard `<= 0`... e voltaria como "sem porta"). `parsePortSafe` recusa.
-    assert(webhookUrlError("https://example.com:4294968080/x") != "", "acima de 2^32 recusada")
-    assert(webhookUrlError("https://example.com:4294967296/x") != "", "2^32 exato recusada")
-    assert(webhookUrlError("https://example.com:0/x") != "", "porta zero recusada")
-    assert(webhookUrlError("https://example.com:abc/x") != "", "porta nao numerica recusada")
-    assert(webhookUrlError("https://example.com:65535/x") == "", "teto valido ainda passa")
-    assert(webhookUrlError("") != "", "vazio recusado")
-    assert(webhookSecretError("curto") != "", "segredo curto recusado")
-    assert(webhookSecretError("0123456789abcdef") == "", "16 chars ok")
+    need(webhookUrlError("https://example.com:4294968080/x") != "", "falhou")
+    need(webhookUrlError("https://example.com:4294967296/x") != "", "falhou")
+    need(webhookUrlError("https://example.com:0/x") != "", "falhou")
+    need(webhookUrlError("https://example.com:abc/x") != "", "falhou")
+    need(webhookUrlError("https://example.com:65535/x") == "", "falhou")
+    need(webhookUrlError("") != "", "falhou")
+    need(webhookSecretError("curto") != "", "falhou")
+    need(webhookSecretError("0123456789abcdef") == "", "falhou")
 }
 
 test "webhook: assinatura HMAC verificavel e sensivel ao payload", "webhook-unit" {
     var secret = "0123456789abcdef"
     var payload = webhookPayload("bulk_device_revokes", "CRIT", "resumo", 1700000000000)
     var header = webhookSignatureHeader(secret, payload)
-    assert(header.startsWith("sha256="), "formato padrao")
-    assert(header.length == 7 + 64, "hex de 32 bytes")
+    need(header.startsWith("sha256="), "falhou")
+    need(header.length == 7 + 64, "falhou")
     // O receptor recalcula e confere em tempo constante.
     var recomputed = webhookSignatureHeader(secret, payload)
-    assert(webhookSignatureValid(secret, payload, header, recomputed), "assinatura confere")
+    need(webhookSignatureValid(secret, payload, header, recomputed), "falhou")
     // Payload adulterado nao confere; segredo errado tambem nao.
     var tampered = webhookSignatureHeader(secret, payload + " ")
-    assert(webhookSignatureValid(secret, payload, header, tampered) == false, "payload adulterado falha")
+    need(webhookSignatureValid(secret, payload, header, tampered) == false, "falhou")
     var wrongSecret = webhookSignatureHeader("ffffffffffffffff", payload)
-    assert(webhookSignatureValid(secret, payload, header, wrongSecret) == false, "segredo errado falha")
+    need(webhookSignatureValid(secret, payload, header, wrongSecret) == false, "falhou")
     // Determinismo.
-    assert(webhookSignature(secret, payload) == webhookSignature(secret, payload), "deterministica")
+    need(webhookSignature(secret, payload) == webhookSignature(secret, payload), "falhou")
 }
 
 test "webhook: payload nao carrega dado sensivel", "webhook-unit" {
     var payload = webhookPayload("freeze_device", "WARN", "device frozen", 1)
-    assert(payload.indexOf("kfc_") < 0, "sem token")
-    assert(payload.indexOf("kfs_") < 0, "sem credencial de servico")
+    need(payload.indexOf("kfc_") < 0, "falhou")
+    need(payload.indexOf("kfs_") < 0, "falhou")
     var parsed = json.decode<Map<String, String>>(payload)
-    assert(parsed.get("event") != null, "event presente")
+    need(parsed.get("event") != null, "falhou")
 }
 
 test "webhook: prazo de entrega com recuo seguro (fonte unica)", "webhook-unit" {
-    assert(webhookTimeoutSecFrom(0) == 5, "zero recai no default")
-    assert(webhookTimeoutSecFrom(-3) == 5, "negativo recai no default")
-    assert(webhookTimeoutSecFrom(10) == 10, "positivo passa")
-    assert(limitWebhookTimeoutSec() == 5, "default travado em 5 s")
+    need(webhookTimeoutSecFrom(0) == 5, "falhou")
+    need(webhookTimeoutSecFrom(-3) == 5, "falhou")
+    need(webhookTimeoutSecFrom(10) == 10, "falhou")
+    need(limitWebhookTimeoutSec() == 5, "falhou")
 }
 
 test "webhook: cadastro, leitura sem segredo e remocao", "webhook-unit" {
@@ -81,10 +81,10 @@ test "webhook: cadastro, leitura sem segredo e remocao", "webhook-unit" {
     var account = registry.createAccount("mel", "m@e.com", "segredo")
     registry.setWebhook(account.id, "https://example.com/hook", "0123456789abcdef")
     var config = registry.webhookForAccount(account.id)
-    assert(config != null, "configurado")
+    need(config != null, "falhou")
     if (config != null) {
-        assert(config.url == "https://example.com/hook", "url")
-        assert(config.secret == "0123456789abcdef", "segredo guardado (para o receptor comparar)")
+        need(config.url == "https://example.com/hook", "falhou")
+        need(config.secret == "0123456789abcdef", "falhou")
     }
     // Invalidos nao gravam.
     var blocked = false
@@ -93,9 +93,9 @@ test "webhook: cadastro, leitura sem segredo e remocao", "webhook-unit" {
     } catch (String e) {
         blocked = true
     }
-    assert(blocked, "url invalida recusada")
-    assert(registry.removeWebhook(account.id), "removeu")
-    assert(registry.removeWebhook(account.id) == false, "remover de novo falha")
+    need(blocked, "falhou")
+    need(registry.removeWebhook(account.id), "falhou")
+    need(registry.removeWebhook(account.id) == false, "falhou")
 }
 
 test "webhook: incidente da conta dispara entrega assinada de verdade", "webhook" {
@@ -118,12 +118,12 @@ test "webhook: incidente da conta dispara entrega assinada de verdade", "webhook
         return "ok"
     }
     var receiverTask = spawn { hook.listen(hookPort) }
-    assert(waitForPort(hookPort, 60), "receptor no ar")
+    need(waitForPort(hookPort, 60), "falhou")
 
     var registry = Registry(webhookPath("e2e"))
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -135,8 +135,8 @@ test "webhook: incidente da conta dispara entrega assinada de verdade", "webhook
     var secret = "segredo-de-teste-123"
     var setBody = "{\"action\":\"set\",\"url\":\"http://127.0.0.1:" + intToString(hookPort) + "/hook\",\"secret\":\"" + secret + "\"}"
     var setResult = httpPostJson(controlPort, "/v1/webhook", setBody, token)
-    assert(statusOf(setResult) == 200, "cadastrou via API")
-    assert(bodyOf(setResult).indexOf(secret) < 0, "API NAO devolve o segredo")
+    need(statusOf(setResult) == 200, "falhou")
+    need(bodyOf(setResult).indexOf(secret) < 0, "falhou")
 
     // Um incidente da conta abre -> entrega assinada.
     registry.raiseIncident("bulk_device_revokes", melId)
@@ -145,25 +145,25 @@ test "webhook: incidente da conta dispara entrega assinada de verdade", "webhook
         time.sleep(50)
         attempts = attempts - 1
     }
-    assert(received.size == 1, "recebeu uma entrega")
+    need(received.size == 1, "falhou")
     if (received.size == 1) {
         var payload = received.get(0)
-        assert(payload.indexOf("bulk_device_revokes") >= 0, "payload tem o sinal")
-        assert(payload.indexOf("kfc_") < 0, "payload sem token")
+        need(payload.indexOf("bulk_device_revokes") >= 0, "falhou")
+        need(payload.indexOf("kfc_") < 0, "falhou")
         // A assinatura bate com o segredo compartilhado.
         var expected = webhookSignatureHeader(secret, payload)
-        assert(receivedSig.get(0) == expected, "assinatura verificada pelo receptor")
+        need(receivedSig.get(0) == expected, "falhou")
     }
 
     // Incidente GLOBAL nao entrega a webhook de conta.
     registry.raiseIncident("edge_refusals", "")
     time.sleep(400)
-    assert(received.size == 1, "global nao entrega em webhook de conta")
+    need(received.size == 1, "falhou")
 
     // `test` entrega de proposito.
     var testResult = httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"test\"}", token)
-    assert(statusOf(testResult) == 200, "teste ok")
-    assert(bodyOf(testResult).indexOf("\"delivered\":\"200\"") >= 0, "entrega de teste")
+    need(statusOf(testResult) == 200, "falhou")
+    need(bodyOf(testResult).indexOf("\"delivered\":\"200\"") >= 0, "falhou")
 
     hook.close()
 }
@@ -190,24 +190,24 @@ test "webhook: receptor mudo nao pendura a entrega (prazo explicito)", "webhook"
             }
         }
     }
-    assert(waitForPort(hookPort, 60), "receptor mudo no ar")
+    need(waitForPort(hookPort, 60), "falhou")
 
     var registry = Registry(webhookPath("stall"))
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
     var setBody = "{\"action\":\"set\",\"url\":\"http://127.0.0.1:" + intToString(hookPort) + "/hook\",\"secret\":\"0123456789abcdef\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/webhook", setBody, token)) == 200, "cadastrou")
+    need(statusOf(httpPostJson(controlPort, "/v1/webhook", setBody, token)) == 200, "falhou")
 
     var started = time.now()
     var testResult = httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"test\"}", token)
     var elapsed = time.now() - started
-    assert(statusOf(testResult) == 200, "rota responde")
-    assert(bodyOf(testResult).indexOf("\"delivered\":\"0\"") >= 0, "entrega desistiu (0)")
-    assert(elapsed < 12000, "voltou no prazo (" + intToString(elapsed) + " ms), nao no default de 15 s")
+    need(statusOf(testResult) == 200, "falhou")
+    need(bodyOf(testResult).indexOf("\"delivered\":\"0\"") >= 0, "falhou")
+    need(elapsed < 12000, "falhou")
 
     // Parada limpa (precedente do waf_timeout: as conexoes aceitas saem aqui,
     // senao o processo nao sai).
@@ -227,7 +227,7 @@ test "webhook: posicional sobrando e --secret defeituoso barram na CLI", "webhoo
     var registry = Registry("/tmp/kofcloud-whg-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var url = "http://127.0.0.1:" + intToString(controlPort)
     var token = loginOrCreate(url, "mel", "segredo")
@@ -236,17 +236,17 @@ test "webhook: posicional sobrando e --secret defeituoso barram na CLI", "webhoo
     saveSession(LocalSession("", "mel", token, url))
 
     // show/remove/test com argumento sobrando barram antes da rede.
-    assert(cmdWebhook(listOf("show", "lixo")) == 1, "show com sobra barra")
-    assert(cmdWebhook(listOf("remove", "lixo")) == 1, "remove com sobra barra")
-    assert(cmdWebhook(listOf("test", "lixo")) == 1, "test com sobra barra")
+    need(cmdWebhook(listOf("show", "lixo")) == 1, "falhou")
+    need(cmdWebhook(listOf("remove", "lixo")) == 1, "falhou")
+    need(cmdWebhook(listOf("test", "lixo")) == 1, "falhou")
     // set exige URL unica e --secret com valor unico.
-    assert(cmdWebhook(listOf("set", "https://example.com/a", "https://example.com/b", "--secret", "0123456789abcdef")) == 1, "set com duas urls barra")
-    assert(cmdWebhook(listOf("set", "https://example.com/a", "--secret")) == 1, "--secret solto barra")
-    assert(cmdWebhook(listOf("set", "https://example.com/a", "--secret", "s1aaaaaaaaaaaaaa", "--secret", "s2aaaaaaaaaaaaaa")) == 1, "--secret repetido barra")
+    need(cmdWebhook(listOf("set", "https://example.com/a", "https://example.com/b", "--secret", "0123456789abcdef")) == 1, "falhou")
+    need(cmdWebhook(listOf("set", "https://example.com/a", "--secret")) == 1, "falhou")
+    need(cmdWebhook(listOf("set", "https://example.com/a", "--secret", "s1aaaaaaaaaaaaaa", "--secret", "s2aaaaaaaaaaaaaa")) == 1, "falhou")
     // Comandos limpos passam do uso (executam contra o control plane).
     // Cadastra primeiro para que o show encontre o registro.
-    assert(cmdWebhook(listOf("set", "https://example.com/a", "--secret", "0123456789abcdef")) == 0, "set limpo passa da guarda")
-    assert(cmdWebhook(listOf("show")) == 0, "show limpo passa da guarda")
+    need(cmdWebhook(listOf("set", "https://example.com/a", "--secret", "0123456789abcdef")) == 0, "falhou")
+    need(cmdWebhook(listOf("show")) == 0, "falhou")
 
     if (priorSession.length == 0) {
         File(sessionPath()).delete()
@@ -263,7 +263,7 @@ test "device: posicional sobrando barra antes de revogar/suspender", "device-gua
     var registry = Registry("/tmp/kofcloud-dg-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var url = "http://127.0.0.1:" + intToString(controlPort)
     var token = loginOrCreate(url, "mel", "segredo")
@@ -274,25 +274,25 @@ test "device: posicional sobrando barra antes de revogar/suspender", "device-gua
 
     // Duplo posicional barra no uso (exit 1) e NAO executa a acao: sem a
     // guarda o comando ignorava "outro" e revogava/suspendia "notebook" (exit 0).
-    assert(cmdDeviceRevoke(listOf("notebook", "outro")) == 1, "revoke com sobra barra")
+    need(cmdDeviceRevoke(listOf("notebook", "outro")) == 1, "falhou")
     var devAfter = registry.deviceById(devId)
-    assert(devAfter != null, "device nao foi revogado pelo comando com sobra")
-    assert(cmdDeviceSuspend(listOf("notebook", "outro")) == 1, "suspend com sobra barra")
-    assert(cmdDeviceUnsuspend(listOf("notebook", "outro")) == 1, "unsuspend com sobra barra")
+    need(devAfter != null, "falhou")
+    need(cmdDeviceSuspend(listOf("notebook", "outro")) == 1, "falhou")
+    need(cmdDeviceUnsuspend(listOf("notebook", "outro")) == 1, "falhou")
     // Sem --yes o revoke so AVISA e nao toca o control plane (guarda de
     // destruicao: revogar e irreversivel e leva servicos/credenciais juntos).
-    assert(cmdDeviceRevoke(listOf("notebook")) == 1, "revoke sem --yes so avisa")
+    need(cmdDeviceRevoke(listOf("notebook")) == 1, "falhou")
     var untouched = registry.deviceById(devId)
-    assert(untouched != null, "device continua existindo sem --yes")
+    need(untouched != null, "falhou")
     if (untouched != null) {
-        assert(deviceIsRevoked(untouched.status) == false, "device nao foi revogado sem --yes")
+        need(deviceIsRevoked(untouched.status) == false, "falhou")
     }
     // Com --yes, o comando revoga de verdade (exit 0).
-    assert(cmdDeviceRevoke(listOf("notebook", "--yes")) == 0, "revoke com --yes executa")
+    need(cmdDeviceRevoke(listOf("notebook", "--yes")) == 0, "falhou")
     // Sem posicional continua pedindo uso.
-    assert(cmdDeviceRevoke(listOf<String>()) == 1, "revoke vazio pede uso")
-    assert(cmdDeviceSuspend(listOf<String>()) == 1, "suspend vazio pede uso")
-    assert(cmdDeviceUnsuspend(listOf<String>()) == 1, "unsuspend vazio pede uso")
+    need(cmdDeviceRevoke(listOf<String>()) == 1, "falhou")
+    need(cmdDeviceSuspend(listOf<String>()) == 1, "falhou")
+    need(cmdDeviceUnsuspend(listOf<String>()) == 1, "falhou")
 
     if (priorSession.length == 0) {
         File(sessionPath()).delete()
@@ -316,30 +316,30 @@ test "webhook: host interno e SSRF barrado (literal e resolvido)", "webhook-ssrf
         "https://fe80::1/hook"
     )
     for (var url in internal) {
-        assert(webhookUrlError(url) != "" || webhookHostIsInternal(webhookUrlHost(url)), "interno barrado: " + url)
+        need(webhookUrlError(url) != "" || webhookHostIsInternal(webhookUrlHost(url)), "falhou")
     }
 
     // LOOPBACK fica de proposito fora do guard: o receptor de dev
     // documentado e `http://127.0.0.1` (o http:// so aceita loopback), e o
     // metadata service de nuvem nao escuta em loopback — recusa-lo quebraria
     // o fluxo de teste sem fechar buraco real.
-    assert(webhookHostIsInternal("127.0.0.1") == false, "loopback nao e interno (receptor de dev)")
-    assert(webhookHostIsInternal("localhost") == false, "localhost idem")
+    need(webhookHostIsInternal("127.0.0.1") == false, "falhou")
+    need(webhookHostIsInternal("localhost") == false, "falhou")
 
     // O predicado, direto: publicos nao sao internos.
-    assert(webhookHostIsInternal("example.com") == false, "publico")
-    assert(webhookHostIsInternal("hooks.example.com") == false, "subdominio publico")
-    assert(webhookHostIsInternal("8.8.8.8") == false, "ip publico")
-    assert(webhookHostIsInternal("172.32.0.1") == false, "fora de 172.16/12")
-    assert(webhookHostIsInternal("192.169.1.1") == false, "fora de 192.168/16")
-    assert(webhookHostIsInternal("172.15.0.1") == false, "fora de 172.16/12 por baixo")
+    need(webhookHostIsInternal("example.com") == false, "falhou")
+    need(webhookHostIsInternal("hooks.example.com") == false, "falhou")
+    need(webhookHostIsInternal("8.8.8.8") == false, "falhou")
+    need(webhookHostIsInternal("172.32.0.1") == false, "falhou")
+    need(webhookHostIsInternal("192.169.1.1") == false, "falhou")
+    need(webhookHostIsInternal("172.15.0.1") == false, "falhou")
 
     // DNS: host publico que resolve para interno e barrado; falha de DNS
     // nao recusa (o IP literal continua guardado pela checagem direta).
-    assert(webhookDnsError("rebind.example.com", listOf("169.254.169.254")) != "", "rebind barrado")
-    assert(webhookDnsError("rebind.example.com", listOf("10.1.2.3")) != "", "privado resolvido barrado")
-    assert(webhookDnsError("hooks.example.com", listOf("93.184.216.34")) == "", "publico passa")
-    assert(webhookDnsError("hooks.example.com", listOf<String>()) == "", "DNS vazio nao recusa")
+    need(webhookDnsError("rebind.example.com", listOf("169.254.169.254")) != "", "falhou")
+    need(webhookDnsError("rebind.example.com", listOf("10.1.2.3")) != "", "falhou")
+    need(webhookDnsError("hooks.example.com", listOf("93.184.216.34")) == "", "falhou")
+    need(webhookDnsError("hooks.example.com", listOf<String>()) == "", "falhou")
 
     // Fim a fim: set com host interno e recusado com o erro estavel e nada
     // e gravado; set com host publico (DNS externo indisponivel aqui) segue.
@@ -347,19 +347,19 @@ test "webhook: host interno e SSRF barrado (literal e resolvido)", "webhook-ssrf
     var registry = Registry(webhookPath("ssrf"))
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control no ar")
+    need(waitForPort(port, 60), "falhou")
     var created = httpPostJson(port, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
 
     var bad = httpPostJson(port, "/v1/webhook", "{\"action\":\"set\",\"url\":\"https://169.254.169.254/latest\",\"secret\":\"segredo-longo-suficiente\"}", token)
-    assert(statusOf(bad) == 400, "interno -> 400: " + intToString(statusOf(bad)))
-    assert(bodyOf(bad).indexOf("internal address") >= 0, "nomeia a causa")
+    need(statusOf(bad) == 400, "falhou")
+    need(bodyOf(bad).indexOf("internal address") >= 0, "falhou")
     var mel = registry.accountByHandle("mel")
     var melId = ""
     if (mel != null) {
         melId = mel.id
     }
-    assert(registry.webhookForAccount(melId) == null, "nada gravado")
+    need(registry.webhookForAccount(melId) == null, "falhou")
 }
 test "webhook: set/remove deixam rastro de auditoria sem o segredo", "webhook-audit" {
     // O webhook era a unica mutacao de configuracao da conta sem evento de
@@ -372,7 +372,7 @@ test "webhook: set/remove deixam rastro de auditoria sem o segredo", "webhook-au
     var registry = Registry(statePath)
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -383,41 +383,41 @@ test "webhook: set/remove deixam rastro de auditoria sem o segredo", "webhook-au
     }
     var secret = "segredo-do-rastro-1"
     var setBody = "{\"action\":\"set\",\"url\":\"https://hooks.example.com/a\",\"secret\":\"" + secret + "\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/webhook", setBody, token)) == 200, "cadastrou")
+    need(statusOf(httpPostJson(controlPort, "/v1/webhook", setBody, token)) == 200, "falhou")
 
     // O fio tem o evento com a acao e a conta; NUNCA o segredo.
     var wire = bodyOf(httpGetToken(controlPort, "/v1/audit", token))
-    assert(wire.indexOf("\"webhook.set\"") >= 0, "acao webhook.set no fio")
-    assert(wire.indexOf("\"account:" + melId + "\"") >= 0 || wire.indexOf("account:mel") >= 0, "ator da conta")
-    assert(wire.indexOf(secret) < 0, "segredo fora do fio")
+    need(wire.indexOf("\"webhook.set\"") >= 0, "falhou")
+    need(wire.indexOf("\"account:" + melId + "\"") >= 0 || wire.indexOf("account:mel") >= 0, "falhou")
+    need(wire.indexOf(secret) < 0, "falhou")
     // E o espelho WORM (mesma fonte `auditEventJson`) tambem esta limpo.
     var mirror = readTextOr(statePath + ".worm.jsonl", "")
-    assert(mirror.indexOf("webhook.set") >= 0, "acao no espelho WORM")
-    assert(mirror.indexOf(secret) < 0, "segredo fora do espelho")
+    need(mirror.indexOf("webhook.set") >= 0, "falhou")
+    need(mirror.indexOf(secret) < 0, "falhou")
 
     // Trocar o webhook registra outro set (a ultima configuracao vence).
-    assert(statusOf(httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"set\",\"url\":\"https://hooks.example.com/b\",\"secret\":\"" + secret + "\"}", token)) == 200, "trocou")
+    need(statusOf(httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"set\",\"url\":\"https://hooks.example.com/b\",\"secret\":\"" + secret + "\"}", token)) == 200, "falhou")
     var wire2 = bodyOf(httpGetToken(controlPort, "/v1/audit", token))
-    assert(wire2.split("\"webhook.set\"").length >= 2, "segundo set registra")
+    need(wire2.split("\"webhook.set\"").length >= 2, "falhou")
 
     // Remocao real registra; remover de novo (404) nao vira evento.
-    assert(statusOf(httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"remove\"}", token)) == 200, "removeu")
+    need(statusOf(httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"remove\"}", token)) == 200, "falhou")
     var before = bodyOf(httpGetToken(controlPort, "/v1/audit", token)).split("\"webhook.removed\"").length
-    assert(before >= 1, "acao webhook.removed no fio")
-    assert(statusOf(httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"remove\"}", token)) == 404, "segunda remocao e 404")
+    need(before >= 1, "falhou")
+    need(statusOf(httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"remove\"}", token)) == 404, "falhou")
     var after = bodyOf(httpGetToken(controlPort, "/v1/audit", token)).split("\"webhook.removed\"").length
-    assert(after == before, "404 nao registra evento")
+    need(after == before, "falhou")
 }
 
 test "webhook: urlHost extrai host sem porta/caminho (fonte unica)", "webhook-host" {
     // `webhookUrlHost` delega na extracao generica: uma regra so. A mesma
     // usada pela sonda de rede do Agent — mudar aqui quebra la (e vice-versa).
-    assert(urlHost("https://hooks.example.com/hook") == "hooks.example.com", "https com caminho")
-    assert(urlHost("http://127.0.0.1:9/hook") == "127.0.0.1", "http com porta")
-    assert(urlHost("HTTPS://HOOKS.EXAMPLE.COM/A") == "hooks.example.com", "caixa")
-    assert(urlHost("  https://hooks.example.com/a  ") == "hooks.example.com", "espacos")
-    assert(urlHost("https://169.254.169.254/latest") == "169.254.169.254", "ip com caminho")
-    assert(urlHost("nao-e-url") == "", "forma invalida")
-    assert(urlHost("") == "", "vazio")
-    assert(webhookUrlHost("https://hooks.example.com/a") == urlHost("https://hooks.example.com/a"), "delega na generica")
+    need(urlHost("https://hooks.example.com/hook") == "hooks.example.com", "falhou")
+    need(urlHost("http://127.0.0.1:9/hook") == "127.0.0.1", "falhou")
+    need(urlHost("HTTPS://HOOKS.EXAMPLE.COM/A") == "hooks.example.com", "falhou")
+    need(urlHost("  https://hooks.example.com/a  ") == "hooks.example.com", "falhou")
+    need(urlHost("https://169.254.169.254/latest") == "169.254.169.254", "falhou")
+    need(urlHost("nao-e-url") == "", "falhou")
+    need(urlHost("") == "", "falhou")
+    need(webhookUrlHost("https://hooks.example.com/a") == urlHost("https://hooks.example.com/a"), "falhou")
 }

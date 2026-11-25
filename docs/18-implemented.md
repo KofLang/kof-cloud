@@ -365,3 +365,4 @@ desconhecido devolve `404`; serviço publicado mas sem túnel devolve `503`.
 Ver `16-plan.md` para as fases e `17-limitations.md` para as lacunas.
 
 | dica de credencial recusada no retry (F16) | `isControlAuthError`/`systemHint` puras: 401 `KCF004` do control plane no laço de reconexão emite o evento "rode `kof cloud login`" (não fatal — o próximo ciclo reconecta após o login); outros erros seguem sem dica | `backoff_test.kf` (`backoff-authhint`) |
+| migração ao Kof 0.8.1 (restabilização) | `assert(cond, expr)` não compila (`PARSE087`): `need(cond, "literal")` compartilhado; fio do control manda `localPort`/`createdAt`/`lastSeenAt` como número JSON (objecto montado à mão; `mapOf()` homogêneo) e o decode lê pelo record; `applyHttpTlsPolicy`/`trustLocalhostTls` (TLS verificado por padrão, opt-out só em loopback); `split` literal; HSTS não é mais do runtime (trava verifica o fio) | `kof test --target jvm --timeout 120` (73 suítes, 0 falhas) |

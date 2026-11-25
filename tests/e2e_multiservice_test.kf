@@ -32,9 +32,9 @@ test "e2e: tres servicos no mesmo tunel com isolamento de falha" {
     var serverOne = spawn { appOne.listen(localOne) }
     var serverTwo = spawn { appTwo.listen(localTwo) }
     var serverThree = spawn { appThree.listen(localThree) }
-    assert(waitForPort(localOne, 60), "servico 1 no ar")
-    assert(waitForPort(localTwo, 60), "servico 2 no ar")
-    assert(waitForPort(localThree, 60), "servico 3 no ar")
+    need(waitForPort(localOne, 60), "falhou")
+    need(waitForPort(localTwo, 60), "falhou")
+    need(waitForPort(localThree, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-multi-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -44,9 +44,9 @@ test "e2e: tres servicos no mesmo tunel com isolamento de falha" {
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control plane no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http publico no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"mel@example.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -73,24 +73,24 @@ test "e2e: tres servicos no mesmo tunel com isolamento de falha" {
             attempts = attempts - 1
         }
     }
-    assert(online, "agent registrado no edge")
+    need(online, "falhou")
 
     // Cada hostname chega na SUA porta, nao em outra.
-    assert(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-one", "site -> servico 1")
-    assert(bodyOf(httpGetRaw(httpPort, "/", "api.mel.kofcloud.io")) == "svc-two", "api -> servico 2")
-    assert(bodyOf(httpGetRaw(httpPort, "/", "files.mel.kofcloud.io")) == "svc-three", "files -> servico 3")
+    need(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-one", "falhou")
+    need(bodyOf(httpGetRaw(httpPort, "/", "api.mel.kofcloud.io")) == "svc-two", "falhou")
+    need(bodyOf(httpGetRaw(httpPort, "/", "files.mel.kofcloud.io")) == "svc-three", "falhou")
 
     // Derruba apenas o servico 2: ele vira 503 e os outros seguem ONLINE.
     appTwo.close()
     time.sleep(500)
-    assert(statusOf(httpGetRaw(httpPort, "/", "api.mel.kofcloud.io")) == 503, "servico 2 offline -> 503")
-    assert(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-one", "servico 1 nao foi afetado")
-    assert(bodyOf(httpGetRaw(httpPort, "/", "files.mel.kofcloud.io")) == "svc-three", "servico 3 nao foi afetado")
+    need(statusOf(httpGetRaw(httpPort, "/", "api.mel.kofcloud.io")) == 503, "falhou")
+    need(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-one", "falhou")
+    need(bodyOf(httpGetRaw(httpPort, "/", "files.mel.kofcloud.io")) == "svc-three", "falhou")
 
     // Parada limpa: agente e listeners.
     writeTextTo(stopFile, "stop")
     time.sleep(1500)
-    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    need(edgeState.isOnline(deviceId) == false, "falhou")
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)
     File(stopFile).delete()
@@ -100,5 +100,5 @@ test "e2e: tres servicos no mesmo tunel com isolamento de falha" {
 void publishViaApi(Int controlPort, String token, String deviceId, String name, Int localPort) {
     var body = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"" + name + "\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localPort) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
     var response = httpPostJson(controlPort, "/v1/services", body, token)
-    assert(statusOf(response) == 200, "publicado: " + name)
+    need(statusOf(response) == 200, "falhou")
 }

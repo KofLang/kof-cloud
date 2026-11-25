@@ -20,12 +20,12 @@ test "uso-push: payload da janela e vocabulario do export (sem credencial)", "us
     // O payload carrega os mesmos contadores do GET /v1/usage + periodEnd do
     // export; event distingue o tipo para o receptor rotear.
     var p = usageWindowPayload("3", "131", "242", 1700000000000)
-    assert(p.indexOf("\"event\":\"usage.window\"") >= 0, "event nomeado: " + p)
-    assert(p.indexOf("\"requests\":\"3\"") >= 0, "requests")
-    assert(p.indexOf("\"bytesIn\":\"131\"") >= 0, "bytesIn")
-    assert(p.indexOf("\"bytesOut\":\"242\"") >= 0, "bytesOut")
-    assert(p.indexOf("\"periodEnd\":\"1700000000000\"") >= 0, "periodEnd")
-    assert(p.indexOf("kfs_") < 0 && p.indexOf("kfc_") < 0, "sem credencial")
+    need(p.indexOf("\"event\":\"usage.window\"") >= 0, "falhou")
+    need(p.indexOf("\"requests\":\"3\"") >= 0, "falhou")
+    need(p.indexOf("\"bytesIn\":\"131\"") >= 0, "falhou")
+    need(p.indexOf("\"bytesOut\":\"242\"") >= 0, "falhou")
+    need(p.indexOf("\"periodEnd\":\"1700000000000\"") >= 0, "falhou")
+    need(p.indexOf("kfs_") < 0 && p.indexOf("kfc_") < 0, "falhou")
 }
 
 test "uso-push: push so com webhook e uso; janela fecha apos sucesso", "usage-push-unit" {
@@ -34,19 +34,19 @@ test "uso-push: push so com webhook e uso; janela fecha apos sucesso", "usage-pu
     // Sem webhook: no-op (0), e o contador NAO zera (sem receptor, nao ha
     // a quem faturar; a janela segue acumulando).
     registry.noteUsage(mel.id, 100, 200)
-    assert(registry.pushUsage(mel.id) == 0, "sem webhook = no-op")
-    assert(registry.usageFor(mel.id).requests == "1", "contador intacto sem webhook")
+    need(registry.pushUsage(mel.id) == 0, "falhou")
+    need(registry.usageFor(mel.id).requests == "1", "falhou")
     // Com webhook mas sem uso: no-op (mas o webhook esta configurado).
     var ana = registry.createAccount("ana", "ana@e.com", "segredo")
     registry.setWebhook(ana.id, "http://127.0.0.1:1/nao-escuta", "segredo-de-16-chars")
-    assert(registry.pushUsage(ana.id) == 0, "sem uso = no-op")
+    need(registry.pushUsage(ana.id) == 0, "falhou")
     // Webhook apontando para porta morta: a entrega falha (best-effort, nao
     // lanca), mas a janela FOI snapshotada — o consumidor deduplica por
     // periodEnd, entao um push repetido sem falha entrega a mesma janela uma
     // vez so (nunca re-fatura e nunca perde: o proximo push le a nova janela).
     registry.noteUsage(ana.id, 5, 6)
-    assert(registry.pushUsage(ana.id) == 1, "com webhook+uso: tenta push")
-    assert(registry.usageFor(ana.id).requests == "0", "janela fechada apos push")
+    need(registry.pushUsage(ana.id) == 1, "falhou")
+    need(registry.usageFor(ana.id).requests == "0", "falhou")
     // Conta CONGELADA: o freeze suspende os servicos (nada novo roteia, logo
     // nada novo acumula — a recusa acontece antes do relay), mas a janela
     // pendente de ANTES do freeze continua sendo pushada: o webhook e o canal
@@ -59,33 +59,33 @@ test "uso-push: push so com webhook e uso; janela fecha apos sucesso", "usage-pu
     } catch (String e) {
         setErrMel = "THROW: " + e
     }
-    assert(setErrMel == "ok", "webhook da mel setado: " + setErrMel)
+    need(setErrMel == "ok", "falhou")
     // Servico real para o freeze ter o que suspender (a recusa de rota e o
     // que impede uso NOVO; a janela pendente continua sendo pushada).
     var melDevice = registry.registerDevice(mel, "nb", "pk")
     registry.publishService(mel, melDevice.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
     var froze = registry.freezeAccount(mel.id)
-    assert(froze.ok, "conta congelada")
-    assert(registry.pushUsageAll() > 0, "janela pendente pre-freeze e pushada apos o freeze")
-    assert(registry.usageFor(mel.id).requests == "0", "push pos-freeze fecha a janela")
+    need(froze.ok, "falhou")
+    need(registry.pushUsageAll() > 0, "falhou")
+    need(registry.usageFor(mel.id).requests == "0", "falhou")
     // Cruzamento export manual x pusher (a mesma fonte, usageSnapshot):
     // o export le-e-zera a janela; o push seguinte so leva o DELTA — nunca
     // re-fatura o que o export ja fechou, e o push nao apaga nada que o
     // export deixou (a janela vem do mesmo mapa).
     var exported = registry.usageSnapshot(mel.id)
-    assert(exported.requests == "0", "janela ja fechada pelo push: export e zeros")
+    need(exported.requests == "0", "falhou")
     registry.noteUsage(mel.id, 10, 20)
     registry.noteUsage(mel.id, 30, 40)
     var delta = registry.usageSnapshot(mel.id)
-    assert(delta.requests == "2", "export leva so o delta da janela nova")
-    assert(registry.usageFor(mel.id).requests == "0", "e zera (o push seguinte parte do zero)")
+    need(delta.requests == "2", "falhou")
+    need(registry.usageFor(mel.id).requests == "0", "falhou")
 }
 
 test "uso-push: limits do passo com recuo seguro", "usage-push-unit" {
-    assert(usagePushMsFrom(0) == 60000, "zero recai no default")
-    assert(usagePushMsFrom(-1) == 60000, "negativo recai no default")
-    assert(usagePushMsFrom(5000) == 5000, "positivo passa")
-    assert(limitUsagePushMs() == 60000, "default travado em 1 min")
+    need(usagePushMsFrom(0) == 60000, "falhou")
+    need(usagePushMsFrom(-1) == 60000, "falhou")
+    need(usagePushMsFrom(5000) == 5000, "falhou")
+    need(limitUsagePushMs() == 60000, "falhou")
 }
 
 
@@ -110,7 +110,7 @@ test "uso-push: e2e — o receptor de billing recebe a janela assinada", "usage-
         return "ok"
     }
     var server = spawn { app.listen(recvPort) }
-    assert(waitForPort(recvPort, 60), "receptor no ar")
+    need(waitForPort(recvPort, 60), "falhou")
 
     var registry = Registry(usagePushPath("e2e"))
     var mel = registry.createAccount("mel", "mel@e.com", "segredo")
@@ -123,16 +123,16 @@ test "uso-push: e2e — o receptor de billing recebe a janela assinada", "usage-
     } catch (String e) {
         setErr = "THROW: " + e
     }
-    assert(setErr == "ok", "webhook setado: " + setErr)
+    need(setErr == "ok", "falhou")
     registry.noteUsage(mel.id, 100, 200)
     registry.noteUsage(mel.id, 50, 60)
     var pushed: Int = registry.pushUsage(mel.id)
-    assert(pushed == 2, "duas requests na janela")
+    need(pushed == 2, "falhou")
     var received: Int = bodies.size
-    assert(received == 1, "receptor recebeu uma entrega")
+    need(received == 1, "falhou")
     var payload: String = bodies.get(0)
     var signature: String = sigs.get(0)
-    assert(payload.indexOf("\"requests\":\"2\"") >= 0, "corpo com a janela: " + payload)
+    need(payload.indexOf("\"requests\":\"2\"") >= 0, "falhou")
     var expected: String = webhookSignatureHeader(secret, payload)
-    assert(signature == expected, "assinatura confere: " + signature)
+    need(signature == expected, "falhou")
 }

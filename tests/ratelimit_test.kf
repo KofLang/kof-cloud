@@ -23,7 +23,7 @@ test "rate limit: quarto pedido rapido e 429 com Retry-After", "ratelimit" {
     var app = web.app()
     app.get("/") { return "svc-rl" }
     var server = spawn { app.listen(localSvc) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-rl-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -36,9 +36,9 @@ test "rate limit: quarto pedido rapido e 429 com Retry-After", "ratelimit" {
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -47,29 +47,29 @@ test "rate limit: quarto pedido rapido e 429 com Retry-After", "ratelimit" {
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "falhou")
     var apiBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"api\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", apiBody, accountToken)) == 200, "segundo PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", apiBody, accountToken)) == 200, "falhou")
     var filesBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"files\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", filesBody, accountToken)) == 200, "terceiro PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", filesBody, accountToken)) == 200, "falhou")
 
     var host = "site.mel.kofcloud.io"
     var first = httpGetRaw(httpPort, "/", host)
-    assert(statusOf(first) == 503, "sem tunel ainda: 503 (conta no limite)")
-    assert(statusOf(httpGetRaw(httpPort, "/", host)) == 503, "segundo 503")
-    assert(statusOf(httpGetRaw(httpPort, "/", host)) == 503, "terceiro 503")
+    need(statusOf(first) == 503, "falhou")
+    need(statusOf(httpGetRaw(httpPort, "/", host)) == 503, "falhou")
+    need(statusOf(httpGetRaw(httpPort, "/", host)) == 503, "falhou")
 
     var limited = httpGetRaw(httpPort, "/", host)
-    assert(statusOf(limited) == 429, "quarto pedido rapido -> 429")
-    assert(bodyOf(limited).indexOf("KCF107") >= 0, "KCF107 no corpo")
-    assert(responseHeader(limited, "retry-after").length > 0, "Retry-After presente")
+    need(statusOf(limited) == 429, "falhou")
+    need(bodyOf(limited).indexOf("KCF107") >= 0, "falhou")
+    need(responseHeader(limited, "retry-after").length > 0, "falhou")
 
     // Outro hostname tem cota propria: nao e afetado.
     var other = httpGetRaw(httpPort, "/", "outro.mel.kofcloud.io")
-    assert(statusOf(other) == 404, "outro host tem cota propria (404, nao 429)")
+    need(statusOf(other) == 404, "falhou")
 
     var exposition = observability.metrics()
-    assert(metricValue(exposition, "kofcloud_edge_http_denied_total_rate_limited") >= 1, "recusa contada por motivo")
+    need(metricValue(exposition, "kofcloud_edge_http_denied_total_rate_limited") >= 1, "falhou")
 
     var host2 = "api.mel.kofcloud.io"
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
@@ -83,27 +83,27 @@ test "rate limit: quarto pedido rapido e 429 com Retry-After", "ratelimit" {
             attempts = attempts - 1
         }
     }
-    assert(online, "agent registrado no edge")
+    need(online, "falhou")
 
     // Com tunel e cota zerada no outro host, o limite tambem protege 200:
     // os 3 primeiros passam, o quarto e 429 antes de tocar no tunel.
-    assert(statusOf(httpGetRaw(httpPort, "/", host2)) == 200, "primeiro 200")
-    assert(statusOf(httpGetRaw(httpPort, "/", host2)) == 200, "segundo 200")
-    assert(statusOf(httpGetRaw(httpPort, "/", host2)) == 200, "terceiro 200")
+    need(statusOf(httpGetRaw(httpPort, "/", host2)) == 200, "falhou")
+    need(statusOf(httpGetRaw(httpPort, "/", host2)) == 200, "falhou")
+    need(statusOf(httpGetRaw(httpPort, "/", host2)) == 200, "falhou")
     var capped = httpGetRaw(httpPort, "/", host2)
-    assert(statusOf(capped) == 429, "quarto -> 429 mesmo com servico saudavel")
-    assert(bodyOf(httpGetRaw(httpPort, "/", "files.mel.kofcloud.io")) == "svc-rl", "terceiro host com cota propria segue 200")
+    need(statusOf(capped) == 429, "falhou")
+    need(bodyOf(httpGetRaw(httpPort, "/", "files.mel.kofcloud.io")) == "svc-rl", "falhou")
 
     // Host e case-insensitive (RFC 1035): a MESMA requisicao com caixa
     // trocada tem que rotear e cair na MESMA cota. Sem normalizar, cada
     // variacao abria bucket novo (evasao do 429 trocando a caixa) e ainda
     // devolvia 404 para um cliente legal com Host em maiusculas.
     var caseStart = statusOf(httpGetRaw(httpPort, "/", "FILES.MEL.KOFCLOUD.IO"))
-    assert(caseStart == 200, "Host em maiusculas roteia (mesmo site)")
-    assert(bodyOf(httpGetRaw(httpPort, "/", "Files.Mel.Kofcloud.Io")) == "svc-rl", "caixa mista serve o mesmo conteudo")
-    assert(statusOf(httpGetRaw(httpPort, "/", "FILES.MEL.KOFCLOUD.IO")) == 429, "a caixa nao abre cota nova (mesmo bucket)")
+    need(caseStart == 200, "falhou")
+    need(bodyOf(httpGetRaw(httpPort, "/", "Files.Mel.Kofcloud.Io")) == "svc-rl", "falhou")
+    need(statusOf(httpGetRaw(httpPort, "/", "FILES.MEL.KOFCLOUD.IO")) == 429, "falhou")
     // FQDN absoluto (ponto final) e o mesmo nome — cliente honesto.
-    assert(statusOf(httpGetRaw(httpPort, "/", "files.mel.kofcloud.io.")) == 429, "ponto final nao abre cota nova")
+    need(statusOf(httpGetRaw(httpPort, "/", "files.mel.kofcloud.io.")) == 429, "falhou")
 
     // A recusa VENCE: com janela curta (1 s) o mesmo hostname volta a passar.
     // Sem a conversao ms->s do `httpWindowSeconds`, a janela de 1000 ms virava
@@ -122,24 +122,24 @@ test "rate limit: quarto pedido rapido e 429 com Retry-After", "ratelimit" {
             tries = tries + 1
         }
     }
-    assert(recovered, "janela de 1 s libera o hostname de novo")
-    assert(tries > 0, "a recusa foi real: precisou esperar a janela")
+    need(recovered, "falhou")
+    need(tries > 0, "falhou")
 
     // O recuo segue a janela em vigor: 1000 ms valem 1 s, anunciados como 2 s
     // (arredonda para cima — o cliente que volta no Retry-After nunca cai
     // dentro da mesma janela).
-    assert(edgeState.httpRetryAfterSec() == 2, "janela 1 s -> Retry-After 2 s")
+    need(edgeState.httpRetryAfterSec() == 2, "falhou")
 
     // Fonte unica: o recuo do 429 delega no Limits (default 60 s travado;
     // mutacao quebra). Janela valida deriva da janela (60 s -> 61 s);
     // janela zerada recai no default em vez de 429 sem recuo util.
     edgeState.setHttpLimits(3, 60000)
-    assert(limitHttpRetryAfterSec() == 60, "default Retry-After 60 s")
-    assert(edgeState.httpRetryAfterSec() == 61, "janela 60 s deriva 61 s")
+    need(limitHttpRetryAfterSec() == 60, "falhou")
+    need(edgeState.httpRetryAfterSec() == 61, "falhou")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
-    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    need(edgeState.isOnline(deviceId) == false, "falhou")
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)
     File(agentStop).delete()
@@ -147,8 +147,8 @@ test "rate limit: quarto pedido rapido e 429 com Retry-After", "ratelimit" {
 }
 
 test "rate limit: Hint orienta sem revelar nada", "ratelimit-hint" {
-    assert(errHint("KCF107: too many requests").indexOf("instante") >= 0, "KCF107 sugere espera")
-    assert(errHint("KCF107: too many requests").indexOf("site") < 0, "sem dado de servico")
+    need(errHint("KCF107: too many requests").indexOf("instante") >= 0, "falhou")
+    need(errHint("KCF107: too many requests").indexOf("site") < 0, "falhou")
 }
 
 Int metricValue(String exposition, String name) {

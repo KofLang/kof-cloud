@@ -16,8 +16,8 @@ import testkit.Support
 // se ja havia resposta parcial -> entrega o parcial (corpo curto).
 
 test "waf timeout: codigo e Hint", "waftimeout-unit" {
-    assert(errUpstreamTimeout().indexOf("KCF112") >= 0, "codigo KCF112")
-    assert(errHint(errUpstreamTimeout()).indexOf("tunnelIdleMs") >= 0, "Hint aponta o teto")
+    need(errUpstreamTimeout().indexOf("KCF112") >= 0, "falhou")
+    need(errHint(errUpstreamTimeout()).indexOf("tunnelIdleMs") >= 0, "falhou")
 }
 
 test "waf timeout: servico mudo vira 504 KCF112 e libera a vaga", "waftimeout" {
@@ -41,7 +41,7 @@ test "waf timeout: servico mudo vira 504 KCF112 e libera a vaga", "waftimeout" {
             }
         }
     }
-    assert(waitForPort(localSvc, 60), "servico mudo no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-wt-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -54,9 +54,9 @@ test "waf timeout: servico mudo vira 504 KCF112 e libera a vaga", "waftimeout" {
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -65,7 +65,7 @@ test "waf timeout: servico mudo vira 504 KCF112 e libera a vaga", "waftimeout" {
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "falhou")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
     var agentTask = spawn { runAgent(config, true) }
@@ -78,7 +78,7 @@ test "waf timeout: servico mudo vira 504 KCF112 e libera a vaga", "waftimeout" {
             attempts = attempts - 1
         }
     }
-    assert(online, "agent online")
+    need(online, "falhou")
 
     var host = "site.mel.kofcloud.io"
     var started = time.now()
@@ -87,18 +87,18 @@ test "waf timeout: servico mudo vira 504 KCF112 e libera a vaga", "waftimeout" {
     File(edgeRuntimeLogPath()).delete()
     var timedOut = httpGetRaw(httpPort, "/", host)
     var elapsed = time.now() - started
-    assert(statusOf(timedOut) == 504, "servico mudo -> 504")
-    assert(bodyOf(timedOut).indexOf("KCF112") >= 0, "KCF112 no corpo")
-    assert(elapsed < 20000, "nao pendurou (elapsed=" + intToString(elapsed) + "ms)")
+    need(statusOf(timedOut) == 504, "falhou")
+    need(bodyOf(timedOut).indexOf("KCF112") >= 0, "falhou")
+    need(elapsed < 20000, "falhou")
 
     // A vaga de conexao por servico foi liberada: o proximo pedido tambem
     // chega ao servico (e tambem estoura), em vez de dar 429 KCF108.
     var again = httpGetRaw(httpPort, "/", host)
-    assert(statusOf(again) == 504, "segundo pedido tambem 504 (vaga liberada)")
+    need(statusOf(again) == 504, "falhou")
 
-    assert(metricValue(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_timeout") >= 1, "timeout contado")
+    need(metricValue(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_timeout") >= 1, "falhou")
     var afterSlow = readTextOr(edgeRuntimeLogPath(), "")
-    assert(afterSlow.indexOf("upstream: tempo esgotado (400ms) — 504") >= 0, "palavra do timeout no arquivo")
+    need(afterSlow.indexOf("upstream: tempo esgotado (400ms) — 504") >= 0, "falhou")
 
     // Parada limpa.
     writeTextTo(agentStop, "stop")

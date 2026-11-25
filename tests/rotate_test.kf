@@ -22,14 +22,14 @@ test "rotacao: emite nova e mantem as antigas dentro do TTL (overlap)", "rotate-
     var first = registry.issueServiceToken(account.id, service.id, 24)
 
     var rotated = registry.rotateServiceTokens(account.id, service.id, 24)
-    assert(rotated.token.startsWith("kfs_"), "token novo")
-    assert(rotated.token != first, "valor diferente")
-    assert(rotated.revoked == 0, "nada revogado ainda (TTL nao venceu)")
+    need(rotated.token.startsWith("kfs_"), "falhou")
+    need(rotated.token != first, "falhou")
+    need(rotated.revoked == 0, "falhou")
     // A antiga continua valida durante o overlap; a nova tambem.
     var oldOwner = registry.serviceByServiceToken(first)
-    assert(oldOwner != null, "antiga segue valida")
+    need(oldOwner != null, "falhou")
     var newOwner = registry.serviceByServiceToken(rotated.token)
-    assert(newOwner != null, "nova ja vale")
+    need(newOwner != null, "falhou")
 }
 
 test "rotacao: credencial sem TTL nao e revogada em silencio", "rotate-unit" {
@@ -40,11 +40,11 @@ test "rotacao: credencial sem TTL nao e revogada em silencio", "rotate-unit" {
     var legacy = registry.issueServiceToken(account.id, service.id)  // sem expiracao
 
     var rotated = registry.rotateServiceTokens(account.id, service.id, 24)
-    assert(rotated.revoked == 0, "sem expiracao = nao revoga")
-    assert(registry.serviceByServiceToken(legacy) != null, "legado continua valido")
+    need(rotated.revoked == 0, "falhou")
+    need(registry.serviceByServiceToken(legacy) != null, "falhou")
     // pending conta as validas ANTES da rotacao (a legada); a nova nao entra.
-    assert(rotated.pending == 1, "a legada continua pendente")
-    assert(registry.pendingRotationCount(service.id) == 2, "legada + nova valem agora")
+    need(rotated.pending == 1, "falhou")
+    need(registry.pendingRotationCount(service.id) == 2, "falhou")
 }
 
 test "rotacao: prune remove so as expiradas", "rotate-unit" {
@@ -54,12 +54,12 @@ test "rotacao: prune remove so as expiradas", "rotate-unit" {
     var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
     var current = registry.issueServiceToken(account.id, service.id, 24)
     var expired = registry.issueServiceToken(account.id, service.id, 1)
-    assert(registry.pendingRotationCount(service.id) == 2, "duas validas antes")
+    need(registry.pendingRotationCount(service.id) == 2, "falhou")
 
     // Sem esperar 1h: prune so age em expirada de verdade; nada vence aqui.
-    assert(registry.pruneExpiredServiceTokens(account.id, service.id) == 0, "nenhuma expirada ainda")
-    assert(registry.serviceByServiceToken(current) != null, "atual intacta")
-    assert(registry.serviceByServiceToken(expired) != null, "a de 1h ainda vale")
+    need(registry.pruneExpiredServiceTokens(account.id, service.id) == 0, "falhou")
+    need(registry.serviceByServiceToken(current) != null, "falhou")
+    need(registry.serviceByServiceToken(expired) != null, "falhou")
 }
 
 test "rotacao: control plane expoe rotate e rotation por HTTP", "rotate" {
@@ -67,7 +67,7 @@ test "rotacao: control plane expoe rotate e rotation por HTTP", "rotate" {
     var registry = Registry(rotatePath("http"))
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -76,33 +76,33 @@ test "rotacao: control plane expoe rotate e rotation por HTTP", "rotate" {
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}"
     var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
     var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
-    assert(serviceId.length > 0, "servico publicado")
+    need(serviceId.length > 0, "falhou")
 
     // Emite uma e rotaciona com TTL.
     var firstBody = "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"24\"}"
     var first = httpPostJson(controlPort, "/v1/services/token", firstBody, accountToken)
-    assert(statusOf(first) == 200, "primeira emitida")
+    need(statusOf(first) == 200, "falhou")
 
     var rotateBody = "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"24\"}"
     var rotated = httpPostJson(controlPort, "/v1/services/rotate", rotateBody, accountToken)
-    assert(statusOf(rotated) == 200, "rotacao ok")
+    need(statusOf(rotated) == 200, "falhou")
     var result = json.decode<Map<String, String>>(bodyOf(rotated))
-    assert(mapField(result, "token").startsWith("kfs_"), "token novo")
-    assert(mapField(result, "revoked") == "0", "nada revogado (overlap)")
-    assert(mapField(result, "pending") == "2", "duas validas durante o overlap")
+    need(mapField(result, "token").startsWith("kfs_"), "falhou")
+    need(mapField(result, "revoked") == "0", "falhou")
+    need(mapField(result, "pending") == "2", "falhou")
 
     var status = httpPostJson(controlPort, "/v1/services/rotation", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
-    assert(statusOf(status) == 200, "status ok")
-    assert(mapField(json.decode<Map<String, String>>(bodyOf(status)), "pending") == "2", "status confirma 2")
+    need(statusOf(status) == 200, "falhou")
+    need(mapField(json.decode<Map<String, String>>(bodyOf(status)), "pending") == "2", "falhou")
 
     // TTL invalido nao rotaciona.
     var badTtl = "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"-1\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/rotate", badTtl, accountToken)) == 400, "ttl negativo -> 400")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/rotate", badTtl, accountToken)) == 400, "falhou")
 
     // Servico alheio: 404 opaco.
     var otherAccount = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
     var anaToken = mapField(json.decode<Map<String, String>>(bodyOf(otherAccount)), "token")
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/rotate", rotateBody, anaToken)) == 404, "alheio -> 404")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/rotate", rotateBody, anaToken)) == 404, "falhou")
 }
 test "rotacao: dois servicos rotacionam independentes (base do --all)", "rotate-all" {
     // O --all itera fetchServices + POST /v1/services/rotate por serviceId
@@ -113,7 +113,7 @@ test "rotacao: dois servicos rotacionam independentes (base do --all)", "rotate-
     var registry = Registry(rotatePath("all"))
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -122,25 +122,25 @@ test "rotacao: dois servicos rotacionam independentes (base do --all)", "rotate-
     var mkPub = "{\"deviceId\":\"" + deviceId + "\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\""
     var siteId = mapField(json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/services", mkPub + ",\"name\":\"site\"}", accountToken))), "id")
     var apiId = mapField(json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/services", mkPub + ",\"name\":\"api\"}", accountToken))), "id")
-    assert(siteId.length > 0 && apiId.length > 0 && siteId != apiId, "dois servicos")
+    need(siteId.length > 0 && apiId.length > 0 && siteId != apiId, "falhou")
 
     // Lista da conta (o que o --all itera): 2 servicos.
     var listed = json.decode<List<Service>>(bodyOf(httpGetToken(controlPort, "/v1/services", accountToken)))
-    assert(listed.size == 2, "conta com 2 servicos")
+    need(listed.size == 2, "falhou")
 
     // Rotaciona cada um (mesmo loop do --all): tokens distintos, overlap.
     var firstSite = mapField(json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + siteId + "\",\"ttlHours\":\"24\"}", accountToken))), "token")
     var firstApi = mapField(json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + apiId + "\",\"ttlHours\":\"24\"}", accountToken))), "token")
     var rotSite = json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/services/rotate", "{\"serviceId\":\"" + siteId + "\",\"ttlHours\":\"24\"}", accountToken)))
     var rotApi = json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/services/rotate", "{\"serviceId\":\"" + apiId + "\",\"ttlHours\":\"24\"}", accountToken)))
-    assert(mapField(rotSite, "token") != firstSite, "site: token novo")
-    assert(mapField(rotApi, "token") != firstApi, "api: token novo")
-    assert(mapField(rotSite, "token") != mapField(rotApi, "token"), "tokens por servico")
-    assert(mapField(rotSite, "revoked") == "0", "site: overlap")
-    assert(mapField(rotApi, "revoked") == "0", "api: overlap")
+    need(mapField(rotSite, "token") != firstSite, "falhou")
+    need(mapField(rotApi, "token") != firstApi, "falhou")
+    need(mapField(rotSite, "token") != mapField(rotApi, "token"), "falhou")
+    need(mapField(rotSite, "revoked") == "0", "falhou")
+    need(mapField(rotApi, "revoked") == "0", "falhou")
     // Cada servico tem 2 validas; uma nao autoriza a outra (isolamento).
-    assert(registry.pendingRotationCount(siteId) == 2, "site com 2")
-    assert(registry.pendingRotationCount(apiId) == 2, "api com 2")
+    need(registry.pendingRotationCount(siteId) == 2, "falhou")
+    need(registry.pendingRotationCount(apiId) == 2, "falhou")
 }
 
 test "rotacao: --all grava credenciais em arquivo e nao imprime kfs_", "rotate-all-files" {
@@ -153,14 +153,14 @@ test "rotacao: --all grava credenciais em arquivo e nao imprime kfs_", "rotate-a
     // A funcao pura decide a linha; o conteudo do arquivo e o caminho para
     // o teste ler sem HOME (o valor na tela nunca e o token).
     var line = rotateAllLine("site", "/tmp/kofcloud-rotate-fake/site.kfs")
-    assert(line.indexOf("site") == 0, "comeca pelo nome")
-    assert(line.indexOf("/tmp/kofcloud-rotate-fake/site.kfs") >= 0, "mostra o caminho")
-    assert(line.indexOf("kfs_") < 0, "nunca carrega o valor")
-    assert(line.indexOf("uma vez") >= 0, "relembra a regra do kfs_")
+    need(line.indexOf("site") == 0, "falhou")
+    need(line.indexOf("/tmp/kofcloud-rotate-fake/site.kfs") >= 0, "falhou")
+    need(line.indexOf("kfs_") < 0, "falhou")
+    need(line.indexOf("uma vez") >= 0, "falhou")
 
     // O diretorio e fonte unica (o help do --all nao precisa mudar junto).
-    assert(rotateAllDir().indexOf(".kofcloud") >= 0, "dentro do HOME do kofcloud")
-    assert(rotateAllDir().indexOf("service-tokens") >= 0, "diretorio dedicado")
+    need(rotateAllDir().indexOf(".kofcloud") >= 0, "falhou")
+    need(rotateAllDir().indexOf("service-tokens") >= 0, "falhou")
 
     // Trava de fonte: o loop do --all grava em arquivo e imprime a linha
     // pura; nunca imprime `mapField(result, "token")` direto.
@@ -178,8 +178,8 @@ test "rotacao: --all grava credenciais em arquivo e nao imprime kfs_", "rotate-a
         end = text.length
     }
     var body = text.substring(start, end)
-    assert(body.indexOf("writeTextTo(filePath") >= 0, "grava em arquivo")
-    assert(body.indexOf("rotateAllLine(") >= 0, "imprime a linha pura")
+    need(body.indexOf("writeTextTo(filePath") >= 0, "falhou")
+    need(body.indexOf("rotateAllLine(") >= 0, "falhou")
     assert(body.indexOf("\" + mapField(result, \"token\")") < 0, "nao concatena o token na saida")
-    assert(body.indexOf("createDirectories()") >= 0, "cria o diretorio antes")
+    need(body.indexOf("createDirectories()") >= 0, "falhou")
 }

@@ -30,28 +30,28 @@ test "device list: presenca por linha, falha nao vira OFFLINE", "devpresence-uni
     var presence = "[\"dev-111\"]"
 
     var l1 = deviceListLine(online, presence, "")
-    assert(l1.indexOf("notebook") == 0, "comeca pelo nome")
-    assert(l1.indexOf("dev-111") >= 0, "id presente")
-    assert(l1.indexOf("ACTIVE") >= 0, "status de cadastro")
-    assert(l1.indexOf("tunel: ONLINE") >= 0, "presenca confirmada")
+    need(l1.indexOf("notebook") == 0, "falhou")
+    need(l1.indexOf("dev-111") >= 0, "falhou")
+    need(l1.indexOf("ACTIVE") >= 0, "falhou")
+    need(l1.indexOf("tunel: ONLINE") >= 0, "falhou")
 
     var l2 = deviceListLine(offline, presence, "")
-    assert(l2.indexOf("tunel: OFFLINE") >= 0, "ausente da presenca = OFFLINE")
+    need(l2.indexOf("tunel: OFFLINE") >= 0, "falhou")
 
     // Suspenso continua com o cadastro visivel (a presenca e outro eixo).
     var l3 = deviceListLine(suspended, presence, "")
-    assert(l3.indexOf("SUSPENDED") >= 0, "cadastro suspenso")
-    assert(l3.indexOf("tunel: OFFLINE") >= 0, "suspenso nao fica online")
+    need(l3.indexOf("SUSPENDED") >= 0, "falhou")
+    need(l3.indexOf("tunel: OFFLINE") >= 0, "falhou")
 
     // Falha na consulta: nao inventa OFFLINE (nem ONLINE).
     var l4 = deviceListLine(online, "", "falha de rede")
-    assert(l4.indexOf("tunel: desconhecido") >= 0, "erro e desconhecido")
-    assert(l4.indexOf("tunel: ONLINE") < 0, "nao afirma online")
-    assert(l4.indexOf("tunel: OFFLINE") < 0, "nao afirma offline")
+    need(l4.indexOf("tunel: desconhecido") >= 0, "falhou")
+    need(l4.indexOf("tunel: ONLINE") < 0, "falhou")
+    need(l4.indexOf("tunel: OFFLINE") < 0, "falhou")
 
     // Id vazio nunca casa por engano: bodyContainsId("") devolve false, entao
     // a linha cai em OFFLINE em vez de "encontrar" o id vazio na lista.
-    assert(deviceListLine(deviceFixture("", "x", "ACTIVE"), "[\"\"]", "").indexOf("tunel: OFFLINE") >= 0, "id vazio nao casa")
+    need(deviceListLine(deviceFixture("", "x", "ACTIVE"), "[\"\"]", "").indexOf("tunel: OFFLINE") >= 0, "falhou")
 }
 
 test "device list: fim a fim mostra ONLINE com tunel vivo e OFFLINE sem", "devpresence" {
@@ -65,8 +65,8 @@ test "device list: fim a fim mostra ONLINE com tunel vivo e OFFLINE sem", "devpr
     var edgeStop = "/tmp/kofcloud-dp-edge-" + crypto.randomHex(4) + ".txt"
     File(edgeStop).delete()
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -77,10 +77,10 @@ test "device list: fim a fim mostra ONLINE com tunel vivo e OFFLINE sem", "devpr
 
     // Antes do connect: presenca vazia -> OFFLINE.
     var presenceBefore = httpGetToken(controlPort, "/v1/presence", accountToken)
-    assert(statusOf(presenceBefore) == 200, "presence acessivel")
+    need(statusOf(presenceBefore) == 200, "falhou")
     var device = Device(deviceId, accountId, "notebook", "pubkey", "ACTIVE", 0L, 0L)
     var before = deviceListLine(device, bodyOf(presenceBefore), "")
-    assert(before.indexOf("tunel: OFFLINE") >= 0, "sem tunel = OFFLINE")
+    need(before.indexOf("tunel: OFFLINE") >= 0, "falhou")
 
     // Com o Agent conectado: ONLINE.
     var agentStop = "/tmp/kofcloud-dp-agent-" + crypto.randomHex(4) + ".txt"
@@ -96,10 +96,10 @@ test "device list: fim a fim mostra ONLINE com tunel vivo e OFFLINE sem", "devpr
             attempts = attempts - 1
         }
     }
-    assert(online, "agent registrado no edge")
+    need(online, "falhou")
     var presenceAfter = httpGetToken(controlPort, "/v1/presence", accountToken)
     var after = deviceListLine(device, bodyOf(presenceAfter), "")
-    assert(after.indexOf("tunel: ONLINE") >= 0, "tunel vivo = ONLINE")
+    need(after.indexOf("tunel: ONLINE") >= 0, "falhou")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
@@ -117,7 +117,7 @@ test "status: presenca do device reflete o tunel (base do estado do agente)", "d
     var registry = Registry("/tmp/kofcloud-dp2-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
     var url = "http://127.0.0.1:" + intToString(controlPort)
 
     var token = loginOrCreate(url, "mel", "segredo")
@@ -130,13 +130,13 @@ test "status: presenca do device reflete o tunel (base do estado do agente)", "d
 
     // Sem sessao no Edge: PARADO (mesmo sem stopFile).
     var presenceBefore = bodyOf(httpGetToken(controlPort, "/v1/presence", token))
-    assert(bodyContainsId(presenceBefore, deviceId) == false, "sem sessao no Edge")
-    assert(fileExists(stopPath()) == false, "stopFile ausente (o caso que enganava)")
+    need(bodyContainsId(presenceBefore, deviceId) == false, "falhou")
+    need(fileExists(stopPath()) == false, "falhou")
 
     // Com sessao viva: ATIVO.
     registry.noteEdgeOnline(deviceId, true)
     var presenceAfter = bodyOf(httpGetToken(controlPort, "/v1/presence", token))
-    assert(bodyContainsId(presenceAfter, deviceId), "sessao viva no Edge")
+    need(bodyContainsId(presenceAfter, deviceId), "falhou")
 
     if (priorSession.length == 0) {
         File(sessionPath()).delete()
@@ -152,16 +152,16 @@ test "status: presenca do device reflete o tunel (base do estado do agente)", "d
 
 test "status: agentStatusLine decide pelos tres sinais", "devpresence-unit" {
     // Tunel vivo manda em tudo.
-    assert(agentStatusLine(true, true, false).startsWith("ATIVO"), "tunel vivo = ATIVO")
-    assert(agentStatusLine(true, true, true).startsWith("ATIVO"), "stopFile velho nao vence o tunel")
+    need(agentStatusLine(true, true, false).startsWith("ATIVO"), "falhou")
+    need(agentStatusLine(true, true, true).startsWith("ATIVO"), "falhou")
     // Sem presenca consultavel: desconhecido (nunca inventa).
-    assert(agentStatusLine(false, false, false).startsWith("desconhecido"), "sem presenca = desconhecido")
-    assert(agentStatusLine(false, false, true).startsWith("desconhecido"), "sem presenca nem com stopFile")
+    need(agentStatusLine(false, false, false).startsWith("desconhecido"), "falhou")
+    need(agentStatusLine(false, false, true).startsWith("desconhecido"), "falhou")
     // Sem tunel e com presenca conhecida: PARADO, distinguindo a causa.
-    assert(agentStatusLine(false, true, true).indexOf("parada pedida") >= 0, "stopFile explica")
+    need(agentStatusLine(false, true, true).indexOf("parada pedida") >= 0, "falhou")
     var never = agentStatusLine(false, true, false)
-    assert(never.startsWith("PARADO"), "nunca subiu = PARADO")
-    assert(never.indexOf("kof cloud connect") >= 0, "diz o proximo passo")
+    need(never.startsWith("PARADO"), "falhou")
+    need(never.indexOf("kof cloud connect") >= 0, "falhou")
 }
 
 test "status: cmdStatus deriva o agente de agentStatusLine (trava de fonte)", "devpresence-unit" {
@@ -183,6 +183,6 @@ test "status: cmdStatus deriva o agente de agentStatusLine (trava de fonte)", "d
         end = text.length
     }
     var body = text.substring(start, end)
-    assert(body.indexOf("agentStatusLine(") >= 0, "status usa a funcao pura")
-    assert(body.indexOf("Agente:       ATIVO") < 0, "nao imprime ATIVO direto")
+    need(body.indexOf("agentStatusLine(") >= 0, "falhou")
+    need(body.indexOf("Agente:       ATIVO") < 0, "falhou")
 }

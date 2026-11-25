@@ -19,36 +19,36 @@ import testkit.Support
 // LIMIT_EXCEEDED em vez de bloquear a conexao inteira"; agora vale.
 
 test "fila: teto por stream, marcadores de controle nao contam", "queue-unit" {
-    assert(limitQueueDepth() == 64, "default 64")
-    assert(isControlMarker(streamEndMarker()), "END e controle")
-    assert(isControlMarker(streamResetMarker()), "RESET e controle")
-    assert(isControlMarker(streamTimeoutMarker()), "TIMEOUT e controle")
-    assert(isControlMarker("aGVsbG8=") == false, "payload base64 nao e controle")
+    need(limitQueueDepth() == 64, "falhou")
+    need(isControlMarker(streamEndMarker()), "falhou")
+    need(isControlMarker(streamResetMarker()), "falhou")
+    need(isControlMarker(streamTimeoutMarker()), "falhou")
+    need(isControlMarker("aGVsbG8=") == false, "falhou")
 
     var session = TunnelSession("s", "d", "a", "")
     session.setQueueDepth(2)
     session.registerStream("1")
-    assert(session.deliver("1", "p1") == true, "1o item cabe")
-    assert(session.deliver("1", "p2") == true, "2o item cabe")
-    assert(session.pendingFor("1") == 2, "dois pendentes")
-    assert(session.deliver("1", "p3") == false, "3o item recusado (fila cheia)")
-    assert(session.pendingFor("1") == 2, "recusa nao incrementa")
+    need(session.deliver("1", "p1") == true, "falhou")
+    need(session.deliver("1", "p2") == true, "falhou")
+    need(session.pendingFor("1") == 2, "falhou")
+    need(session.deliver("1", "p3") == false, "falhou")
+    need(session.pendingFor("1") == 2, "falhou")
 
     // Marcador de controle passa mesmo com a fila cheia: e o que desbloqueia
     // o consumidor. Sem isso, um END ficaria preso atras da fila cheia.
-    assert(session.deliver("1", streamEndMarker()) == true, "END passa com fila cheia")
+    need(session.deliver("1", streamEndMarker()) == true, "falhou")
 
     // Consumir libera vaga.
-    assert(session.nextFromStream("1") == "p1", "primeiro item")
-    assert(session.pendingFor("1") == 1, "um pendente")
-    assert(session.deliver("1", "p3") == true, "vaga liberada")
+    need(session.nextFromStream("1") == "p1", "falhou")
+    need(session.pendingFor("1") == 1, "falhou")
+    need(session.deliver("1", "p3") == true, "falhou")
 
     // Stream desconhecido: recusa (nao ha fila para entregar).
-    assert(session.deliver("nao-existe", "x") == false, "stream ausente recusa")
+    need(session.deliver("nao-existe", "x") == false, "falhou")
 
     // Fechar o stream limpa o contador (nao vaza memoria por stream morto).
     session.closeStream("1")
-    assert(session.pendingFor("1") == 0, "contador limpo ao fechar")
+    need(session.pendingFor("1") == 0, "falhou")
 }
 
 test "fila: routeData recusa o stream cheio e nao toca nos vizinhos", "queue-unit" {
@@ -61,18 +61,18 @@ test "fila: routeData recusa o stream cheio e nao toca nos vizinhos", "queue-uni
     session.registerStream("1")
     session.registerStream("2")
 
-    assert(session.routeData("1", "p1") == true, "1 cabe")
-    assert(session.routeData("2", "q1") == true, "2 cabe")
-    assert(session.routeData("1", "p2") == false, "1 estourou")
+    need(session.routeData("1", "p1") == true, "falhou")
+    need(session.routeData("2", "q1") == true, "falhou")
+    need(session.routeData("1", "p2") == false, "falhou")
 
     // O vizinho continua inteiro e recebe o que veio depois.
-    assert(session.nextFromStream("2") == "q1", "vizinho recebeu o seu")
-    assert(session.routeData("2", "q2") == true, "vizinho segue aceitando")
+    need(session.nextFromStream("2") == "q1", "falhou")
+    need(session.routeData("2", "q2") == true, "falhou")
 
     // O stream estourado foi fechado (nao acumula mais nada).
-    assert(session.pendingFor("1") == 0, "estourado nao guarda pendencia")
-    assert(session.streamCount() == 1, "so o vizinho segue registrado")
-    assert(session.nextFromStream("1") == streamResetMarker(), "consumidor ve reset")
+    need(session.pendingFor("1") == 0, "falhou")
+    need(session.streamCount() == 1, "falhou")
+    need(session.nextFromStream("1") == streamResetMarker(), "falhou")
 }
 
 test "fila: stream lento e recusado sem parar os outros (Edge real)", "queue" {
@@ -107,7 +107,7 @@ test "fila: stream lento e recusado sem parar os outros (Edge real)", "queue" {
             }
         }
     }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-qd-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -119,9 +119,9 @@ test "fila: stream lento e recusado sem parar os outros (Edge real)", "queue" {
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -130,7 +130,7 @@ test "fila: stream lento e recusado sem parar os outros (Edge real)", "queue" {
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "falhou")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
     var agentTask = spawn { runAgent(config, true) }
@@ -143,12 +143,12 @@ test "fila: stream lento e recusado sem parar os outros (Edge real)", "queue" {
             attempts = attempts - 1
         }
     }
-    assert(online, "agent online")
+    need(online, "falhou")
 
     // A sessao do Edge tem a fila no default; o teste aperta o teto nela
     // (mesmo objeto que o leitor do tunel consulta).
     var session = edgeState.sessionFor(deviceId)
-    assert(session != null, "sessao viva")
+    need(session != null, "falhou")
     if (session != null) {
         session.setQueueDepth(1)
     }
@@ -157,17 +157,17 @@ test "fila: stream lento e recusado sem parar os outros (Edge real)", "queue" {
     // leitor do tunel usa; o teste injeta a condicao direto para nao depender
     // de corrida (o corpo do servico local pode caber num unico bloco).
     if (session != null) {
-        assert(session.routeData("teste-estouro-a", "x") == false, "stream desconhecido recusado")
+        need(session.routeData("teste-estouro-a", "x") == false, "falhou")
         // E um DATA normal para stream vivo continua aceito.
         var first = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
-        assert(statusOf(first) > 0, "resposta veio (nao travou)")
+        need(statusOf(first) > 0, "falhou")
     }
 
     // O tunel continua vivo e serve o proximo pedido: a recusa foi do stream,
     // nao da sessao.
-    assert(edgeState.isOnline(deviceId), "tunel segue vivo apos a recusa")
+    need(edgeState.isOnline(deviceId), "falhou")
     var second = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
-    assert(statusOf(second) > 0, "segundo pedido tambem responde")
+    need(statusOf(second) > 0, "falhou")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)

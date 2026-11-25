@@ -25,14 +25,14 @@ Service statusCertService(String name) {
 
 test "service status: serviceCertLines roda openssl uma vez e julga cada host", "svcdevice-unit" {
     // Sem --tls-cert: lista vazia (o status nao muda para quem nao pediu).
-    assert(serviceCertLines("", listOf("site.mel.kofcloud.io")).size == 0, "sem PEM: nada")
-    assert(serviceCertLines("/tmp/x.pem", listOf<String>()).size == 0, "sem hosts: nada")
+    need(serviceCertLines("", listOf("site.mel.kofcloud.io")).size == 0, "falhou")
+    need(serviceCertLines("/tmp/x.pem", listOf<String>()).size == 0, "falhou")
 
     // Arquivo ausente: FALHA com o caminho (mesma linha do domain verify).
     var missing = serviceCertLines("/tmp/kofcloud-sem-pem-" + crypto.randomHex(4) + ".pem", listOf("site.mel.kofcloud.io"))
-    assert(missing.size == 1, "um host, uma linha")
-    assert(missing.get(0).startsWith("FALHA tls"), "ausente e FALHA")
-    assert(missing.get(0).indexOf("nao encontrado") >= 0, "diz o problema")
+    need(missing.size == 1, "falhou")
+    need(missing.get(0).startsWith("FALHA tls"), "falhou")
+    need(missing.get(0).indexOf("nao encontrado") >= 0, "falhou")
 
     var dir = "/tmp/kofcloud-status-cert-" + crypto.randomHex(4)
     var good = dir + "/good.pem"
@@ -48,22 +48,22 @@ test "service status: serviceCertLines roda openssl uma vez e julga cada host", 
 
     // PEM real que cobre (curinga da conta), valido por 10 anos: ok por host.
     var okLines = serviceCertLines(good, listOf("site.mel.kofcloud.io", "loja.mel.kofcloud.io"))
-    assert(okLines.size == 2, "uma linha por hostname")
-    assert(okLines.get(0).startsWith("ok"), "curinga cobre o default: " + okLines.get(0))
-    assert(okLines.get(0).indexOf("site.mel.kofcloud.io") >= 0, "linha nomeia o host")
-    assert(okLines.get(0).indexOf("expira") < 0, "sem aviso de expiracao")
-    assert(okLines.get(1).startsWith("ok"), "segundo host tambem")
+    need(okLines.size == 2, "falhou")
+    need(okLines.get(0).startsWith("ok"), "falhou")
+    need(okLines.get(0).indexOf("site.mel.kofcloud.io") >= 0, "falhou")
+    need(okLines.get(0).indexOf("expira") < 0, "falhou")
+    need(okLines.get(1).startsWith("ok"), "falhou")
 
     // PEM real expirando em 30 dias: aviso na linha ok, NAO FALHA (mesma
     // semantica do domain verify; o doctor e quem trata expiracao como falha).
     var shortLines = serviceCertLines(shortPem, listOf("site.mel.kofcloud.io"))
-    assert(shortLines.get(0).startsWith("ok"), "expirando segue ok: " + shortLines.get(0))
-    assert(shortLines.get(0).indexOf("expira em menos de 30 dias") >= 0, "aviso de expiracao")
+    need(shortLines.get(0).startsWith("ok"), "falhou")
+    need(shortLines.get(0).indexOf("expira em menos de 30 dias") >= 0, "falhou")
 
     // PEM real de outro dominio: FALHA dizendo o que cobre.
     var wrongLines = serviceCertLines(wrong, listOf("site.mel.kofcloud.io"))
-    assert(wrongLines.get(0).startsWith("FALHA tls"), "outro dominio e FALHA: " + wrongLines.get(0))
-    assert(wrongLines.get(0).indexOf("other.example") >= 0, "diz o que o PEM cobre")
+    need(wrongLines.get(0).startsWith("FALHA tls"), "falhou")
+    need(wrongLines.get(0).indexOf("other.example") >= 0, "falhou")
 }
 
 test "service status: cmdServiceStatus julga o PEM e sai 1 na FALHA", "status-cert" {
@@ -71,7 +71,7 @@ test "service status: cmdServiceStatus julga o PEM e sai 1 na FALHA", "status-ce
     var registry = Registry("/tmp/kofcloud-svccert-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
     var url = "http://127.0.0.1:" + intToString(controlPort)
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
@@ -100,10 +100,10 @@ test "service status: cmdServiceStatus julga o PEM e sai 1 na FALHA", "status-ce
     } else {
         writeTextTo(sessionPath(), prior)
     }
-    assert(looseCode == 1, "flag solta recusa")
-    assert(dupCode == 1, "flag repetida recusa")
-    assert(goodCode == 0, "PEM que cobre: exit 0")
-    assert(wrongCode == 1, "PEM de outro dominio: exit 1")
+    need(looseCode == 1, "falhou")
+    need(dupCode == 1, "falhou")
+    need(goodCode == 0, "falhou")
+    need(wrongCode == 1, "falhou")
 
     // Trava de fonte: o status precisa julgar via `serviceCertLines` (a
     // regra UNICA `domainCertLine`) e tratar FALHA como exit 1.
@@ -121,9 +121,9 @@ test "service status: cmdServiceStatus julga o PEM e sai 1 na FALHA", "status-ce
         end = text.length
     }
     var body = text.substring(start, end)
-    assert(body.indexOf("serviceCertLines(") >= 0, "delega no openssl-once")
-    assert(body.indexOf("flagMissingValue(args, \"--tls-cert\")") >= 0, "guarda flag solta")
-    assert(body.indexOf("flagDuplicated(args, \"--tls-cert\")") >= 0, "guarda flag repetida")
+    need(body.indexOf("serviceCertLines(") >= 0, "falhou")
+    need(body.indexOf("flagMissingValue(args, \"--tls-cert\")") >= 0, "falhou")
+    need(body.indexOf("flagDuplicated(args, \"--tls-cert\")") >= 0, "falhou")
 }
 
 test "service status: customs do servico entram no julgamento do PEM", "status-cert" {
@@ -139,9 +139,9 @@ test "service status: customs do servico entram no julgamento do PEM", "status-c
     for (var custom in customDomainsFor(domains, "site")) {
         hosts.add(custom.hostname)
     }
-    assert(hosts.size == 2, "default + custom do servico")
-    assert(hosts.get(0) == "site.mel.kofcloud.io", "default primeiro")
-    assert(hosts.get(1) == "api.exemplo.com", "custom do proprio servico")
-    assert(customDomainsFor(domains, "loja").get(0).hostname == "outro.exemplo.com", "loja pega o seu")
+    need(hosts.size == 2, "falhou")
+    need(hosts.get(0) == "site.mel.kofcloud.io", "falhou")
+    need(hosts.get(1) == "api.exemplo.com", "falhou")
+    need(customDomainsFor(domains, "loja").get(0).hostname == "outro.exemplo.com", "falhou")
     // PENDING tambem entra: DNS pendente nao muda o PEM exigido pelo host.
 }

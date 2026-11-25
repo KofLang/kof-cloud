@@ -38,28 +38,28 @@ test "metricas do agent: funcoes contam sem dado de cliente", "agent-metrics" {
     noteStreamServed()
     noteLocalError()
     var exposition = observability.metrics()
-    assert(agentMetricHas(exposition, "kofcloud_agent_connects_total"), "connects")
-    assert(agentMetricHas(exposition, "kofcloud_agent_reconnects_total"), "reconnects")
-    assert(agentMetricHas(exposition, "kofcloud_agent_fatal_refusals_total"), "fatais")
-    assert(agentMetricHas(exposition, "kofcloud_agent_fatal_refusals_total_revoked"), "revogado por motivo")
-    assert(agentMetricHas(exposition, "kofcloud_agent_fatal_refusals_total_auth"), "auth por motivo")
+    need(agentMetricHas(exposition, "kofcloud_agent_connects_total"), "falhou")
+    need(agentMetricHas(exposition, "kofcloud_agent_reconnects_total"), "falhou")
+    need(agentMetricHas(exposition, "kofcloud_agent_fatal_refusals_total"), "falhou")
+    need(agentMetricHas(exposition, "kofcloud_agent_fatal_refusals_total_revoked"), "falhou")
+    need(agentMetricHas(exposition, "kofcloud_agent_fatal_refusals_total_auth"), "falhou")
     noteAgentFatal("DEVICE_SUSPENDED")
-    assert(agentMetricHas(observability.metrics(), "kofcloud_agent_fatal_refusals_total_suspended"), "suspenso por motivo")
+    need(agentMetricHas(observability.metrics(), "kofcloud_agent_fatal_refusals_total_suspended"), "falhou")
     noteAgentFatal("DEVICE_UNKNOWN")
-    assert(agentMetricHas(observability.metrics(), "kofcloud_agent_fatal_refusals_total_unknown"), "desconhecido por motivo")
+    need(agentMetricHas(observability.metrics(), "kofcloud_agent_fatal_refusals_total_unknown"), "falhou")
     noteAgentFatal("OUTRO")
-    assert(agentMetricHas(observability.metrics(), "kofcloud_agent_fatal_refusals_total_other"), "outro cai no fallback")
-    assert(agentMetricHas(exposition, "kofcloud_agent_health_reports_total"), "health reports")
-    assert(agentMetricHas(exposition, "kofcloud_agent_streams_served_total"), "streams servidos")
-    assert(agentMetricHas(exposition, "kofcloud_agent_local_errors_total"), "erros locais")
+    need(agentMetricHas(observability.metrics(), "kofcloud_agent_fatal_refusals_total_other"), "falhou")
+    need(agentMetricHas(exposition, "kofcloud_agent_health_reports_total"), "falhou")
+    need(agentMetricHas(exposition, "kofcloud_agent_streams_served_total"), "falhou")
+    need(agentMetricHas(exposition, "kofcloud_agent_local_errors_total"), "falhou")
     // isFatal decide sem reconectar: os 5 motivos do refuseTunnel sao
     // fatais; motivo desconhecido nao e (fail-open para retry).
-    assert(isFatal("DEVICE_REVOKED") == true, "revogado e fatal")
-    assert(isFatal("DEVICE_SUSPENDED") == true, "suspenso e fatal")
-    assert(isFatal("AUTH_FAILED") == true, "auth e fatal")
-    assert(isFatal("DEVICE_UNKNOWN") == true, "desconhecido e fatal")
-    assert(isFatal("VERSION_UNSUPPORTED") == true, "versao e fatal")
-    assert(isFatal("OUTRO") == false, "desconhecido nao e fatal")
+    need(isFatal("DEVICE_REVOKED") == true, "falhou")
+    need(isFatal("DEVICE_SUSPENDED") == true, "falhou")
+    need(isFatal("AUTH_FAILED") == true, "falhou")
+    need(isFatal("DEVICE_UNKNOWN") == true, "falhou")
+    need(isFatal("VERSION_UNSUPPORTED") == true, "falhou")
+    need(isFatal("OUTRO") == false, "falhou")
 }
 
 test "metricas do agent: fluxo real conta connect, stream e health", "agent-metrics-e2e" {
@@ -71,7 +71,7 @@ test "metricas do agent: fluxo real conta connect, stream e health", "agent-metr
     var app = web.app()
     app.get("/") { return "svc-agentmet" }
     var server = spawn { app.listen(localSvc) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-amet-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -83,9 +83,9 @@ test "metricas do agent: fluxo real conta connect, stream e health", "agent-metr
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -94,7 +94,7 @@ test "metricas do agent: fluxo real conta connect, stream e health", "agent-metr
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "falhou")
 
     // NOTE: o Agent roda em TASK no mesmo processo do teste (padrao das
     // suites E2E) — os contadores do Agent sao observaveis aqui. Em
@@ -116,14 +116,14 @@ test "metricas do agent: fluxo real conta connect, stream e health", "agent-metr
             attempts = attempts - 1
         }
     }
-    assert(online, "agent registrado no edge")
+    need(online, "falhou")
 
     var streamsBefore = agentMetricValue(observability.metrics(), "kofcloud_agent_streams_served_total")
     if (streamsBefore < 0) {
         streamsBefore = 0
     }
     var ok = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
-    assert(statusOf(ok) == 200, "roteia pelo tunel")
+    need(statusOf(ok) == 200, "falhou")
     // Espera o relay fechar o stream e contar. Poll generoso (10 s): a task
     // do relay compete com o teste sob carga da suite completa.
     var served = false
@@ -136,17 +136,17 @@ test "metricas do agent: fluxo real conta connect, stream e health", "agent-metr
             waits = waits - 1
         }
     }
-    assert(served, "stream servido contado")
+    need(served, "falhou")
 
     var exposition = observability.metrics()
-    assert(agentMetricValue(exposition, "kofcloud_agent_connects_total") == connectsBefore + 1, "um connect contado")
-    assert(agentMetricHas(exposition, "kofcloud_agent_health_reports_total"), "health report contado")
-    assert(exposition.indexOf("svc-agentmet") < 0, "sem corpo de resposta")
-    assert(exposition.indexOf("site.mel") < 0, "sem nome de servico")
+    need(agentMetricValue(exposition, "kofcloud_agent_connects_total") == connectsBefore + 1, "falhou")
+    need(agentMetricHas(exposition, "kofcloud_agent_health_reports_total"), "falhou")
+    need(exposition.indexOf("svc-agentmet") < 0, "falhou")
+    need(exposition.indexOf("site.mel") < 0, "falhou")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
-    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    need(edgeState.isOnline(deviceId) == false, "falhou")
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)
     File(agentStop).delete()
@@ -168,8 +168,8 @@ test "metricas do agent: recusa fatal conta por motivo", "agent-metrics-fatal" {
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -181,7 +181,7 @@ test "metricas do agent: recusa fatal conta por motivo", "agent-metrics-fatal" {
     // Revoga ANTES de conectar: o Edge recusa o HELLO com DEVICE_REVOKED,
     // o Agent classifica como fatal e conta por motivo.
     var revokeBody = "{\"deviceId\":\"" + deviceId + "\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/devices/revoke", revokeBody, accountToken)) == 200, "revogado")
+    need(statusOf(httpPostJson(controlPort, "/v1/devices/revoke", revokeBody, accountToken)) == 200, "falhou")
 
     var fatalBefore = agentMetricValue(observability.metrics(), "kofcloud_agent_fatal_refusals_total_revoked")
     if (fatalBefore < 0) {
@@ -190,7 +190,7 @@ test "metricas do agent: recusa fatal conta por motivo", "agent-metrics-fatal" {
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
     var agentTask = spawn { runAgent(config, true) }
     await agentTask
-    assert(agentMetricValue(observability.metrics(), "kofcloud_agent_fatal_refusals_total_revoked") == fatalBefore + 1, "recusa fatal contada")
+    need(agentMetricValue(observability.metrics(), "kofcloud_agent_fatal_refusals_total_revoked") == fatalBefore + 1, "falhou")
 
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)

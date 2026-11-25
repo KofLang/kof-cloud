@@ -622,6 +622,18 @@ socket cru (capacidade do Kof) ou API de resposta binária no `web.app()`.
 Enquanto isso, TLS no Edge segue no terminador externo (`12-tls.md`) —
 o que o slice parcial acima resolve é o control plane (login/token).
 
+**Migração ao Kof 0.8.1 ✅ (restabilização).** O toolchain do host mudou e
+o repositório inteiro parou de compilar/rodar (`PARSE087`, `split` literal,
+`JSN006` estrito, TLS verificado por padrão, HSTS não automático — ver L21
+em `13-kof-apis.md`). Mudanças: todas as asserções não literais viraram
+`need(cond, "literal")`; o fio do control plane manda `localPort`/
+`createdAt`/`lastSeenAt` como **número JSON** (objecto montado à mão —
+`mapOf()` é homogêneo) e o decoder lê explicitamente; a CLI/Agent aplicam
+`applyHttpTlsPolicy` (opt-out só com control em loopback) e os e2e chamam
+`trustLocalhostTls()`; o HSTS deixa de ser promessa do runtime (trava do
+`control-tls` verifica o fio). `split("\\+")` da trava `u-counts` virou
+`split("+")`. Prova: `kof test --target jvm --timeout 120` verde.
+
 ## Fase 10 — WAF + proteção da aplicação (cloud robusta)
 
 **Motivação:** hoje o Edge roteia sem inspecionar — SQLi/XSS/RCE passam

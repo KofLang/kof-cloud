@@ -25,9 +25,9 @@ test "edge-eventos: linha persiste com nivel e mensagem", "edge-events" {
     var path = eventsEdgePath("basic")
     appendEdgeRuntimeLineTo(path, "warn", "tunel recusado: AUTH_FAILED")
     var text = readTextOr(path, "")
-    assert(text.length > 0, "arquivo criado")
-    assert(text.indexOf("warn tunel recusado: AUTH_FAILED") >= 0, "nivel + mensagem")
-    assert(text.endsWith("\n"), "linha terminada")
+    need(text.length > 0, "falhou")
+    need(text.indexOf("warn tunel recusado: AUTH_FAILED") >= 0, "falhou")
+    need(text.endsWith("\n"), "falhou")
 }
 
 test "edge-eventos: teto corta o inicio e mantem o recente", "edge-events" {
@@ -48,9 +48,9 @@ test "edge-eventos: teto corta o inicio e mantem o recente", "edge-events" {
         j = j + 1
     }
     var text = readTextOr(path, "")
-    assert(text.length <= limit, "respeita o teto")
-    assert(text.indexOf("enchimento 14") >= 0, "mantem o mais recente")
-    assert(text.indexOf("enchimento 0 ") < 0, "corta o inicio")
+    need(text.length <= limit, "falhou")
+    need(text.indexOf("enchimento 14") >= 0, "falhou")
+    need(text.indexOf("enchimento 0 ") < 0, "falhou")
 }
 
 test "edge-eventos: nunca grava segredo nem hostname (contrato do modulo)", "edge-events" {
@@ -63,10 +63,10 @@ test "edge-eventos: nunca grava segredo nem hostname (contrato do modulo)", "edg
     appendEdgeRuntimeLineTo(path, "warn", "teto de conexoes publicas atingido (1024) — 503")
     appendEdgeRuntimeLineTo(path, "info", "tunel aceito (1 sessao(oes) vivas)")
     var text = readTextOr(path, "")
-    assert(text.indexOf("kfc_") < 0, "sem token de conta")
-    assert(text.indexOf("kfs_") < 0, "sem token de servico")
-    assert(text.indexOf("kft_") < 0, "sem token de tunel")
-    assert(text.indexOf("kofcloud.io") < 0, "sem hostname")
+    need(text.indexOf("kfc_") < 0, "falhou")
+    need(text.indexOf("kfs_") < 0, "falhou")
+    need(text.indexOf("kft_") < 0, "falhou")
+    need(text.indexOf("kofcloud.io") < 0, "falhou")
 }
 
 test "edge-eventos: e2e — recusa de tunel real cai no arquivo", "edge-events" {
@@ -88,7 +88,7 @@ test "edge-eventos: e2e — recusa de tunel real cai no arquivo", "edge-events" 
     File(stop).delete()
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", stop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), stop) }
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    need(waitForPort(tunnelPort, 60), "falhou")
 
     // HELLO invalido: dispositivo inexistente -> DEVICE_UNKNOWN (antes de
     // qualquer auth; mesmo frame que um Agent real mandaria).
@@ -103,11 +103,11 @@ test "edge-eventos: e2e — recusa de tunel real cai no arquivo", "edge-events" 
     time.sleep(300)
     conn.close()
 
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(httpPort, 60), "falhou")
     // O mesmo evento que o Tunnel emitiu: a linha com o motivo do protocolo.
     var text = readTextOr(edgeRuntimeLogPath(), "")
-    assert(text.indexOf("tunel recusado: DEVICE_UNKNOWN") >= 0, "recusa com motivo no arquivo: " + text)
-    assert(text.indexOf("kfc_") < 0, "o frame invalido nao vaza para o arquivo")
+    need(text.indexOf("tunel recusado: DEVICE_UNKNOWN") >= 0, "falhou")
+    need(text.indexOf("kfc_") < 0, "falhou")
 
     // HELLO gigante (acima do teto de linha): fail-closed fecha SEM responder
     // — e o unico destino de conexao que contava metrica sem dizer palavra
@@ -130,16 +130,16 @@ test "edge-eventos: e2e — recusa de tunel real cai no arquivo", "edge-events" 
     connBig.send(bytesFromString(flood + "\n"))
     time.sleep(500)
     var echo = connBig.receive(receiveChunkBytes())
-    assert(echo.length == 0, "fail-closed fecha sem responder: " + intToString(echo.length))
+    need(echo.length == 0, "falhou")
     connBig.close()
 
     // Parada limpa tambem deixa marco (GOAWAY SHUTDOWN).
     File(stop).writeText("stop")
     time.sleep(500)
     var afterBig = readTextOr(edgeRuntimeLogPath(), "")
-    assert(afterBig.indexOf("tunel recusado: LINE_OVERFLOW") >= 0, "overflow gigante deixa a linha prometida pelo plano")
-    assert(afterBig.indexOf("xxxxxxxxxx") < 0, "o conteudo do HELLO gigante nunca vai para o arquivo")
-    assert(afterBig.indexOf("GOAWAY SHUTDOWN") >= 0, "marco da parada limpa")
+    need(afterBig.indexOf("tunel recusado: LINE_OVERFLOW") >= 0, "falhou")
+    need(afterBig.indexOf("xxxxxxxxxx") < 0, "falhou")
+    need(afterBig.indexOf("GOAWAY SHUTDOWN") >= 0, "falhou")
 }
 
 // Paridade do fail-closed mid-sessao: o HELLO gigante tinha palavra e
@@ -159,8 +159,8 @@ test "edge-eventos: linha gigante mid-sessao fecha com palavra e sem perda", "ed
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", stop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), stop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -188,7 +188,7 @@ test "edge-eventos: linha gigante mid-sessao fecha com palavra e sem perda", "ed
             attempts = attempts - 1
         }
     }
-    assert(online, "sessao aceita antes do flood")
+    need(online, "falhou")
 
     // Linha gigante DEPOIS do handshake (4 MiB por dobras — acima do teto
     // de linha e em tempo linear, mesmo precedente).
@@ -213,19 +213,19 @@ test "edge-eventos: linha gigante mid-sessao fecha com palavra e sem perda", "ed
             waits = waits - 1
         }
     }
-    assert(offline, "fail-closed derruba a sessao")
+    need(offline, "falhou")
 
     // A palavra existe e diz o motivo; conteudo, device e token ficam fora.
     var text = readTextOr(edgeRuntimeLogPath(), "")
-    assert(text.indexOf("sessao fechada: linha gigante acima do teto (LINE_OVERFLOW)") >= 0, "fail-closed mid-sessao deixa palavra: " + text)
-    assert(text.indexOf("xxxxxxxxxx") < 0, "o conteudo da linha nunca vai para o arquivo")
-    assert(text.indexOf(deviceId) < 0, "o device nao vaza para o arquivo")
-    assert(text.indexOf("kfc_") < 0, "nenhum token vaza para o arquivo")
+    need(text.indexOf("sessao fechada: linha gigante acima do teto (LINE_OVERFLOW)") >= 0, "falhou")
+    need(text.indexOf("xxxxxxxxxx") < 0, "falhou")
+    need(text.indexOf(deviceId) < 0, "falhou")
+    need(text.indexOf("kfc_") < 0, "falhou")
 
     // Decisao do proprio Edge nao e perda abrupta: a sonda de tuneis
     // perdidos fica intoca (a marca da sessao nem e lida neste caminho —
     // o overflow sai pelo fim do handler, nunca pelo ramo de perda).
-    assert(edgeState.tunnelLossProbe.count == 0, "protocolo violado nao conta como perda")
+    need(edgeState.tunnelLossProbe.count == 0, "falhou")
 
     // Trava com ANCORA de indentacao: palavra e metrica no nivel do corpo
     // do `if (reader.overflowed())`, dentro do handler (tecnica do c330b8c).
@@ -234,26 +234,26 @@ test "edge-eventos: linha gigante mid-sessao fecha com palavra e sem perda", "ed
     if (tunnelSrc != null) {
         tunnelText = tunnelSrc
     }
-    assert(tunnelText.length > 0, "le o Tunnel.kf")
+    need(tunnelText.length > 0, "falhou")
     var connStart = tunnelText.indexOf("void handleTunnelConnection(")
-    assert(connStart >= 0, "acha o handler da conexao")
+    need(connStart >= 0, "falhou")
     var connEnd = tunnelText.indexOf("void tunnelIdleSweeper(", connStart)
-    assert(connEnd > connStart, "acha o fim do handler")
+    need(connEnd > connStart, "falhou")
     var connBody = tunnelText.substring(connStart, connEnd)
-    assert(connBody.indexOf("\n                    edgeEvent(\"warn\", \"sessao fechada: linha gigante acima do teto (LINE_OVERFLOW)\")") >= 0, "palavra no nivel do if do overflow")
-    assert(connBody.indexOf("\n                    noteTunnelRefused(\"LINE_OVERFLOW\")") >= 0, "metrica no nivel do if do overflow")
+    need(connBody.indexOf("\n                    edgeEvent(\"warn\", \"sessao fechada: linha gigante acima do teto (LINE_OVERFLOW)\")") >= 0, "falhou")
+    need(connBody.indexOf("\n                    noteTunnelRefused(\"LINE_OVERFLOW\")") >= 0, "falhou")
 
     // Parada limpa para o teardown (o watcher fecha o listener; sem sessoes
     // vivas o GOAWAY nao mexe em nada aqui).
     writeTextTo(stop, "stop")
-    assert(waitForPort(controlPort, 60), "encerra")
+    need(waitForPort(controlPort, 60), "falhou")
     conn.close()
 }
 
 test "edge-eventos: caminho separado dos outros dois logs", "edge-events" {
-    assert(edgeRuntimeLogPath() != logPath(), "edge != marcos da CLI")
-    assert(edgeRuntimeLogPath() != agentRuntimeLogPath(), "edge != runtime do Agent")
-    assert(edgeRuntimeLogPath().endsWith("/edge-runtime.log"), "nome do arquivo")
-    assert(logPath().endsWith("/agent.log"), "marcos continuam em agent.log")
-    assert(agentRuntimeLogPath().endsWith("/agent-runtime.log"), "runtime do Agent inalterado")
+    need(edgeRuntimeLogPath() != logPath(), "falhou")
+    need(edgeRuntimeLogPath() != agentRuntimeLogPath(), "falhou")
+    need(edgeRuntimeLogPath().endsWith("/edge-runtime.log"), "falhou")
+    need(logPath().endsWith("/agent.log"), "falhou")
+    need(agentRuntimeLogPath().endsWith("/agent-runtime.log"), "falhou")
 }

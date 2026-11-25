@@ -24,69 +24,69 @@ String incidentsPath(String name) {
 }
 
 test "incidentes: severidade e resumo por sinal", "incident-unit" {
-    assert(incidentSeverityFor(incidentBulkDeviceRevokes()) == "CRIT", "revoke em lote de device e CRIT")
-    assert(incidentSeverityFor(incidentBulkTokenRevokes()) == "WARN", "token e WARN")
-    assert(incidentSeverityFor(incidentEdgeRefusals()) == "WARN", "edge e WARN")
-    assert(incidentSeverityFor("desconhecido") == "INFO", "desconhecido e INFO")
-    assert(incidentSummaryFor(incidentBulkDeviceRevokes()).length > 0, "resumo presente")
-    assert(severityIsKnown("CRIT"), "CRIT conhecido")
-    assert(severityIsKnown("nada") == false, "desconhecida recusada")
+    need(incidentSeverityFor(incidentBulkDeviceRevokes()) == "CRIT", "falhou")
+    need(incidentSeverityFor(incidentBulkTokenRevokes()) == "WARN", "falhou")
+    need(incidentSeverityFor(incidentEdgeRefusals()) == "WARN", "falhou")
+    need(incidentSeverityFor("desconhecido") == "INFO", "falhou")
+    need(incidentSummaryFor(incidentBulkDeviceRevokes()).length > 0, "falhou")
+    need(severityIsKnown("CRIT"), "falhou")
+    need(severityIsKnown("nada") == false, "falhou")
     // Anel de incidentes na fonte unica (`util/Limits.kf`): valor travado +
     // delegacao (mudar o default no Limits muda o anel — mutacao quebra).
-    assert(limitIncidents() == 100, "anel de incidentes travado em 100")
-    assert(limitIncidents() == limitIncidentRing(), "anel delega na fonte")
+    need(limitIncidents() == 100, "falhou")
+    need(limitIncidents() == limitIncidentRing(), "falhou")
     // Detectores em fonte unica (`util/Limits.kf`, mesma familia de
     // `limitHeartbeatMs`/`limitIdleSweepMs`): valor travado + delegacao
     // (mudar o default no Limits muda o detector — mutacao quebra).
-    assert(edgeRefusalThreshold() == 10, "limiar do edge travado")
-    assert(edgeRefusalThreshold() == limitEdgeRefusalThreshold(), "edge delega na fonte")
-    assert(edgeRefusalWindowMs() == 60000, "janela do edge travada")
-    assert(edgeRefusalWindowMs() == limitEdgeRefusalWindowMs(), "janela delega na fonte")
-    assert(bulkRevokeThreshold() == 3, "limiar de lote travado")
-    assert(bulkRevokeThreshold() == limitBulkRevokeThreshold(), "lote delega na fonte")
-    assert(bulkRevokeWindowMs() == 60000, "janela de lote travada")
-    assert(bulkRevokeWindowMs() == limitBulkRevokeWindowMs(), "janela de lote delega na fonte")
-    assert(incidentSeverityFor(incidentEdgeAuthFailures()) == "WARN", "401 em rajada e WARN")
-    assert(incidentSummaryFor(incidentEdgeAuthFailures()).length > 0, "resumo do 401 presente")
-    assert(edgeAuthFailureThreshold() == 25, "limiar de 401 travado")
-    assert(edgeAuthFailureThreshold() == limitEdgeAuthFailureThreshold(), "401 delega na fonte")
-    assert(edgeAuthFailureWindowMs() == 60000, "janela de 401 travada")
-    assert(edgeAuthFailureWindowMs() == limitEdgeAuthFailureWindowMs(), "janela de 401 delega na fonte")
+    need(edgeRefusalThreshold() == 10, "falhou")
+    need(edgeRefusalThreshold() == limitEdgeRefusalThreshold(), "falhou")
+    need(edgeRefusalWindowMs() == 60000, "falhou")
+    need(edgeRefusalWindowMs() == limitEdgeRefusalWindowMs(), "falhou")
+    need(bulkRevokeThreshold() == 3, "falhou")
+    need(bulkRevokeThreshold() == limitBulkRevokeThreshold(), "falhou")
+    need(bulkRevokeWindowMs() == 60000, "falhou")
+    need(bulkRevokeWindowMs() == limitBulkRevokeWindowMs(), "falhou")
+    need(incidentSeverityFor(incidentEdgeAuthFailures()) == "WARN", "falhou")
+    need(incidentSummaryFor(incidentEdgeAuthFailures()).length > 0, "falhou")
+    need(edgeAuthFailureThreshold() == 25, "falhou")
+    need(edgeAuthFailureThreshold() == limitEdgeAuthFailureThreshold(), "falhou")
+    need(edgeAuthFailureWindowMs() == 60000, "falhou")
+    need(edgeAuthFailureWindowMs() == limitEdgeAuthFailureWindowMs(), "falhou")
     // Sinais distintos: vocabulario fechado, mesmo nivel por desenho.
-    assert(incidentEdgeAuthFailures() != incidentEdgeRefusals(), "sinais separados")
-    assert(incidentSeverityFor(incidentEdgeAuthFailures()) == incidentSeverityFor(incidentEdgeRefusals()), "mesmo nivel")
+    need(incidentEdgeAuthFailures() != incidentEdgeRefusals(), "falhou")
+    need(incidentSeverityFor(incidentEdgeAuthFailures()) == incidentSeverityFor(incidentEdgeRefusals()), "falhou")
     // Edge sem heartbeat: quedas por ociosidade repetidas. Limiar baixo
     // (cada queda e um tunel que caiu de verdade) e janela folgada (300 s).
-    assert(incidentSeverityFor(incidentEdgeIdleTimeouts()) == "WARN", "quedas por ociosidade e WARN")
-    assert(incidentSummaryFor(incidentEdgeIdleTimeouts()).length > 0, "resumo das quedas presente")
-    assert(edgeIdleTimeoutThreshold() == 5, "limiar de ociosidade travado")
-    assert(edgeIdleTimeoutThreshold() == limitEdgeIdleTimeoutThreshold(), "ociosidade delega na fonte")
-    assert(edgeIdleTimeoutWindowMs() == 300000, "janela de ociosidade travada")
-    assert(edgeIdleTimeoutWindowMs() == limitEdgeIdleTimeoutWindowMs(), "janela de ociosidade delega na fonte")
-    assert(incidentEdgeIdleTimeouts() != incidentEdgeRefusals(), "ociosidade separada das recusas")
-    assert(incidentEdgeIdleTimeouts() != incidentEdgeAuthFailures(), "ociosidade separada do 401")
+    need(incidentSeverityFor(incidentEdgeIdleTimeouts()) == "WARN", "falhou")
+    need(incidentSummaryFor(incidentEdgeIdleTimeouts()).length > 0, "falhou")
+    need(edgeIdleTimeoutThreshold() == 5, "falhou")
+    need(edgeIdleTimeoutThreshold() == limitEdgeIdleTimeoutThreshold(), "falhou")
+    need(edgeIdleTimeoutWindowMs() == 300000, "falhou")
+    need(edgeIdleTimeoutWindowMs() == limitEdgeIdleTimeoutWindowMs(), "falhou")
+    need(incidentEdgeIdleTimeouts() != incidentEdgeRefusals(), "falhou")
+    need(incidentEdgeIdleTimeouts() != incidentEdgeAuthFailures(), "falhou")
     // Expiracao em massa de kfs_: detector por conta, nao por Edge. Limiar e
     // janela proprios (um vencimento isolado e rotina da rotacao por TTL).
-    assert(incidentSeverityFor(incidentMassTokenExpiry()) == "WARN", "expiracao em massa e WARN")
-    assert(incidentSummaryFor(incidentMassTokenExpiry()).length > 0, "resumo da expiracao presente")
-    assert(limitMassTokenExpiryThreshold() == 3, "limiar de expiracao travado")
-    assert(limitMassTokenExpiryWindowMs() == 300000, "janela de expiracao travada")
-    assert(errIncidentNotFound().indexOf("KCF125") >= 0, "codigo KCF125")
-    assert(errHint(errIncidentNotFound()).length > 0, "Hint presente")
+    need(incidentSeverityFor(incidentMassTokenExpiry()) == "WARN", "falhou")
+    need(incidentSummaryFor(incidentMassTokenExpiry()).length > 0, "falhou")
+    need(limitMassTokenExpiryThreshold() == 3, "falhou")
+    need(limitMassTokenExpiryWindowMs() == 300000, "falhou")
+    need(errIncidentNotFound().indexOf("KCF125") >= 0, "falhou")
+    need(errHint(errIncidentNotFound()).length > 0, "falhou")
 }
 
 test "incidentes: abrir e idempotente por (sinal, conta)", "incident-unit" {
     var registry = Registry(incidentsPath("idem"))
     var account = registry.createAccount("mel", "m@e.com", "segredo")
     var first = registry.raiseIncident(incidentBulkTokenRevokes(), account.id)
-    assert(first != null, "abre")
+    need(first != null, "falhou")
     if (first != null) {
-        assert(first.severity == "WARN", "severidade do sinal")
-        assert(first.resolvedAt == 0, "aberto")
+        need(first.severity == "WARN", "falhou")
+        need(first.resolvedAt == 0, "falhou")
     }
     var second = registry.raiseIncident(incidentBulkTokenRevokes(), account.id)
-    assert(second == null, "nao duplica enquanto aberto")
-    assert(registry.incidentsForAccount(account.id, true).size == 1, "um so")
+    need(second == null, "falhou")
+    need(registry.incidentsForAccount(account.id, true).size == 1, "falhou")
 }
 
 test "incidentes: revogacao em lote abre incidente da conta", "incident-unit" {
@@ -98,36 +98,36 @@ test "incidentes: revogacao em lote abre incidente da conta", "incident-unit" {
     var d4 = registry.registerDevice(account, "d4", "pk")
 
     registry.revokeDevice(account.id, d1.id)
-    assert(registry.incidentsForAccount(account.id, true).size == 0, "uma ainda nao")
+    need(registry.incidentsForAccount(account.id, true).size == 0, "falhou")
     registry.revokeDevice(account.id, d2.id)
-    assert(registry.incidentsForAccount(account.id, true).size == 0, "duas ainda nao")
+    need(registry.incidentsForAccount(account.id, true).size == 0, "falhou")
     registry.revokeDevice(account.id, d3.id)
     var list = registry.incidentsForAccount(account.id, true)
-    assert(list.size == 1, "terceira abre (limiar 3)")
+    need(list.size == 1, "falhou")
     if (list.size == 1) {
-        assert(list.get(0).kind == incidentBulkDeviceRevokes(), "sinal certo")
-        assert(list.get(0).severity == "CRIT", "CRIT")
+        need(list.get(0).kind == incidentBulkDeviceRevokes(), "falhou")
+        need(list.get(0).severity == "CRIT", "falhou")
     }
     registry.revokeDevice(account.id, d4.id)
-    assert(registry.incidentsForAccount(account.id, true).size == 1, "nao duplica")
+    need(registry.incidentsForAccount(account.id, true).size == 1, "falhou")
 }
 
 test "incidentes: resolver fecha; o mesmo sinal dentro do plato NAO reabre", "incident-unit" {
     var registry = Registry(incidentsPath("resolve"))
     var account = registry.createAccount("mel", "m@e.com", "segredo")
     var opened = registry.raiseIncident(incidentBulkDeviceRevokes(), account.id)
-    assert(opened != null, "aberto")
+    need(opened != null, "falhou")
     var id = ""
     if (opened != null) {
         id = opened.id
     }
-    assert(registry.resolveIncident(id) == true, "fecha")
-    assert(registry.resolveIncident(id) == false, "fechar de novo nao acha")
+    need(registry.resolveIncident(id) == true, "falhou")
+    need(registry.resolveIncident(id) == false, "falhou")
     // Fase 17 s1 — plato: o sinal que ainda dispara dentro da janela nao
     // reabre a cada evento (era o incidente por evento).
     var again = registry.raiseIncident(incidentBulkDeviceRevokes(), account.id)
-    assert(again == null, "plato: dentro da janela nao reabre")
-    assert(registry.incidentsForAccount(account.id, true).size == 1, "continua um so")
+    need(again == null, "falhou")
+    need(registry.incidentsForAccount(account.id, true).size == 1, "falhou")
 }
 
 test "incidentes: escopo global aparece para a conta, escopo alheio nao", "incident-unit" {
@@ -137,9 +137,9 @@ test "incidentes: escopo global aparece para a conta, escopo alheio nao", "incid
     registry.raiseIncident(incidentEdgeRefusals(), "")
     registry.raiseIncident(incidentBulkTokenRevokes(), ana.id)
 
-    assert(registry.incidentsForAccount(mel.id, true).size == 1, "mel ve o global")
-    assert(registry.incidentsForAccount(mel.id, false).size == 0, "mel nao ve o de ana")
-    assert(registry.incidentsForAccount(ana.id, false).size == 1, "ana ve o seu")
+    need(registry.incidentsForAccount(mel.id, true).size == 1, "falhou")
+    need(registry.incidentsForAccount(mel.id, false).size == 0, "falhou")
+    need(registry.incidentsForAccount(ana.id, false).size == 1, "falhou")
 }
 
 test "incidentes: HTTP lista, resolve e recusa incidente alheio", "incident" {
@@ -147,7 +147,7 @@ test "incidentes: HTTP lista, resolve e recusa incidente alheio", "incident" {
     var registry = Registry(incidentsPath("http"))
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var melToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -159,23 +159,23 @@ test "incidentes: HTTP lista, resolve e recusa incidente alheio", "incident" {
     var opened = registry.raiseIncident(incidentBulkDeviceRevokes(), melId)
 
     var listed = httpPostJson(controlPort, "/v1/incidents", "{}", melToken)
-    assert(statusOf(listed) == 200, "lista 200")
-    assert(bodyOf(listed).indexOf("bulk_device_revokes") >= 0, "sinal na lista")
-    assert(bodyOf(listed).indexOf("CRIT") >= 0, "severidade na lista")
+    need(statusOf(listed) == 200, "falhou")
+    need(bodyOf(listed).indexOf("bulk_device_revokes") >= 0, "falhou")
+    need(bodyOf(listed).indexOf("CRIT") >= 0, "falhou")
 
     var incidentId = ""
     if (opened != null) {
         incidentId = opened.id
     }
     var resolved = httpPostJson(controlPort, "/v1/incidents", "{\"resolveId\":\"" + incidentId + "\"}", melToken)
-    assert(statusOf(resolved) == 200, "resolve 200")
+    need(statusOf(resolved) == 200, "falhou")
 
     // Outra conta nao enxerga nem fecha o incidente de mel (404 opaco).
     var other = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
     var anaToken = mapField(json.decode<Map<String, String>>(bodyOf(other)), "token")
-    assert(statusOf(httpPostJson(controlPort, "/v1/incidents", "{\"resolveId\":\"" + incidentId + "\"}", anaToken)) == 404, "alheio 404")
+    need(statusOf(httpPostJson(controlPort, "/v1/incidents", "{\"resolveId\":\"" + incidentId + "\"}", anaToken)) == 404, "falhou")
     var anaList = httpPostJson(controlPort, "/v1/incidents", "{}", anaToken)
-    assert(bodyOf(anaList).indexOf("bulk_device_revokes") < 0, "lista de ana nao mostra")
+    need(bodyOf(anaList).indexOf("bulk_device_revokes") < 0, "falhou")
 }
 
 test "incidentes: rajada de recusas do Edge abre incidente global", "incident-edge" {
@@ -186,16 +186,16 @@ test "incidentes: rajada de recusas do Edge abre incidente global", "incident-ed
     edgeState.refusalProbe.windowStart = time.now()
     noteEdgeRefusalIncident(edgeState)
     var list = registry.incidentsForAccount("", true)
-    assert(list.size == 1, "limiar abre o global")
+    need(list.size == 1, "falhou")
     if (list.size == 1) {
-        assert(list.get(0).kind == incidentEdgeRefusals(), "sinal do edge")
-        assert(list.get(0).accountId.length == 0, "escopo global")
-        assert(list.get(0).severity == "WARN", "WARN")
+        need(list.get(0).kind == incidentEdgeRefusals(), "falhou")
+        need(list.get(0).accountId.length == 0, "falhou")
+        need(list.get(0).severity == "WARN", "falhou")
     }
     // Abaixo do limiar nao abre.
     var fresh = EdgeState(Registry(incidentsPath("edge2")))
     noteEdgeRefusalIncident(fresh)
-    assert(fresh.registry.allIncidents().size == 0, "uma recusa nao e incidente")
+    need(fresh.registry.allIncidents().size == 0, "falhou")
 }
 
 test "incidentes: rajada de 401 no Edge abre incidente, controlada nao", "incident-auth" {
@@ -205,20 +205,20 @@ test "incidentes: rajada de 401 no Edge abre incidente, controlada nao", "incide
     edgeState.authFailureProbe.windowStart = time.now()
     noteEdgeAuthFailureIncident(edgeState)
     var list = registry.incidentsForAccount("", true)
-    assert(list.size == 1, "limiar de 401 abre o global")
+    need(list.size == 1, "falhou")
     if (list.size == 1) {
-        assert(list.get(0).kind == incidentEdgeAuthFailures(), "sinal do 401")
-        assert(list.get(0).accountId.length == 0, "escopo global")
-        assert(list.get(0).severity == "WARN", "WARN")
+        need(list.get(0).kind == incidentEdgeAuthFailures(), "falhou")
+        need(list.get(0).accountId.length == 0, "falhou")
+        need(list.get(0).severity == "WARN", "falhou")
         // Privacidade: nada de hostname/token/caminho no resumo.
-        assert(list.get(0).summary.indexOf("kfs_") < 0, "sem credencial no resumo")
-        assert(list.get(0).summary.indexOf(".") < 0, "sem hostname no resumo")
+        need(list.get(0).summary.indexOf("kfs_") < 0, "falhou")
+        need(list.get(0).summary.indexOf(".") < 0, "falhou")
     }
 
     // Uma rajada abaixo do limiar nao abre.
     var quiet = EdgeState(Registry(incidentsPath("auth2")))
     noteEdgeAuthFailureIncident(quiet)
-    assert(quiet.registry.allIncidents().size == 0, "um 401 nao e incidente")
+    need(quiet.registry.allIncidents().size == 0, "falhou")
 
     // Sondas independentes: nutrir a de 401 nao antecipa a de recusas.
     var shared = EdgeState(Registry(incidentsPath("auth3")))
@@ -226,9 +226,9 @@ test "incidentes: rajada de 401 no Edge abre incidente, controlada nao", "incide
     noteEdgeAuthFailureIncident(shared)
     noteEdgeRefusalIncident(shared)
     var kinds = shared.registry.allIncidents()
-    assert(kinds.size == 1, "recusa nao foi contada pela sonda de 401")
+    need(kinds.size == 1, "falhou")
     if (kinds.size == 1) {
-        assert(kinds.get(0).kind == incidentEdgeAuthFailures(), "so o sinal de 401 abriu")
+        need(kinds.get(0).kind == incidentEdgeAuthFailures(), "falhou")
     }
 
     // Janela vencida zera o contador (sonda cheia de antes nao abre agora).
@@ -236,7 +236,7 @@ test "incidentes: rajada de 401 no Edge abre incidente, controlada nao", "incide
     stale.authFailureProbe.count = edgeAuthFailureThreshold() - 1
     stale.authFailureProbe.windowStart = time.now() - edgeAuthFailureWindowMs() - 1000
     noteEdgeAuthFailureIncident(stale)
-    assert(stale.registry.allIncidents().size == 0, "janela vencida reseta antes de contar")
+    need(stale.registry.allIncidents().size == 0, "falhou")
 }
 
 test "incidentes: quedas por ociosidade no Edge abrem incidente próprio", "incident-idle" {
@@ -246,20 +246,20 @@ test "incidentes: quedas por ociosidade no Edge abrem incidente próprio", "inci
     edgeState.idleTimeoutProbe.windowStart = time.now()
     noteEdgeIdleTimeoutIncident(edgeState)
     var list = registry.incidentsForAccount("", true)
-    assert(list.size == 1, "limiar de quedas abre o global")
+    need(list.size == 1, "falhou")
     if (list.size == 1) {
-        assert(list.get(0).kind == incidentEdgeIdleTimeouts(), "sinal de ociosidade")
-        assert(list.get(0).accountId.length == 0, "escopo global (sem device)")
-        assert(list.get(0).severity == "WARN", "WARN")
+        need(list.get(0).kind == incidentEdgeIdleTimeouts(), "falhou")
+        need(list.get(0).accountId.length == 0, "falhou")
+        need(list.get(0).severity == "WARN", "falhou")
         // Privacidade: o sinal nao carrega device, hostname nem token.
-        assert(list.get(0).summary.indexOf(".") < 0, "sem hostname no resumo")
-        assert(list.get(0).summary.indexOf("kfs_") < 0, "sem credencial no resumo")
+        need(list.get(0).summary.indexOf(".") < 0, "falhou")
+        need(list.get(0).summary.indexOf("kfs_") < 0, "falhou")
     }
 
     // Uma queda isolada nao e incidente (Agent parado e rotina).
     var quiet = EdgeState(Registry(incidentsPath("idle2")))
     noteEdgeIdleTimeoutIncident(quiet)
-    assert(quiet.registry.allIncidents().size == 0, "uma queda nao e incidente")
+    need(quiet.registry.allIncidents().size == 0, "falhou")
 
     // Sondas independentes: quedas nao antecipam recusas nem 401.
     var shared = EdgeState(Registry(incidentsPath("idle3")))
@@ -268,19 +268,19 @@ test "incidentes: quedas por ociosidade no Edge abrem incidente próprio", "inci
     noteEdgeRefusalIncident(shared)
     noteEdgeAuthFailureIncident(shared)
     var kinds = shared.registry.allIncidents()
-    assert(kinds.size == 1, "so a sonda de ociosidade abriu")
+    need(kinds.size == 1, "falhou")
     if (kinds.size == 1) {
-        assert(kinds.get(0).kind == incidentEdgeIdleTimeouts(), "sinal de ociosidade")
+        need(kinds.get(0).kind == incidentEdgeIdleTimeouts(), "falhou")
     }
-    assert(shared.refusalProbe.count == 1, "recusas contaram na propria sonda")
-    assert(shared.authFailureProbe.count == 1, "401 contou na propria sonda")
+    need(shared.refusalProbe.count == 1, "falhou")
+    need(shared.authFailureProbe.count == 1, "falhou")
 
     // Janela vencida zera o contador.
     var stale = EdgeState(Registry(incidentsPath("idle4")))
     stale.idleTimeoutProbe.count = edgeIdleTimeoutThreshold() - 1
     stale.idleTimeoutProbe.windowStart = time.now() - edgeIdleTimeoutWindowMs() - 1000
     noteEdgeIdleTimeoutIncident(stale)
-    assert(stale.registry.allIncidents().size == 0, "janela vencida reseta antes de contar")
+    need(stale.registry.allIncidents().size == 0, "falhou")
 }
 
 // Tunel caindo em massa (Fase 17 slice 1, ultimo sinal do desenho sem
@@ -291,12 +291,12 @@ test "incidentes: quedas por ociosidade no Edge abrem incidente próprio", "inci
 // de ociosidade, GOAWAY de parada) de perda de verdade.
 test "incidentes: perda abrupta de tuneis no Edge abre incidente próprio", "incident-loss" {
     // Sinal e limites travados na fonte unica.
-    assert(incidentSeverityFor(incidentEdgeTunnelLosses()) == "WARN", "perda em massa e WARN")
-    assert(incidentSummaryFor(incidentEdgeTunnelLosses()).length > 0, "resumo presente")
-    assert(limitEdgeTunnelLossThreshold() == 5, "limiar de perda travado")
-    assert(limitEdgeTunnelLossWindowMs() == 300000, "janela de perda travada")
-    assert(incidentEdgeTunnelLosses() != incidentEdgeIdleTimeouts(), "sinal distinto da ociosidade")
-    assert(incidentSummaryFor(incidentEdgeTunnelLosses()) != incidentSummaryFor(incidentEdgeIdleTimeouts()), "resumos distintos")
+    need(incidentSeverityFor(incidentEdgeTunnelLosses()) == "WARN", "falhou")
+    need(incidentSummaryFor(incidentEdgeTunnelLosses()).length > 0, "falhou")
+    need(limitEdgeTunnelLossThreshold() == 5, "falhou")
+    need(limitEdgeTunnelLossWindowMs() == 300000, "falhou")
+    need(incidentEdgeTunnelLosses() != incidentEdgeIdleTimeouts(), "falhou")
+    need(incidentSummaryFor(incidentEdgeTunnelLosses()) != incidentSummaryFor(incidentEdgeIdleTimeouts()), "falhou")
 
     var registry = Registry(incidentsPath("loss"))
     var edgeState = EdgeState(registry)
@@ -304,20 +304,20 @@ test "incidentes: perda abrupta de tuneis no Edge abre incidente próprio", "inc
     edgeState.tunnelLossProbe.windowStart = time.now()
     noteEdgeTunnelLossIncident(edgeState)
     var list = registry.incidentsForAccount("", true)
-    assert(list.size == 1, "limiar de perdas abre o global")
+    need(list.size == 1, "falhou")
     if (list.size == 1) {
-        assert(list.get(0).kind == incidentEdgeTunnelLosses(), "sinal de perda")
-        assert(list.get(0).accountId.length == 0, "escopo global (sem device)")
-        assert(list.get(0).severity == "WARN", "WARN")
+        need(list.get(0).kind == incidentEdgeTunnelLosses(), "falhou")
+        need(list.get(0).accountId.length == 0, "falhou")
+        need(list.get(0).severity == "WARN", "falhou")
         // Privacidade: o sinal nao carrega device, hostname nem token.
-        assert(list.get(0).summary.indexOf(".") < 0, "sem hostname no resumo")
-        assert(list.get(0).summary.indexOf("kfs_") < 0, "sem credencial no resumo")
+        need(list.get(0).summary.indexOf(".") < 0, "falhou")
+        need(list.get(0).summary.indexOf("kfs_") < 0, "falhou")
     }
 
     // Uma perda isolada nao e incidente (Agent morto e rotina).
     var quiet = EdgeState(Registry(incidentsPath("loss2")))
     noteEdgeTunnelLossIncident(quiet)
-    assert(quiet.registry.allIncidents().size == 0, "uma perda nao e incidente")
+    need(quiet.registry.allIncidents().size == 0, "falhou")
 
     // Sondas independentes: perdas nao antecipam recusas, 401 nem ociosidade.
     var shared = EdgeState(Registry(incidentsPath("loss3")))
@@ -327,24 +327,24 @@ test "incidentes: perda abrupta de tuneis no Edge abre incidente próprio", "inc
     noteEdgeAuthFailureIncident(shared)
     noteEdgeIdleTimeoutIncident(shared)
     var kinds = shared.registry.allIncidents()
-    assert(kinds.size == 1, "so a sonda de perda abriu")
+    need(kinds.size == 1, "falhou")
     if (kinds.size == 1) {
-        assert(kinds.get(0).kind == incidentEdgeTunnelLosses(), "sinal de perda")
+        need(kinds.get(0).kind == incidentEdgeTunnelLosses(), "falhou")
     }
-    assert(shared.refusalProbe.count == 1, "recusas contaram na propria sonda")
-    assert(shared.authFailureProbe.count == 1, "401 contou na propria sonda")
-    assert(shared.idleTimeoutProbe.count == 1, "ociosidade contou na propria sonda")
+    need(shared.refusalProbe.count == 1, "falhou")
+    need(shared.authFailureProbe.count == 1, "falhou")
+    need(shared.idleTimeoutProbe.count == 1, "falhou")
 
     // Janela vencida zera o contador.
     var stale = EdgeState(Registry(incidentsPath("loss4")))
     stale.tunnelLossProbe.count = edgeTunnelLossThreshold() - 1
     stale.tunnelLossProbe.windowStart = time.now() - edgeTunnelLossWindowMs() - 1000
     noteEdgeTunnelLossIncident(stale)
-    assert(stale.registry.allIncidents().size == 0, "janela vencida reseta antes de contar")
+    need(stale.registry.allIncidents().size == 0, "falhou")
 
     // A marca nasce falsa: saida propria do Edge e excecao, nao regra.
     var session = TunnelSession("s1", "d1", "a1", "")
-    assert(session.edgeClosed == false, "marca de fechamento proprio nasce falsa")
+    need(session.edgeClosed == false, "falhou")
 
     // Trava com ANCORA de indentacao no wiring (tecnica do c330b8c): o EOF
     // so conta SEM a marca, com palavra e sonda no nivel do if; sweeper e
@@ -355,43 +355,43 @@ test "incidentes: perda abrupta de tuneis no Edge abre incidente próprio", "inc
     if (tunnelSrc != null) {
         tunnelText = tunnelSrc
     }
-    assert(tunnelText.length > 0, "le o Tunnel.kf")
+    need(tunnelText.length > 0, "falhou")
     var connStart = tunnelText.indexOf("void handleTunnelConnection(")
-    assert(connStart >= 0, "acha o handler da conexao")
+    need(connStart >= 0, "falhou")
     var connEnd = tunnelText.indexOf("void tunnelIdleSweeper(", connStart)
-    assert(connEnd > connStart, "acha o fim do handler")
+    need(connEnd > connStart, "falhou")
     var connBody = tunnelText.substring(connStart, connEnd)
     var firstCall = connBody.indexOf("\n                tunnelDiedAbruptly(state, session)")
-    assert(firstCall >= 0, "EOF de peer conta perda no nivel do if")
+    need(firstCall >= 0, "falhou")
     var catchStart = connBody.indexOf("\n        } catch (String e) {", firstCall)
-    assert(catchStart > firstCall, "leitura que lanca tem destino proprio")
-    assert(connBody.indexOf("\n            tunnelDiedAbruptly(state, session)", catchStart) > catchStart, "excecao de leitura conta perda com a mesma marca")
+    need(catchStart > firstCall, "falhou")
+    need(connBody.indexOf("\n            tunnelDiedAbruptly(state, session)", catchStart) > catchStart, "falhou")
     var helperStart = tunnelText.indexOf("void tunnelDiedAbruptly(")
-    assert(helperStart > connStart, "acha o helper do fim abrupto")
+    need(helperStart > connStart, "falhou")
     var helperEnd = tunnelText.indexOf("void noteEdgeTunnelLossIncident(", helperStart)
-    assert(helperEnd > helperStart, "acha o fim do helper")
+    need(helperEnd > helperStart, "falhou")
     var helperBody = tunnelText.substring(helperStart, helperEnd)
-    assert(helperBody.indexOf("\n    if (session.edgeClosed == false) {") >= 0, "perda so sem a marca de fechamento proprio")
-    assert(helperBody.indexOf("\n        edgeEvent(\"warn\", \"tunel perdido: EOF do agent (\" + intToString(state.onlineCount()) + \" sessao(oes) vivas)\")") >= 0, "perda deixa palavra no nivel do if")
-    assert(helperBody.indexOf("\n        noteEdgeTunnelLossIncident(state)") >= 0, "perda alimenta a sonda no nivel do if")
+    need(helperBody.indexOf("\n    if (session.edgeClosed == false) {") >= 0, "falhou")
+    need(helperBody.indexOf("\n        edgeEvent(\"warn\", \"tunel perdido: EOF do agent (\" + intToString(state.onlineCount()) + \" sessao(oes) vivas)\")") >= 0, "falhou")
+    need(helperBody.indexOf("\n        noteEdgeTunnelLossIncident(state)") >= 0, "falhou")
     var sweepStart = tunnelText.indexOf("void tunnelIdleSweeper(")
-    assert(sweepStart > connStart, "acha o sweeper")
+    need(sweepStart > connStart, "falhou")
     var sweepEnd = tunnelText.indexOf("Bool handleTunnelFrame(", sweepStart)
-    assert(sweepEnd > sweepStart, "acha o fim do sweeper")
+    need(sweepEnd > sweepStart, "falhou")
     var sweepBody = tunnelText.substring(sweepStart, sweepEnd)
-    assert(sweepBody.indexOf("\n                session.edgeClosed = true") >= 0, "sweeper marca antes de fechar")
+    need(sweepBody.indexOf("\n                session.edgeClosed = true") >= 0, "falhou")
     var edgeSrc = File("src/kofcloud/edge/EdgeState.kf").readText()
     var edgeText = ""
     if (edgeSrc != null) {
         edgeText = edgeSrc
     }
-    assert(edgeText.length > 0, "le o EdgeState.kf")
+    need(edgeText.length > 0, "falhou")
     var goawayStart = edgeText.indexOf("void goawayAll(")
-    assert(goawayStart >= 0, "acha o goawayAll")
+    need(goawayStart >= 0, "falhou")
     var goawayEnd = edgeText.indexOf("Bool isOnline(", goawayStart)
-    assert(goawayEnd > goawayStart, "acha o fim do goawayAll")
+    need(goawayEnd > goawayStart, "falhou")
     var goawayBody = edgeText.substring(goawayStart, goawayEnd)
-    assert(goawayBody.indexOf("\n            session.edgeClosed = true") >= 0, "parada limpa marca antes de fechar")
+    need(goawayBody.indexOf("\n            session.edgeClosed = true") >= 0, "falhou")
 }
 
 // Caminho REAL: um Agent valido que some sem GOAWAY (crash, rede, processo
@@ -410,9 +410,9 @@ test "incidentes: tunel perdido abruptamente abre incidente e deixa palavra", "i
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -445,7 +445,7 @@ test "incidentes: tunel perdido abruptamente abre incidente e deixa palavra", "i
             attempts = attempts - 1
         }
     }
-    assert(online, "sessao registrada no edge")
+    need(online, "falhou")
 
     // Queda abrupta: fecha o socket sem GOAWAY — o laço de leitura recebe
     // EOF e, sem a marca, conta perda.
@@ -459,19 +459,19 @@ test "incidentes: tunel perdido abruptamente abre incidente e deixa palavra", "i
             waits = waits - 1
         }
     }
-    assert(offline, "sessao desregistrada apos o EOF")
-    assert(edgeState.tunnelLossProbe.count == edgeTunnelLossThreshold(), "EOF abrupto contou na sonda")
+    need(offline, "falhou")
+    need(edgeState.tunnelLossProbe.count == edgeTunnelLossThreshold(), "falhou")
     var incidents = registry.allIncidents()
-    assert(incidents.size == 1, "limiar abre o global")
+    need(incidents.size == 1, "falhou")
     if (incidents.size == 1) {
-        assert(incidents.get(0).kind == incidentEdgeTunnelLosses(), "sinal da perda")
-        assert(incidents.get(0).accountId.length == 0, "escopo global, nao da conta")
-        assert(incidents.get(0).summary.indexOf("notebook") < 0, "sem nome de device no incidente")
+        need(incidents.get(0).kind == incidentEdgeTunnelLosses(), "falhou")
+        need(incidents.get(0).accountId.length == 0, "falhou")
+        need(incidents.get(0).summary.indexOf("notebook") < 0, "falhou")
     }
     var text = readTextOr(edgeRuntimeLogPath(), "")
-    assert(text.indexOf("tunel perdido: EOF do agent (") >= 0, "perda deixa palavra no arquivo: " + text)
-    assert(text.indexOf(deviceId) < 0, "o device da sessao perdida nao vaza para o arquivo")
-    assert(text.indexOf("kfc_") < 0, "nenhum token vaza para o arquivo")
+    need(text.indexOf("tunel perdido: EOF do agent (") >= 0, "falhou")
+    need(text.indexOf(deviceId) < 0, "falhou")
+    need(text.indexOf("kfc_") < 0, "falhou")
 
     // Parada limpa NAO e perda: segunda sessao fica viva, o stop manda
     // GOAWAY para todas (goawayAll marca antes de fechar) e o EOF que chega
@@ -493,7 +493,7 @@ test "incidentes: tunel perdido abruptamente abre incidente e deixa palavra", "i
             tries = tries - 1
         }
     }
-    assert(online2, "segunda sessao registrada")
+    need(online2, "falhou")
     var before = edgeState.tunnelLossProbe.count
     var incidentCount = registry.allIncidents().size
     writeTextTo(edgeStop, "stop")
@@ -506,12 +506,12 @@ test "incidentes: tunel perdido abruptamente abre incidente e deixa palavra", "i
             waits2 = waits2 - 1
         }
     }
-    assert(gone, "GOAWAY de parada desregistra")
-    assert(edgeState.tunnelLossProbe.count == before, "GOAWAY de parada nao e perda")
-    assert(registry.allIncidents().size == incidentCount, "parada limpa nao duplica incidente")
+    need(gone, "falhou")
+    need(edgeState.tunnelLossProbe.count == before, "falhou")
+    need(registry.allIncidents().size == incidentCount, "falhou")
     conn2.close()
 
-    assert(waitForPort(controlPort, 60), "encerra")
+    need(waitForPort(controlPort, 60), "falhou")
 }
 
 // Expiracao em massa de kfs_ (Fase 17 slice 1, ultimo sinal do desenho):
@@ -522,47 +522,47 @@ test "incidentes: tunel perdido abruptamente abre incidente e deixa palavra", "i
 // janela significam rotacao quebrada ou estado adulterado.
 test "incidentes: expiração em massa de kfs_ abre incidente da conta", "incident-expiry" {
     // Sinal e limites travados na fonte unica.
-    assert(incidentSeverityFor(incidentMassTokenExpiry()) == "WARN", "expiracao em massa e WARN")
-    assert(incidentSummaryFor(incidentMassTokenExpiry()).length > 0, "resumo presente")
-    assert(limitMassTokenExpiryThreshold() == 3, "limiar de expiracao travado")
-    assert(limitMassTokenExpiryWindowMs() == 300000, "janela de expiracao travada")
-    assert(incidentMassTokenExpiry() != incidentBulkTokenRevokes(), "sinal distinto do revoke em lote")
-    assert(incidentSummaryFor(incidentMassTokenExpiry()) != incidentSummaryFor(incidentBulkTokenRevokes()), "resumos distintos")
+    need(incidentSeverityFor(incidentMassTokenExpiry()) == "WARN", "falhou")
+    need(incidentSummaryFor(incidentMassTokenExpiry()).length > 0, "falhou")
+    need(limitMassTokenExpiryThreshold() == 3, "falhou")
+    need(limitMassTokenExpiryWindowMs() == 300000, "falhou")
+    need(incidentMassTokenExpiry() != incidentBulkTokenRevokes(), "falhou")
+    need(incidentSummaryFor(incidentMassTokenExpiry()) != incidentSummaryFor(incidentBulkTokenRevokes()), "falhou")
 
     // Detector puro: abaixo do limiar nao abre; no limiar abre; idempotente.
     var registry = Registry(incidentsPath("expiry"))
     var mel = registry.createAccount("mel", "m@e.com", "segredo")
-    assert(registry.detectMassTokenExpiry(mel.id, time.now(), 1) == null, "uma vencida nao abre")
-    assert(registry.allIncidents().size == 0, "nada aberto ainda")
-    assert(registry.detectMassTokenExpiry(mel.id, time.now(), 1) == null, "duas vencidas nao abrem")
+    need(registry.detectMassTokenExpiry(mel.id, time.now(), 1) == null, "falhou")
+    need(registry.allIncidents().size == 0, "falhou")
+    need(registry.detectMassTokenExpiry(mel.id, time.now(), 1) == null, "falhou")
     var opened = registry.detectMassTokenExpiry(mel.id, time.now(), 1)
-    assert(opened != null, "terceira fecha o limiar")
+    need(opened != null, "falhou")
     if (opened != null) {
-        assert(opened.kind == incidentMassTokenExpiry(), "sinal da expiracao")
-        assert(opened.accountId == mel.id, "escopo da conta dona")
-        assert(opened.severity == "WARN", "WARN")
-        assert(opened.summary.indexOf("kfs_") < 0, "sem credencial no resumo")
-        assert(opened.summary.indexOf("mel") < 0, "sem handle no resumo")
+        need(opened.kind == incidentMassTokenExpiry(), "falhou")
+        need(opened.accountId == mel.id, "falhou")
+        need(opened.severity == "WARN", "falhou")
+        need(opened.summary.indexOf("kfs_") < 0, "falhou")
+        need(opened.summary.indexOf("mel") < 0, "falhou")
     }
     var again = registry.detectMassTokenExpiry(mel.id, time.now(), 1)
-    assert(again == null, "acima do limiar nao duplica")
-    assert(registry.incidentsForAccount(mel.id, true).size == 1, "um incidente so")
+    need(again == null, "falhou")
+    need(registry.incidentsForAccount(mel.id, true).size == 1, "falhou")
 
     // Janela vencida reseta: nao carrega contagem antiga para a proxima.
     var stale = Registry(incidentsPath("expiry2"))
     var ana = stale.createAccount("ana", "a@e.com", "segredo")
     stale.detectMassTokenExpiry(ana.id, time.now() - limitMassTokenExpiryWindowMs() - 1000, 2)
-    assert(stale.allIncidents().size == 0, "janela vencida nao soma")
-    assert(stale.detectMassTokenExpiry(ana.id, time.now(), 2) == null, "2 apos reset ainda nao abre")
-    assert(stale.detectMassTokenExpiry(ana.id, time.now(), 1) != null, "3 apos reset abre")
+    need(stale.allIncidents().size == 0, "falhou")
+    need(stale.detectMassTokenExpiry(ana.id, time.now(), 2) == null, "falhou")
+    need(stale.detectMassTokenExpiry(ana.id, time.now(), 1) != null, "falhou")
 
     // Contas isoladas: uma conta vencendo nao conta para outra.
     var both = Registry(incidentsPath("expiry3"))
     var um = both.createAccount("uma", "uma@e.com", "segredo")
     var dois = both.createAccount("duas", "duas@e.com", "segredo")
     both.detectMassTokenExpiry(um.id, time.now(), 2)
-    assert(both.detectMassTokenExpiry(dois.id, time.now(), 1) == null, "sondas por conta sao separadas")
-    assert(both.allIncidents().size == 0, "nada aberto com 2+1 em contas diferentes")
+    need(both.detectMassTokenExpiry(dois.id, time.now(), 1) == null, "falhou")
+    need(both.allIncidents().size == 0, "falhou")
 }
 
 // Caminho REAL: a varredura preguicosa de `serviceByServiceToken` e quem
@@ -586,28 +586,28 @@ test "incidentes: varredura preguicosa de kfs_ abre o incidente da conta certa",
     registry.serviceTokens.add(ServiceToken(anaSvc.id, ana.id, tokenHash("kfs_ana_1"), past, stale))
 
     // Qualquer validacao dispara a varredura. Um token inexistente ja basta.
-    assert(registry.serviceByServiceToken("kfs_nao_existe") == null, "token invalido nao resolve")
+    need(registry.serviceByServiceToken("kfs_nao_existe") == null, "falhou")
     // mel tem 2 vencidas na janela: abaixo do limiar (3), nada abre.
-    assert(registry.allIncidents().size == 0, "duas vencidas de mel nao abrem")
-    assert(registry.incidentsForAccount(ana.id, false).size == 0, "uma vencida de ana nao abre")
+    need(registry.allIncidents().size == 0, "falhou")
+    need(registry.incidentsForAccount(ana.id, false).size == 0, "falhou")
 
     // Mais uma credencial vencida de mel: a proxima varredura fecha o limiar.
     registry.serviceTokens.add(ServiceToken(melSvc.id, mel.id, tokenHash("kfs_mel_3"), past, stale))
-    assert(registry.serviceByServiceToken("kfs_nao_existe") == null, "varredura roda de novo")
+    need(registry.serviceByServiceToken("kfs_nao_existe") == null, "falhou")
     var melIncidents = registry.incidentsForAccount(mel.id, false)
-    assert(melIncidents.size == 1, "terceira vencida de mel abre o incidente da conta")
+    need(melIncidents.size == 1, "falhou")
     if (melIncidents.size == 1) {
-        assert(melIncidents.get(0).kind == incidentMassTokenExpiry(), "sinal certo")
-        assert(melIncidents.get(0).severity == "WARN", "WARN")
+        need(melIncidents.get(0).kind == incidentMassTokenExpiry(), "falhou")
+        need(melIncidents.get(0).severity == "WARN", "falhou")
         // Privacidade: nem servico, nem token, nem hostname no sinal.
-        assert(melIncidents.get(0).summary.indexOf("kfs_") < 0, "sem credencial")
-        assert(melIncidents.get(0).summary.indexOf("site") < 0, "sem nome de servico")
+        need(melIncidents.get(0).summary.indexOf("kfs_") < 0, "falhou")
+        need(melIncidents.get(0).summary.indexOf("site") < 0, "falhou")
     }
     // Ana continua sem incidente: a sonda nao misturou contas.
-    assert(registry.incidentsForAccount(ana.id, false).size == 0, "ana nao herda o incidente de mel")
+    need(registry.incidentsForAccount(ana.id, false).size == 0, "falhou")
 
     // A poda levou as 4 vencidas; as validas (nenhuma aqui) ficariam.
-    assert(registry.serviceTokens.size == 0, "todas as vencidas podadas")
+    need(registry.serviceTokens.size == 0, "falhou")
 }
 
 // E2E do caminho real: um servico AUTHENTICATED publicado, token errado
@@ -622,7 +622,7 @@ test "incidentes: 401 real no Edge alimenta a sonda de autenticacao", "incident-
     var app = web.app()
     app.get("/") { return "svc-auth" }
     var server = spawn { app.listen(localSvc) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-inc-authe-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -632,9 +632,9 @@ test "incidentes: 401 real no Edge alimenta a sonda de autenticacao", "incident-
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -643,7 +643,7 @@ test "incidentes: 401 real no Edge alimenta a sonda de autenticacao", "incident-
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"secret\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}"
     var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
-    assert(statusOf(published) == 200, "AUTHENTICATED publicado")
+    need(statusOf(published) == 200, "falhou")
     var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
 
     // Sem o Agent a rota existe mas o device esta OFFLINE: o 401 por
@@ -661,19 +661,19 @@ test "incidentes: 401 real no Edge alimenta a sonda de autenticacao", "incident-
     edgeState.authFailureProbe.windowStart = time.now()
 
     // Dois 401: abaixo do limiar, nada abre.
-    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", "kfs_errado1")) == 401, "errado -> 401")
-    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", "kfs_errado2")) == 401, "errado -> 401")
-    assert(registry.allIncidents().size == 0, "dois 401 nao abrem")
-    assert(edgeState.authFailureProbe.count == base + 2, "sonda contou os dois")
-    assert(edgeState.refusalProbe.count == 0, "sonda de recusas intacta")
+    need(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", "kfs_errado1")) == 401, "falhou")
+    need(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", "kfs_errado2")) == 401, "falhou")
+    need(registry.allIncidents().size == 0, "falhou")
+    need(edgeState.authFailureProbe.count == base + 2, "falhou")
+    need(edgeState.refusalProbe.count == 0, "falhou")
 
     // Terceiro 401 fecha o limiar (3) e abre o incidente global.
-    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", "kfs_errado3")) == 401, "errado -> 401")
+    need(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", "kfs_errado3")) == 401, "falhou")
     var incidents = registry.allIncidents()
-    assert(incidents.size == 1, "limiar abre o global")
+    need(incidents.size == 1, "falhou")
     if (incidents.size == 1) {
-        assert(incidents.get(0).kind == incidentEdgeAuthFailures(), "sinal do 401")
-        assert(incidents.get(0).accountId.length == 0, "escopo global, nao da conta")
+        need(incidents.get(0).kind == incidentEdgeAuthFailures(), "falhou")
+        need(incidents.get(0).accountId.length == 0, "falhou")
     }
 
     // Token honesto nao conta nem reabre (incidente segue idempotente).
@@ -689,22 +689,22 @@ test "incidentes: 401 real no Edge alimenta a sonda de autenticacao", "incident-
             attempts = attempts - 1
         }
     }
-    assert(online, "agent registrado no edge")
+    need(online, "falhou")
     var minted = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
-    assert(statusOf(minted) == 200, "token de servico emitido")
+    need(statusOf(minted) == 200, "falhou")
     var serviceToken = mapField(json.decode<Map<String, String>>(bodyOf(minted)), "token")
     var before = edgeState.authFailureProbe.count
-    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", serviceToken)) == 200, "token bom -> 200")
-    assert(edgeState.authFailureProbe.count == before, "200 nao incrementa a sonda")
-    assert(registry.allIncidents().size == 1, "sem incidente duplicado")
+    need(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", serviceToken)) == 200, "falhou")
+    need(edgeState.authFailureProbe.count == before, "falhou")
+    need(registry.allIncidents().size == 1, "falhou")
 
     // O incidente nao carrega hostname nem token (regra de privacidade).
-    assert(incidents.get(0).summary.indexOf("secret.mel") < 0, "sem hostname no incidente")
-    assert(incidents.get(0).summary.indexOf("kfs_") < 0, "sem token no incidente")
+    need(incidents.get(0).summary.indexOf("secret.mel") < 0, "falhou")
+    need(incidents.get(0).summary.indexOf("kfs_") < 0, "falhou")
 
     writeTextTo(edgeStop, "stop")
     writeTextTo(agentStop, "stop")
-    assert(waitForPort(controlPort, 60), "encerra")
+    need(waitForPort(controlPort, 60), "falhou")
 }
 
 test "incidentes: template de post-mortem tem as 5 secoes e sem dado de cliente", "postmortem-template" {
@@ -714,21 +714,21 @@ test "incidentes: template de post-mortem tem as 5 secoes e sem dado de cliente"
     // do SECURITY.md (security-policy). Caminho relativo ao repo: o
     // runner usa a raiz como cwd.
     var doc = readTextOr("docs/incidents/README.md", "")
-    assert(doc.length > 0, "template existe e nao e vazio")
-    assert(doc.indexOf("## Causa") >= 0, "secao causa")
-    assert(doc.indexOf("## Impacto") >= 0, "secao impacto")
-    assert(doc.indexOf("## Timeline") >= 0, "secao timeline")
-    assert(doc.indexOf("## Correção") >= 0, "secao correcao")
-    assert(doc.indexOf("## Ação preventiva") >= 0, "secao preventiva")
+    need(doc.length > 0, "falhou")
+    need(doc.indexOf("## Causa") >= 0, "falhou")
+    need(doc.indexOf("## Impacto") >= 0, "falhou")
+    need(doc.indexOf("## Timeline") >= 0, "falhou")
+    need(doc.indexOf("## Correção") >= 0, "falhou")
+    need(doc.indexOf("## Ação preventiva") >= 0, "falhou")
     // O template cita os comandos reais do ciclo (se um mudar de nome,
     // a trava quebra de proposito — procedimento desatualizado e pior
     // que nenhum, porque o operador segue passo que nao funciona).
-    assert(doc.indexOf("kof cloud freeze") >= 0, "caminho contencao")
-    assert(doc.indexOf("incidents --resolve") >= 0, "caminho resolve")
+    need(doc.indexOf("kof cloud freeze") >= 0, "falhou")
+    need(doc.indexOf("incidents --resolve") >= 0, "falhou")
     // Regra de privacidade do template: orienta a nunca registrar dado
     // de cliente (mesma regra de log/metrica/audit).
-    assert(doc.indexOf("kfs_") >= 0, "cita o que nao vazar")
-    assert(doc.indexOf("sem hostname") >= 0, "proibe hostname")
+    need(doc.indexOf("kfs_") >= 0, "falhou")
+    need(doc.indexOf("sem hostname") >= 0, "falhou")
 }
 test "incidents: --resolve solto ou repetido barra antes de qualquer rede", "incident-usage" {
     // `--resolve` sem valor saia 0 e LISTAVA os incidentes: o operador achava
@@ -744,16 +744,16 @@ test "incidents: --resolve solto ou repetido barra antes de qualquer rede", "inc
     var registry = Registry("/tmp/kofcloud-inc-usage2-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control no ar")
+    need(waitForPort(port, 60), "falhou")
     var url = "http://127.0.0.1:" + intToString(port)
     var token = loginOrCreate(url, "mel", "segredo")
     var prior = readTextOr(sessionPath(), "")
     saveSession(LocalSession("", "mel", token, url))
 
-    assert(cmdIncidents(listOf("--resolve")) == 1, "solto barra")
-    assert(cmdIncidents(listOf("--resolve", "id-um", "--resolve", "id-dois")) == 1, "repetida barra")
+    need(cmdIncidents(listOf("--resolve")) == 1, "falhou")
+    need(cmdIncidents(listOf("--resolve", "id-um", "--resolve", "id-dois")) == 1, "falhou")
     // Posicional solto continua barrando.
-    assert(cmdIncidents(listOf("lixo")) == 1, "posicional solto barra")
+    need(cmdIncidents(listOf("lixo")) == 1, "falhou")
 
     if (prior.length == 0) {
         File(sessionPath()).delete()
@@ -767,7 +767,7 @@ test "incidents: --resolve com valor segue ate o control plane", "incident-usage
     var registry = Registry("/tmp/kofcloud-inc-usage-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control no ar")
+    need(waitForPort(port, 60), "falhou")
     var url = "http://127.0.0.1:" + intToString(port)
     var token = loginOrCreate(url, "mel", "segredo")
     var prior = readTextOr(sessionPath(), "")
@@ -776,7 +776,7 @@ test "incidents: --resolve com valor segue ate o control plane", "incident-usage
     // Id inexistente: o comando chega ao control plane e a API responde
     // 404 KCF125 (exit 1) — a recusa acontece la, nao no parse local.
     var code = cmdIncidents(listOf("--resolve", "incidente-que-nao-existe"))
-    assert(code == 1, "id inexistente -> 404 KCF125 da API (exit " + intToString(code) + ")")
+    need(code == 1, "falhou")
 
     if (prior.length == 0) {
         File(sessionPath()).delete()
@@ -809,8 +809,8 @@ test "incidente: suspensao em lote abre bulk_suspensions (WARN)", "incident-susp
     var db = registry.publishService(mel, device.id, "db", "127.0.0.1", 5432, "http", "PRIVATE", "", "")
 
     // Dois suspends: abaixo do limiar (3), nada abre.
-    assert(registry.suspendService(mel.id, site.id), "suspende site")
-    assert(registry.suspendService(mel.id, api.id), "suspende api")
+    need(registry.suspendService(mel.id, site.id), "falhou")
+    need(registry.suspendService(mel.id, api.id), "falhou")
     var before = registry.incidentsForAccount(mel.id, false)
     var bulkBefore = 0
     for (var incident in before) {
@@ -818,28 +818,28 @@ test "incidente: suspensao em lote abre bulk_suspensions (WARN)", "incident-susp
             bulkBefore = bulkBefore + 1
         }
     }
-    assert(bulkBefore == 0, "dois suspends nao abrem")
+    need(bulkBefore == 0, "falhou")
 
     // Terceiro (limiar): abre WARN, escopo da conta.
-    assert(registry.suspendService(mel.id, db.id), "suspende db")
+    need(registry.suspendService(mel.id, db.id), "falhou")
     var opened = bulkSuspensionIncident(registry, mel.id)
-    assert(opened != null, "incidente bulk_suspensions aberto")
+    need(opened != null, "falhou")
     if (opened != null) {
-        assert(opened.severity == severityWarn(), "severidade WARN")
-        assert(opened.accountId == mel.id, "escopo da conta")
-        assert(opened.summary.indexOf("suspended") >= 0, "resumo diz suspended")
+        need(opened.severity == severityWarn(), "falhou")
+        need(opened.accountId == mel.id, "falhou")
+        need(opened.summary.indexOf("suspended") >= 0, "falhou")
     }
 
     // Idempotente: mais um suspend nao abre outro (o mesmo e o sinal).
     var db2 = registry.publishService(mel, device.id, "db2", "127.0.0.1", 5433, "http", "PRIVATE", "", "")
-    assert(registry.suspendService(mel.id, db2.id), "quarto suspend")
+    need(registry.suspendService(mel.id, db2.id), "falhou")
     var after = bulkSuspensionIncident(registry, mel.id)
     var openedId = ""
     if (opened != null) {
         openedId = opened.id
     }
     if (after != null) {
-        assert(after.id == openedId, "mesmo incidente (idempotente)")
+        need(after.id == openedId, "falhou")
     }
     var count = 0
     for (var incident in registry.incidentsForAccount(mel.id, false)) {
@@ -847,16 +847,16 @@ test "incidente: suspensao em lote abre bulk_suspensions (WARN)", "incident-susp
             count = count + 1
         }
     }
-    assert(count == 1, "um incidente so")
+    need(count == 1, "falhou")
 
     // Suspend de device tambem alimenta a mesma sinal (device.suspended).
     var dev2 = registry.registerDevice(mel, "srv", "pk2")
-    assert(registry.suspendDevice(mel.id, dev2.id), "suspende device")
-    assert(count == 1, "device suspend nao duplica")
+    need(registry.suspendDevice(mel.id, dev2.id), "falhou")
+    need(count == 1, "falhou")
 
     // Conta sem suspensos: nada.
     var ana = registry.createAccount("ana", "ana@e.com", "segredo")
-    assert(bulkSuspensionIncident(registry, ana.id) == null, "outra conta intocada")
+    need(bulkSuspensionIncident(registry, ana.id) == null, "falhou")
 }
 
 // Varredura PERIODICA (laco do serve): numa conta ociosa ninguem valida,
@@ -898,26 +898,26 @@ test "incidentes: varredura periodica poda credenciais ociosas e abre o incident
         time.sleep(20)
         tries = tries + 1
     }
-    assert(registry.serviceTokens.size == 1, "laco podou as vencidas e manteve a valida")
-    assert(registry.tokens.size == 1, "kfc_ valida fica e a vencida saiu")
-    assert(registry.pruneExpiredAccountTokens() == 0, "kfc_ vencida ja saiu no laco")
+    need(registry.serviceTokens.size == 1, "falhou")
+    need(registry.tokens.size == 1, "falhou")
+    need(registry.pruneExpiredAccountTokens() == 0, "falhou")
 
     // O sinal chega na conta dona SEM nenhuma validacao (conta ociosa):
     // mel tinha 3 vencidas na janela, ana 1.
     var melIncidents = registry.incidentsForAccount(mel.id, false)
-    assert(melIncidents.size == 1, "laco abre o incidente da conta ociosa")
+    need(melIncidents.size == 1, "falhou")
     if (melIncidents.size == 1) {
-        assert(melIncidents.get(0).kind == incidentMassTokenExpiry(), "sinal certo")
-        assert(melIncidents.get(0).severity == "WARN", "WARN")
+        need(melIncidents.get(0).kind == incidentMassTokenExpiry(), "falhou")
+        need(melIncidents.get(0).severity == "WARN", "falhou")
         // Privacidade: nem credencial, nem servico, nem handle no resumo.
-        assert(melIncidents.get(0).summary.indexOf("kfs_") < 0, "sem credencial no resumo")
-        assert(melIncidents.get(0).summary.indexOf("site") < 0, "sem servico no resumo")
-        assert(melIncidents.get(0).summary.indexOf("mel") < 0, "sem handle no resumo")
+        need(melIncidents.get(0).summary.indexOf("kfs_") < 0, "falhou")
+        need(melIncidents.get(0).summary.indexOf("site") < 0, "falhou")
+        need(melIncidents.get(0).summary.indexOf("mel") < 0, "falhou")
     }
-    assert(registry.incidentsForAccount(ana.id, false).size == 0, "uma vencida nao abre")
+    need(registry.incidentsForAccount(ana.id, false).size == 0, "falhou")
     // Idempotente: segunda varredura nao acha nada nem duplica incidente.
-    assert(registry.sweepExpiredCredentials() == 0, "segunda varredura nao acha nada")
-    assert(registry.incidentsForAccount(mel.id, false).size == 1, "sem duplicar")
+    need(registry.sweepExpiredCredentials() == 0, "falhou")
+    need(registry.incidentsForAccount(mel.id, false).size == 1, "falhou")
 
     // O laco para no stopFile (mesma sentenca do serve).
     writeTextTo(stop, "pare")
@@ -932,55 +932,55 @@ test "plato: decisao pura (aberto, fechado na janela, reincidencia CRIT)", "inci
     var window = 3600000L
     // Nunca disparou: abre com o sinal de sempre, WARN.
     var fresh = signalOutcomeWith(false, listOf<IncidentPlateau>(), incidentEdgeRefusals(), "acc", now, window)
-    assert(fresh.open == "open", "primeira vez abre")
-    assert(fresh.kind == incidentEdgeRefusals(), "primeira vez nao reincide")
+    need(fresh.open == "open", "falhou")
+    need(fresh.kind == incidentEdgeRefusals(), "falhou")
     // Aberto e ainda na janela: nada (o incidente ja diz).
     var saved = listOf(IncidentPlateau(incidentEdgeRefusals(), "acc", "4000000", "4900000", "0"))
     var stillOpen = signalOutcomeWith(true, saved, incidentEdgeRefusals(), "acc", now, window)
-    assert(stillOpen.open == "none", "aberto na janela cala")
+    need(stillOpen.open == "none", "falhou")
     // Fechado dentro da janela: plato, reincidencia contada, nada abre.
     var closed = signalOutcomeWith(false, saved, incidentEdgeRefusals(), "acc", now, window)
-    assert(closed.open == "none", "fechado na janela cala")
-    assert(closed.reopenCount == 1, "reincidencia contada")
+    need(closed.open == "none", "falhou")
+    need(closed.reopenCount == 1, "falhou")
     // Fechado e fora da janela: reincidencia — abre como `<kind>_reopened`.
     var stale = listOf(IncidentPlateau(incidentEdgeRefusals(), "acc", "100000", "100000", "0"))
     var late = signalOutcomeWith(false, stale, incidentEdgeRefusals(), "acc", now, window)
-    assert(late.open == "open", "fora da janela reabre")
-    assert(late.kind == incidentEdgeRefusals() + "_reopened", "sinal de reincidencia")
-    assert(incidentSeverityFor(late.kind) == "CRIT", "reincidencia e CRIT")
-    assert(incidentBaseKind(late.kind) == incidentEdgeRefusals(), "base preservada")
-    assert(incidentIsReopen(incidentBulkDeviceRevokes()) == false, "base nao e reincidencia")
+    need(late.open == "open", "falhou")
+    need(late.kind == incidentEdgeRefusals() + "_reopened", "falhou")
+    need(incidentSeverityFor(late.kind) == "CRIT", "falhou")
+    need(incidentBaseKind(late.kind) == incidentEdgeRefusals(), "falhou")
+    need(incidentIsReopen(incidentBulkDeviceRevokes()) == false, "falhou")
 }
 
 test "plato: guarda vencida com o incidente aberto volta a disparar sem abrir", "incident-plateau" {
     var now = 5000000L
     var stale = listOf(IncidentPlateau(incidentEdgeRefusals(), "acc", "100000", "100000", "0"))
     var refire = signalOutcomeWith(true, stale, incidentEdgeRefusals(), "acc", now, 3600000L)
-    assert(refire.open == "refire", "aberto e vencido reinicia a guarda")
-    assert(refire.lastFiredAt == now, "guarda atualizada")
+    need(refire.open == "refire", "falhou")
+    need(refire.lastFiredAt == now, "falhou")
     // Janela de 1 h contada de `lastFiredAt`: 100000 + 3600000 = 3700000 < 5000000.
-    assert(now - 100000L > 3600000L, "cenario: guarda vencida")
+    need(now - 100000L > 3600000L, "falhou")
     // Janela invalida recai no default (1 h): ninguem desliga o plato pelo config.
     var saved = listOf(IncidentPlateau(incidentEdgeRefusals(), "acc", "4000000", "4900000", "0"))
     var degenerated = signalOutcomeWith(false, saved, incidentEdgeRefusals(), "acc", now, 0L)
-    assert(degenerated.open == "none", "janela 0 usa o default")
-    assert(limitIncidentPlateauWindowMs() == 3600000L, "janela do plato travada")
+    need(degenerated.open == "none", "falhou")
+    need(limitIncidentPlateauWindowMs() == 3600000L, "falhou")
 }
 
 test "plato: embasamento ilegivel no estado abre como primeira vez", "incident-plateau" {
     var now = 1000000L
     var corrupt = signalFromPlateaus(mapOf(), false, "x/y", incidentEdgeRefusals(), "", now, 3600000L)
-    assert(corrupt.open == "open", "sem plato abre")
-    assert(corrupt.kind == incidentEdgeRefusals(), "sem plato nao e reincidencia")
+    need(corrupt.open == "open", "falhou")
+    need(corrupt.kind == incidentEdgeRefusals(), "falhou")
     var fakeMap = mapOf()
     fakeMap.put("bulk_device_revokes/acc", "lixo")
     var junk = signalFromPlateaus(fakeMap, false, "bulk_device_revokes/acc", incidentBulkDeviceRevokes(), "acc", now, 3600000L)
-    assert(junk.open == "open", "embasamento ilegivel abre como primeira vez")
-    assert(incidentIntOr("", 7) == 7, "vazio usa fallback")
-    assert(incidentIntOr("12x", 7) == 7, "ilegivel usa fallback")
-    assert(incidentIntOr("42", 7) == 42, "numero lido")
-    assert(incidentLongOr("", 5L) == 5L, "Long vazio usa fallback")
-    assert(incidentLongOr("1700000000001", 0L) == 1700000000001L, "Long lido sem estouro 32 bits")
+    need(junk.open == "open", "falhou")
+    need(incidentIntOr("", 7) == 7, "falhou")
+    need(incidentIntOr("12x", 7) == 7, "falhou")
+    need(incidentIntOr("42", 7) == 42, "falhou")
+    need(incidentLongOr("", 5L) == 5L, "falhou")
+    need(incidentLongOr("1700000000001", 0L) == 1700000000001L, "falhou")
 }
 
 test "plato: reincidencia externa (fora da janela) abre CRIT e sobrevive ao restart", "incident-plateau" {
@@ -988,30 +988,30 @@ test "plato: reincidencia externa (fora da janela) abre CRIT e sobrevive ao rest
     var registry = Registry(path)
     var account = registry.createAccount("mel", "m@e.com", "segredo")
     var first = registry.raiseIncident(incidentEdgeRefusals(), "")
-    assert(first != null, "primeira vez abre")
+    need(first != null, "falhou")
     // Fecha e envelhece a guarda alem da janela: o sinal voltou tarde.
     if (first != null) {
-        assert(first.severity == "WARN", "primeira vez WARN")
+        need(first.severity == "WARN", "falhou")
         registry.resolveIncident(first.id)
     }
     registry.setPlateauForTest(incidentEdgeRefusals(), "", "1000;1000;0")
     registry.save()
     var reopened = registry.raiseIncident(incidentEdgeRefusals(), "")
-    assert(reopened != null, "fora da janela reabre")
+    need(reopened != null, "falhou")
     if (reopened != null) {
-        assert(reopened.kind == incidentEdgeRefusals() + "_reopened", "sinal de reincidencia")
-        assert(reopened.severity == "CRIT", "reincidencia nasce CRIT")
-        assert(reopened.accountId == "", "escopo preservado")
+        need(reopened.kind == incidentEdgeRefusals() + "_reopened", "falhou")
+        need(reopened.severity == "CRIT", "falhou")
+        need(reopened.accountId == "", "falhou")
     }
     // O plato e PERSISTIDO: um restart no meio do ataque nao zera o sinal.
     var reloaded = Registry(path)
     var third = reloaded.raiseIncident(incidentEdgeRefusals(), "")
-    assert(third == null, "depois do restart o plato continua valendo")
+    need(third == null, "falhou")
     // Outro sinal/outra conta tem plato proprio.
     var other = reloaded.raiseIncident(incidentBulkTokenRevokes(), account.id)
-    assert(other != null, "sinal distinto abre")
+    need(other != null, "falhou")
     if (other != null) {
-        assert(other.severity == "WARN", "sinal distinto nao herda a reincidencia")
+        need(other.severity == "WARN", "falhou")
     }
 }
 
@@ -1024,13 +1024,13 @@ test "plato: freeze de conta abre UM incidente, nao um por servico", "incident-p
     registry.publishService(account, deviceId, "api", "127.0.0.1", 3001, "http", "PUBLIC", "", "")
     registry.publishService(account, deviceId, "docs", "127.0.0.1", 3002, "http", "PUBLIC", "", "")
     var result = registry.freezeAccount(account.id)
-    assert(result.ok, "congelou")
+    need(result.ok, "falhou")
     var freezes = 0
     for (var incident in registry.incidentsForAccount(account.id, true)) {
         if (incidentBaseKind(incident.kind) == incidentFreezeAccount()) {
             freezes = freezes + 1
         }
     }
-    assert(freezes == 1, "um incidente de freeze de conta, nao um por servico: " + intToString(freezes))
-    assert(result.incidentId.length > 0, "o id devolvido e o do incidente aberto")
+    need(freezes == 1, "falhou")
+    need(result.incidentId.length > 0, "falhou")
 }

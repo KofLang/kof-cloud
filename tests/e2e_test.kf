@@ -27,7 +27,7 @@ test "e2e: publicar um servico local e alcancar pela borda" {
         return "method=" + method()
     }
     var localServer = spawn { app.listen(localPort) }
-    assert(waitForPort(localPort, 60), "servico local no ar")
+    need(waitForPort(localPort, 60), "falhou")
 
     // 2. plataforma: control plane + edge, compartilhando um Registry
     var registry = Registry("/tmp/kofcloud-e2e-" + crypto.randomHex(4) + ".json")
@@ -38,9 +38,9 @@ test "e2e: publicar um servico local e alcancar pela borda" {
     File(edgeStop).delete()
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control plane no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http publico no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     // 3. conta + dispositivo
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"mel@example.com\",\"password\":\"segredo\"}", "")
@@ -54,13 +54,13 @@ test "e2e: publicar um servico local e alcancar pela borda" {
     // 4. publica o servico
     var publishBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localPort) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
     var published = httpPostJson(controlPort, "/v1/services", publishBody, token)
-    assert(statusOf(published) == 200, "servico publicado")
+    need(statusOf(published) == 200, "falhou")
 
     // 5. host desconhecido antes de conectar: 404
     var beforeConnect = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
-    assert(statusOf(beforeConnect) == 503, "servico publicado mas sem tunel -> 503")
+    need(statusOf(beforeConnect) == 503, "falhou")
     var unknownHost = httpGetRaw(httpPort, "/", "naoexiste.mel.kofcloud.io")
-    assert(statusOf(unknownHost) == 404, "host desconhecido -> 404")
+    need(statusOf(unknownHost) == 404, "falhou")
 
     // 6. agent conecta e serve
     var stopFile = "/tmp/kofcloud-e2e-stop-" + crypto.randomHex(4) + ".txt"
@@ -77,31 +77,31 @@ test "e2e: publicar um servico local e alcancar pela borda" {
             attempts = attempts - 1
         }
     }
-    assert(online, "agent registrado no edge")
+    need(online, "falhou")
 
     // 7. requisicao publica atravessa o tunel ate localhost
     var response = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
-    assert(statusOf(response) == 200, "200 pela borda")
-    assert(bodyOf(response) == "hello from localhost", "corpo veio do servico local")
+    need(statusOf(response) == 200, "falhou")
+    need(bodyOf(response) == "hello from localhost", "falhou")
 
 
     // 9. segunda requisicao no mesmo tunel (multiplexacao por requisicao)
     var second = httpGetRaw(httpPort, "/echo", "site.mel.kofcloud.io")
-    assert(statusOf(second) == 200, "200 na segunda")
-    assert(bodyOf(second) == "method=GET", "rota /echo")
+    need(statusOf(second) == 200, "falhou")
+    need(bodyOf(second) == "method=GET", "falhou")
 
     // encerra o servico local: o Agent deve reportar OFFLINE e a borda 503
     app.close()
     time.sleep(300)
     var offline = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
-    assert(statusOf(offline) == 503, "servico local fora -> 503")
+    need(statusOf(offline) == 503, "falhou")
 
     // Encerra o agente de forma limpa: o watchdog ve o arquivo-sentinela,
     // fecha a sessao e todas as tasks do Agent terminam — o runner retorna
     // sozinho, sem timeout.
     writeTextTo(stopFile, "stop")
     time.sleep(1500)
-    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    need(edgeState.isOnline(deviceId) == false, "falhou")
 
     // Encerra os listeners do Edge (accept bloqueado so cede ao close).
     writeTextTo(edgeStop, "stop")

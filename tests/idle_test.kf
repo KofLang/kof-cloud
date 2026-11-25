@@ -15,45 +15,45 @@ import testkit.Support
 // derrubar a sessao. O Agent reconecta sozinho; o Edge limpa a rota.
 
 test "idle: touch so em frame util; PING nao renova", "idle" {
-    assert(limitTunnelIdleMs() == 120000, "default 120 s")
-    assert(limitStreamIdleMs() == 30000, "default 30 s")
+    need(limitTunnelIdleMs() == 120000, "falhou")
+    need(limitStreamIdleMs() == 30000, "falhou")
     // Recuo seguro em fonte pura: 0 nao e "nunca derruba" — e derruba na
     // hora (sweep compara idle > limite; upstreamWaitMs herda o do tunel).
-    assert(tunnelIdleMsFrom(0) == 120000, "tunel zero recai no default")
-    assert(tunnelIdleMsFrom(-1000) == 120000, "tunel negativo recai no default")
-    assert(tunnelIdleMsFrom(60000) == 60000, "tunel positivo passa")
-    assert(streamIdleMsFrom(0) == 30000, "stream zero recai no default")
-    assert(streamIdleMsFrom(-1) == 30000, "stream negativo recai no default")
-    assert(streamIdleMsFrom(10000) == 10000, "stream positivo passa")
+    need(tunnelIdleMsFrom(0) == 120000, "falhou")
+    need(tunnelIdleMsFrom(-1000) == 120000, "falhou")
+    need(tunnelIdleMsFrom(60000) == 60000, "falhou")
+    need(streamIdleMsFrom(0) == 30000, "falhou")
+    need(streamIdleMsFrom(-1) == 30000, "falhou")
+    need(streamIdleMsFrom(10000) == 10000, "falhou")
     // Fonte unica do heartbeat (Edge anuncia, connect ecoa, Agent recai):
     // mudar no Limits muda os tres juntos. Recuo em fonte pura: com 0/neg
     // o pinger vira `time.sleep(0)` e martela PING sem parar (busy-loop).
-    assert(limitHeartbeatMs() == 15000, "heartbeat default 15 s")
-    assert(heartbeatMsFrom(0) == 15000, "heartbeat zero recai no default")
-    assert(heartbeatMsFrom(-1) == 15000, "heartbeat negativo recai no default")
-    assert(heartbeatMsFrom(3000) == 3000, "heartbeat positivo passa")
+    need(limitHeartbeatMs() == 15000, "falhou")
+    need(heartbeatMsFrom(0) == 15000, "falhou")
+    need(heartbeatMsFrom(-1) == 15000, "falhou")
+    need(heartbeatMsFrom(3000) == 3000, "falhou")
     // Mesmo passo nos dois sweepers (Edge + Agent): mudar num so lado
     // dessincronizava a deteccao de tunel zumbi. Recuo: com 0/neg o sweeper
     // gira sem parar (`time.sleep(0)`).
-    assert(limitIdleSweepMs() == 5000, "sweep default 5 s")
-    assert(idleSweepMsFrom(0) == 5000, "sweep zero recai no default")
-    assert(idleSweepMsFrom(-5) == 5000, "sweep negativo recai no default")
-    assert(idleSweepMsFrom(1000) == 1000, "sweep positivo passa")
+    need(limitIdleSweepMs() == 5000, "falhou")
+    need(idleSweepMsFrom(0) == 5000, "falhou")
+    need(idleSweepMsFrom(-5) == 5000, "falhou")
+    need(idleSweepMsFrom(1000) == 1000, "falhou")
     // Health local e refresh da tabela andam juntos (refresh = 6xhealth):
     // o fallback do Agent recai aqui quando a config vem sem health. Recuo:
     // com 0/neg o laco de health vira `time.sleep(0)` e sonda sem parar.
-    assert(limitHealthMs() == 5000, "health default 5 s")
-    assert(healthMsFrom(0) == 5000, "health zero recai no default")
-    assert(healthMsFrom(-1) == 5000, "health negativo recai no default")
-    assert(healthMsFrom(1000) == 1000, "health positivo passa")
+    need(limitHealthMs() == 5000, "falhou")
+    need(healthMsFrom(0) == 5000, "falhou")
+    need(healthMsFrom(-1) == 5000, "falhou")
+    need(healthMsFrom(1000) == 1000, "falhou")
     // O refresh deriva do health, entao o piso do health tambem o protege.
-    assert(limitRefreshMs(healthMsFrom(0)) == 30000, "health zerado ainda gera refresh valido")
+    need(limitRefreshMs(healthMsFrom(0)) == 30000, "falhou")
     // Fonte unica do refresh: o spawn e o fallback do refresher passam
     // pela mesma funcao (sem isso o `* 6` do chamador e o `30000` do
     // fallback andariam separados).
-    assert(limitRefreshMs(5000) == 30000, "refresh = 6x health")
-    assert(limitRefreshMs(0) == 30000, "refresh invalido recai no default")
-    assert(limitRefreshMs(-1) == 30000, "refresh negativo recai no default")
+    need(limitRefreshMs(5000) == 30000, "falhou")
+    need(limitRefreshMs(0) == 30000, "falhou")
+    need(limitRefreshMs(-1) == 30000, "falhou")
     // Polling do stopFile: Edge vigia o listener parado no accept (passo
     // curto), Agent vigia a sessao viva (passo um pouco maior) — valores
     // distintos de proposito, cada lado na sua fonte (last sleep cru).
@@ -61,36 +61,36 @@ test "idle: touch so em frame util; PING nao renova", "idle" {
     // IllegalArgumentException — o watcher morre na primeira passada e o
     // `disconnect` deixa de funcionar. Zero tambem recai (passo 0 gira sem
     // parar, gastando checagens de arquivo sem utilidade).
-    assert(stopFilePollMsFrom(0) == 100, "edge poll zero recai no default")
-    assert(stopFilePollMsFrom(-1) == 100, "edge poll negativo recai no default")
-    assert(stopFilePollMsFrom(50) == 50, "edge poll positivo passa")
-    assert(agentStopPollMsFrom(0) == 250, "agent poll zero recai no default")
-    assert(agentStopPollMsFrom(-10) == 250, "agent poll negativo recai no default")
-    assert(agentStopPollMsFrom(500) == 500, "agent poll positivo passa")
-    assert(stopFilePollMs() == 100, "poll do stopFile no Edge 100 ms")
-    assert(agentStopPollMs() == 250, "poll do stopFile no Agent 250 ms")
+    need(stopFilePollMsFrom(0) == 100, "falhou")
+    need(stopFilePollMsFrom(-1) == 100, "falhou")
+    need(stopFilePollMsFrom(50) == 50, "falhou")
+    need(agentStopPollMsFrom(0) == 250, "falhou")
+    need(agentStopPollMsFrom(-10) == 250, "falhou")
+    need(agentStopPollMsFrom(500) == 500, "falhou")
+    need(stopFilePollMs() == 100, "falhou")
+    need(agentStopPollMs() == 250, "falhou")
     var session = TunnelSession("s1", "d1", "a1", "")
     var t0 = session.lastActivityMs
-    assert(t0 > 0, "atividade inicial marcada")
+    need(t0 > 0, "falhou")
     time.sleep(15)
-    assert(session.idleMs() >= 0, "idle nao negativo")
+    need(session.idleMs() >= 0, "falhou")
     session.touch()
-    assert(session.lastActivityMs >= t0, "touch avanca")
+    need(session.lastActivityMs >= t0, "falhou")
 }
 
 test "idle: stream preso entra na lista; fechar limpa", "idle-stream" {
     var session = TunnelSession("s1", "d1", "a1", "")
     var a = session.openStream()
     var b = session.openStream()
-    assert(session.idleStreams(3600000).size == 0, "nada antigo ainda")
+    need(session.idleStreams(3600000).size == 0, "falhou")
     // Relogio em ms: dorme para garantir now > started (evita empate).
     time.sleep(20)
     var stale = session.idleStreams(0)
-    assert(stale.size == 2, "dois presos")
-    assert(session.streamStartedMs.size == 2, "inicio rastreado")
+    need(stale.size == 2, "falhou")
+    need(session.streamStartedMs.size == 2, "falhou")
     session.closeStream(a)
-    assert(session.idleStreams(0).size == 1, "fechar limpa o rastreio")
-    assert(session.streamCount() == 1, "um stream vivo")
+    need(session.idleStreams(0).size == 1, "falhou")
+    need(session.streamCount() == 1, "falhou")
 }
 
 test "idle: Edge derruba sessao ociosa e Agent reconecta", "idle-e2e" {
@@ -113,7 +113,7 @@ test "idle: Edge derruba sessao ociosa e Agent reconecta", "idle-e2e" {
             }
         }
     }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-idle-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -132,9 +132,9 @@ test "idle: Edge derruba sessao ociosa e Agent reconecta", "idle-e2e" {
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -143,7 +143,7 @@ test "idle: Edge derruba sessao ociosa e Agent reconecta", "idle-e2e" {
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "falhou")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 1000)
     var agentTask = spawn { runAgent(config, false) }
@@ -156,16 +156,16 @@ test "idle: Edge derruba sessao ociosa e Agent reconecta", "idle-e2e" {
             attempts = attempts - 1
         }
     }
-    assert(online, "agent registrado no edge")
+    need(online, "falhou")
 
     // Um request prova que o tunel serve; depois, silencio real: health TCP
     // contra listener cru nao flapa (1 STATUS inicial + nada) e PING nao
     // renova o idle por desenho. O sweeper (poll 5 s) derruba em ~8 s.
     // NOTE: o Agent roda com once=false e reconecta em seguida — por isso o
     // teste espera a TROCA de sessao (sessionId novo), nao offline estavel.
-    assert(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-idle", "tunel serve")
+    need(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-idle", "falhou")
     var oldSession = edgeState.sessionFor(deviceId)
-    assert(oldSession != null, "sessao existe")
+    need(oldSession != null, "falhou")
     var oldSessionId = ""
     if (oldSession != null) {
         oldSessionId = oldSession.sessionId
@@ -181,22 +181,22 @@ test "idle: Edge derruba sessao ociosa e Agent reconecta", "idle-e2e" {
             waits = waits - 1
         }
     }
-    assert(drained, "sweeper derrubou a sessao ociosa (nova sessao no lugar)")
+    need(drained, "falhou")
 
     // O túnel novo serve sem intervencao.
-    assert(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-idle", "tunel novo serve")
-    assert(metricValue(observability.metrics(), "kofcloud_edge_tunnel_refused_total_idle_timeout") >= 1, "kill contado")
+    need(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-idle", "falhou")
+    need(metricValue(observability.metrics(), "kofcloud_edge_tunnel_refused_total_idle_timeout") >= 1, "falhou")
     // Edge sem heartbeat (Fase 17 s1): a queda por ociosidade alimentou a
     // sonda propria e, no limiar, abriu o incidente global — sem device nem
     // hostname no sinal.
     var idleIncidents = registry.allIncidents()
-    assert(idleIncidents.size == 1, "queda por ociosidade abre o global")
+    need(idleIncidents.size == 1, "falhou")
     if (idleIncidents.size == 1) {
-        assert(idleIncidents.get(0).kind == incidentEdgeIdleTimeouts(), "sinal de ociosidade")
-        assert(idleIncidents.get(0).accountId.length == 0, "escopo global")
-        assert(idleIncidents.get(0).summary.indexOf("site.mel") < 0, "sem hostname no incidente")
+        need(idleIncidents.get(0).kind == incidentEdgeIdleTimeouts(), "falhou")
+        need(idleIncidents.get(0).accountId.length == 0, "falhou")
+        need(idleIncidents.get(0).summary.indexOf("site.mel") < 0, "falhou")
     }
-    assert(edgeState.refusalProbe.count == 0, "queda por ociosidade nao e recusa de tunel")
+    need(edgeState.refusalProbe.count == 0, "falhou")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
@@ -246,48 +246,48 @@ test "idle: stream preso leva RESET sem derrubar a sessao", "idle-reset" {
     // Simula inicio antigo: so o relogio interessa para a varredura.
     session.streamStartedMs.put(a, 0)
     var stale = session.idleStreams(30000)
-    assert(stale.size == 1 && stale.get(0) == a, "preso detectado")
+    need(stale.size == 1 && stale.get(0) == a, "falhou")
     // O RESET do protocolo e decidido pelo chamador; aqui so a deteccao.
-    assert(session.streamCount() == 1, "sessao intacta")
+    need(session.streamCount() == 1, "falhou")
 
     // O sweeper local deixou de ser mudo: palavra de derrubada diz
     // "localmente" (a do Edge diz o mesmo do lado dele) e o reset de
     // streams e contado em lote, nunca nomeado — contagem, nao conteudo.
     var drop = agentIdleDropLine(123000)
-    assert(drop == "sessao ociosa derrubada localmente (123000ms sem frame util)", "formato da palavra de derrubada: " + drop)
+    need(drop == "sessao ociosa derrubada localmente (123000ms sem frame util)", "falhou")
     var resets = agentStreamResetLine(2)
-    assert(resets == "2 stream(s) preso(s) resetado(s) por ociosidade", "formato da palavra de reset: " + resets)
-    assert(drop.indexOf("kfc_") < 0 && resets.indexOf("kfc_") < 0, "sem credencial nas palavras")
+    need(resets == "2 stream(s) preso(s) resetado(s) por ociosidade", "falhou")
+    need(drop.indexOf("kfc_") < 0 && resets.indexOf("kfc_") < 0, "falhou")
     // A marca vive so em memoria: nasce falsa e o fim do connectAndServe
     // le ela para jogar a verdade em vez de acusar o Edge pelo EOF que foi
     // decisao daqui. Trava com ANCORa de indentacao no wiring (o sweeper
     // marca antes de fechar; o throw honesto vem antes do generico) —
     // dead-code wrap re-indenta e fica vermelho (tecnica do c330b8c).
-    assert(session.idleDropped == false, "marca nasce falsa")
+    need(session.idleDropped == false, "falhou")
     var agentSrc = File("src/kofcloud/agent/Agent.kf").readText()
     var text = ""
     if (agentSrc != null) {
         text = agentSrc
     }
-    assert(text.length > 0, "le o Agent.kf")
+    need(text.length > 0, "falhou")
     var sweepStart = text.indexOf("void agentIdleSweeper(")
-    assert(sweepStart >= 0, "acha o sweeper")
+    need(sweepStart >= 0, "falhou")
     var sweepEnd = text.indexOf("// Reavalia o health", sweepStart)
-    assert(sweepEnd > sweepStart, "acha o fim do sweeper")
+    need(sweepEnd > sweepStart, "falhou")
     var sweep = text.substring(sweepStart, sweepEnd)
-    assert(sweep.indexOf("\n                agentEvent(\"warn\", agentIdleDropLine(idle))") >= 0, "derrubada emite a palavra no nivel do if")
-    assert(sweep.indexOf("\n                session.idleDropped = true") >= 0, "marca antes de fechar")
-    assert(sweep.indexOf("\n                session.close()") >= 0, "fecha apos a marca")
-    assert(sweep.indexOf("\n                if (stale.size > 0) {") >= 0, "palavra de reset so com vitimas")
-    assert(sweep.indexOf("\n                    agentEvent(\"warn\", agentStreamResetLine(stale.size))") >= 0, "palavra de reset no nivel do if")
+    need(sweep.indexOf("\n                agentEvent(\"warn\", agentIdleDropLine(idle))") >= 0, "falhou")
+    need(sweep.indexOf("\n                session.idleDropped = true") >= 0, "falhou")
+    need(sweep.indexOf("\n                session.close()") >= 0, "falhou")
+    need(sweep.indexOf("\n                if (stale.size > 0) {") >= 0, "falhou")
+    need(sweep.indexOf("\n                    agentEvent(\"warn\", agentStreamResetLine(stale.size))") >= 0, "falhou")
     var serveStart = text.indexOf("void connectAndServe(")
-    assert(serveStart >= 0, "acha o connectAndServe")
+    need(serveStart >= 0, "falhou")
     var serveEnd = text.indexOf("Bool handleAgentFrame(", serveStart)
-    assert(serveEnd > serveStart, "acha o fim do connectAndServe")
+    need(serveEnd > serveStart, "falhou")
     var serve = text.substring(serveStart, serveEnd)
-    assert(serve.indexOf("\n    if (session.idleDropped) {") >= 0, "throw honesto no nivel do corpo")
-    assert(serve.indexOf("sessao derrubada localmente por ociosidade") >= 0, "mensagem diz localmente")
-    assert(serve.indexOf("throw \"edge closed connection\"") >= 0, "EOF de peer continua com a mensagem de sempre")
+    need(serve.indexOf("\n    if (session.idleDropped) {") >= 0, "falhou")
+    need(serve.indexOf("sessao derrubada localmente por ociosidade") >= 0, "falhou")
+    need(serve.indexOf("throw \"edge closed connection\"") >= 0, "falhou")
 }
 
 test "edge: stop envia GOAWAY e o agent sai limpo (sem erro nem reconnect)", "shutdown" {
@@ -317,14 +317,14 @@ test "edge: stop envia GOAWAY e o agent sai limpo (sem erro nem reconnect)", "sh
     var app = web.app()
     app.get("/") { return "svc-shut" }
     var appServer = spawn { app.listen(localSvc) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var control = ControlPlane(registry, controlPort, "127.0.0.1", tunnelPort)
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -333,7 +333,7 @@ test "edge: stop envia GOAWAY e o agent sai limpo (sem erro nem reconnect)", "sh
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", accountToken)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "falhou")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 1000)
     var agentTask = spawn { runAgent(config, false) }
@@ -346,8 +346,8 @@ test "edge: stop envia GOAWAY e o agent sai limpo (sem erro nem reconnect)", "sh
             attempts = attempts - 1
         }
     }
-    assert(online, "agent online antes do shutdown")
-    assert(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-shut", "tunel serve antes")
+    need(online, "falhou")
+    need(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-shut", "falhou")
 
     var before = readTextOr(runtimeLog, "")
 
@@ -364,14 +364,14 @@ test "edge: stop envia GOAWAY e o agent sai limpo (sem erro nem reconnect)", "sh
             waits = waits - 1
         }
     }
-    assert(goawayLogged, "agent registrou o GOAWAY (saida limpa, nao queda)")
+    need(goawayLogged, "falhou")
     var after = readTextOr(runtimeLog, "")
     var tail = ""
     if (after.length > before.length) {
         tail = after.substring(before.length)
     }
-    assert(tail.indexOf("edge closed connection") < 0, "GOAWAY nao e queda (sem error de EOF)")
-    assert(tail.indexOf("reconnecting") < 0, "sem reconexao apos o shutdown")
+    need(tail.indexOf("edge closed connection") < 0, "falhou")
+    need(tail.indexOf("reconnecting") < 0, "falhou")
     // Parada coordenada: o agent encerra sozinho (o GOAWAY sai o processo).
     time.sleep(1500)
 

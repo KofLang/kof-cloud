@@ -15,37 +15,37 @@ import testkit.Support
 // impresso/log, e UMA fonte de DNS por vez.
 
 test "dns-cmd: uma fonte de DNS (webhook OU comando)", "dns-cmd-unit" {
-    assert(dnsCmdError("", "") == "", "sem fonte: manual")
-    assert(dnsCmdError("cloudflare ...", "") == "", "so comando: ok")
-    assert(dnsCmdError("", "https://hook.example/x") == "", "so webhook: ok")
+    need(dnsCmdError("", "") == "", "falhou")
+    need(dnsCmdError("cloudflare ...", "") == "", "falhou")
+    need(dnsCmdError("", "https://hook.example/x") == "", "falhou")
     var both = dnsCmdError("cloudflare ...", "https://hook.example/x")
-    assert(both.indexOf("UMA fonte") >= 0, "duas fontes barram: " + both)
+    need(both.indexOf("UMA fonte") >= 0, "falhou")
     // Espacos sozinhos nao contam como comando.
-    assert(dnsCmdError("   ", "") == "", "comando em branco = sem fonte")
+    need(dnsCmdError("   ", "") == "", "falhou")
 }
 
 test "dns-cmd: expansao de placeholders e previa sem executar", "dns-cmd-unit" {
     var expanded = dnsCmdExpand("cf dns create {hostname} CNAME {target} --service {service}", "api.example.com", "site", "site.mel.kofcloud.io")
-    assert(expanded == "cf dns create api.example.com CNAME site.mel.kofcloud.io --service site", "expande os tres: " + expanded)
+    need(expanded == "cf dns create api.example.com CNAME site.mel.kofcloud.io --service site", "falhou")
     // Sem placeholder: o comando segue intacto (operador pode hardcodar).
-    assert(dnsCmdExpand("cf dns list", "h", "s", "t") == "cf dns list", "sem placeholder intacto")
+    need(dnsCmdExpand("cf dns list", "h", "s", "t") == "cf dns list", "falhou")
     // Previa: diz que nada foi executado e mostra o comando expandido —
     // mas nunca acrescenta/ecoa valor de credencial (ela vem do ambiente).
     var preview = dnsCmdPreview(expanded)
-    assert(preview.indexOf("nada foi executado") >= 0, "previa honesta")
-    assert(preview.indexOf("api.example.com") >= 0, "comando expandido na previa")
+    need(preview.indexOf("nada foi executado") >= 0, "falhou")
+    need(preview.indexOf("api.example.com") >= 0, "falhou")
 }
 
 test "dns-cmd: execucao real com falha honesta", "dns-cmd-unit" {
     // Sucesso: exit 0 = "" (sem mensagem).
-    assert(dnsCmdRun("exit 0") == "", "exit 0 = ok")
+    need(dnsCmdRun("exit 0") == "", "falhou")
     // Falha: exit != 0 vira mensagem com o codigo (nunca aborta).
     var failed = dnsCmdRun("exit 3")
-    assert(failed.indexOf("exit 3") >= 0, "codigo na mensagem: " + failed)
+    need(failed.indexOf("exit 3") >= 0, "falhou")
     // Comando inexistente: o shell devolve 127 (medido) — falha honesta,
     // nunca execucao silenciosa nem aborto.
     var missing = dnsCmdRun("/bin/nao-existe-dns-x")
-    assert(missing.indexOf("falhou") >= 0, "inexistente falha: " + missing)
+    need(missing.indexOf("falhou") >= 0, "falhou")
 }
 
 test "dns-cmd: o alvo do CNAME e o hostname do SERVICO, nunca o do control", "dns-cmd-unit" {
@@ -56,30 +56,30 @@ test "dns-cmd: o alvo do CNAME e o hostname do SERVICO, nunca o do control", "dn
     // e o hostname do servico (`<servico>.<handle>.kofcloud.io`, o mesmo
     // que a instrucao `CNAME <host> -> <target>` do control plane imprime).
     var expected = serviceHostname("site", "mel")
-    assert(expected == "site.mel.kofcloud.io", "host do servico: " + expected)
-    assert(expected != webhookUrlHost("https://api.kofcloud.io"), "nao e o host do control")
+    need(expected == "site.mel.kofcloud.io", "falhou")
+    need(expected != webhookUrlHost("https://api.kofcloud.io"), "falhou")
     // A instrucao devolvida pelo control plane e a fonte do alvo REAL
     // (customTargetFor). A pura extrai o que vem depois de "->".
-    assert(dnsTargetFromInstruction("CNAME api.example.com -> site.mel.kofcloud.io") == "site.mel.kofcloud.io", "extrai o alvo")
-    assert(dnsTargetFromInstruction("") == "", "instrucao vazia = sem alvo (nao inventa)")
-    assert(dnsTargetFromInstruction("sem seta") == "", "sem seta = sem alvo")
-    assert(dnsTargetFromInstruction("CNAME h -> outro.kofcloud.io  ") == "outro.kofcloud.io", "apara padding")
+    need(dnsTargetFromInstruction("CNAME api.example.com -> site.mel.kofcloud.io") == "site.mel.kofcloud.io", "falhou")
+    need(dnsTargetFromInstruction("") == "", "falhou")
+    need(dnsTargetFromInstruction("sem seta") == "", "falhou")
+    need(dnsTargetFromInstruction("CNAME h -> outro.kofcloud.io  ") == "outro.kofcloud.io", "falhou")
     // Trava de fonte: o `cmdDomainAdd` NAO pode voltar a usar o host do
     // control plane como alvo (nem no dry-run, nem no webhook, nem no
     // comando). Restaurar `webhookUrlHost(session.controlUrl)` quebra.
     var srcRaw = File("src/kofcloud/cli/Commands.kf").readText()
     var src = ""
     if (srcRaw != null) { src = srcRaw }
-    assert(src.length > 0, "fonte legivel")
-    assert(src.indexOf("webhookUrlHost(session.controlUrl)") < 0, "alvo nunca e o host do control")
-    assert(src.indexOf("serviceHostname(service, session.handle)") >= 0, "dry-run deriva do servico")
-    assert(src.indexOf("dnsTargetFromInstruction(created.instruction)") >= 0, "execucao usa a instrucao do control")
+    need(src.length > 0, "falhou")
+    need(src.indexOf("webhookUrlHost(session.controlUrl)") < 0, "falhou")
+    need(src.indexOf("serviceHostname(service, session.handle)") >= 0, "falhou")
+    need(src.indexOf("dnsTargetFromInstruction(created.instruction)") >= 0, "falhou")
 }
 
 test "dns-cmd: help anuncia --dns-cmd no domain add", "dns-cmd-unit" {
     var help = usageText()
-    assert(help.indexOf("--dns-cmd <cmd>") >= 0, "help anuncia --dns-cmd")
-    assert(usoDomainAddLine().indexOf("--dns-cmd") >= 0, "uso anuncia --dns-cmd")
+    need(help.indexOf("--dns-cmd <cmd>") >= 0, "falhou")
+    need(usoDomainAddLine().indexOf("--dns-cmd") >= 0, "falhou")
 }
 
 test "dns-cmd: e2e — o comando do provedor roda com os placeholders expandidos", "dns-cmd-e2e" {
@@ -92,16 +92,16 @@ test "dns-cmd: e2e — o comando do provedor roda com os placeholders expandidos
     var registry = Registry("/tmp/kofcloud-dnscmd-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control no ar")
+    need(waitForPort(port, 60), "falhou")
     var outPath = "/tmp/kofcloud-dnscmd-out-" + crypto.randomHex(4) + ".txt"
     var cmd = "printf '%s CNAME %s' {hostname} {target} > " + outPath
     var expanded = dnsCmdExpand(cmd, "api.example.com", "site", "site.mel.kofcloud.io")
     var err = dnsCmdRun(expanded)
-    assert(err.length == 0, "comando executou: " + err)
+    need(err.length == 0, "falhou")
     var written = readTextOr(outPath, "")
-    assert(written == "api.example.com CNAME site.mel.kofcloud.io", "efeito do comando: [" + written + "]")
+    need(written == "api.example.com CNAME site.mel.kofcloud.io", "falhou")
     // Falha do provedor NAO derruba nada: o dominio ja foi registrado
     // (PENDING) e o caminho manual segue — so a mensagem de aviso existe.
     var bad = dnsCmdRun("exit 1")
-    assert(bad.indexOf("exit 1") >= 0, "falha vira aviso")
+    need(bad.indexOf("exit 1") >= 0, "falhou")
 }

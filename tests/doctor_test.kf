@@ -3,6 +3,7 @@ import kofcloud.cli.Commands
 import kofcloud.cli.Daemon
 import kofcloud.cli.Deploy
 import kofcloud.cli.Doctor
+import kofcloud.cli.Local
 import kofcloud.cli.Usage
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
@@ -16,34 +17,47 @@ import testkit.Support
 
 test "doctor: sem login pede login e para na primeira camada", "doctor" {
     // Sem sessao nao ha como autenticar: falha fechada, sem tocar na rede.
+    // A sessao vive no HOME do processo, compartilhado entre as suites: um
+    // teste anterior que grava e nao restaura deixava esta com sessao (o
+    // isolamento e condicao do agente). Guarda e restaura.
+    var priorSession = readTextOr(sessionPath(), "")
+    var priorIdentity = readTextOr(identityPath(), "")
+    File(sessionPath()).delete()
+    File(identityPath()).delete()
     var report = doctorCheck("")
-    assert(report.ok == false, "falha sem login")
-    assert(report.lines.size == 1, "para na primeira camada")
-    assert(report.lines.get(0).startsWith("FALHA login local"), "aponta o login")
+    if (priorSession.length > 0) {
+        writeTextTo(sessionPath(), priorSession)
+    }
+    if (priorIdentity.length > 0) {
+        writeTextTo(identityPath(), priorIdentity)
+    }
+    need(report.ok == false, "falhou")
+    need(report.lines.size == 1, "falhou")
+    need(report.lines.get(0).startsWith("FALHA login local"), "falhou")
 }
 
 test "doctor: camada TLS distingue ausente, invalido e expirando", "doctor-tls" {
     // Sem --tls-cert nada a checar: nao inventa linha.
-    assert(doctorTlsLine("", true, 0, 0) == "", "sem cert = sem linha")
+    need(doctorTlsLine("", true, 0, 0) == "", "falhou")
     // Arquivo ausente.
     var missing = doctorTlsLine("/tmp/nao-existe.pem", false, 1, 1)
-    assert(missing.startsWith("FALHA tls"), "ausente e FALHA")
-    assert(missing.indexOf("nao encontrado") >= 0, "diz que falta o arquivo")
+    need(missing.startsWith("FALHA tls"), "falhou")
+    need(missing.indexOf("nao encontrado") >= 0, "falhou")
     // PEM ilegivel (openssl x509 sai != 0 sem -checkend).
     var invalid = doctorTlsLine("/tmp/x.pem", true, 1, 1)
-    assert(invalid.startsWith("FALHA tls"), "invalido e FALHA")
-    assert(invalid.indexOf("PEM valido") >= 0, "aponta o conteudo invalido")
+    need(invalid.startsWith("FALHA tls"), "falhou")
+    need(invalid.indexOf("PEM valido") >= 0, "falhou")
     // Expirado/expirando: -checkend != 0 com PEM valido.
     var expiring = doctorTlsLine("/tmp/x.pem", true, 0, 1)
-    assert(expiring.startsWith("FALHA tls"), "expirando e FALHA")
-    assert(expiring.indexOf("30 dias") >= 0, "nomeia o prazo")
-    assert(expiring.indexOf("renove") >= 0, "orienta a acao")
+    need(expiring.startsWith("FALHA tls"), "falhou")
+    need(expiring.indexOf("30 dias") >= 0, "falhou")
+    need(expiring.indexOf("renove") >= 0, "falhou")
     // Valido: ok, com o caminho (e nunca o conteudo).
     var valid = doctorTlsLine("/tmp/x.pem", true, 0, 0)
-    assert(valid.startsWith("ok"), "valido e ok")
-    assert(valid.indexOf("/tmp/x.pem") >= 0, "mostra o caminho checado")
+    need(valid.startsWith("ok"), "falhou")
+    need(valid.indexOf("/tmp/x.pem") >= 0, "falhou")
     // Caminho relativo tambem: a linha e pura, sem ler o disco.
-    assert(doctorTlsLine("certs/a.pem", true, 0, 0).indexOf("certs/a.pem") >= 0, "caminho preservado")
+    need(doctorTlsLine("certs/a.pem", true, 0, 0).indexOf("certs/a.pem") >= 0, "falhou")
 }
 
 test "doctor: --tls-cert com PEM real (openssl) vira ok/FALHA na camada TLS", "doctor-tls" {
@@ -56,60 +70,60 @@ test "doctor: --tls-cert com PEM real (openssl) vira ok/FALHA na camada TLS", "d
     var bad = dir + "/bad.pem"
     var gen = process.run("sh", "-c", "mkdir -p " + dir + " && openssl req -x509 -newkey rsa:2048 -keyout " + key + " -out " + cert + " -days 3650 -nodes -subj /CN=doctor 2>/dev/null && printf garbage > " + bad)
     if (gen.exitCode != 0) {
-        assert(true, "openssl ausente: pulando integracao")
+        need(true, "falhou")
         return
     }
     var parse = process.run("openssl", "x509", "-in", cert, "-noout").exitCode
     var checkend = process.run("openssl", "x509", "-in", cert, "-noout", "-checkend", tlsCheckendWindowSec()).exitCode
     var okLine = doctorTlsLine(cert, true, parse, checkend)
-    assert(okLine.startsWith("ok"), "cert de 10 anos e ok: " + okLine)
-    assert(okLine.indexOf("tls") >= 0, "rotula a camada tls")
+    need(okLine.startsWith("ok"), "falhou")
+    need(okLine.indexOf("tls") >= 0, "falhou")
     var badLine = doctorTlsLine(bad, true, process.run("openssl", "x509", "-in", bad, "-noout").exitCode, 1)
-    assert(badLine.startsWith("FALHA tls"), "garbage e FALHA: " + badLine)
+    need(badLine.startsWith("FALHA tls"), "falhou")
     // O comando completo aceita a flag e nao morre (sem login, para na 1a
     // camada): a flag e reconhecida antes de qualquer rede.
-    assert(doctorTlsLine(cert, false, 0, 0).indexOf("nao encontrado") >= 0, "ausente antes de checar")
+    need(doctorTlsLine(cert, false, 0, 0).indexOf("nao encontrado") >= 0, "falhou")
 }
 
 test "doctor: ajuda lista a camada do tunel", "doctor-usage" {
     // Regressao: o help ficou para tras quando o doctor ganhou o tunel
     // (README ja citava, Usage.kf nao). Puro, sem rede nem HOME.
     var help = usageText()
-    assert(help.indexOf("doctor") >= 0, "menciona o doctor")
-    assert(help.indexOf("tunel") >= 0, "menciona o tunel")
+    need(help.indexOf("doctor") >= 0, "falhou")
+    need(help.indexOf("tunel") >= 0, "falhou")
     // Fase 9 slice 3 parcial: o doctor checa o PEM quando informado.
-    assert(help.indexOf("doctor [--file kofcloud.json] [--tls-cert <pem>]") >= 0, "doctor anuncia --tls-cert")
-    assert(help.indexOf("tls") >= 0, "menciona a camada tls")
+    need(help.indexOf("doctor [--file kofcloud.json] [--tls-cert <pem>]") >= 0, "falhou")
+    need(help.indexOf("tls") >= 0, "falhou")
     // Camada da auditoria (Fase 19 s4): o help nao fica para tras de novo.
-    assert(help.indexOf("auditoria") >= 0, "menciona a camada da auditoria")
+    need(help.indexOf("auditoria") >= 0, "falhou")
 }
 
 test "doctor: manifesto invalido e reportado com caminho", "doctor-manifest" {
     var bad = deployManifest("bad", "{\"services\":[{\"name\":\"x\",\"port\":1}]}")
     var parsed = parseManifest(readTextOr(bad, ""))
-    assert(parsed.size == 1, "parse ok")
+    need(parsed.size == 1, "falhou")
     // Com login ausente, o manifesto nem e lido: login vem antes.
     var report = doctorCheck(bad)
-    assert(report.ok == false, "falha sem login")
+    need(report.ok == false, "falhou")
 }
 
 test "doctor: camada do tunel decide sem rede nem HOME", "doctor-tunnel" {
     // Presente: corpo de /v1/presence com o id entre aspas (formato real).
     var online = doctorTunnelLine("[\"dev-1\",\"dev-2\"]", "dev-1", "")
-    assert(online.startsWith("ok"), "sessao viva e ok")
-    assert(online.indexOf("tunel") >= 0, "rotula a camada")
+    need(online.startsWith("ok"), "falhou")
+    need(online.indexOf("tunel") >= 0, "falhou")
     // Ausente: mesmo corpo, outro device — FALHA que aponta o connect.
     // (Prefixo sozinho nao casa: bodyContainsId exige as aspas.)
     var offline = doctorTunnelLine("[\"dev-1\"]", "dev-10", "")
-    assert(offline.startsWith("FALHA tunel"), "sem sessao e FALHA")
-    assert(offline.indexOf("connect") >= 0, "orienta o proximo passo")
+    need(offline.startsWith("FALHA tunel"), "falhou")
+    need(offline.indexOf("connect") >= 0, "falhou")
     // Lista vazia: offline, nao erro.
     var empty = doctorTunnelLine("[]", "dev-1", "")
-    assert(empty.startsWith("FALHA tunel"), "vazio tambem e FALHA")
+    need(empty.startsWith("FALHA tunel"), "falhou")
     // Busca falhou (rede/conta): FALHA distinta, com o motivo.
     var failed = doctorTunnelLine("", "dev-1", "KCF004: unauthorized")
-    assert(failed.startsWith("FALHA tunel"), "erro de busca e FALHA")
-    assert(failed.indexOf("indisponivel") >= 0, "diz que nao deu para saber")
+    need(failed.startsWith("FALHA tunel"), "falhou")
+    need(failed.indexOf("indisponivel") >= 0, "falhou")
 }
 
 test "doctor: fim a fim acusa servico fora do ar e aprova quando sobe", "doctor-e2e" {
@@ -118,7 +132,7 @@ test "doctor: fim a fim acusa servico fora do ar e aprova quando sobe", "doctor-
     var registry = Registry(path)
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control plane no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -131,15 +145,15 @@ test "doctor: fim a fim acusa servico fora do ar e aprova quando sobe", "doctor-
 
     // Nada publicado: doctor acusa "nao publicado", sem exigir porta local.
     var missing = verifyDeploymentLike(controlUrl, accountToken, wanted)
-    assert(missing.size == 1, "um problema")
-    assert(missing.get(0).indexOf("nao publicado") >= 0, "diz que nao publicou")
+    need(missing.size == 1, "falhou")
+    need(missing.get(0).indexOf("nao publicado") >= 0, "falhou")
 
     // Publica mas sem ninguem escutando: acusa falta de resposta local.
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19742\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "falhou")
     var down = verifyDeploymentLike(controlUrl, accountToken, wanted)
-    assert(down.size == 1, "um problema")
-    assert(down.get(0).indexOf("sem resposta") >= 0, "diz que nao responde")
+    need(down.size == 1, "falhou")
+    need(down.get(0).indexOf("sem resposta") >= 0, "falhou")
 
     // Sobe um listener cru na porta: tudo ok.
     var listener = net.listen(19742)
@@ -154,9 +168,9 @@ test "doctor: fim a fim acusa servico fora do ar e aprova quando sobe", "doctor-
             }
         }
     }
-    assert(waitForPort(19742, 60), "servico local no ar")
+    need(waitForPort(19742, 60), "falhou")
     var up = verifyDeploymentLike(controlUrl, accountToken, wanted)
-    assert(up.size == 0, "tudo saudavel")
+    need(up.size == 0, "falhou")
     listener.close()
 
     // Drift de config pelo caminho do doctor: remove e republica o mesmo
@@ -164,14 +178,14 @@ test "doctor: fim a fim acusa servico fora do ar e aprova quando sobe", "doctor-
     // retorna o existente sem atualizar). O doctor acusa antes de testar
     // resposta, com a dica de re-deploy.
     var driftTarget = doctorServiceIdIn(bodyOf(httpGetToken(controlPort, "/v1/services", accountToken)), "site")
-    assert(driftTarget.length > 0, "alvo existe")
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + driftTarget + "\"}", accountToken)) == 200, "removido")
+    need(driftTarget.length > 0, "falhou")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + driftTarget + "\"}", accountToken)) == 200, "falhou")
     var driftBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19743\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", driftBody, accountToken)) == 200, "republicado com drift")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", driftBody, accountToken)) == 200, "falhou")
     var drifted = verifyDeploymentLike(controlUrl, accountToken, wanted)
-    assert(drifted.size == 1, "um problema de drift")
-    assert(drifted.get(0).indexOf("config diferente") >= 0, "doctor acusa o drift")
-    assert(drifted.get(0).indexOf("deploy") >= 0, "doctor orienta o re-deploy")
+    need(drifted.size == 1, "falhou")
+    need(drifted.get(0).indexOf("config diferente") >= 0, "falhou")
+    need(drifted.get(0).indexOf("deploy") >= 0, "falhou")
 }
 
 // Espelho da etapa 5 do doctorCheck sem precisar de HOME/sessao: o doctor
@@ -219,43 +233,43 @@ test "doctor: PEM valido mas de outro dominio nao cobre os servicos do manifesto
     var hosts = listOf("site.mel.kofcloud.io", "api.mel.kofcloud.io")
 
     var blocked = doctorTlsLineFor("/tmp/x.pem", true, 0, 0, sanWrong, subjectWrong, hosts)
-    assert(blocked.startsWith("FALHA tls"), "cert de outro dominio e FALHA")
-    assert(blocked.indexOf("site.mel.kofcloud.io") >= 0, "nomeia o host que nao cobre")
+    need(blocked.startsWith("FALHA tls"), "falhou")
+    need(blocked.indexOf("site.mel.kofcloud.io") >= 0, "falhou")
 
     // Curinga da conta cobre todos os servicos.
     var sanOk = "X509v3 Subject Alternative Name:\n    DNS:*.mel.kofcloud.io\n"
     var okLine = doctorTlsLineFor("/tmp/x.pem", true, 0, 0, sanOk, "", hosts)
-    assert(okLine.startsWith("ok"), "curinga da conta passa")
-    assert(okLine.indexOf("2 servico(s)") >= 0, "diz quantos cobriu")
+    need(okLine.startsWith("ok"), "falhou")
+    need(okLine.indexOf("2 servico(s)") >= 0, "falhou")
 
     // Um host coberto e outro nao: falha, porque HTTPS cai no que falta.
     var partial = "X509v3 Subject Alternative Name:\n    DNS:site.mel.kofcloud.io\n"
     var partialLine = doctorTlsLineFor("/tmp/x.pem", true, 0, 0, partial, "", hosts)
-    assert(partialLine.startsWith("FALHA tls"), "cobertura parcial e FALHA")
-    assert(partialLine.indexOf("api.mel.kofcloud.io") >= 0, "aponta o que falta")
+    need(partialLine.startsWith("FALHA tls"), "falhou")
+    need(partialLine.indexOf("api.mel.kofcloud.io") >= 0, "falhou")
 
     // Sem SAN consultado (openssl ausente / chamador antigo) nao inventa
     // falha de cobertura: so valida formato, como antes.
     var noSan = doctorTlsLineFor("/tmp/x.pem", true, 0, 0, "", "", hosts)
-    assert(noSan.startsWith("ok"), "sem SAN consultado nao acusa cobertura")
+    need(noSan.startsWith("ok"), "falhou")
 
     // Sem manifesto nao ha host a cobrir.
-    assert(tlsRequiredHosts(listOf<ManifestService>(), "mel").size == 0, "sem servico = sem host")
-    assert(tlsRequiredHosts(listOf<ManifestService>(), "").size == 0, "sem handle = sem host")
+    need(tlsRequiredHosts(listOf<ManifestService>(), "mel").size == 0, "falhou")
+    need(tlsRequiredHosts(listOf<ManifestService>(), "").size == 0, "falhou")
 }
 
 test "doctor: manifesto vira a lista de hostnames exigidos do PEM", "doctor-tls" {
     var dir = "/tmp/kofcloud-doc-host-" + crypto.randomHex(4)
     writeTextTo(dir + "/kofcloud.json", "{\"services\": [{\"name\": \"site\", \"port\": 8080}, {\"name\": \"api\", \"port\": 3000}]}")
     var loaded = loadManifestFile(dir + "/kofcloud.json")
-    assert(loaded.ok, "manifesto lido")
+    need(loaded.ok, "falhou")
     var hosts = tlsRequiredHosts(loaded.services, "mel")
-    assert(hosts.size == 2, "dois hosts")
-    assert(hosts.contains("site.mel.kofcloud.io"), "site")
-    assert(hosts.contains("api.mel.kofcloud.io"), "api")
+    need(hosts.size == 2, "falhou")
+    need(hosts.contains("site.mel.kofcloud.io"), "falhou")
+    need(hosts.contains("api.mel.kofcloud.io"), "falhou")
 
     // Manifesto ausente: nada a exigir (a camada do manifesto acusa isso).
-    assert(loadManifestFile(dir + "/nao-existe.json").ok == false, "ausente nao ok")
+    need(loadManifestFile(dir + "/nao-existe.json").ok == false, "falhou")
 }
 
 test "doctor: PEM real de outro dominio e FALHA; curinga do dominio e ok", "doctor-tls" {
@@ -275,12 +289,12 @@ test "doctor: PEM real de outro dominio e FALHA; curinga do dominio e ok", "doct
     var wrongSan = process.run("openssl", "x509", "-in", wrong, "-noout", "-ext", "subjectAltName").stdout
     var wrongSubj = process.run("openssl", "x509", "-in", wrong, "-noout", "-subject").stdout
     var wrongLine = doctorTlsLineFor(wrong, true, 0, 0, wrongSan, wrongSubj, hosts)
-    assert(wrongLine.startsWith("FALHA tls"), "PEM real de outro dominio e FALHA: " + wrongLine)
+    need(wrongLine.startsWith("FALHA tls"), "falhou")
 
     var wildSan = process.run("openssl", "x509", "-in", wild, "-noout", "-ext", "subjectAltName").stdout
     var wildSubj = process.run("openssl", "x509", "-in", wild, "-noout", "-subject").stdout
     var wildLine = doctorTlsLineFor(wild, true, 0, 0, wildSan, wildSubj, hosts)
-    assert(wildLine.startsWith("ok"), "PEM real com curinga da conta passa: " + wildLine)
+    need(wildLine.startsWith("ok"), "falhou")
 }
 
 // Responde 200 a uma requisicao e fecha (fixture de servico saudavel):
@@ -299,17 +313,17 @@ test "doctor: camada do device distingue REVOKED de SUSPENDED de ACTIVE", "docto
     // (fatal no Agent). A dica certa para revogado e re-registrar (REVOKED e
     // terminal); para suspenso, o unsuspend (reversivel).
     var revoked = doctorDeviceLine("REVOKED")
-    assert(revoked.startsWith("FALHA dispositivo"), "revogado e FALHA")
-    assert(revoked.indexOf("revogado") >= 0, "nomeia a causa")
-    assert(revoked.indexOf("login --device") >= 0, "aponta o re-registro")
-    assert(revoked.indexOf("connect") < 0, "nunca sugere connect (seria recusado)")
+    need(revoked.startsWith("FALHA dispositivo"), "falhou")
+    need(revoked.indexOf("revogado") >= 0, "falhou")
+    need(revoked.indexOf("login --device") >= 0, "falhou")
+    need(revoked.indexOf("connect") < 0, "falhou")
 
     var suspended = doctorDeviceLine("SUSPENDED")
-    assert(suspended.startsWith("FALHA dispositivo"), "suspenso e FALHA")
-    assert(suspended.indexOf("unsuspend") >= 0, "aponta o unsuspend")
+    need(suspended.startsWith("FALHA dispositivo"), "falhou")
+    need(suspended.indexOf("unsuspend") >= 0, "falhou")
 
     var active = doctorDeviceLine("ACTIVE")
-    assert(active.startsWith("ok"), "ativo segue ok")
+    need(active.startsWith("ok"), "falhou")
 
     // Trava de fonte: o doctorCheck consulta o status do device e delega na
     // linha pura (sem captura de stdout no runner).
@@ -327,41 +341,41 @@ test "doctor: camada do device distingue REVOKED de SUSPENDED de ACTIVE", "docto
         end = text.length
     }
     var body = text.substring(start, end)
-    assert(body.indexOf("doctorDeviceLine(") >= 0, "doctorCheck usa a linha pura")
-    assert(body.indexOf("deviceStatus = device.status") >= 0, "le o ciclo de vida da lista")
-    assert(body.indexOf("dispositivo registrado (\" + identity.deviceId + \")") < 0, "nao imprime ok direto")
+    need(body.indexOf("doctorDeviceLine(") >= 0, "falhou")
+    need(body.indexOf("deviceStatus = device.status") >= 0, "falhou")
+    need(body.indexOf("dispositivo registrado (\" + identity.deviceId + \")") < 0, "falhou")
 }
 
 test "doctor: camada da auditoria decide sem rede nem HOME", "doctor-audit" {
     // Busca falhou (control plane caiu entre as camadas): FALHA, sem mentir.
     var failed = doctorAuditLine("", "KCF004: unauthorized")
-    assert(failed.startsWith("FALHA auditoria"), "erro de busca e FALHA")
-    assert(failed.indexOf("indisponivel") >= 0, "diz que nao deu para saber")
+    need(failed.startsWith("FALHA auditoria"), "falhou")
+    need(failed.indexOf("indisponivel") >= 0, "falhou")
     // Corpo ilegivel (nao e o JSON do verify): FALHA, nao excecao.
     var garbage = doctorAuditLine("{lixo", "")
-    assert(garbage.startsWith("FALHA auditoria"), "lixo e FALHA")
-    assert(garbage.indexOf("inesperada") >= 0, "aponta a resposta")
+    need(garbage.startsWith("FALHA auditoria"), "falhou")
+    need(garbage.indexOf("inesperada") >= 0, "falhou")
     // Tudo integro (anel + espelho) no formato real do fio.
     var healthy = doctorAuditLine("{\"ok\":\"true\",\"brokenAt\":\"\",\"events\":\"7\",\"mirrorOk\":\"true\",\"mirrorBrokenAt\":\"\",\"mirrorEvents\":\"7\"}", "")
-    assert(healthy.startsWith("ok"), "integro e ok")
-    assert(healthy.indexOf("auditoria integra") >= 0, "rotula a camada")
-    assert(healthy.indexOf("7 eventos") >= 0, "mostra a contagem")
+    need(healthy.startsWith("ok"), "falhou")
+    need(healthy.indexOf("auditoria integra") >= 0, "falhou")
+    need(healthy.indexOf("7 eventos") >= 0, "falhou")
     // Cadeia quebrada: FALHA com o indice e a orientacao de investigar.
     var broken = doctorAuditLine("{\"ok\":\"false\",\"brokenAt\":\"3\",\"events\":\"10\",\"mirrorOk\":\"true\",\"mirrorBrokenAt\":\"\",\"mirrorEvents\":\"10\"}", "")
-    assert(broken.startsWith("FALHA auditoria"), "cadeia quebrada e FALHA")
-    assert(broken.indexOf("3") >= 0, "diz o indice")
-    assert(broken.indexOf("investigue") >= 0, "orienta o operador")
-    assert(broken.indexOf("audit --verify") >= 0, "aponta o detalhe")
+    need(broken.startsWith("FALHA auditoria"), "falhou")
+    need(broken.indexOf("3") >= 0, "falhou")
+    need(broken.indexOf("investigue") >= 0, "falhou")
+    need(broken.indexOf("audit --verify") >= 0, "falhou")
     // Espelho comprometido com anel integro: FALHA propria, nao ok manchado.
     var mirrorDown = doctorAuditLine("{\"ok\":\"true\",\"brokenAt\":\"\",\"events\":\"2\",\"mirrorOk\":\"false\",\"mirrorBrokenAt\":\"1\",\"mirrorEvents\":\"2\"}", "")
-    assert(mirrorDown.startsWith("FALHA auditoria"), "espelho ruim e FALHA")
-    assert(mirrorDown.indexOf("espelho comprometido") >= 0, "nomeia o espelho")
-    assert(mirrorDown.indexOf("1") >= 0, "diz o indice")
+    need(mirrorDown.startsWith("FALHA auditoria"), "falhou")
+    need(mirrorDown.indexOf("espelho comprometido") >= 0, "falhou")
+    need(mirrorDown.indexOf("1") >= 0, "falhou")
     // Control plane antigo (sem os campos do espelho): ok honesto, sem FALHA
     // nem mentira "integra" para o espelho.
     var legacy = doctorAuditLine("{\"ok\":\"true\",\"brokenAt\":\"\",\"events\":\"4\"}", "")
-    assert(legacy.startsWith("ok"), "anel ok e ok")
-    assert(legacy.indexOf("espelho nao reportado") >= 0, "diz que nao sabe do espelho")
+    need(legacy.startsWith("ok"), "falhou")
+    need(legacy.indexOf("espelho nao reportado") >= 0, "falhou")
 }
 
 test "doctor: camada da auditoria contra o endpoint real", "doctor-audit" {
@@ -372,15 +386,15 @@ test "doctor: camada da auditoria contra o endpoint real", "doctor-audit" {
     var registry = Registry(path)
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control plane no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
-    assert(statusOf(httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pubkey\"}", accountToken)) == 200, "device criado")
+    need(statusOf(httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pubkey\"}", accountToken)) == 200, "falhou")
 
     var before = doctorAuditLine(bodyOf(httpGetToken(controlPort, "/v1/audit/verify", accountToken)), "")
-    assert(before.startsWith("ok"), "trilha integra e ok: " + before)
-    assert(before.indexOf("2 eventos") >= 0, "conta os dois eventos: " + before)
+    need(before.startsWith("ok"), "falhou")
+    need(before.indexOf("2 eventos") >= 0, "falhou")
 
     // Trunca a segunda linha do espelho no meio: o fiel (anel) segue
     // integro, mas o espelho deixa de decodificar — verify real acusa.
@@ -390,12 +404,12 @@ test "doctor: camada da auditoria contra o endpoint real", "doctor-audit" {
     var half = second.substring(0, second.length - (second.length / 2))
     writeTextTo(path + ".worm.jsonl", raw.substring(0, firstBreak + 1) + half + "\n")
     var verify = bodyOf(httpGetToken(controlPort, "/v1/audit/verify", accountToken))
-    assert(verify.indexOf("\"ok\":\"true\"") >= 0, "anel segue integro")
-    assert(verify.indexOf("\"mirrorOk\":\"false\"") >= 0, "espelho real quebrou")
+    need(verify.indexOf("\"ok\":\"true\"") >= 0, "falhou")
+    need(verify.indexOf("\"mirrorOk\":\"false\"") >= 0, "falhou")
     var after = doctorAuditLine(verify, "")
-    assert(after.startsWith("FALHA auditoria"), "espelho truncado e FALHA: " + after)
-    assert(after.indexOf("espelho comprometido") >= 0, "nomeia o espelho")
-    assert(after.indexOf("parse") >= 0, "diz o indice de parse")
+    need(after.startsWith("FALHA auditoria"), "falhou")
+    need(after.indexOf("espelho comprometido") >= 0, "falhou")
+    need(after.indexOf("parse") >= 0, "falhou")
 }
 
 test "doctor: camada da credencial da conta decide sem rede nem HOME", "doctor-cred" {
@@ -405,25 +419,25 @@ test "doctor: camada da credencial da conta decide sem rede nem HOME", "doctor-c
     // re-deriva com relogio proprio. Expira em breve e FALHA com a acao
     // (mesmo padrao do PEM a 30 dias); a janela citada vem do mesmo Limits
     // do aviso do CLI, derivada — nao copiada.
-    assert(doctorAccountTokenLine("", "boom").indexOf("indisponivel") >= 0, "busca falha: indisponivel")
-    assert(doctorAccountTokenLine("lixo {", "").indexOf("inesperada") >= 0, "resposta ilegivel")
+    need(doctorAccountTokenLine("", "boom").indexOf("indisponivel") >= 0, "falhou")
+    need(doctorAccountTokenLine("lixo {", "").indexOf("inesperada") >= 0, "falhou")
     var okLine = doctorAccountTokenLine("[{\"id\":\"a1\",\"createdAt\":\"1\"},{\"id\":\"b2\",\"createdAt\":\"1\",\"expiresAt\":\"9\"}]", "")
-    assert(okLine.startsWith("ok"), "sem expiring: ok: " + okLine)
-    assert(okLine.indexOf("kfc_") < 0, "linha ok nao vaza valor")
+    need(okLine.startsWith("ok"), "falhou")
+    need(okLine.indexOf("kfc_") < 0, "falhou")
     var hours = intToString((limitTokenExpiryWarnMs() / 3600000L) as Int)
     var warn = doctorAccountTokenLine("[{\"id\":\"a1\",\"createdAt\":\"1\",\"expiresAt\":\"2\",\"expiring\":\"true\"}]", "")
-    assert(warn.startsWith("FALHA"), "expirando: FALHA: " + warn)
-    assert(warn.indexOf("token rotate") >= 0, "orienta o rotate: " + warn)
-    assert(warn.indexOf(hours + "h") >= 0, "janela derivada da fonte unica: " + warn)
-    assert(warn.indexOf("kfc_") < 0, "FALHA nao vaza valor")
+    need(warn.startsWith("FALHA"), "falhou")
+    need(warn.indexOf("token rotate") >= 0, "falhou")
+    need(warn.indexOf(hours + "h") >= 0, "falhou")
+    need(warn.indexOf("kfc_") < 0, "falhou")
     var two = doctorAccountTokenLine("[{\"id\":\"a\",\"createdAt\":\"1\",\"expiring\":\"true\"},{\"id\":\"b\",\"createdAt\":\"1\",\"expiring\":\"true\"}]", "")
-    assert(two.indexOf("2 credencial") >= 0, "conta as duas: " + two)
+    need(two.indexOf("2 credencial") >= 0, "falhou")
     var mixed = doctorAccountTokenLine("[{\"id\":\"a\",\"createdAt\":\"1\"},{\"id\":\"b\",\"createdAt\":\"1\",\"expiresAt\":\"2\",\"expiring\":\"true\"}]", "")
-    assert(mixed.startsWith("FALHA"), "uma expirando basta: " + mixed)
-    assert(mixed.indexOf("1 credencial") >= 0, "conta so a expirando: " + mixed)
-    assert(doctorAccountTokenLine("[]", "").startsWith("ok"), "lista vazia nao inventa FALHA")
+    need(mixed.startsWith("FALHA"), "falhou")
+    need(mixed.indexOf("1 credencial") >= 0, "falhou")
+    need(doctorAccountTokenLine("[]", "").startsWith("ok"), "falhou")
     var forever = doctorAccountTokenLine("[{\"id\":\"a\",\"createdAt\":\"1\",\"expiresAt\":\"2524608000000\"}]", "")
-    assert(forever.startsWith("ok"), "longa fora da janela segue ok: " + forever)
+    need(forever.startsWith("ok"), "falhou")
 }
 
 test "doctor: camada da credencial contra o endpoint real", "doctor-cred" {
@@ -434,25 +448,25 @@ test "doctor: camada da credencial contra o endpoint real", "doctor-cred" {
     var registry = Registry("/tmp/kofcloud-doctor-cred-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control plane no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
-    assert(statusOf(httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pubkey\"}", accountToken)) == 200, "device criado")
+    need(statusOf(httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pubkey\"}", accountToken)) == 200, "falhou")
     var longList = bodyOf(httpGetToken(controlPort, "/v1/tokens", accountToken))
-    assert(countTokenExpiring(longList) == 0, "sem TTL: nenhum sinal: " + longList)
-    assert(doctorAccountTokenLine(longList, "").startsWith("ok"), "sem TTL: ok")
+    need(countTokenExpiring(longList) == 0, "falhou")
+    need(doctorAccountTokenLine(longList, "").startsWith("ok"), "falhou")
 
     var rotated = httpPostJson(controlPort, "/v1/tokens/rotate", "{\"ttlHours\":\"24\"}", accountToken)
-    assert(statusOf(rotated) == 200, "rotate 200")
+    need(statusOf(rotated) == 200, "falhou")
     var fresh = mapField(json.decode<Map<String, String>>(bodyOf(rotated)), "token")
     var listed = bodyOf(httpGetToken(controlPort, "/v1/tokens", fresh))
     // O fio real carrega o sinal na entrada nova (TTL 24h < janela de 7
     // dias), mas nao na antiga (sem TTL): a camada conta exatamente uma.
-    assert(countTokenExpiring(listed) == 1, "uma expirando no fio real: " + listed)
+    need(countTokenExpiring(listed) == 1, "falhou")
     var line = doctorAccountTokenLine(listed, "")
-    assert(line.startsWith("FALHA"), "fio real com TTL curto: FALHA: " + line)
-    assert(line.indexOf("1 credencial") >= 0, "conta so a nova: " + line)
+    need(line.startsWith("FALHA"), "falhou")
+    need(line.indexOf("1 credencial") >= 0, "falhou")
 }
 test "doctor: aviso de kfs_ perto do fim por servico (mesma fonte do --check)", "doctor-kfs" {
     // Camada de aviso do doctor sobre a credencial de SERVICO (a camada
@@ -460,22 +474,22 @@ test "doctor: aviso de kfs_ perto do fim por servico (mesma fonte do --check)", 
     // do deploy --check — linha AVISO, nunca FALHA nem exit 1. A linha e
     // pura e delega a decisao a kfsExpiryCheckLine (o MESMO predicado do
     // token-list/service status); o doctor so busca e imprime.
-    assert(doctorWarnLine("servico", "x").startsWith("AVISO"), "formato proprio")
-    assert(doctorWarnLine("servico", "x").indexOf("FALHA") < 0, "aviso nao e falha")
+    need(doctorWarnLine("servico", "x").startsWith("AVISO"), "falhou")
+    need(doctorWarnLine("servico", "x").indexOf("FALHA") < 0, "falhou")
 
     var window = limitTokenExpiryWarnMs()
     var now = 1000000000000L
     var calm = listOf<ServiceTokenEntry>()
     calm.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", longToString(now + window + 86400000L)))
-    assert(kfsExpiryCheckLine("api", calm, longToString(now)) == "", "fora da janela: sem linha")
+    need(kfsExpiryCheckLine("api", calm, longToString(now)) == "", "falhou")
 
     var hot = listOf<ServiceTokenEntry>()
     hot.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", longToString(now + window - 1000L)))
     var line = doctorWarnLine("servico", kfsExpiryCheckLine("api", hot, longToString(now)))
-    assert(line.startsWith("AVISO"), "perto do fim: AVISO: " + line)
-    assert(line.indexOf("api:") >= 0, "nomeia o servico: " + line)
-    assert(line.indexOf("service rotate api") >= 0, "orienta a rotacao: " + line)
-    assert(line.indexOf("a1b2c3d4") < 0, "nao vaza nem o id curto")
+    need(line.startsWith("AVISO"), "falhou")
+    need(line.indexOf("api:") >= 0, "falhou")
+    need(line.indexOf("service rotate api") >= 0, "falhou")
+    need(line.indexOf("a1b2c3d4") < 0, "falhou")
 
     var text = File("src/kofcloud/cli/Doctor.kf").readText()
     var raw = ""
@@ -486,17 +500,17 @@ test "doctor: aviso de kfs_ perto do fim por servico (mesma fonte do --check)", 
         return
     }
     var start = raw.indexOf("DoctorReport doctorCheckWith(")
-    assert(start >= 0, "acha o doctorCheckWith")
+    need(start >= 0, "falhou")
     var end = raw.indexOf("Int cmdDoctor(", start)
-    assert(end > start, "acha o fim do doctorCheckWith")
+    need(end > start, "falhou")
     var body = raw.substring(start, end)
     // Ancora de indentacao (mesma tecnica do deploy-kfswarn): o laco do
     // aviso corre INCONDICIONALMENTE no nivel do corpo (4 espacos) e a
     // linha AVISO entra antes das ok — dead-code wrap re-indenta e a
     // trava fica vermelha (lacuna real do 2af856a, agora coberta).
-    assert(body.indexOf("\n    for (var warn in kfsExpiryWarningsFor(session.controlUrl, session.token, wanted, identity.deviceId, now)) {") >= 0, "doctor consulta os avisos no nivel do corpo")
-    assert(body.indexOf("doctorWarnLine(\"servico\", warn)") >= 0, "doctor imprime a linha de aviso")
-    assert(body.indexOf("doctorWarnLine(\"servico\", warn)") < body.indexOf("doctorOkLine(service.name"), "aviso antes das linhas ok")
+    need(body.indexOf("\n    for (var warn in kfsExpiryWarningsFor(session.controlUrl, session.token, wanted, identity.deviceId, now)) {") >= 0, "falhou")
+    need(body.indexOf("doctorWarnLine(\"servico\", warn)") >= 0, "falhou")
+    need(body.indexOf("doctorWarnLine(\"servico\", warn)") < body.indexOf("doctorOkLine(service.name"), "falhou")
 
     // Fio real (precedente doctor-cred e2e): AUTHENTICATED com kfs_ de 1h
     // vira AVISO; PUBLIC mesmo com token alheio na conta nao tem o que
@@ -505,31 +519,31 @@ test "doctor: aviso de kfs_ perto do fim por servico (mesma fonte do --check)", 
     var registry = Registry("/tmp/kofcloud-doctor-kfs-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control plane no ar")
+    need(waitForPort(controlPort, 60), "falhou")
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pubkey\"}", accountToken)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var authBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"api\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19986\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}"
     var pub = httpPostJson(controlPort, "/v1/services", authBody, accountToken)
-    assert(statusOf(pub) == 200, "servico AUTHENTICATED publicado")
+    need(statusOf(pub) == 200, "falhou")
     var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(pub)), "id")
     var controlUrl = "http://127.0.0.1:" + intToString(controlPort)
     var fioNow = longToString(time.now())
     var wanted = parseManifest("{\"services\":[{\"name\":\"api\",\"port\":19986,\"exposure\":\"AUTHENTICATED\"}]}")
-    assert(kfsExpiryWarningsFor(controlUrl, accountToken, wanted, deviceId, fioNow).size == 0, "sem kfs_: sem aviso")
+    need(kfsExpiryWarningsFor(controlUrl, accountToken, wanted, deviceId, fioNow).size == 0, "falhou")
     var issue = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"1\"}", accountToken)
-    assert(statusOf(issue) == 200, "kfs_ de 1h emitida")
+    need(statusOf(issue) == 200, "falhou")
     var warnings = kfsExpiryWarningsFor(controlUrl, accountToken, wanted, deviceId, fioNow)
-    assert(warnings.size == 1, "um aviso no fio real: " + intToString(warnings.size))
+    need(warnings.size == 1, "falhou")
     var wrapped = doctorWarnLine("servico", warnings.get(0))
-    assert(wrapped.startsWith("AVISO"), "fio real: AVISO: " + wrapped)
-    assert(wrapped.indexOf("api:") >= 0, "fio real nomeia o servico: " + wrapped)
+    need(wrapped.startsWith("AVISO"), "falhou")
+    need(wrapped.indexOf("api:") >= 0, "falhou")
 
     var pubBody2 = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19987\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody2, accountToken)) == 200, "servico PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody2, accountToken)) == 200, "falhou")
     var wantedPublic = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":19987}]}")
-    assert(kfsExpiryWarningsFor(controlUrl, accountToken, wantedPublic, deviceId, fioNow).size == 0, "PUBLIC silencia mesmo com kfs_ na conta")
+    need(kfsExpiryWarningsFor(controlUrl, accountToken, wantedPublic, deviceId, fioNow).size == 0, "falhou")
 }
 
 test "doctor: camada do control plane distingue estado ilegivel de fora do ar", "doctor-control" {
@@ -538,36 +552,36 @@ test "doctor: camada do control plane distingue estado ilegivel de fora do ar", 
     // como "inacessivel ou fora do ar" e mandava o operador olhar rede
     // quando o problema era o ARQUIVO DE ESTADO.
     var corrupt = doctorControlLine("http://127.0.0.1:8080", "", "HTTP 503 from http://127.0.0.1:8080/v1/health")
-    assert(corrupt.startsWith("FALHA control plane"), "503 e FALHA: " + corrupt)
-    assert(corrupt.indexOf("503") >= 0, "nomeia o codigo")
-    assert(corrupt.indexOf("ilegivel") >= 0, "nomeia o estado ilegivel: " + corrupt)
-    assert(corrupt.indexOf("state-backup") >= 0, "aponta o backup")
-    assert(corrupt.indexOf("fora do ar") < 0, "nunca diz fora do ar quando respondeu")
+    need(corrupt.startsWith("FALHA control plane"), "falhou")
+    need(corrupt.indexOf("503") >= 0, "falhou")
+    need(corrupt.indexOf("ilegivel") >= 0, "falhou")
+    need(corrupt.indexOf("state-backup") >= 0, "falhou")
+    need(corrupt.indexOf("fora do ar") < 0, "falhou")
 
     // Falha de rede de verdade: "inacessivel", sem falar de estado.
     var down = doctorControlLine("http://127.0.0.1:8080", "", "kof.net: connect failed")
-    assert(down.startsWith("FALHA control plane"), "rede e FALHA")
-    assert(down.indexOf("inacessivel") >= 0, "rede = inacessivel")
-    assert(down.indexOf("ilegivel") < 0, "rede nao inventa estado")
+    need(down.startsWith("FALHA control plane"), "falhou")
+    need(down.indexOf("inacessivel") >= 0, "falhou")
+    need(down.indexOf("ilegivel") < 0, "falhou")
 
     // Corpo sem "ok" (control estranho/proxy): resposta inesperada, nunca verde.
     var weird = doctorControlLine("http://c", "<html>", "")
-    assert(weird.indexOf("resposta inesperada") >= 0, "corpo estranho: " + weird)
+    need(weird.indexOf("resposta inesperada") >= 0, "falhou")
 
     // Saudavel: ok com a URL, sem conta nem credencial.
     var good = doctorControlLine("http://127.0.0.1:8080", "{\"ok\":\"true\",\"ready\":\"true\"}", "")
-    assert(good == "ok   control plane (http://127.0.0.1:8080)", "saudavel: " + good)
-    assert(good.indexOf("kfc_") < 0, "sem credencial")
+    need(good == "ok   control plane (http://127.0.0.1:8080)", "falhou")
+    need(good.indexOf("kfc_") < 0, "falhou")
 
     // e2e: control real com estado ilegivel — a linha diz estado, nao rede.
     var port = 19988
     var path = "/tmp/kofcloud-docctl-" + crypto.randomHex(4) + ".json"
     writeTextTo(path, "{ isto nao e estado }")
     var registry = Registry(path)
-    assert(registry.loadStatus == "corrupt", "estado ilegivel na partida")
+    need(registry.loadStatus == "corrupt", "falhou")
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control no ar")
+    need(waitForPort(port, 60), "falhou")
     var body = ""
     var err = ""
     try {
@@ -576,6 +590,6 @@ test "doctor: camada do control plane distingue estado ilegivel de fora do ar", 
         err = e
     }
     var line = doctorControlLine("http://127.0.0.1:" + intToString(port), body, err)
-    assert(err.indexOf("503") >= 0, "e2e: http.get lanca 503: " + err)
-    assert(line.indexOf("ilegivel") >= 0, "e2e: a camada nomeia o estado: " + line)
+    need(err.indexOf("503") >= 0, "falhou")
+    need(line.indexOf("ilegivel") >= 0, "falhou")
 }

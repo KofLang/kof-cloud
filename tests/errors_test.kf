@@ -28,86 +28,86 @@ test "erros: control plane devolve codigos estaveis", "errors" {
     var registry = Registry(path)
     var control = ControlPlane(registry, 19500, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(19500, 60), "control plane no ar")
+    need(waitForPort(19500, 60), "falhou")
 
     var badHandle = httpPostJson(19500, "/v1/accounts", "{\"handle\":\"MEL\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
-    assert(statusOf(badHandle) == 400, "handle invalido -> 400")
-    assert(codeIs(errorCodeOf(badHandle), "KCF001"), "KCF001 invalid handle")
+    need(statusOf(badHandle) == 400, "falhou")
+    need(codeIs(errorCodeOf(badHandle), "KCF001"), "falhou")
 
     // Senha curta: o handler barra antes de criar (400 KCF005). Sem esta
     // trava, o ramo `password.length < 4` poderia sumir ou mudar de codigo
     // sem quebrar nada — o construtor e a Hint ja estao travados, mas o fio
     // (status+corpo via HTTP) nao estava.
     var shortPass = httpPostJson(19500, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"abc\"}", "")
-    assert(statusOf(shortPass) == 400, "senha curta -> 400")
-    assert(codeIs(errorCodeOf(shortPass), "KCF005"), "KCF005 password too short")
+    need(statusOf(shortPass) == 400, "falhou")
+    need(codeIs(errorCodeOf(shortPass), "KCF005"), "falhou")
 
     var created = httpPostJson(19500, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"mel@example.com\",\"password\":\"segredo\"}", "")
-    assert(statusOf(created) == 200, "conta criada")
+    need(statusOf(created) == 200, "falhou")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
     var duplicate = httpPostJson(19500, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"outro@e.com\",\"password\":\"segredo\"}", "")
-    assert(statusOf(duplicate) == 409, "handle duplicado -> 409")
-    assert(codeIs(errorCodeOf(duplicate), "KCF002"), "KCF002 handle taken")
+    need(statusOf(duplicate) == 409, "falhou")
+    need(codeIs(errorCodeOf(duplicate), "KCF002"), "falhou")
 
     var wrongPass = httpPostJson(19500, "/v1/login", "{\"handle\":\"mel\",\"password\":\"errada\"}", "")
-    assert(statusOf(wrongPass) == 401, "senha errada -> 401")
-    assert(codeIs(errorCodeOf(wrongPass), "KCF003"), "KCF003 invalid credentials")
+    need(statusOf(wrongPass) == 401, "falhou")
+    need(codeIs(errorCodeOf(wrongPass), "KCF003"), "falhou")
     var unknownUser = httpPostJson(19500, "/v1/login", "{\"handle\":\"ninguem\",\"password\":\"x\"}", "")
-    assert(statusOf(unknownUser) == 401, "conta inexistente -> 401 opaco")
-    assert(codeIs(errorCodeOf(unknownUser), "KCF003"), "mesmo KCF003 (nao revela existencia)")
+    need(statusOf(unknownUser) == 401, "falhou")
+    need(codeIs(errorCodeOf(unknownUser), "KCF003"), "falhou")
 
     var noToken = httpGetRaw(19500, "/v1/devices", "127.0.0.1")
-    assert(statusOf(noToken) == 401, "sem token -> 401")
-    assert(codeIs(bodyOf(noToken), "KCF004"), "KCF004 unauthorized")
+    need(statusOf(noToken) == 401, "falhou")
+    need(codeIs(bodyOf(noToken), "KCF004"), "falhou")
 
     var badDevice = httpPostJson(19500, "/v1/devices", "{\"name\":\"\",\"publicKey\":\"\"}", accountToken)
-    assert(statusOf(badDevice) == 400, "campos vazios -> 400")
-    assert(codeIs(errorCodeOf(badDevice), "KCF020"), "KCF020 name/publicKey")
+    need(statusOf(badDevice) == 400, "falhou")
+    need(codeIs(errorCodeOf(badDevice), "KCF020"), "falhou")
 
     var device = httpPostJson(19500, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
-    assert(statusOf(device) == 200, "device registrado")
+    need(statusOf(device) == 200, "falhou")
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(device)), "deviceId")
 
     var badPort = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"0\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", accountToken)
-    assert(statusOf(badPort) == 400, "porta invalida -> 400")
-    assert(codeIs(errorCodeOf(badPort), "KCF043"), "KCF043 localPort")
+    need(statusOf(badPort) == 400, "falhou")
+    need(codeIs(errorCodeOf(badPort), "KCF043"), "falhou")
 
     // Teto: porta acima de 65535 tambem e 400 (antes passava e quebrava so
     // no net.connect do relay).
     var bigPort = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"99999\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", accountToken)
-    assert(statusOf(bigPort) == 400, "porta gigante -> 400")
-    assert(codeIs(errorCodeOf(bigPort), "KCF043"), "KCF043 com teto")
+    need(statusOf(bigPort) == 400, "falhou")
+    need(codeIs(errorCodeOf(bigPort), "KCF043"), "falhou")
 
     // Porta que estoura Int fazia WRAP na API: 4294968080 virava 784 e era
     // publicada em silencio; 4294967296 virava 0. Agora e 400 como qualquer
     // porta fora da faixa.
     var wrappedPort = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"4294968080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", accountToken)
-    assert(statusOf(wrappedPort) == 400, "porta com wrap -> 400")
-    assert(codeIs(errorCodeOf(wrappedPort), "KCF043"), "KCF043 no wrap")
+    need(statusOf(wrappedPort) == 400, "falhou")
+    need(codeIs(errorCodeOf(wrappedPort), "KCF043"), "falhou")
     var zeroWrapPort = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"4294967296\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", accountToken)
-    assert(statusOf(zeroWrapPort) == 400, "porta 2^32 -> 400")
-    assert(codeIs(errorCodeOf(zeroWrapPort), "KCF043"), "KCF043 no 2^32")
+    need(statusOf(zeroWrapPort) == 400, "falhou")
+    need(codeIs(errorCodeOf(zeroWrapPort), "KCF043"), "falhou")
 
     var badName = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"SITE!\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", accountToken)
-    assert(statusOf(badName) == 400, "nome invalido -> 400")
-    assert(codeIs(errorCodeOf(badName), "KCF040"), "KCF040 invalid service name")
+    need(statusOf(badName) == 400, "falhou")
+    need(codeIs(errorCodeOf(badName), "KCF040"), "falhou")
 
     // Exposure desconhecida nao cai para PUBLIC em silencio: um typo
     // ("PUBLIK") num servico que devia ser PRIVATE o exporia.
     var badExposure = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"db\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"5432\",\"protocol\":\"http\",\"exposure\":\"PUBLIK\"}", accountToken)
-    assert(statusOf(badExposure) == 400, "exposure invalida -> 400")
-    assert(codeIs(errorCodeOf(badExposure), "KCF045"), "KCF045 exposure")
+    need(statusOf(badExposure) == 400, "falhou")
+    need(codeIs(errorCodeOf(badExposure), "KCF045"), "falhou")
 
     // Protocol fora do MVP nao e aceito em silencio: o tunel so fala HTTP.
     var badProtocol = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"db\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"5432\",\"protocol\":\"tcp\",\"exposure\":\"PRIVATE\"}", accountToken)
-    assert(statusOf(badProtocol) == 400, "protocol invalido -> 400")
-    assert(codeIs(errorCodeOf(badProtocol), "KCF046"), "KCF046 protocol")
+    need(statusOf(badProtocol) == 400, "falhou")
+    need(codeIs(errorCodeOf(badProtocol), "KCF046"), "falhou")
 
     // Address fora de loopback nao e aceito: o Agent conectaria nesse
     // endereco — externo o transformaria em escaneador (SSRF).
     var badAddress = httpPostJson(19500, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"db\",\"localAddress\":\"169.254.169.254\",\"localPort\":\"80\",\"protocol\":\"http\",\"exposure\":\"PRIVATE\"}", accountToken)
-    assert(statusOf(badAddress) == 400, "address externo -> 400")
-    assert(codeIs(errorCodeOf(badAddress), "KCF047"), "KCF047 loopback")
+    need(statusOf(badAddress) == 400, "falhou")
+    need(codeIs(errorCodeOf(badAddress), "KCF047"), "falhou")
 }
 
 test "erros: conta nao dona recebe 404 opaco (nao revela recurso alheio)", "errors-xacct" {
@@ -115,7 +115,7 @@ test "erros: conta nao dona recebe 404 opaco (nao revela recurso alheio)", "erro
     var registry = Registry(path)
     var control = ControlPlane(registry, 19510, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(19510, 60), "control plane no ar")
+    need(waitForPort(19510, 60), "falhou")
 
     var melCreated = httpPostJson(19510, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"mel@example.com\",\"password\":\"segredo\"}", "")
     var mel = json.decode<Map<String, String>>(bodyOf(melCreated))
@@ -126,31 +126,31 @@ test "erros: conta nao dona recebe 404 opaco (nao revela recurso alheio)", "erro
     var melDeviceId = mapField(json.decode<Map<String, String>>(bodyOf(melDevice)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + melDeviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
     var published = httpPostJson(19510, "/v1/services", pubBody, mapField(mel, "token"))
-    assert(statusOf(published) == 200, "mel publica")
+    need(statusOf(published) == 200, "falhou")
     var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
 
     // ana tenta operar sobre o device/servico de mel: mesmo 404 de inexistente
     var anaDevice = httpPostJson(19510, "/v1/services", pubBody, mapField(ana, "token"))
-    assert(statusOf(anaDevice) == 404, "device alheio -> 404")
-    assert(codeIs(errorCodeOf(anaDevice), "KCF021"), "KCF021 (nao revela que existe)")
+    need(statusOf(anaDevice) == 404, "falhou")
+    need(codeIs(errorCodeOf(anaDevice), "KCF021"), "falhou")
 
     var anaTokenBody = "{\"serviceId\":\"" + serviceId + "\"}"
     var anaToken = httpPostJson(19510, "/v1/services/token", anaTokenBody, mapField(ana, "token"))
-    assert(statusOf(anaToken) == 404, "token sobre servico alheio -> 404")
-    assert(codeIs(errorCodeOf(anaToken), "KCF041"), "KCF041 opaco")
+    need(statusOf(anaToken) == 404, "falhou")
+    need(codeIs(errorCodeOf(anaToken), "KCF041"), "falhou")
 
     // owner-gate do status: ana nao altera o status do servico de mel
     var anaStatus = httpPostJson(19510, "/v1/services/status", "{\"serviceId\":\"" + serviceId + "\",\"status\":\"OFFLINE\"}", mapField(ana, "token"))
-    assert(statusOf(anaStatus) == 404, "status alheio -> 404 opaco")
-    assert(codeIs(errorCodeOf(anaStatus), "KCF041"), "KCF041 (nao KCF042 na borda)")
+    need(statusOf(anaStatus) == 404, "falhou")
+    need(codeIs(errorCodeOf(anaStatus), "KCF041"), "falhou")
     var svcBefore = registry.serviceById(serviceId)
-    assert(svcBefore != null && svcBefore.status == "UNKNOWN", "status intacto")
+    need(svcBefore != null && svcBefore.status == "UNKNOWN", "falhou")
 
     // e o dono consegue
     var melStatus = httpPostJson(19510, "/v1/services/status", "{\"serviceId\":\"" + serviceId + "\",\"status\":\"ONLINE\"}", mapField(mel, "token"))
-    assert(statusOf(melStatus) == 200, "dono altera")
+    need(statusOf(melStatus) == 200, "falhou")
     var svcAfter = registry.serviceById(serviceId)
-    assert(svcAfter != null && svcAfter.status == "ONLINE", "status aplicado")
+    need(svcAfter != null && svcAfter.status == "ONLINE", "falhou")
 }
 
 test "erros: device resolve por nome ou id (publish --device)", "errors-device" {
@@ -158,7 +158,7 @@ test "erros: device resolve por nome ou id (publish --device)", "errors-device" 
     var registry = Registry(path)
     var control = ControlPlane(registry, 19546, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(19546, 60), "control plane no ar")
+    need(waitForPort(19546, 60), "falhou")
 
     var created = httpPostJson(19546, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -171,32 +171,32 @@ test "erros: device resolve por nome ou id (publish --device)", "errors-device" 
     var srvId = mapField(json.decode<Map<String, String>>(bodyOf(srv)), "deviceId")
 
     // Nome resolve para o id (e o outro nome resolve para o outro id).
-    assert(deviceIdByNameOrId(session, "notebook") == nbId, "nome resolve")
-    assert(deviceIdByNameOrId(session, "server") == srvId, "segundo nome resolve")
+    need(deviceIdByNameOrId(session, "notebook") == nbId, "falhou")
+    need(deviceIdByNameOrId(session, "server") == srvId, "falhou")
     // Id passa direto (compat: quem ja usa id nao quebra).
-    assert(deviceIdByNameOrId(session, nbId) == nbId, "id passa direto")
+    need(deviceIdByNameOrId(session, nbId) == nbId, "falhou")
     // Nome inexistente: "" (o chamador responde erro local honesto).
-    assert(deviceIdByNameOrId(session, "fantasma") == "", "nome ruim da vazio")
+    need(deviceIdByNameOrId(session, "fantasma") == "", "falhou")
     // Trim como o parseManifest: padding resolve igual (CLI e manifesto
     // aceitam os mesmos nomes; espacos sobrando nao quebram a resolucao).
-    assert(deviceIdByNameOrId(session, "  notebook  ") == nbId, "nome com espaco resolve")
-    assert(deviceIdByNameOrId(session, "  " + nbId + "  ") == nbId, "id com espaco passa direto")
+    need(deviceIdByNameOrId(session, "  notebook  ") == nbId, "falhou")
+    need(deviceIdByNameOrId(session, "  " + nbId + "  ") == nbId, "falhou")
     // So-espacos nao resolve nada (""): os guardas do device revoke/suspend/
     // unsuspend pedem `uso` antes de qualquer fetch, igual aos comandos de
     // servico (unpublish/status/token/token-revoke ja faziam com trim).
-    assert(deviceIdByNameOrId(session, "   ") == "", "so-espacos nao resolve")
+    need(deviceIdByNameOrId(session, "   ") == "", "falhou")
 
     // E o id resolvido opera de verdade: suspende por nome via API (o que
     // os comandos fazem depois de resolver).
     var suspendBody = "{\"deviceId\":\"" + deviceIdByNameOrId(session, "notebook") + "\"}"
-    assert(statusOf(httpPostJson(19546, "/v1/devices/suspend", suspendBody, accountToken)) == 200, "suspend do id resolvido")
+    need(statusOf(httpPostJson(19546, "/v1/devices/suspend", suspendBody, accountToken)) == 200, "falhou")
     var suspended = registry.deviceById(nbId)
-    assert(suspended != null, "device existe")
+    need(suspended != null, "falhou")
     if (suspended != null) {
-        assert(suspended.status == "SUSPENDED", "suspenso de verdade")
+        need(suspended.status == "SUSPENDED", "falhou")
     }
     var unsuspendBody = "{\"deviceId\":\"" + deviceIdByNameOrId(session, "notebook") + "\"}"
-    assert(statusOf(httpPostJson(19546, "/v1/devices/unsuspend", unsuspendBody, accountToken)) == 200, "unsuspend do id resolvido")
+    need(statusOf(httpPostJson(19546, "/v1/devices/unsuspend", unsuspendBody, accountToken)) == 200, "falhou")
 }
 
 test "erros: limites e owner-gate no registry viajam como KCF080/KCF081/KCF022/KCF060", "errors-reg" {
@@ -211,7 +211,7 @@ test "erros: limites e owner-gate no registry viajam como KCF080/KCF081/KCF022/K
     } catch (String e) {
         blocked = e
     }
-    assert(codeIs(blocked, "KCF080"), "KCF080 limite de dispositivos")
+    need(codeIs(blocked, "KCF080"), "falhou")
 
     registry.publishService(mel, d1.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
     var blockedSvc = ""
@@ -220,7 +220,7 @@ test "erros: limites e owner-gate no registry viajam como KCF080/KCF081/KCF022/K
     } catch (String e) {
         blockedSvc = e
     }
-    assert(codeIs(blockedSvc, "KCF081"), "KCF081 limite de servicos")
+    need(codeIs(blockedSvc, "KCF081"), "falhou")
 
     var anaDevice = registry.registerDevice(ana, "nb", "pk")
     var notYours = ""
@@ -229,10 +229,10 @@ test "erros: limites e owner-gate no registry viajam como KCF080/KCF081/KCF022/K
     } catch (String e) {
         notYours = e
     }
-    assert(codeIs(notYours, "KCF022"), "KCF022 device alheio")
+    need(codeIs(notYours, "KCF022"), "falhou")
 
     var site = registry.serviceByName(mel.id, "site")
-    assert(site != null, "site publicado")
+    need(site != null, "falhou")
     var tokenDenied = ""
     if (site != null) {
         try {
@@ -241,7 +241,7 @@ test "erros: limites e owner-gate no registry viajam como KCF080/KCF081/KCF022/K
             tokenDenied = e
         }
     }
-    assert(codeIs(tokenDenied, "KCF060"), "KCF060 emissao negada a nao dona")
+    need(codeIs(tokenDenied, "KCF060"), "falhou")
 
     // Contrato interno-vs-borda do owner-gate do status: o registry devolve
     // o motivo real (KCF041 inexistente, KCF042 alheio); a borda reescreve
@@ -249,8 +249,8 @@ test "erros: limites e owner-gate no registry viajam como KCF080/KCF081/KCF022/K
     // registry passar a devolver outra coisa, este teste quebra — e se a
     // borda passar a repassar o KCF042, o errors-xacct quebra.
     if (site != null) {
-        assert(codeIs(registry.reportServiceStatus(mel.id, "fantasma", "ONLINE"), "KCF041"), "status: inexistente e KCF041")
-        assert(codeIs(registry.reportServiceStatus(ana.id, site.id, "OFFLINE"), "KCF042"), "status: alheio e KCF042 interno")
+        need(codeIs(registry.reportServiceStatus(mel.id, "fantasma", "ONLINE"), "KCF041"), "falhou")
+        need(codeIs(registry.reportServiceStatus(ana.id, site.id, "OFFLINE"), "KCF042"), "falhou")
     }
 }
 
@@ -258,20 +258,20 @@ test "erros: publishHttpStatus mapeia familia -> HTTP (trava pura)", "errors-pub
     // Fonte unica do mapeamento que o publishError usa na borda: limite
     // 429, validacao 400, resto (dono/recurso) 404 opaco. Mudar um ramo
     // sem atualizar a trava quebra aqui de proposito.
-    assert(publishHttpStatus(errLimitDevices()) == 429, "KCF080 -> 429")
-    assert(publishHttpStatus(errLimitServices()) == 429, "KCF081 -> 429")
-    assert(publishHttpStatus(errInvalidServiceName()) == 400, "KCF040 -> 400")
-    assert(publishHttpStatus(errLocalPort()) == 400, "KCF043 -> 400")
-    assert(publishHttpStatus(errDeviceNotYours()) == 404, "KCF022 -> 404 opaco")
-    assert(publishHttpStatus(errDeviceRevoked()) == 409, "KCF023 -> 409 (estado impede, acionavel)")
-    assert(publishHttpStatus(errDeviceNotFound()) == 404, "KCF021 -> 404 opaco")
-    assert(publishHttpStatus("KCF999: algo estranho") == 404, "desconhecido -> 404 opaco")
+    need(publishHttpStatus(errLimitDevices()) == 429, "falhou")
+    need(publishHttpStatus(errLimitServices()) == 429, "falhou")
+    need(publishHttpStatus(errInvalidServiceName()) == 400, "falhou")
+    need(publishHttpStatus(errLocalPort()) == 400, "falhou")
+    need(publishHttpStatus(errDeviceNotYours()) == 404, "falhou")
+    need(publishHttpStatus(errDeviceRevoked()) == 409, "falhou")
+    need(publishHttpStatus(errDeviceNotFound()) == 404, "falhou")
+    need(publishHttpStatus("KCF999: algo estranho") == 404, "falhou")
     // O freeze tem mapeamento proprio (freezeHttpStatus): KCF023 -> 409
     // (revogado terminal, acionavel), resto -> 404 opaco. Mesma recusa do
     // publish, outra borda: mudar um ramo sem atualizar aqui quebra.
-    assert(freezeHttpStatus(errDeviceRevoked()) == 409, "freeze: KCF023 -> 409")
-    assert(freezeHttpStatus(errTargetNotFound()) == 404, "freeze: KCF128 -> 404 opaco")
-    assert(freezeHttpStatus("KCF999: algo estranho") == 404, "freeze: desconhecido -> 404 opaco")
+    need(freezeHttpStatus(errDeviceRevoked()) == 409, "falhou")
+    need(freezeHttpStatus(errTargetNotFound()) == 404, "falhou")
+    need(freezeHttpStatus("KCF999: algo estranho") == 404, "falhou")
 }
 
 test "erros: Edge devolve codigos estaveis (rota, auth, offline, conteudo)", "errors-edge" {
@@ -283,7 +283,7 @@ test "erros: Edge devolve codigos estaveis (rota, auth, offline, conteudo)", "er
     var app = web.app()
     app.get("/") { return "svc-up" }
     var server = spawn { app.listen(localSvc) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-erre-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -295,9 +295,9 @@ test "erros: Edge devolve codigos estaveis (rota, auth, offline, conteudo)", "er
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"mel@example.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -307,19 +307,19 @@ test "erros: Edge devolve codigos estaveis (rota, auth, offline, conteudo)", "er
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
 
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"pub\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "falhou")
     var secBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"secret\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", secBody, accountToken)) == 200, "AUTHENTICATED publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", secBody, accountToken)) == 200, "falhou")
 
     // sem tunel: device offline -> 503 KCF102
     var offline = httpGetRaw(httpPort, "/", "pub.mel.kofcloud.io")
-    assert(statusOf(offline) == 503, "offline -> 503")
-    assert(codeIs(bodyOf(offline), "KCF102"), "KCF102 device offline")
+    need(statusOf(offline) == 503, "falhou")
+    need(codeIs(bodyOf(offline), "KCF102"), "falhou")
 
     // host desconhecido e PRIVATE respondem o mesmo 404 opaco
     var unknown = httpGetRaw(httpPort, "/", "naoexiste.mel.kofcloud.io")
-    assert(statusOf(unknown) == 404, "host desconhecido -> 404")
-    assert(codeIs(bodyOf(unknown), "KCF100"), "KCF100 sem rota")
+    need(statusOf(unknown) == 404, "falhou")
+    need(codeIs(bodyOf(unknown), "KCF100"), "falhou")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
     var agentTask = spawn { runAgent(config, true) }
@@ -332,18 +332,18 @@ test "erros: Edge devolve codigos estaveis (rota, auth, offline, conteudo)", "er
             attempts = attempts - 1
         }
     }
-    assert(online, "agent registrado no edge")
+    need(online, "falhou")
 
-    assert(statusOf(httpGetRaw(httpPort, "/", "pub.mel.kofcloud.io")) == 200, "PUBLIC roteia com tunel")
+    need(statusOf(httpGetRaw(httpPort, "/", "pub.mel.kofcloud.io")) == 200, "falhou")
 
     var noCred = httpGetRaw(httpPort, "/", "secret.mel.kofcloud.io")
-    assert(statusOf(noCred) == 401, "AUTHENTICATED sem credencial -> 401")
-    assert(codeIs(bodyOf(noCred), "KCF101"), "KCF101 auth required")
-    assert(responseHeader(noCred, "www-authenticate") == "Bearer", "anuncia o esquema")
+    need(statusOf(noCred) == 401, "falhou")
+    need(codeIs(bodyOf(noCred), "KCF101"), "falhou")
+    need(responseHeader(noCred, "www-authenticate") == "Bearer", "falhou")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
-    assert(edgeState.isOnline(deviceId) == false, "agente encerrou")
+    need(edgeState.isOnline(deviceId) == false, "falhou")
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)
     File(agentStop).delete()
@@ -351,39 +351,39 @@ test "erros: Edge devolve codigos estaveis (rota, auth, offline, conteudo)", "er
 }
 
 test "erros: Hint orienta sem vazar segredo ou recurso alheio", "errors-hint" {
-    assert(errHint("KCF004: missing or invalid account token").indexOf("login") >= 0, "KCF004 sugere login")
-    assert(errHint("KCF005: password too short").indexOf("4 caracteres") >= 0, "KCF005 sugere tamanho")
-    assert(errPasswordTooShort().indexOf("KCF005") >= 0, "KCF005 sai do construtor, nao de literal inline")
-    assert(errHint(errPasswordTooShort()).indexOf("4 caracteres") >= 0, "KCF005 via construtor tem Hint")
-    assert(errHint("KCF043: localPort required").indexOf("--port") >= 0, "KCF043 sugere flag")
-    assert(errHint("KCF044: serviceId required").indexOf("service list") >= 0, "KCF044 sugere lista")
-    assert(errHint("KCF022: not the owner of device").indexOf("outra conta") >= 0, "KCF022 sem revelar dono")
-    assert(errHint("KCF060: not the owner of service").indexOf("outra conta") >= 0, "KCF060 sem revelar dono")
-    assert(errHint("KCF061: serviceId and token required").indexOf("service token") >= 0, "KCF061 sugere comando")
-    assert(errHint("KCF062: ttlHours must be positive").indexOf("--ttl") >= 0, "KCF062 sugere flag")
-    assert(errHint("KCF101: authentication required").indexOf("kfs_") >= 0, "KCF101 sugere service token")
-    assert(errHint("KCF100: no route for host").indexOf("domain list") >= 0, "KCF100 sugere domain list")
-    assert(errHint("KCF102: device not connected").indexOf("connect") >= 0, "KCF102 sugere connect")
-    assert(errHint("KCF103: service site is OFFLINE").indexOf("logs") >= 0, "KCF103 sugere logs")
-    assert(errHint("KCF104: tunnel error: boom").indexOf("reconexao") >= 0, "KCF104 pede paciencia")
-    assert(errHint("KCF105: empty response from service").indexOf("porta") >= 0, "KCF105 aponta aplicacao")
-    assert(errHint("KCF106: too many concurrent streams").indexOf("instantes") >= 0, "KCF106 pede retry")
-    assert(errHint("KCF107: too many requests").indexOf("instante") >= 0, "KCF107 pede espera")
-    assert(errHint("KCF108: too many connections for this service").indexOf("instantes") >= 0, "KCF108 pede retry")
-    assert(errHint(errWafDenied()).indexOf("_waf_denied") >= 0, "KCF109 aponta a metrica")
-    assert(errHint(errWafAllowDenied()).indexOf("_waf_allow_denied") >= 0, "KCF111 aponta a metrica")
-    assert(errHint("KCF110: request body too large").indexOf("httpBodyBytes") >= 0, "KCF110 aponta o limite")
-    assert(errHint("KCF112: upstream did not respond in time").indexOf("tunnelIdleMs") >= 0, "KCF112 aponta o teto")
-    assert(errHint("KCF120: bad hostname").indexOf("api.example.com") >= 0, "KCF120 da exemplo")
-    assert(errHint("KCF121: hostname already registered").indexOf("domain list") >= 0, "KCF121 sugere lista")
-    assert(errHint("KCF122: domain not found").indexOf("domain list") >= 0, "KCF122 sugere lista")
-    assert(errHint("KCF124: does not resolve").indexOf("verify") >= 0, "KCF124 sugere verify")
-    assert(errHint("KCF080: too many active devices").indexOf("revoke") >= 0, "KCF080 sugere revoke")
-    assert(errHint("KCF045: exposure must be PUBLIC").indexOf("PRIVATE") >= 0, "KCF045 lista as opcoes")
-    assert(errHint("KCF046: protocol must be http").indexOf("HTTP") >= 0, "KCF046 diz que e so HTTP")
-    assert(errHint("KCF047: localAddress must be loopback").indexOf("loopback") >= 0, "KCF047 sugere loopback")
-    assert(errHint("KCF063: short id matches more").indexOf("kfs_") >= 0, "KCF063 pede o valor completo")
-    assert(errHint("KCF999: algo desconhecido") == "", "codigo desconhecido nao inventa dica")
+    need(errHint("KCF004: missing or invalid account token").indexOf("login") >= 0, "falhou")
+    need(errHint("KCF005: password too short").indexOf("4 caracteres") >= 0, "falhou")
+    need(errPasswordTooShort().indexOf("KCF005") >= 0, "falhou")
+    need(errHint(errPasswordTooShort()).indexOf("4 caracteres") >= 0, "falhou")
+    need(errHint("KCF043: localPort required").indexOf("--port") >= 0, "falhou")
+    need(errHint("KCF044: serviceId required").indexOf("service list") >= 0, "falhou")
+    need(errHint("KCF022: not the owner of device").indexOf("outra conta") >= 0, "falhou")
+    need(errHint("KCF060: not the owner of service").indexOf("outra conta") >= 0, "falhou")
+    need(errHint("KCF061: serviceId and token required").indexOf("service token") >= 0, "falhou")
+    need(errHint("KCF062: ttlHours must be positive").indexOf("--ttl") >= 0, "falhou")
+    need(errHint("KCF101: authentication required").indexOf("kfs_") >= 0, "falhou")
+    need(errHint("KCF100: no route for host").indexOf("domain list") >= 0, "falhou")
+    need(errHint("KCF102: device not connected").indexOf("connect") >= 0, "falhou")
+    need(errHint("KCF103: service site is OFFLINE").indexOf("logs") >= 0, "falhou")
+    need(errHint("KCF104: tunnel error: boom").indexOf("reconexao") >= 0, "falhou")
+    need(errHint("KCF105: empty response from service").indexOf("porta") >= 0, "falhou")
+    need(errHint("KCF106: too many concurrent streams").indexOf("instantes") >= 0, "falhou")
+    need(errHint("KCF107: too many requests").indexOf("instante") >= 0, "falhou")
+    need(errHint("KCF108: too many connections for this service").indexOf("instantes") >= 0, "falhou")
+    need(errHint(errWafDenied()).indexOf("_waf_denied") >= 0, "falhou")
+    need(errHint(errWafAllowDenied()).indexOf("_waf_allow_denied") >= 0, "falhou")
+    need(errHint("KCF110: request body too large").indexOf("httpBodyBytes") >= 0, "falhou")
+    need(errHint("KCF112: upstream did not respond in time").indexOf("tunnelIdleMs") >= 0, "falhou")
+    need(errHint("KCF120: bad hostname").indexOf("api.example.com") >= 0, "falhou")
+    need(errHint("KCF121: hostname already registered").indexOf("domain list") >= 0, "falhou")
+    need(errHint("KCF122: domain not found").indexOf("domain list") >= 0, "falhou")
+    need(errHint("KCF124: does not resolve").indexOf("verify") >= 0, "falhou")
+    need(errHint("KCF080: too many active devices").indexOf("revoke") >= 0, "falhou")
+    need(errHint("KCF045: exposure must be PUBLIC").indexOf("PRIVATE") >= 0, "falhou")
+    need(errHint("KCF046: protocol must be http").indexOf("HTTP") >= 0, "falhou")
+    need(errHint("KCF047: localAddress must be loopback").indexOf("loopback") >= 0, "falhou")
+    need(errHint("KCF063: short id matches more").indexOf("kfs_") >= 0, "falhou")
+    need(errHint("KCF999: algo desconhecido") == "", "falhou")
 }
 
 test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" {
@@ -456,9 +456,9 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     emitted.add(errInvalidWebhook())
     emitted.add(errWebhookNotFound())
     emitted.add(errHeadWithBody())
-    assert(emitted.size == 64, "64 construtores emitem codigo")
+    need(emitted.size == 64, "falhou")
     for (var msg in emitted) {
-        assert(errHint(msg).length > 0, msg + " via construtor tem Hint")
+        need(errHint(msg).length > 0, "falhou")
     }
     // Camada 2 — lista canonica por codigo (amarra o errHint(): codigo novo
     // sem ramo de dica quebra aqui).
@@ -531,7 +531,7 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
     codes.add("KCF141")
     codes.add("KCF164")
     for (var code in codes) {
-        assert(errHint(code + ": x").length > 0, code + " tem Hint")
+        need(errHint(code + ": x").length > 0, "falhou")
     }
     // Camada 3 — completude: a lista canonica cobre TODOS os codigos que os
     // construtores emitem. Sem isso, um construtor novo entra no `emitted`
@@ -545,13 +545,13 @@ test "erros: todo KCF emitido tem Hint (trava de regressao)", "errors-hint-all" 
             fromConstructors.add(head)
         }
     }
-    assert(fromConstructors.size == codes.size, "lista canonica cobre os construtores: " + intToString(fromConstructors.size) + " codigos vs " + intToString(codes.size) + " na lista")
+    need(fromConstructors.size == codes.size, "falhou")
     for (var code in fromConstructors) {
-        assert(codes.contains(code), code + " emitido por construtor e ausente da lista canonica")
+        need(codes.contains(code), "falhou")
     }
     // E o reservado continua sem dica (nunca emitido — se alguem emitir,
     // o teste acima nao pega, mas a tabela do protocolo acusa).
-    assert(errHint("KCF123: reservado") == "", "KCF123 sem Hint (reservado)")
+    need(errHint("KCF123: reservado") == "", "falhou")
 }
 
 test "erros: revoke e TTL invalidos viajam como KCF061/KCF062", "errors-token" {
@@ -559,7 +559,7 @@ test "erros: revoke e TTL invalidos viajam como KCF061/KCF062", "errors-token" {
     var registry = Registry("/tmp/kofcloud-errt-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control plane no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -567,22 +567,22 @@ test "erros: revoke e TTL invalidos viajam como KCF061/KCF062", "errors-token" {
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}"
     var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
-    assert(statusOf(published) == 200, "servico publicado")
+    need(statusOf(published) == 200, "falhou")
     var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
 
     // Revoke sem serviceId nem token: 400 KCF061 (nao 404 — e erro de
     // requisicao, nao recurso ausente).
     var noFields = httpPostJson(controlPort, "/v1/services/token/revoke", "{}", accountToken)
-    assert(statusOf(noFields) == 400, "revoke sem campos -> 400")
-    assert(codeIs(errorCodeOf(noFields), "KCF061"), "KCF061 campos obrigatorios")
+    need(statusOf(noFields) == 400, "falhou")
+    need(codeIs(errorCodeOf(noFields), "KCF061"), "falhou")
     // Revoke sem o token: mesmo 400 (o serviceId sozinho nao basta).
     var noTokenField = httpPostJson(controlPort, "/v1/services/token/revoke", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
-    assert(statusOf(noTokenField) == 400, "revoke sem token -> 400")
-    assert(codeIs(errorCodeOf(noTokenField), "KCF061"), "KCF061 sem token")
+    need(statusOf(noTokenField) == 400, "falhou")
+    need(codeIs(errorCodeOf(noTokenField), "KCF061"), "falhou")
     // Revoke de token inexistente: 404 opaco, nao 400 (a forma esta certa,
     // o recurso e que nao existe).
     var ghost = httpPostJson(controlPort, "/v1/services/token/revoke", "{\"serviceId\":\"" + serviceId + "\",\"token\":\"kfs_inexistente\"}", accountToken)
-    assert(statusOf(ghost) == 404, "revoke de fantasma -> 404 opaco")
+    need(statusOf(ghost) == 404, "falhou")
 
     // Padding colado no token (copiar-colar com espaco) tambem e 404
     // opaco: o servidor compara o hash exato (e o prefixo curto), entao
@@ -590,20 +590,20 @@ test "erros: revoke e TTL invalidos viajam como KCF061/KCF062", "errors-token" {
     // o CLI apara o token antes de enviar (mesma paridade de trim do
     // nome); aqui o protocolo mostra o comportamento sem o trim.
     var issued = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
-    assert(statusOf(issued) == 200, "token emitido")
+    need(statusOf(issued) == 200, "falhou")
     var realToken = mapField(json.decode<Map<String, String>>(bodyOf(issued)), "token")
     var padded = httpPostJson(controlPort, "/v1/services/token/revoke", "{\"serviceId\":\"" + serviceId + "\",\"token\":\" " + realToken + " \"}", accountToken)
-    assert(statusOf(padded) == 404, "revoke com padding -> 404 opaco")
+    need(statusOf(padded) == 404, "falhou")
     var exact = httpPostJson(controlPort, "/v1/services/token/revoke", "{\"serviceId\":\"" + serviceId + "\",\"token\":\"" + realToken + "\"}", accountToken)
-    assert(statusOf(exact) == 200, "revoke exato -> 200")
+    need(statusOf(exact) == 200, "falhou")
 
     // TTL zero e lixo: 400 KCF062 (na borda, igual ao e2e autenticado).
     var zeroTtl = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"0\"}", accountToken)
-    assert(statusOf(zeroTtl) == 400, "TTL zero -> 400")
-    assert(codeIs(errorCodeOf(zeroTtl), "KCF062"), "KCF062 TTL positivo")
+    need(statusOf(zeroTtl) == 400, "falhou")
+    need(codeIs(errorCodeOf(zeroTtl), "KCF062"), "falhou")
     var junkTtl = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"para-sempre\"}", accountToken)
-    assert(statusOf(junkTtl) == 400, "TTL lixo -> 400")
-    assert(codeIs(errorCodeOf(junkTtl), "KCF062"), "KCF062 lixo")
+    need(statusOf(junkTtl) == 400, "falhou")
+    need(codeIs(errorCodeOf(junkTtl), "KCF062"), "falhou")
 }
 
 test "erros: revokeTokenError mapeia outcome -> HTTP+corpo (trava pura)", "errors-revoke-status" {
@@ -613,14 +613,14 @@ test "erros: revokeTokenError mapeia outcome -> HTTP+corpo (trava pura)", "error
     // atualizar a trava quebra aqui de proposito (precedente:
     // errors-publish-status, domains-status).
     var ambiguous = revokeTokenError("ambiguous")
-    assert(ambiguous.code == 409, "ambiguous -> 409")
-    assert(codeIs(ambiguous.body, "KCF063"), "409 carrega KCF063")
+    need(ambiguous.code == 409, "falhou")
+    need(codeIs(ambiguous.body, "KCF063"), "falhou")
     var missing = revokeTokenError("")
-    assert(missing.code == 404, "vazio -> 404 opaco")
-    assert(codeIs(missing.body, "KCF041"), "404 carrega KCF041 opaco")
+    need(missing.code == 404, "falhou")
+    need(codeIs(missing.body, "KCF041"), "falhou")
     var other = revokeTokenError("algo-estranho")
-    assert(other.code == 404, "desconhecido -> 404 opaco")
-    assert(codeIs(other.body, "KCF041"), "404 desconhecido tambem opaco")
+    need(other.code == 404, "falhou")
+    need(codeIs(other.body, "KCF041"), "falhou")
 }
 
 test "device: nome resolve para o device VIVO apos re-registro", "device-name-live" {
@@ -632,7 +632,7 @@ test "device: nome resolve para o device VIVO apos re-registro", "device-name-li
     var registry = Registry("/tmp/kofcloud-devlive-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control no ar")
+    need(waitForPort(port, 60), "falhou")
     var url = "http://127.0.0.1:" + intToString(port)
     var created = httpPostJson(port, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -640,9 +640,9 @@ test "device: nome resolve para o device VIVO apos re-registro", "device-name-li
     var firstId = registerDevice(url, token, "notebook", "pk1")
     requireOk(http.post(url + "/v1/devices/revoke", "{\"deviceId\":\"" + firstId + "\"}", jsonHeader(token)))
     var secondId = registerDevice(url, token, "notebook", "pk2")
-    assert(secondId != firstId, "re-registro apos revoke gera id novo")
+    need(secondId != firstId, "falhou")
 
     var session = LocalSession("", "mel", token, url)
-    assert(deviceIdByNameOrId(session, "notebook") == secondId, "nome leva ao VIVO")
-    assert(deviceIdByNameOrId(session, firstId) == firstId, "id do revogado continua exato")
+    need(deviceIdByNameOrId(session, "notebook") == secondId, "falhou")
+    need(deviceIdByNameOrId(session, firstId) == firstId, "falhou")
 }

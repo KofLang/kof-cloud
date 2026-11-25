@@ -3,12 +3,13 @@ import kofcloud.identity.Keys
 import kofcloud.identity.Tokens
 import kofcloud.protocol.Bytes
 import kofcloud.protocol.Payload
+import testkit.Support
 
 test "identidade: par X25519 tem chave publica exportavel" {
     var pair = generateKeyPair()
-    assert(pair.publicKey.length > 0, "publica presente")
-    assert(pair.privateKey.length > 0, "privada presente")
-    assert(pair.privateKey != pair.publicKey, "par distinto")
+    need(pair.publicKey.length > 0, "falhou")
+    need(pair.privateKey.length > 0, "falhou")
+    need(pair.privateKey != pair.publicKey, "falhou")
 }
 
 test "identidade: os dois lados derivam a mesma chave de sessao" {
@@ -16,8 +17,8 @@ test "identidade: os dois lados derivam a mesma chave de sessao" {
     var b = generateKeyPair()
     var keyA = deriveSessionKey(a.privateKey, b.publicKey, "sess-1", tunnelInfo())
     var keyB = deriveSessionKey(b.privateKey, a.publicKey, "sess-1", tunnelInfo())
-    assert(keyA == keyB, "ECDH + HKDF simetrico")
-    assert(keyA.length == 64, "32 bytes em hex")
+    need(keyA == keyB, "falhou")
+    need(keyA.length == 64, "falhou")
 }
 
 test "identidade: salt diferente produz chave diferente" {
@@ -25,7 +26,7 @@ test "identidade: salt diferente produz chave diferente" {
     var b = generateKeyPair()
     var k1 = deriveSessionKey(a.privateKey, b.publicKey, "sess-1", tunnelInfo())
     var k2 = deriveSessionKey(a.privateKey, b.publicKey, "sess-2", tunnelInfo())
-    assert(k1 != k2, "salt participa da derivacao")
+    need(k1 != k2, "falhou")
 }
 
 test "payload: cifrado com a chave de sessao e decifrado do outro lado" {
@@ -35,24 +36,24 @@ test "payload: cifrado com a chave de sessao e decifrado do outro lado" {
     var keyB = deriveSessionKey(b.privateKey, a.publicKey, "s", tunnelInfo())
     var original = bytesFromString("GET / HTTP/1.1\r\nHost: x\r\n\r\n")
     var wire = encodePayload(original, keyA)
-    assert(wire != bytesToBase64(original), "nao viaja em claro")
+    need(wire != bytesToBase64(original), "falhou")
     var recovered = decodePayload(wire, keyB)
-    assert(bytesToString(recovered) == bytesToString(original), "ida e volta")
+    need(bytesToString(recovered) == bytesToString(original), "falhou")
 }
 
 test "payload: sem chave usa base64 puro" {
     var original = bytesFromString("hello")
     var wire = encodePayload(original, "")
-    assert(wire == bytesToBase64(original), "base64")
-    assert(bytesToString(decodePayload(wire, "")) == "hello", "volta")
+    need(wire == bytesToBase64(original), "falhou")
+    need(bytesToString(decodePayload(wire, "")) == "hello", "falhou")
 }
 
 test "tokens: comparacao e por hash, nao por igualdade de string" {
     var token = newAccountToken()
-    assert(token.startsWith("kfc_"), "prefixo")
+    need(token.startsWith("kfc_"), "falhou")
     var hash = tokenHash(token)
-    assert(tokenMatches(hash, token) == true, "confere")
-    assert(tokenMatches(hash, token + "x") == false, "nao confere")
-    assert(tokenMatches("", token) == false, "hash vazio recusa")
+    need(tokenMatches(hash, token) == true, "falhou")
+    need(tokenMatches(hash, token + "x") == false, "falhou")
+    need(tokenMatches("", token) == false, "falhou")
 }
 

@@ -30,31 +30,31 @@ test "usage: contadores por conta e escopo do dono", "usage-unit" {
     var ana = registry.createAccount("ana", "ana@e.com", "segredo")
     // Sem entrada: zeros honestos (a CLI imprime "sem uso", nunca inventa).
     var zero = registry.usageFor(mel.id)
-    assert(zero.requests == "0" && zero.bytesIn == "0" && zero.bytesOut == "0", "sem entrada = zeros")
+    need(zero.requests == "0" && zero.bytesIn == "0" && zero.bytesOut == "0", "falhou")
     // Acumula: 3 pedidos, bytes somados.
     registry.noteUsage(mel.id, 100, 200)
     registry.noteUsage(mel.id, 30, 40)
     registry.noteUsage(mel.id, 1, 2)
     var melUsage = registry.usageFor(mel.id)
-    assert(melUsage.requests == "3", "requests somam: " + melUsage.requests)
-    assert(melUsage.bytesIn == "131", "bytesIn somam: " + melUsage.bytesIn)
-    assert(melUsage.bytesOut == "242", "bytesOut somam: " + melUsage.bytesOut)
+    need(melUsage.requests == "3", "falhou")
+    need(melUsage.bytesIn == "131", "falhou")
+    need(melUsage.bytesOut == "242", "falhou")
     // Escopo: ana ve zeros (conta alheia nao existe para o fio).
     var anaUsage = registry.usageFor(ana.id)
-    assert(anaUsage.requests == "0", "escopo por conta")
+    need(anaUsage.requests == "0", "falhou")
     // Conta vazia no id: no-op (defesa do chamador).
     registry.noteUsage("", 999, 999)
     var emptyUse = registry.usageFor("")
-    assert(emptyUse.requests == "0", "id vazio nao acumula: " + emptyUse.requests)
+    need(emptyUse.requests == "0", "falhou")
     // Persistencia: o noteUsage nao grava disco por request (seria I/O por
     // request); o uso vai junto no proximo save() de mutacao — aqui a
     // gravacao e explicita e o estado recarregado ve os mesmos numeros.
     registry.save()
     var reloaded = Registry(unitPath)
     var again = reloaded.usageFor(mel.id)
-    assert(reloaded.loadStatus == "ok", "reload status")
-    assert(again.requests == "3", "uso persiste requests")
-    assert(again.bytesIn == "131", "uso persiste bytesIn")
+    need(reloaded.loadStatus == "ok", "falhou")
+    need(again.requests == "3", "falhou")
+    need(again.bytesIn == "131", "falhou")
 }
 
 test "usage: e2e — relay real acumula no dono; recusa nao conta; outra conta nao ve", "usage-e2e" {
@@ -66,7 +66,7 @@ test "usage: e2e — relay real acumula no dono; recusa nao conta; outra conta n
     var app = web.app()
     app.get("/") { return "svc-usage" }
     var server = spawn { app.listen(localSvc) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry(usagePath("e2e"))
     var edgeState = EdgeState(registry)
@@ -78,9 +78,9 @@ test "usage: e2e — relay real acumula no dono; recusa nao conta; outra conta n
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -89,7 +89,7 @@ test "usage: e2e — relay real acumula no dono; recusa nao conta; outra conta n
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", token)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "falhou")
 
     // Outra conta no mesmo control plane (escopo do fio).
     var created2 = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
@@ -98,9 +98,9 @@ test "usage: e2e — relay real acumula no dono; recusa nao conta; outra conta n
     // Antes do connect: recusa 404 (KCF100) — nao pode contar como uso.
     // Servico publicado mas sem tunel: o Edge responde 503 KCF102 (device
     // offline) — e recusa de plataforma, sem uso a precificar.
-    assert(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 503, "sem tunel: 503 device offline")
+    need(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 503, "falhou")
     var before = httpGetToken(controlPort, "/v1/usage", token)
-    assert(mapField(json.decode<Map<String, String>>(bodyOf(before)), "requests") == "0", "recusa nao e uso")
+    need(mapField(json.decode<Map<String, String>>(bodyOf(before)), "requests") == "0", "falhou")
 
     // Agent conecta e o relay roteia: 3 pedidos ok acumulam no dono.
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, token, "", agentStop, "127.0.0.1", tunnelPort, 500)
@@ -114,21 +114,21 @@ test "usage: e2e — relay real acumula no dono; recusa nao conta; outra conta n
             attempts = attempts - 1
         }
     }
-    assert(online, "agent no ar")
+    need(online, "falhou")
     var i = 0
     while (i < 3) {
-        assert(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 200, "relay ok " + intToString(i))
+        need(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 200, "falhou")
         i = i + 1
     }
     var after = httpGetToken(controlPort, "/v1/usage", token)
     var usage = json.decode<Map<String, String>>(bodyOf(after))
-    assert(mapField(usage, "requests") == "3", "3 pedidos roteados contam: " + bodyOf(after))
-    assert(parseIntBounded(mapField(usage, "bytesOut"), 0, 2147483647) > 0, "bytesOut positivo")
+    need(mapField(usage, "requests") == "3", "falhou")
+    need(parseIntBounded(mapField(usage, "bytesOut"), 0, 2147483647) > 0, "falhou")
 
     // Escopo: ana nunca ve o uso de mel; sem token e 401.
     var anaView = httpGetToken(controlPort, "/v1/usage", anaToken)
-    assert(mapField(json.decode<Map<String, String>>(bodyOf(anaView)), "requests") == "0", "conta alheia ve zeros")
-    assert(statusOf(httpGetToken(controlPort, "/v1/usage", "")) == 401, "401 sem token")
+    need(mapField(json.decode<Map<String, String>>(bodyOf(anaView)), "requests") == "0", "falhou")
+    need(statusOf(httpGetToken(controlPort, "/v1/usage", "")) == 401, "falhou")
 
     // CLI: `usage` formata o mesmo fio (aqui pelo caminho puro do comando
     // com sessao real gravada? Nao — o cmdUsage le a sessao do HOME; o fio
@@ -145,8 +145,8 @@ test "usage: e2e — relay real acumula no dono; recusa nao conta; outra conta n
 
 test "usage: help anuncia o comando", "usage-help" {
     var help = usageText()
-    assert(help.indexOf("usage [--export]") >= 0, "help anuncia usage")
-    assert(help.indexOf("billing externo") >= 0, "help diz para que serve")
+    need(help.indexOf("usage [--export]") >= 0, "falhou")
+    need(help.indexOf("billing externo") >= 0, "falhou")
 }
 
 test "usage: snapshot fecha a janela (le e zera) e o Edge continua contando", "usage-unit" {
@@ -161,32 +161,32 @@ test "usage: snapshot fecha a janela (le e zera) e o Edge continua contando", "u
     registry.save()
     // Snapshot: devolve o acumulado da janela e zera o contador.
     var window1 = registry.usageSnapshot(mel.id)
-    assert(window1.requests == "2", "janela 1: requests: " + window1.requests)
-    assert(window1.bytesIn == "150" && window1.bytesOut == "260", "janela 1: bytes")
+    need(window1.requests == "2", "falhou")
+    need(window1.bytesIn == "150" && window1.bytesOut == "260", "falhou")
     // Zerado: o proximo snapshot e zeros (idempotente — export repetido
     // nao re-fatura).
     var window2 = registry.usageSnapshot(mel.id)
-    assert(window2.requests == "0", "janela fechada: zeros")
+    need(window2.requests == "0", "falhou")
     // O Edge continua contando em cima do zero: nova janela comeca limpa.
     registry.noteUsage(mel.id, 10, 20)
     var window3 = registry.usageSnapshot(mel.id)
-    assert(window3.requests == "1" && window3.bytesIn == "10", "janela 2 comeca do zero")
+    need(window3.requests == "1" && window3.bytesIn == "10", "falhou")
     // Sem entrada nunca e erro: snapshot de conta sem uso devolve zeros (e
     // NAO grava: carimbar disco em conta-parada seria I/O por export vazio;
     // o reload abaixo continua vendo zeros porque nada mudou no disco).
     var empty = registry.usageSnapshot("sem-conta")
-    assert(empty.requests == "0" && empty.bytesIn == "0", "zeros honestos")
+    need(empty.requests == "0" && empty.bytesIn == "0", "falhou")
     // O reset do export PERSISTE NA HORA (padrao do setWebhook): reload do
     // disco ve a janela fechada — antes o reset era so em memoria e um
     // restart antes da proxima mutacao recarregava a janela (re-faturamento).
     var afterExport = Registry(unitPath)
-    assert(afterExport.loadStatus == "ok", "reload status pos-export")
+    need(afterExport.loadStatus == "ok", "falhou")
     var closed = afterExport.usageFor(mel.id)
-    assert(closed.requests == "0" && closed.bytesIn == "0" && closed.bytesOut == "0", "reset do export persiste no disco")
+    need(closed.requests == "0" && closed.bytesIn == "0" && closed.bytesOut == "0", "falhou")
     // Conta sem uso no reload: zeros (o snapshot de zeros nao gravou nada —
     // sem mutacao, sem disco).
     var emptyReload = afterExport.usageFor("sem-conta")
-    assert(emptyReload.requests == "0", "sem-conta segue zeros no reload")
+    need(emptyReload.requests == "0", "falhou")
 }
 
 test "usage: export fecha a janela pelo fio com rastro de auditoria", "usage-e2e" {
@@ -198,7 +198,7 @@ test "usage: export fecha a janela pelo fio com rastro de auditoria", "usage-e2e
     var app = web.app()
     app.get("/") { return "svc-usage" }
     var server = spawn { app.listen(localSvc) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry(usagePath("export"))
     var edgeState = EdgeState(registry)
@@ -210,9 +210,9 @@ test "usage: export fecha a janela pelo fio com rastro de auditoria", "usage-e2e
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -221,7 +221,7 @@ test "usage: export fecha a janela pelo fio com rastro de auditoria", "usage-e2e
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", token)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "falhou")
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, token, "", agentStop, "127.0.0.1", tunnelPort, 500)
     var agentTask = spawn { runAgent(config, true) }
     var online = false
@@ -233,31 +233,31 @@ test "usage: export fecha a janela pelo fio com rastro de auditoria", "usage-e2e
             attempts = attempts - 1
         }
     }
-    assert(online, "agent no ar")
+    need(online, "falhou")
     var i = 0
     while (i < 2) {
-        assert(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 200, "relay ok " + intToString(i))
+        need(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 200, "falhou")
         i = i + 1
     }
 
     // Export (POST): devolve a janela com periodEnd e ZERA o fio.
     var exp = httpPostJson(controlPort, "/v1/usage/export", "{}", token)
-    assert(statusOf(exp) == 200, "export 200")
+    need(statusOf(exp) == 200, "falhou")
     var window = json.decode<Map<String, String>>(bodyOf(exp))
-    assert(mapField(window, "requests") == "2", "janela do export: " + bodyOf(exp))
-    assert(mapField(window, "periodEnd").length > 0, "periodEnd presente")
+    need(mapField(window, "requests") == "2", "falhou")
+    need(mapField(window, "periodEnd").length > 0, "falhou")
     var after = httpGetToken(controlPort, "/v1/usage", token)
-    assert(mapField(json.decode<Map<String, String>>(bodyOf(after)), "requests") == "0", "contador zerado apos export")
+    need(mapField(json.decode<Map<String, String>>(bodyOf(after)), "requests") == "0", "falhou")
 
     // Rastro de auditoria do fechamento de janela (same vocabulary do CLI).
     var audit = httpGetToken(controlPort, "/v1/audit", token)
-    assert(bodyOf(audit).indexOf("usage.export") >= 0, "usage.export na trilha")
+    need(bodyOf(audit).indexOf("usage.export") >= 0, "falhou")
 
     // Export repetido: zeros (idempotente — nunca re-fatura a mesma janela).
     var exp2 = httpPostJson(controlPort, "/v1/usage/export", "{}", token)
-    assert(mapField(json.decode<Map<String, String>>(bodyOf(exp2)), "requests") == "0", "export repetido nao re-fatura")
+    need(mapField(json.decode<Map<String, String>>(bodyOf(exp2)), "requests") == "0", "falhou")
     // Sem token: 401.
-    assert(statusOf(httpPostJson(controlPort, "/v1/usage/export", "{}", "")) == 401, "401 sem token")
+    need(statusOf(httpPostJson(controlPort, "/v1/usage/export", "{}", "")) == 401, "falhou")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1200)
@@ -269,6 +269,6 @@ test "usage: export fecha a janela pelo fio com rastro de auditoria", "usage-e2e
 
 test "usage: help anuncia --export e a janela", "usage-help" {
     var help = usageText()
-    assert(help.indexOf("usage [--export]") >= 0, "help anuncia --export")
-    assert(help.indexOf("fecha a janela") >= 0, "help diz o que o export faz")
+    need(help.indexOf("usage [--export]") >= 0, "falhou")
+    need(help.indexOf("fecha a janela") >= 0, "falhou")
 }

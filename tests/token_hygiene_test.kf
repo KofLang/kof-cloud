@@ -20,11 +20,11 @@ test "higiene: credencial sem TTL aparece; com TTL nao", "hygiene-unit" {
     registry.issueServiceToken(account.id, b.id, 24)        // com TTL
 
     var unrotated = registry.tokensWithoutExpiry(account.id)
-    assert(unrotated.size == 1, "so a sem TTL")
+    need(unrotated.size == 1, "falhou")
     var names = registry.servicesWithUnrotatedTokens(account.id)
-    assert(names.size == 1, "um servico")
+    need(names.size == 1, "falhou")
     if (names.size == 1) {
-        assert(names.get(0) == "site", "o servico sem TTL")
+        need(names.get(0) == "site", "falhou")
     }
 }
 
@@ -34,13 +34,13 @@ test "higiene: revogar/rotacionar com TTL remove do relatorio", "hygiene-unit" {
     var device = registry.registerDevice(account, "nb", "pk")
     var a = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
     var legacy = registry.issueServiceToken(account.id, a.id)
-    assert(registry.tokensWithoutExpiry(account.id).size == 1, "legado listado")
+    need(registry.tokensWithoutExpiry(account.id).size == 1, "falhou")
     // Revogar o legado tira do relatorio (mesmo sem rotacionar).
-    assert(registry.revokeServiceToken(account.id, a.id, legacy), "revogado")
-    assert(registry.tokensWithoutExpiry(account.id).size == 0, "limpo")
+    need(registry.revokeServiceToken(account.id, a.id, legacy), "falhou")
+    need(registry.tokensWithoutExpiry(account.id).size == 0, "falhou")
     // Nova com TTL tambem nao aparece.
     registry.issueServiceToken(account.id, a.id, 24)
-    assert(registry.tokensWithoutExpiry(account.id).size == 0, "com TTL fora")
+    need(registry.tokensWithoutExpiry(account.id).size == 0, "falhou")
 }
 
 test "higiene: escopo e da conta (nao ve de outra)", "hygiene-unit" {
@@ -53,10 +53,10 @@ test "higiene: escopo e da conta (nao ve de outra)", "hygiene-unit" {
     var anaSvc = registry.publishService(ana, anaDev.id, "api", "127.0.0.1", 3000, "http", "AUTHENTICATED", "", "")
     registry.issueServiceToken(mel.id, melSvc.id)
     registry.issueServiceToken(ana.id, anaSvc.id)
-    assert(registry.tokensWithoutExpiry(mel.id).size == 1, "mel ve so o seu")
+    need(registry.tokensWithoutExpiry(mel.id).size == 1, "falhou")
     var names = registry.servicesWithUnrotatedTokens(mel.id)
-    assert(names.contains("api") == false, "nao ve o de ana")
-    assert(names.contains("site"), "ve o proprio")
+    need(names.contains("api") == false, "falhou")
+    need(names.contains("site"), "falhou")
 }
 
 test "higiene: rotate sem TTL deixa o servico no relatorio (pendente)", "hygiene-unit" {
@@ -73,17 +73,17 @@ test "higiene: rotate sem TTL deixa o servico no relatorio (pendente)", "hygiene
     var svc = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
     registry.issueServiceToken(account.id, svc.id)
     var rotated = registry.rotateServiceTokens(account.id, svc.id, 0)
-    assert(rotated.pending == 1, "antiga fica pendente")
-    assert(registry.pendingRotationCount(svc.id) == 2, "duas credenciais vivas")
+    need(rotated.pending == 1, "falhou")
+    need(registry.pendingRotationCount(svc.id) == 2, "falhou")
     var names = registry.servicesWithUnrotatedTokens(account.id)
-    assert(names.size == 1, "servico segue na higiene")
+    need(names.size == 1, "falhou")
     if (names.size == 1) {
-        assert(names.get(0) == "site", "o servico rotacionado sem TTL")
+        need(names.get(0) == "site", "falhou")
     }
     // Rotate com TTL: a nova tem expiracao, mas as antigas sem TTL
     // continuam validas e sem expiracao — o servico NAO sai do relatorio.
     registry.rotateServiceTokens(account.id, svc.id, 24)
-    assert(registry.servicesWithUnrotatedTokens(account.id).size == 1, "rotate com TTL nao limpa o legado sem TTL")
+    need(registry.servicesWithUnrotatedTokens(account.id).size == 1, "falhou")
 }
 
 test "higiene: HTTP devolve servicos e contagem", "hygiene" {
@@ -91,7 +91,7 @@ test "higiene: HTTP devolve servicos e contagem", "hygiene" {
     var registry = Registry(hygienePath("http"))
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -100,14 +100,14 @@ test "higiene: HTTP devolve servicos e contagem", "hygiene" {
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}"
     var published = httpPostJson(controlPort, "/v1/services", pubBody, token)
     var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "token sem TTL")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "falhou")
 
     var hygiene = httpPostJson(controlPort, "/v1/services/token-hygiene", "{}", token)
-    assert(statusOf(hygiene) == 200, "hygiene 200")
+    need(statusOf(hygiene) == 200, "falhou")
     var result = json.decode<Map<String, String>>(bodyOf(hygiene))
-    assert(mapField(result, "count") == "1", "uma sem TTL")
-    assert(bodyOf(hygiene).indexOf("site") >= 0, "servico listado")
+    need(mapField(result, "count") == "1", "falhou")
+    need(bodyOf(hygiene).indexOf("site") >= 0, "falhou")
 
     // Sem token -> 401 (nao ha endpoint aberto).
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/token-hygiene", "{}", "")) == 401, "401 sem token")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/token-hygiene", "{}", "")) == 401, "falhou")
 }

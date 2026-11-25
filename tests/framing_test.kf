@@ -25,62 +25,62 @@ import testkit.Support
 test "framing: Content-Length unico em Long, duplicado/TE invalidos", "framing-unit" {
     // Ausente = sem corpo.
     var none = parseContentLength(listOf<String>())
-    assert(none.invalid == false && none.value == 0L, "sem header = 0")
+    need(none.invalid == false && none.value == 0L, "falhou")
     // Valor simples e espaco em volta.
     var plain = parseContentLength(listOf<String>("Host: x", "Content-Length: 42"))
-    assert(plain.invalid == false && plain.value == 42L, "42")
+    need(plain.invalid == false && plain.value == 42L, "falhou")
     var spaced = parseContentLength(listOf<String>("content-length:   7  "))
-    assert(spaced.invalid == false && spaced.value == 7L, "espacos")
+    need(spaced.invalid == false && spaced.value == 7L, "falhou")
     // Dois iguais sao aceitos (o RFC permite); divergentes sao smuggling.
     var equalDup = parseContentLength(listOf<String>("Content-Length: 7", "content-length: 7"))
-    assert(equalDup.invalid == false && equalDup.value == 7L, "duplicado igual")
+    need(equalDup.invalid == false && equalDup.value == 7L, "falhou")
     var divergent = parseContentLength(listOf<String>("Content-Length: 3", "Content-Length: 4"))
-    assert(divergent.invalid, "duplicado divergente invalido")
+    need(divergent.invalid, "falhou")
     // Nao numerico, vazio, sinal, hex, espaco interno.
-    assert(parseContentLength(listOf<String>("Content-Length: abc")).invalid, "nao numerico")
-    assert(parseContentLength(listOf<String>("Content-Length:")).invalid, "vazio")
-    assert(parseContentLength(listOf<String>("Content-Length: -5")).invalid, "negativo")
-    assert(parseContentLength(listOf<String>("Content-Length: +5")).invalid, "com sinal")
-    assert(parseContentLength(listOf<String>("Content-Length: 0x10")).invalid, "hex")
-    assert(parseContentLength(listOf<String>("Content-Length: 5 5")).invalid, "espaco interno")
+    need(parseContentLength(listOf<String>("Content-Length: abc")).invalid, "falhou")
+    need(parseContentLength(listOf<String>("Content-Length:")).invalid, "falhou")
+    need(parseContentLength(listOf<String>("Content-Length: -5")).invalid, "falhou")
+    need(parseContentLength(listOf<String>("Content-Length: +5")).invalid, "falhou")
+    need(parseContentLength(listOf<String>("Content-Length: 0x10")).invalid, "falhou")
+    need(parseContentLength(listOf<String>("Content-Length: 5 5")).invalid, "falhou")
     // Nome fora da forma canonica: o Edge nao reconheceria, alguns servidores
     // locais reconhecem — divergencia de fronteira.
-    assert(parseContentLength(listOf<String>("Content-Length : 5")).invalid, "espaco antes dos dois pontos")
-    assert(parseContentLength(listOf<String>("Content-Length")).invalid, "header sem valor")
+    need(parseContentLength(listOf<String>("Content-Length : 5")).invalid, "falhou")
+    need(parseContentLength(listOf<String>("Content-Length")).invalid, "falhou")
     // Chunked nao e decodificado pelo Edge: o header inteiro e recusado.
-    assert(parseContentLength(listOf<String>("Transfer-Encoding: chunked")).invalid, "transfer-encoding")
-    assert(parseContentLength(listOf<String>("Transfer-Encoding: identity", "Content-Length: 4")).invalid, "TE mesmo com CL")
+    need(parseContentLength(listOf<String>("Transfer-Encoding: chunked")).invalid, "falhou")
+    need(parseContentLength(listOf<String>("Transfer-Encoding: identity", "Content-Length: 4")).invalid, "falhou")
     // Acima de 2^31 continua valido como Long (nada de wrap/negativo).
     var huge = parseContentLength(listOf<String>("Content-Length: 4294967306"))
-    assert(huge.invalid == false && huge.value == 4294967306L, "4294967306 sem wrap")
+    need(huge.invalid == false && huge.value == 4294967306L, "falhou")
     var giant = parseContentLength(listOf<String>("Content-Length: 999999999999"))
-    assert(giant.invalid == false && giant.value == 999999999999L, "999999999999 nao vira negativo")
-    assert(giant.value > (limitMaxBodyBytes() as Long), "gigante acima do teto de leitura")
+    need(giant.invalid == false && giant.value == 999999999999L, "falhou")
+    need(giant.value > (limitMaxBodyBytes() as Long), "falhou")
     // Codigo e Hint existem (R6).
-    assert(errInvalidContentLength().indexOf("KCF118") >= 0, "codigo KCF118")
-    assert(errHint(errInvalidContentLength()).indexOf("Content-Length") >= 0, "Hint explica o enquadramento")
+    need(errInvalidContentLength().indexOf("KCF118") >= 0, "falhou")
+    need(errHint(errInvalidContentLength()).indexOf("Content-Length") >= 0, "falhou")
 }
 
 
 test "framing: Host unico, nao vazio e sem caractere invalido", "framing-host-unit" {
     // Um Host normal passa.
-    assert(hostIsUnambiguous(listOf<String>("Host: site.mel.kofcloud.io")), "um Host")
-    assert(hostIsUnambiguous(listOf<String>("host: Site.Mel.KofCloud.IO:443", "X-Outro: 1")), "case/porta/outros headers")
+    need(hostIsUnambiguous(listOf<String>("Host: site.mel.kofcloud.io")), "falhou")
+    need(hostIsUnambiguous(listOf<String>("host: Site.Mel.KofCloud.IO:443", "X-Outro: 1")), "falhou")
     // Ausente, vazio, duplicado (mesmo igual) e caractere de controle: ambiguos.
-    assert(hostIsUnambiguous(listOf<String>()) == false, "sem Host")
-    assert(hostIsUnambiguous(listOf<String>("Host:")) == false, "Host vazio")
-    assert(hostIsUnambiguous(listOf<String>("Host:   ")) == false, "Host so espacos")
-    assert(hostIsUnambiguous(listOf<String>("Host: a.kofcloud.io", "Host: b.kofcloud.io")) == false, "duplicado divergente")
-    assert(hostIsUnambiguous(listOf<String>("Host: a.kofcloud.io", "host: a.kofcloud.io")) == false, "duplicado igual tambem")
+    need(hostIsUnambiguous(listOf<String>()) == false, "falhou")
+    need(hostIsUnambiguous(listOf<String>("Host:")) == false, "falhou")
+    need(hostIsUnambiguous(listOf<String>("Host:   ")) == false, "falhou")
+    need(hostIsUnambiguous(listOf<String>("Host: a.kofcloud.io", "Host: b.kofcloud.io")) == false, "falhou")
+    need(hostIsUnambiguous(listOf<String>("Host: a.kofcloud.io", "host: a.kofcloud.io")) == false, "falhou")
     // Espaco dentro do valor quebraria a linha ao reconstruir o pedido.
-    assert(hostIsUnambiguous(listOf<String>("Host: a b.kofcloud.io")) == false, "espaco no valor")
-    assert(hostIsUnambiguous(listOf<String>("Host: a.kofcloud.io\rX-Injected: 1")) == false, "controle no valor")
+    need(hostIsUnambiguous(listOf<String>("Host: a b.kofcloud.io")) == false, "falhou")
+    need(hostIsUnambiguous(listOf<String>("Host: a.kofcloud.io\rX-Injected: 1")) == false, "falhou")
     // Header parecido nao conta como Host.
-    assert(hostIsUnambiguous(listOf<String>("X-Host: a", "X-Host: b")) == false, "so headers parecidos = sem Host")
-    assert(hostIsUnambiguous(listOf<String>("Host: a.kofcloud.io", "X-Host: b")) == true, "Host + parecido")
+    need(hostIsUnambiguous(listOf<String>("X-Host: a", "X-Host: b")) == false, "falhou")
+    need(hostIsUnambiguous(listOf<String>("Host: a.kofcloud.io", "X-Host: b")) == true, "falhou")
     // Codigo e Hint (R6).
-    assert(errInvalidHost().indexOf("KCF119") >= 0, "codigo KCF119")
-    assert(errHint(errInvalidHost()).indexOf("Host") >= 0, "Hint explica o Host")
+    need(errInvalidHost().indexOf("KCF119") >= 0, "falhou")
+    need(errHint(errInvalidHost()).indexOf("Host") >= 0, "falhou")
 }
 
 
@@ -88,37 +88,37 @@ test "framing: hop-by-hop e tokens do Connection nao atravessam o Edge", "framin
     // Hop-by-hop padrao: valem para a conexao cliente-Edge, nunca para a
     // conexao Edge-servico local. `proxy-authorization` e o caso caro: e
     // credencial de proxy e era repassada em claro ao servico.
-    assert(headerIsForwarded("Keep-Alive: timeout=5", listOf<String>(), false) == false, "keep-alive")
-    assert(headerIsForwarded("Proxy-Authorization: Basic x", listOf<String>(), false) == false, "proxy-authorization")
-    assert(headerIsForwarded("Proxy-Authenticate: Basic", listOf<String>(), false) == false, "proxy-authenticate")
-    assert(headerIsForwarded("Upgrade: websocket", listOf<String>(), false) == false, "upgrade")
-    assert(headerIsForwarded("TE: trailers", listOf<String>(), false) == false, "te")
-    assert(headerIsForwarded("Trailer: X-Sum", listOf<String>(), false) == false, "trailer")
-    assert(headerIsForwarded("Connection: keep-alive", listOf<String>(), false) == false, "connection")
-    assert(headerIsForwarded("Transfer-Encoding: chunked", listOf<String>(), false) == false, "transfer-encoding")
+    need(headerIsForwarded("Keep-Alive: timeout=5", listOf<String>(), false) == false, "falhou")
+    need(headerIsForwarded("Proxy-Authorization: Basic x", listOf<String>(), false) == false, "falhou")
+    need(headerIsForwarded("Proxy-Authenticate: Basic", listOf<String>(), false) == false, "falhou")
+    need(headerIsForwarded("Upgrade: websocket", listOf<String>(), false) == false, "falhou")
+    need(headerIsForwarded("TE: trailers", listOf<String>(), false) == false, "falhou")
+    need(headerIsForwarded("Trailer: X-Sum", listOf<String>(), false) == false, "falhou")
+    need(headerIsForwarded("Connection: keep-alive", listOf<String>(), false) == false, "falhou")
+    need(headerIsForwarded("Transfer-Encoding: chunked", listOf<String>(), false) == false, "falhou")
     // Tokens nomeados no Connection sao hop-by-hop por declaracao.
     var tokens = connectionTokens(listOf<String>("Connection: close, X-Private", "Connection: TE"))
-    assert(tokens.contains("x-private") && tokens.contains("close") && tokens.contains("te"), "tokens normalizados")
-    assert(headerIsForwarded("X-Private: v", tokens, false) == false, "token nomeado nao passa")
+    need(tokens.contains("x-private") && tokens.contains("close") && tokens.contains("te"), "falhou")
+    need(headerIsForwarded("X-Private: v", tokens, false) == false, "falhou")
     // `X-Forwarded-For` do cliente e descartado (o Edge escreve o seu).
-    assert(headerIsForwarded("X-Forwarded-For: 1.2.3.4", listOf<String>(), false) == false, "xff do cliente")
+    need(headerIsForwarded("X-Forwarded-For: 1.2.3.4", listOf<String>(), false) == false, "falhou")
     // End-to-end continua passando.
-    assert(headerIsForwarded("Host: site.mel.kofcloud.io", listOf<String>(), false), "host")
-    assert(headerIsForwarded("Content-Type: application/json", listOf<String>(), false), "content-type")
-    assert(headerIsForwarded("Cookie: a=1", listOf<String>(), false), "cookie")
+    need(headerIsForwarded("Host: site.mel.kofcloud.io", listOf<String>(), false), "falhou")
+    need(headerIsForwarded("Content-Type: application/json", listOf<String>(), false), "falhou")
+    need(headerIsForwarded("Cookie: a=1", listOf<String>(), false), "falhou")
     // Credenciais so caem em servico AUTHENTICATED (o Edge ja as consumiu).
-    assert(headerIsForwarded("Authorization: Bearer x", listOf<String>(), false), "authorization em PUBLIC passa")
-    assert(headerIsForwarded("Authorization: Bearer x", listOf<String>(), true) == false, "authorization em AUTHENTICATED cai")
-    assert(headerIsForwarded("X-KofCloud-Token: kfc_x", listOf<String>(), true) == false, "token administrativo cai")
+    need(headerIsForwarded("Authorization: Bearer x", listOf<String>(), false), "falhou")
+    need(headerIsForwarded("Authorization: Bearer x", listOf<String>(), true) == false, "falhou")
+    need(headerIsForwarded("X-KofCloud-Token: kfc_x", listOf<String>(), true) == false, "falhou")
     // Reconstrucao real: o pedido que chega ao servico nao tem nenhum deles.
     var raw = bytesFromString("POST / HTTP/1.1\r\nHost: site.mel.kofcloud.io\r\nKeep-Alive: timeout=5\r\nUpgrade: websocket\r\nProxy-Authorization: Basic c2VjcmV0\r\nTE: trailers\r\nConnection: keep-alive, X-Private\r\nX-Private: v\r\nX-Forwarded-For: 1.2.3.4\r\nContent-Length: 2\r\n\r\nok")
     var out = bytesToString(serializeRequest(parseRequest(raw), "edge", false))
-    assert(out.indexOf("Keep-Alive") < 0 && out.indexOf("Upgrade") < 0, "sem keep-alive/upgrade")
-    assert(out.indexOf("Proxy-Authorization") < 0 && out.indexOf("TE:") < 0, "sem proxy-auth/TE")
-    assert(out.indexOf("X-Private") < 0 && out.indexOf("1.2.3.4") < 0, "sem token nomeado nem xff do cliente")
-    assert(out.indexOf("Host: site.mel.kofcloud.io") >= 0, "Host preservado")
-    assert(out.indexOf("X-Forwarded-For: edge") >= 0, "Edge assina o seu XFF")
-    assert(out.endsWith("ok"), "corpo intacto")
+    need(out.indexOf("Keep-Alive") < 0 && out.indexOf("Upgrade") < 0, "falhou")
+    need(out.indexOf("Proxy-Authorization") < 0 && out.indexOf("TE:") < 0, "falhou")
+    need(out.indexOf("X-Private") < 0 && out.indexOf("1.2.3.4") < 0, "falhou")
+    need(out.indexOf("Host: site.mel.kofcloud.io") >= 0, "falhou")
+    need(out.indexOf("X-Forwarded-For: edge") >= 0, "falhou")
+    need(out.endsWith("ok"), "falhou")
 }
 
 
@@ -127,21 +127,21 @@ test "framing: resposta do upstream perde hop-by-hop e anuncia close", "framing-
     // cliente veria "reuse esta conexao" para um socket que o Edge fecha.
     var upstream = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: keep-alive, X-Trace\r\nKeep-Alive: timeout=5\r\nX-Trace: abc\r\nProxy-Authenticate: Basic\r\nContent-Length: 2\r\n\r\nok"
     var out = bytesToString(sanitizeResponse(bytesFromString(upstream)))
-    assert(statusOf(out) == 200, "status preservado")
-    assert(out.indexOf("Keep-Alive") < 0, "sem Keep-Alive")
-    assert(out.indexOf("X-Trace") < 0, "sem token nomeado no Connection")
-    assert(out.indexOf("Proxy-Authenticate") < 0, "sem proxy-authenticate")
-    assert(out.indexOf("Connection: close") >= 0, "Edge anuncia close")
-    assert(out.indexOf("Content-Type: text/plain") >= 0, "header fim-a-fim preservado")
-    assert(out.endsWith("\r\n\r\nok"), "corpo intacto e cabecalho refeito")
+    need(statusOf(out) == 200, "falhou")
+    need(out.indexOf("Keep-Alive") < 0, "falhou")
+    need(out.indexOf("X-Trace") < 0, "falhou")
+    need(out.indexOf("Proxy-Authenticate") < 0, "falhou")
+    need(out.indexOf("Connection: close") >= 0, "falhou")
+    need(out.indexOf("Content-Type: text/plain") >= 0, "falhou")
+    need(out.endsWith("\r\n\r\nok"), "falhou")
     // Sem `\r\n\r\n` (resposta crua) nada e inventado.
     var raw = "nao e http"
-    assert(bytesToString(sanitizeResponse(bytesFromString(raw))) == raw, "crua volta intacta")
+    need(bytesToString(sanitizeResponse(bytesFromString(raw))) == raw, "falhou")
     // Resposta que ja esta correta nao muda de significado.
     var clean = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok"
     var cleanOut = bytesToString(sanitizeResponse(bytesFromString(clean)))
-    assert(cleanOut.indexOf("Connection: close") >= 0, "close entra")
-    assert(bodyOf(cleanOut) == "ok", "corpo preservado")
+    need(cleanOut.indexOf("Connection: close") >= 0, "falhou")
+    need(bodyOf(cleanOut) == "ok", "falhou")
 }
 
 
@@ -149,89 +149,89 @@ test "framing: resposta chunked do upstream e decodificada", "framing-chunked-un
     // Transfer-Encoding e hop-by-hop: sai. Sem decodificar, o cliente
     // recebia o ENQUADRAMENTO como corpo ("5\r\nhello\r\n0") — medido.
     var one = decodeChunked(bytesFromString("5\r\nhello\r\n0\r\n\r\n"))
-    assert(one.valid && bytesToString(one.body) == "hello", "chunk unico")
+    need(one.valid && bytesToString(one.body) == "hello", "falhou")
     var multi = decodeChunked(bytesFromString("2\r\nab\r\n3\r\ncde\r\n0\r\n\r\n"))
-    assert(multi.valid && bytesToString(multi.body) == "abcde", "varios chunks")
+    need(multi.valid && bytesToString(multi.body) == "abcde", "falhou")
     // Extensao de chunk (`;k=v`) e ignorada; CRLF final opcional.
     var ext = decodeChunked(bytesFromString("3;nome=valor\r\nabc\r\n0\r\n\r\n"))
-    assert(ext.valid && bytesToString(ext.body) == "abc", "extensao ignorada")
+    need(ext.valid && bytesToString(ext.body) == "abc", "falhou")
     // Malformado: nao lanca, nao entra em laco — devolve o que deu e invalido.
-    assert(decodeChunked(bytesFromString("zz\r\nabc\r\n")).valid == false, "tamanho nao hex")
-    assert(decodeChunked(bytesFromString("9\r\nabc")).valid == false, "corpo curto")
-    assert(decodeChunked(bytesFromString("")).valid == false, "vazio")
+    need(decodeChunked(bytesFromString("zz\r\nabc\r\n")).valid == false, "falhou")
+    need(decodeChunked(bytesFromString("9\r\nabc")).valid == false, "falhou")
+    need(decodeChunked(bytesFromString("")).valid == false, "falhou")
     // Hex em Long (reusa a tabela do WAF).
-    assert(parseHexSafe("1a", -1L) == 26L, "hex minusculo")
-    assert(parseHexSafe("FF", -1L) == 255L, "hex maiusculo")
-    assert(parseHexSafe("x", -1L) == -1L, "invalido")
+    need(parseHexSafe("1a", -1L) == 26L, "falhou")
+    need(parseHexSafe("FF", -1L) == 255L, "falhou")
+    need(parseHexSafe("x", -1L) == -1L, "falhou")
     // Resposta completa: header chunked sai, corpo decodificado, close entra.
     var upstream = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Type: text/plain\r\n\r\n5\r\nhello\r\n0\r\n\r\n"
     var out = bytesToString(sanitizeResponse(bytesFromString(upstream)))
-    assert(out.toLowerCase().indexOf("transfer-encoding") < 0, "sem transfer-encoding")
-    assert(out.indexOf("Connection: close") >= 0, "close do Edge")
-    assert(out.indexOf("Content-Type: text/plain") >= 0, "header fim-a-fim preservado")
-    assert(bodyOf(out) == "hello", "corpo decodificado, sem enquadramento")
+    need(out.toLowerCase().indexOf("transfer-encoding") < 0, "falhou")
+    need(out.indexOf("Connection: close") >= 0, "falhou")
+    need(out.indexOf("Content-Type: text/plain") >= 0, "falhou")
+    need(bodyOf(out) == "hello", "falhou")
     // Sem chunked, o corpo continua byte a byte (inclusive CRLF).
     var plain = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\na\r\nb"
-    assert(bodyOf(bytesToString(sanitizeResponse(bytesFromString(plain)))) == "a\r\nb", "corpo cru intacto")
+    need(bodyOf(bytesToString(sanitizeResponse(bytesFromString(plain)))) == "a\r\nb", "falhou")
 }
 
 
 test "framing: 1xx/204/304 e HEAD nunca entregam corpo", "framing-status-unit" {
     // Codigo e regra puras.
-    assert(statusCodeOf("HTTP/1.1 204 No Content") == 204, "codigo 204")
-    assert(statusCodeOf("HTTP/1.0 304 Not Modified") == 304, "codigo 304")
-    assert(statusCodeOf("HTTP/1.1 200 OK") == 200, "codigo 200")
-    assert(statusCodeOf("lixo") == -1, "sem status")
-    assert(statusCodeOf("HTTP/1.1 20 OK") == -1, "codigo de 2 digitos")
-    assert(statusAllowsBody(200, "GET"), "200 GET tem corpo")
-    assert(statusAllowsBody(404, "POST"), "404 tem corpo")
-    assert(statusAllowsBody(200, "HEAD") == false, "HEAD sem corpo")
-    assert(statusAllowsBody(204, "GET") == false, "204 sem corpo")
-    assert(statusAllowsBody(304, "GET") == false, "304 sem corpo")
-    assert(statusAllowsBody(100, "POST") == false, "1xx sem corpo")
+    need(statusCodeOf("HTTP/1.1 204 No Content") == 204, "falhou")
+    need(statusCodeOf("HTTP/1.0 304 Not Modified") == 304, "falhou")
+    need(statusCodeOf("HTTP/1.1 200 OK") == 200, "falhou")
+    need(statusCodeOf("lixo") == -1, "falhou")
+    need(statusCodeOf("HTTP/1.1 20 OK") == -1, "falhou")
+    need(statusAllowsBody(200, "GET"), "falhou")
+    need(statusAllowsBody(404, "POST"), "falhou")
+    need(statusAllowsBody(200, "HEAD") == false, "falhou")
+    need(statusAllowsBody(204, "GET") == false, "falhou")
+    need(statusAllowsBody(304, "GET") == false, "falhou")
+    need(statusAllowsBody(100, "POST") == false, "falhou")
     // Corpo de REQUISICAO que o metodo recusa (lado simetrico): so HEAD, e
     // so quando ha bytes — GET/POST/DELETE com corpo seguem legitimos.
-    assert(requestHasBody("HEAD", bytesFromString("abc")), "HEAD com corpo recusado")
-    assert(requestHasBody("HEAD", bytesEmpty()) == false, "HEAD sem corpo passa")
-    assert(requestHasBody("GET", bytesFromString("abc")) == false, "GET com corpo passa")
-    assert(requestHasBody("POST", bytesFromString("abc")) == false, "POST com corpo passa")
-    assert(requestHasBody("DELETE", bytesFromString("x")) == false, "DELETE com corpo passa")
-    assert(errHeadWithBody().indexOf("KCF136") >= 0, "codigo KCF136")
-    assert(errHint(errHeadWithBody()).indexOf("HEAD") >= 0, "Hint explica o metodo")
+    need(requestHasBody("HEAD", bytesFromString("abc")), "falhou")
+    need(requestHasBody("HEAD", bytesEmpty()) == false, "falhou")
+    need(requestHasBody("GET", bytesFromString("abc")) == false, "falhou")
+    need(requestHasBody("POST", bytesFromString("abc")) == false, "falhou")
+    need(requestHasBody("DELETE", bytesFromString("x")) == false, "falhou")
+    need(errHeadWithBody().indexOf("KCF136") >= 0, "falhou")
+    need(errHint(errHeadWithBody()).indexOf("HEAD") >= 0, "falhou")
     // 204/1xx perdem tambem o Content-Length; 304 e HEAD mantem (descrevem
     // a representacao do GET).
     var n204 = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 204 No Content\r\nContent-Length: 5\r\n\r\nhello"), "GET"))
-    assert(bodyOf(n204) == "", "204 sem corpo")
-    assert(n204.toLowerCase().indexOf("content-length") < 0, "204 sem Content-Length")
+    need(bodyOf(n204) == "", "falhou")
+    need(n204.toLowerCase().indexOf("content-length") < 0, "falhou")
     var n100 = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 100 Continue\r\nContent-Length: 0\r\n\r\nx"), "POST"))
-    assert(bodyOf(n100) == "" && n100.toLowerCase().indexOf("content-length") < 0, "1xx sem corpo nem CL")
+    need(bodyOf(n100) == "" && n100.toLowerCase().indexOf("content-length") < 0, "falhou")
     var n304 = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 304 Not Modified\r\nContent-Length: 3\r\nETag: x\r\n\r\nabc"), "GET"))
-    assert(bodyOf(n304) == "", "304 sem corpo")
-    assert(n304.indexOf("Content-Length: 3") >= 0 && n304.indexOf("ETag: x") >= 0, "304 mantem CL e ETag")
+    need(bodyOf(n304) == "", "falhou")
+    need(n304.indexOf("Content-Length: 3") >= 0 && n304.indexOf("ETag: x") >= 0, "falhou")
     var head = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"), "HEAD"))
-    assert(bodyOf(head) == "", "HEAD sem corpo")
-    assert(head.indexOf("Content-Length: 2") >= 0, "HEAD mantem o CL do GET")
+    need(bodyOf(head) == "", "falhou")
+    need(head.indexOf("Content-Length: 2") >= 0, "falhou")
     // Corpo do HEAD descartado e NADA alem dele: a resposta termina no
     // separador (sem 4 bytes extras do separador vindo como corpo) e o
     // texto do corpo nao aparece em lugar nenhum. Sem o corte em `bodiless`
     // o `ok` continuaria no fim do stream e o cliente leria um corpo que o
     // HEAD proibe.
-    assert(head.endsWith("\r\n\r\n"), "HEAD termina no separador (sem corpo)")
-    assert(head.endsWith("\r\n\r\nok") == false, "nem 2 bytes de corpo passam")
-    assert(head.indexOf("ok") < 0, "texto do corpo ausente")
+    need(head.endsWith("\r\n\r\n"), "falhou")
+    need(head.endsWith("\r\n\r\nok") == false, "falhou")
+    need(head.indexOf("ok") < 0, "falhou")
     // Mesma regra para chunked: decodifica e descarta, sem vazar o
     // enquadramento (nem os bytes decodificados).
     var headChunked = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n"), "HEAD"))
-    assert(bodyOf(headChunked) == "", "HEAD chunked sem corpo")
-    assert(headChunked.indexOf("hello") < 0, "bytes decodificados nao vazam")
-    assert(headChunked.toLowerCase().indexOf("transfer-encoding") < 0, "sem TE na resposta")
+    need(bodyOf(headChunked) == "", "falhou")
+    need(headChunked.indexOf("hello") < 0, "falhou")
+    need(headChunked.toLowerCase().indexOf("transfer-encoding") < 0, "falhou")
     // GET comum segue intacto.
     var get = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"), "GET"))
-    assert(bodyOf(get) == "ok", "GET preservado")
+    need(bodyOf(get) == "ok", "falhou")
     // 204 chunked: decodifica e descarta (nunca vaza enquadramento).
     var chunk204 = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 204 No Content\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n"), "GET"))
-    assert(bodyOf(chunk204) == "", "204 chunked sem corpo")
-    assert(chunk204.toLowerCase().indexOf("transfer-encoding") < 0, "204 chunked sem TE")
+    need(bodyOf(chunk204) == "", "falhou")
+    need(chunk204.toLowerCase().indexOf("transfer-encoding") < 0, "falhou")
 }
 
 
@@ -239,101 +239,101 @@ test "framing: Content-Length da resposta e reconciliado com o corpo real", "fra
     // Medido: CL 2 com 7 bytes entregava os 7 (lixo no fim do stream) e
     // CL 100 com 2 bytes mantinha o header mentiroso.
     var over = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nokEXTRA"), "GET"))
-    assert(bodyOf(over) == "ok", "excedente cortado no declarado")
-    assert(responseHeader(over, "content-length") == "2", "CL do excedente inalterado")
+    need(bodyOf(over) == "ok", "falhou")
+    need(responseHeader(over, "content-length") == "2", "falhou")
     var under = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nok"), "GET"))
-    assert(bodyOf(under) == "ok", "corpo curto intacto")
-    assert(responseHeader(under, "content-length") == "2", "CL reescrito para o real")
+    need(bodyOf(under) == "ok", "falhou")
+    need(responseHeader(under, "content-length") == "2", "falhou")
     var exact = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"), "GET"))
-    assert(bodyOf(exact) == "ok" && responseHeader(exact, "content-length") == "2", "CL exato nao muda")
+    need(bodyOf(exact) == "ok" && responseHeader(exact, "content-length") == "2", "falhou")
     // Sem CL o Edge nao inventa um: o close delimita (comportamento de antes).
     var noCl = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nok"), "GET"))
-    assert(bodyOf(noCl) == "ok", "sem CL o corpo passa")
-    assert(noCl.toLowerCase().indexOf("content-length") < 0, "sem CL nao ganha CL")
+    need(bodyOf(noCl) == "ok", "falhou")
+    need(noCl.toLowerCase().indexOf("content-length") < 0, "falhou")
     // HEAD e 304 mantem o CL original: descreve a representacao do GET.
     var head = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nok"), "HEAD"))
-    assert(bodyOf(head) == "" && responseHeader(head, "content-length") == "100", "HEAD mantem CL e perde corpo")
+    need(bodyOf(head) == "" && responseHeader(head, "content-length") == "100", "falhou")
     var n304 = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 304 Not Modified\r\nContent-Length: 3\r\n\r\nabc"), "GET"))
-    assert(bodyOf(n304) == "" && responseHeader(n304, "content-length") == "3", "304 mantem CL")
+    need(bodyOf(n304) == "" && responseHeader(n304, "content-length") == "3", "falhou")
     // Chunked decodificado ganha o CL do corpo decodificado.
     var chunk = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n"), "GET"))
-    assert(bodyOf(chunk) == "hello", "chunked decodificado")
-    assert(chunk.toLowerCase().indexOf("transfer-encoding") < 0, "sem TE")
+    need(bodyOf(chunk) == "hello", "falhou")
+    need(chunk.toLowerCase().indexOf("transfer-encoding") < 0, "falhou")
     // CL invalido do upstream nao vira corte nem header novo.
     var badCl = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: abc\r\n\r\nok"), "GET"))
-    assert(bodyOf(badCl) == "ok", "CL invalido nao corta")
+    need(bodyOf(badCl) == "ok", "falhou")
 }
 
 
 test "framing: resposta nao-HTTP do upstream vira 502 KCF131", "framing-badresp-unit" {
     // Sem linha de status enquadravel o Edge entregava bytes crus ao cliente.
-    assert(responseIsParseable(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")), "200 valido")
-    assert(responseIsParseable(bytesFromString("HTTP/1.0 404 Not Found\r\n\r\n")), "404 sem corpo valido")
-    assert(responseIsParseable(bytesFromString("GARBAGE RESPONSE\r\nX: y\r\n\r\npayload")) == false, "sem HTTP/")
-    assert(responseIsParseable(bytesFromString("HTTP/1.1 XX OK\r\n\r\n")) == false, "codigo nao numerico")
-    assert(responseIsParseable(bytesFromString("HTTP/1.1 999 Nope\r\n\r\n")) == false, "codigo fora de 100-599")
-    assert(responseIsParseable(bytesFromString("HTTP/1.1 20 OK\r\n\r\n")) == false, "codigo de 2 digitos")
-    assert(responseIsParseable(bytesFromString("nao e http")) == false, "sem terminador")
-    assert(responseIsParseable(bytesFromString("")) == false, "vazio")
+    need(responseIsParseable(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")), "falhou")
+    need(responseIsParseable(bytesFromString("HTTP/1.0 404 Not Found\r\n\r\n")), "falhou")
+    need(responseIsParseable(bytesFromString("GARBAGE RESPONSE\r\nX: y\r\n\r\npayload")) == false, "falhou")
+    need(responseIsParseable(bytesFromString("HTTP/1.1 XX OK\r\n\r\n")) == false, "falhou")
+    need(responseIsParseable(bytesFromString("HTTP/1.1 999 Nope\r\n\r\n")) == false, "falhou")
+    need(responseIsParseable(bytesFromString("HTTP/1.1 20 OK\r\n\r\n")) == false, "falhou")
+    need(responseIsParseable(bytesFromString("nao e http")) == false, "falhou")
+    need(responseIsParseable(bytesFromString("")) == false, "falhou")
     // Codigo e Hint (R6).
-    assert(errInvalidUpstreamResponse().indexOf("KCF131") >= 0, "codigo KCF131")
-    assert(errHint(errInvalidUpstreamResponse()).indexOf("HTTP") >= 0, "Hint explica")
+    need(errInvalidUpstreamResponse().indexOf("KCF131") >= 0, "falhou")
+    need(errHint(errInvalidUpstreamResponse()).indexOf("HTTP") >= 0, "falhou")
 }
 
 
 test "framing: linha de requisicao fora do formato vira 400 KCF132", "framing-reqline-unit" {
     // Tres partes, metodo token, path absoluto e versao HTTP/1.x.
-    assert(requestLineIsValid("GET / HTTP/1.1"), "GET simples")
-    assert(requestLineIsValid("POST /api/x?y=1 HTTP/1.0"), "query e 1.0")
-    assert(requestLineIsValid("DELETE / HTTP/1.1"), "outro metodo")
-    assert(requestLineIsValid("GE T / HTTP/1.1") == false, "quatro partes")
-    assert(requestLineIsValid("GET /") == false, "duas partes")
-    assert(requestLineIsValid("HTTP/1.1 200 OK") == false, "linha de status")
-    assert(requestLineIsValid("GET  / HTTP/1.1") == false, "espaco duplo")
-    assert(requestLineIsValid("GET x HTTP/1.1") == false, "path relativo")
-    assert(requestLineIsValid("GET / HTTP/2.0") == false, "versao nao suportada")
-    assert(requestLineIsValid("G\tT / HTTP/1.1") == false, "tab no metodo")
+    need(requestLineIsValid("GET / HTTP/1.1"), "falhou")
+    need(requestLineIsValid("POST /api/x?y=1 HTTP/1.0"), "falhou")
+    need(requestLineIsValid("DELETE / HTTP/1.1"), "falhou")
+    need(requestLineIsValid("GE T / HTTP/1.1") == false, "falhou")
+    need(requestLineIsValid("GET /") == false, "falhou")
+    need(requestLineIsValid("HTTP/1.1 200 OK") == false, "falhou")
+    need(requestLineIsValid("GET  / HTTP/1.1") == false, "falhou")
+    need(requestLineIsValid("GET x HTTP/1.1") == false, "falhou")
+    need(requestLineIsValid("GET / HTTP/2.0") == false, "falhou")
+    need(requestLineIsValid("G\tT / HTTP/1.1") == false, "falhou")
     // Path: caractere de controle quebraria a linha ao reconstruir o pedido.
-    assert(requestLineIsValid("GET /a\rb HTTP/1.1") == false, "CR no path")
-    assert(requestLineIsValid("GET /a\tb HTTP/1.1") == false, "tab no path")
-    assert(requestLineIsValid("GET /a b HTTP/1.1") == false, "espaco no path (4 partes)")
-    assert(requestLineIsValid("GET http://evil.example/x HTTP/1.1") == false, "URI absoluta")
-    assert(requestLineIsValid("GET /a%20b?q=1 HTTP/1.1"), "percent-encoded e query passam")
+    need(requestLineIsValid("GET /a\rb HTTP/1.1") == false, "falhou")
+    need(requestLineIsValid("GET /a\tb HTTP/1.1") == false, "falhou")
+    need(requestLineIsValid("GET /a b HTTP/1.1") == false, "falhou")
+    need(requestLineIsValid("GET http://evil.example/x HTTP/1.1") == false, "falhou")
+    need(requestLineIsValid("GET /a%20b?q=1 HTTP/1.1"), "falhou")
     // Parser: linha invalida deixa método vazio (o chamador recusa); válida
     // preenche método/path/versão.
     var ok = parseRequest(bytesFromString("GET /a HTTP/1.1\r\nHost: x\r\n\r\n"))
-    assert(ok.method == "GET" && ok.path == "/a" && ok.version == "HTTP/1.1", "parser valido")
+    need(ok.method == "GET" && ok.path == "/a" && ok.version == "HTTP/1.1", "falhou")
     var bad = parseRequest(bytesFromString("GE T / HTTP/1.1\r\nHost: x\r\n\r\n"))
-    assert(bad.method == "", "linha de 4 partes nao inventa metodo")
+    need(bad.method == "", "falhou")
     var status = parseRequest(bytesFromString("HTTP/1.1 200 OK\r\n\r\n"))
-    assert(status.method == "", "status line nao vira pedido")
+    need(status.method == "", "falhou")
     var ctrlPath = parseRequest(bytesFromString("GET /a\rb HTTP/1.1\r\nHost: x\r\n\r\n"))
-    assert(ctrlPath.method == "", "CR no path nao vira pedido")
+    need(ctrlPath.method == "", "falhou")
     // Codigo e Hint (R6).
-    assert(errInvalidRequestLine().indexOf("KCF132") >= 0, "codigo KCF132")
-    assert(errHint(errInvalidRequestLine()).indexOf("METODO") >= 0, "Hint explica")
+    need(errInvalidRequestLine().indexOf("KCF132") >= 0, "falhou")
+    need(errHint(errInvalidRequestLine()).indexOf("METODO") >= 0, "falhou")
 }
 
 
 test "framing: cabecalho malformado vira 400 KCF133", "framing-hdrline-unit" {
-    assert(headerLineIsValid("Host: x.kofcloud.io"), "header normal")
-    assert(headerLineIsValid("X-Vazio:"), "valor vazio e valido")
-    assert(headerLineIsValid("X-Espaco:  a b  "), "espacos no valor")
-    assert(headerLineIsValid("Cookie: a=1; b=2"), "cookie")
-    assert(headerLineIsValid("semdoispontos") == false, "sem dois pontos")
-    assert(headerLineIsValid(": v") == false, "nome vazio")
-    assert(headerLineIsValid("X-A b: v") == false, "espaco no nome")
-    assert(headerLineIsValid("X-A\rb: v") == false, "CR no nome (quebra a linha)")
-    assert(headerLineIsValid("X-A\tb: v") == false, "tab no nome")
-    assert(headerLineIsValid("X-A: v\rw") == false, "CR no valor")
-    assert(headerLineIsValid("X-A: v\nw") == false, "LF no valor")
+    need(headerLineIsValid("Host: x.kofcloud.io"), "falhou")
+    need(headerLineIsValid("X-Vazio:"), "falhou")
+    need(headerLineIsValid("X-Espaco:  a b  "), "falhou")
+    need(headerLineIsValid("Cookie: a=1; b=2"), "falhou")
+    need(headerLineIsValid("semdoispontos") == false, "falhou")
+    need(headerLineIsValid(": v") == false, "falhou")
+    need(headerLineIsValid("X-A b: v") == false, "falhou")
+    need(headerLineIsValid("X-A\rb: v") == false, "falhou")
+    need(headerLineIsValid("X-A\tb: v") == false, "falhou")
+    need(headerLineIsValid("X-A: v\rw") == false, "falhou")
+    need(headerLineIsValid("X-A: v\nw") == false, "falhou")
     // Lista: basta uma linha ruim para recusar o pedido inteiro.
-    assert(headersAreValid(listOf<String>("Host: x", "X-Ok: 1")), "lista boa")
-    assert(headersAreValid(listOf<String>()) , "lista vazia")
-    assert(headersAreValid(listOf<String>("Host: x", "lixo")) == false, "lista com linha sem dois pontos")
+    need(headersAreValid(listOf<String>("Host: x", "X-Ok: 1")), "falhou")
+    need(headersAreValid(listOf<String>()), "falhou")
+    need(headersAreValid(listOf<String>("Host: x", "lixo")) == false, "falhou")
     // Codigo e Hint (R6).
-    assert(errInvalidHeaderLine().indexOf("KCF133") >= 0, "codigo KCF133")
-    assert(errHint(errInvalidHeaderLine()).indexOf("Nome") >= 0, "Hint explica")
+    need(errInvalidHeaderLine().indexOf("KCF133") >= 0, "falhou")
+    need(errHint(errInvalidHeaderLine()).indexOf("Nome") >= 0, "falhou")
 }
 
 
@@ -341,37 +341,37 @@ test "framing: 1xx intermediario e pulado ate a resposta final", "framing-interi
     // Medido: 100 Continue + 200 OK virava um 100 com corpo vazio (o cliente
     // nunca via a resposta final).
     var one = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok"), "POST"))
-    assert(statusOf(one) == 200, "status final preservado")
-    assert(bodyOf(one) == "ok", "corpo final preservado")
-    assert(one.indexOf("100 Continue") < 0, "sem bloco 1xx")
+    need(statusOf(one) == 200, "falhou")
+    need(bodyOf(one) == "ok", "falhou")
+    need(one.indexOf("100 Continue") < 0, "falhou")
     // Varios interinos seguidos.
     var many = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 103 Early Hints\r\nLink: </x>\r\n\r\nHTTP/1.1 201 Created\r\n\r\nhi"), "POST"))
-    assert(statusOf(many) == 201, "ultimo status")
-    assert(bodyOf(many) == "hi", "corpo do ultimo")
-    assert(many.indexOf("Early Hints") < 0 && many.indexOf("100 Continue") < 0, "sem interinos")
+    need(statusOf(many) == 201, "falhou")
+    need(bodyOf(many) == "hi", "falhou")
+    need(many.indexOf("Early Hints") < 0 && many.indexOf("100 Continue") < 0, "falhou")
     // Interino com headers nao vaza nenhum deles.
     var withHdr = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 100 Continue\r\nX-Interim: v\r\n\r\nHTTP/1.1 200 OK\r\n\r\nok"), "POST"))
-    assert(withHdr.indexOf("X-Interim") < 0, "headers do interino nao vazam")
+    need(withHdr.indexOf("X-Interim") < 0, "falhou")
     // Resposta normal nao muda.
     var plain = bytesToString(sanitizeResponse(bytesFromString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"), "GET"))
-    assert(statusOf(plain) == 200 && bodyOf(plain) == "ok", "sem 1xx intacta")
+    need(statusOf(plain) == 200 && bodyOf(plain) == "ok", "falhou")
     // Bloco 1xx sem terminador (resposta incompleta) volta como veio.
     var broken = "HTTP/1.1 100 Continue"
-    assert(bytesToString(sanitizeResponse(bytesFromString(broken), "POST")) == broken, "sem terminador nao inventa")
+    need(bytesToString(sanitizeResponse(bytesFromString(broken), "POST")) == broken, "falhou")
 }
 
 
 test "framing: query nao interfere nas decisoes da plataforma", "framing-query-unit" {
     // Medido: /security.txt?x=1 caia no roteamento (404) porque o parser
     // mantem a query no path. A plataforma decide pelo caminho.
-    assert(pathWithoutQuery("/.well-known/security.txt?x=1") == "/.well-known/security.txt", "query removida")
-    assert(pathWithoutQuery("/a/b") == "/a/b", "sem query intacto")
-    assert(pathWithoutQuery("/?") == "/", "query vazia")
-    assert(pathWithoutQuery("/a?b?c") == "/a", "primeiro ? corta")
+    need(pathWithoutQuery("/.well-known/security.txt?x=1") == "/.well-known/security.txt", "falhou")
+    need(pathWithoutQuery("/a/b") == "/a/b", "falhou")
+    need(pathWithoutQuery("/?") == "/", "falhou")
+    need(pathWithoutQuery("/a?b?c") == "/a", "falhou")
     // O path do PEDIDO continua inteiro (a query vai ao servico local).
     var req = parseRequest(bytesFromString("GET /api/x?page=2 HTTP/1.1\r\nHost: a\r\n\r\n"))
-    assert(req.path == "/api/x?page=2", "query preservada no pedido")
-    assert(pathWithoutQuery(req.path) == "/api/x", "rota sem query")
+    need(req.path == "/api/x?page=2", "falhou")
+    need(pathWithoutQuery(req.path) == "/api/x", "falhou")
 }
 
 // Troca crua: manda os bytes e le ate o Edge fechar (Connection: close).
@@ -409,44 +409,44 @@ test "framing: enquadramento ambiguo vira 400 KCF118 e gigante vira 413", "frami
     var edgeStop = "/tmp/kofcloud-framing-edge-" + crypto.randomHex(4) + ".txt"
     File(edgeStop).delete()
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var host = "x.kofcloud.io"
     // Duplicado divergente: 400 antes de rotear (sem rota, o desfecho
     // antigo seria 404). O corpo curto mantem o teste rapido em qualquer
     // implementacao.
     var dup = rawExchange(httpPort, "POST / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 3\r\nContent-Length: 4\r\nConnection: close\r\n\r\nabcd")
-    assert(statusOf(dup) == 400, "CL duplicado divergente -> 400 (recebido " + intToString(statusOf(dup)) + ")")
-    assert(bodyOf(dup).indexOf("KCF118") >= 0, "KCF118 no corpo")
+    need(statusOf(dup) == 400, "falhou")
+    need(bodyOf(dup).indexOf("KCF118") >= 0, "falhou")
 
     // Transfer-Encoding: o Edge nao decodifica chunked; repassar o header
     // faria o servico local esperar um corpo que nunca chega.
     var chunked = rawExchange(httpPort, "POST / HTTP/1.1\r\nHost: " + host + "\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\nabcd")
-    assert(statusOf(chunked) == 400, "chunked -> 400")
-    assert(bodyOf(chunked).indexOf("KCF118") >= 0, "KCF118 no chunked")
+    need(statusOf(chunked) == 400, "falhou")
+    need(bodyOf(chunked).indexOf("KCF118") >= 0, "falhou")
 
     // Valor que fazia wrap em Int (4294967306 -> 10): agora e Long e cai no
     // teto de leitura/politica (413), nunca em 404 com corpo de 10 bytes.
     var wrapped = rawExchange(httpPort, "POST / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 4294967306\r\nConnection: close\r\n\r\n0123456789LEFTOVERLEFTOVERLEFTOVER")
-    assert(statusOf(wrapped) == 413, "CL 4294967306 -> 413 (sem wrap); recebido " + intToString(statusOf(wrapped)))
-    assert(bodyOf(wrapped).indexOf("KCF110") >= 0, "KCF110 no corpo")
+    need(statusOf(wrapped) == 413, "falhou")
+    need(bodyOf(wrapped).indexOf("KCF110") >= 0, "falhou")
 
     // Valor que virava negativo: mesmo desfecho (413), nunca corpo descartado.
     var negative = rawExchange(httpPort, "POST / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 999999999999\r\nConnection: close\r\n\r\nabcd")
-    assert(statusOf(negative) == 413, "CL 999999999999 -> 413 (nao negativo)")
-    assert(bodyOf(negative).indexOf("KCF110") >= 0, "KCF110 no corpo do gigante")
+    need(statusOf(negative) == 413, "falhou")
+    need(bodyOf(negative).indexOf("KCF110") >= 0, "falhou")
 
     // Enquadramento valido atravessa: sem rota, 404 opaco (nao 400/413).
     var plain = httpPostRaw(httpPort, "/", host, listOf<String>(), "ok")
-    assert(statusOf(plain) == 404, "CL valido chega ao roteamento")
+    need(statusOf(plain) == 404, "falhou")
 
     // HEAD com corpo: 400 KCF136 antes de rotear. O Edge nao entrega o corpo
     // ao servico local, entao aceitar o pedido esconderia do cliente um erro
     // dele; e um servico local que lesse o corpo bloquearia esperando bytes
     // que o relay nunca manda.
     var headBody = rawExchange(httpPort, "HEAD / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 3\r\nConnection: close\r\n\r\nabc")
-    assert(statusOf(headBody) == 400, "HEAD com corpo -> 400 (recebido " + intToString(statusOf(headBody)) + ")")
-    assert(bodyOf(headBody).indexOf("KCF136") >= 0, "KCF136 no corpo")
+    need(statusOf(headBody) == 400, "falhou")
+    need(bodyOf(headBody).indexOf("KCF136") >= 0, "falhou")
 
     // Conta por motivo, sem ecoar o valor do header.
     var counted = false
@@ -459,19 +459,19 @@ test "framing: enquadramento ambiguo vira 400 KCF118 e gigante vira 413", "frami
             waits = waits - 1
         }
     }
-    assert(counted, "recusa por enquadramento contada")
+    need(counted, "falhou")
 
     // Host ambiguo: duplicado, ausente e com caractere invalido -> 400 KCF119
     // antes de rotear (sem rota, o desfecho antigo seria 404 — mas com dois
     // Host o Edge roteava pelo primeiro e repassava os dois ao servico).
     var dupHost = rawExchange(httpPort, "GET / HTTP/1.1\r\nHost: " + host + "\r\nHost: evil.example.com\r\nConnection: close\r\n\r\n")
-    assert(statusOf(dupHost) == 400, "Host duplicado -> 400; recebido " + intToString(statusOf(dupHost)))
-    assert(bodyOf(dupHost).indexOf("KCF119") >= 0, "KCF119 no duplicado")
+    need(statusOf(dupHost) == 400, "falhou")
+    need(bodyOf(dupHost).indexOf("KCF119") >= 0, "falhou")
     var noHost = rawExchange(httpPort, "GET / HTTP/1.1\r\nConnection: close\r\n\r\n")
-    assert(statusOf(noHost) == 400, "Host ausente -> 400")
-    assert(bodyOf(noHost).indexOf("KCF119") >= 0, "KCF119 no ausente")
+    need(statusOf(noHost) == 400, "falhou")
+    need(bodyOf(noHost).indexOf("KCF119") >= 0, "falhou")
     var badHost = rawExchange(httpPort, "GET / HTTP/1.1\r\nHost: " + host + "\r\nX-KofCloud-Token: a\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
-    assert(statusOf(badHost) == 400, "Host repetido com header no meio -> 400")
+    need(statusOf(badHost) == 400, "falhou")
 
     var hostCounted = false
     var hostWaits = 100
@@ -483,28 +483,28 @@ test "framing: enquadramento ambiguo vira 400 KCF118 e gigante vira 413", "frami
             hostWaits = hostWaits - 1
         }
     }
-    assert(hostCounted, "recusa por Host contada")
+    need(hostCounted, "falhou")
 
     // Linha de requisicao fora do formato: 400 KCF132 antes de rotear. Sem
     // isso "GE T / HTTP/1.1" virava metodo "GE" + path "T" e seguia adiante.
     var badLine = rawExchange(httpPort, "GE T / HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
-    assert(statusOf(badLine) == 400, "linha de 4 partes -> 400; recebeu " + intToString(statusOf(badLine)))
-    assert(bodyOf(badLine).indexOf("KCF132") >= 0, "KCF132 no corpo")
+    need(statusOf(badLine) == 400, "falhou")
+    need(bodyOf(badLine).indexOf("KCF132") >= 0, "falhou")
     var statusLine = rawExchange(httpPort, "HTTP/1.1 200 OK\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
-    assert(statusOf(statusLine) == 400, "status line como pedido -> 400")
-    assert(bodyOf(statusLine).indexOf("KCF132") >= 0, "KCF132 na status line")
+    need(statusOf(statusLine) == 400, "falhou")
+    need(bodyOf(statusLine).indexOf("KCF132") >= 0, "falhou")
     // CR no path: sem a validacao a linha se partia ao repassar (injection).
     var crPath = rawExchange(httpPort, "GET /a\rb HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
-    assert(statusOf(crPath) == 400, "CR no path -> 400; recebeu " + intToString(statusOf(crPath)))
-    assert(bodyOf(crPath).indexOf("KCF132") >= 0, "KCF132 no CR do path")
+    need(statusOf(crPath) == 400, "falhou")
+    need(bodyOf(crPath).indexOf("KCF132") >= 0, "falhou")
     // Cabecalho com CR no nome: 400 KCF133 antes de rotear (sem isso a linha
     // se partia no servico local).
     var crHeader = rawExchange(httpPort, "GET / HTTP/1.1\r\nHost: " + host + "\r\nX-A\rb: v\r\nConnection: close\r\n\r\n")
-    assert(statusOf(crHeader) == 400, "CR no nome do header -> 400; recebeu " + intToString(statusOf(crHeader)))
-    assert(bodyOf(crHeader).indexOf("KCF133") >= 0, "KCF133 no corpo")
+    need(statusOf(crHeader) == 400, "falhou")
+    need(bodyOf(crHeader).indexOf("KCF133") >= 0, "falhou")
     var lineNoColon = rawExchange(httpPort, "GET / HTTP/1.1\r\nHost: " + host + "\r\nsemdoispontos\r\nConnection: close\r\n\r\n")
-    assert(statusOf(lineNoColon) == 400, "linha sem dois pontos -> 400")
-    assert(bodyOf(lineNoColon).indexOf("KCF133") >= 0, "KCF133 sem dois pontos")
+    need(statusOf(lineNoColon) == 400, "falhou")
+    need(bodyOf(lineNoColon).indexOf("KCF133") >= 0, "falhou")
 
     var hdrCounted = false
     var hdrWaits = 100
@@ -516,7 +516,7 @@ test "framing: enquadramento ambiguo vira 400 KCF118 e gigante vira 413", "frami
             hdrWaits = hdrWaits - 1
         }
     }
-    assert(hdrCounted, "recusa por cabecalho contada")
+    need(hdrCounted, "falhou")
 
     var lineCounted = false
     var lineWaits = 100
@@ -528,7 +528,7 @@ test "framing: enquadramento ambiguo vira 400 KCF118 e gigante vira 413", "frami
             lineWaits = lineWaits - 1
         }
     }
-    assert(lineCounted, "recusa por linha de requisicao contada")
+    need(lineCounted, "falhou")
 
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)
@@ -625,7 +625,7 @@ test "framing: corpo relayado tem exatamente o tamanho declarado", "framing-rela
             }
         }
     }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-framing-relay-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -637,9 +637,9 @@ test "framing: corpo relayado tem exatamente o tamanho declarado", "framing-rela
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -648,7 +648,7 @@ test "framing: corpo relayado tem exatamente o tamanho declarado", "framing-rela
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "falhou")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
     var agentTask = spawn { runAgent(config, true) }
@@ -661,84 +661,84 @@ test "framing: corpo relayado tem exatamente o tamanho declarado", "framing-rela
             attempts = attempts - 1
         }
     }
-    assert(online, "agent online")
+    need(online, "falhou")
 
     var host = "site.mel.kofcloud.io"
     var smuggled = rawExchange(httpPort, "POST / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 10\r\nConnection: close\r\n\r\n" + malicious)
-    assert(statusOf(smuggled) == 200, "pedido entregue")
-    assert(received[0].length == 10, "servico local recebe 10 bytes; recebeu " + intToString(received[0].length))
-    assert(received[0] == "0123456789", "sem excedente no corpo")
-    assert(received[0].indexOf("LEFTOVER") < 0, "bytes alem do declarado nao chegam ao servico")
+    need(statusOf(smuggled) == 200, "falhou")
+    need(received[0].length == 10, "falhou")
+    need(received[0] == "0123456789", "falhou")
+    need(received[0].indexOf("LEFTOVER") < 0, "falhou")
     // O Host que roteou e o unico que a aplicacao ve.
-    assert(seenHead[0].indexOf("Host: " + host) >= 0, "Host roteado chega ao servico")
+    need(seenHead[0].indexOf("Host: " + host) >= 0, "falhou")
     var hostLines = 0
     for (var line in seenHead[0].split("\n")) {
         if (line.trim().toLowerCase().startsWith("host:")) {
             hostLines = hostLines + 1
         }
     }
-    assert(hostLines == 1, "servico local ve exatamente um Host; viu " + intToString(hostLines))
+    need(hostLines == 1, "falhou")
 
     // Host injetado nem chega ao relay: 400 KCF119 antes de abrir stream.
     var injected = rawExchange(httpPort, "POST / HTTP/1.1\r\nHost: " + host + "\r\nHost: evil.example.com\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
-    assert(statusOf(injected) == 400, "Host duplicado -> 400; recebido " + intToString(statusOf(injected)))
-    assert(bodyOf(injected).indexOf("KCF119") >= 0, "KCF119 no duplicado")
+    need(statusOf(injected) == 400, "falhou")
+    need(bodyOf(injected).indexOf("KCF119") >= 0, "falhou")
     var afterInjected = received[0]
     time.sleep(300)
-    assert(received[0] == afterInjected, "pedido recusado nao chega ao servico local")
-    assert(received[0].indexOf("evil.example.com") < 0, "Host injetado nunca chega a aplicacao")
+    need(received[0] == afterInjected, "falhou")
+    need(received[0].indexOf("evil.example.com") < 0, "falhou")
 
     // Hop-by-hop e tokens do Connection: chegam ao Edge, nunca ao servico.
     var withHop = rawExchange(httpPort, "POST / HTTP/1.1\r\nHost: " + host + "\r\nKeep-Alive: timeout=5\r\nUpgrade: websocket\r\nProxy-Authorization: Basic c2VjcmV0\r\nTE: trailers\r\nConnection: keep-alive, X-Private\r\nX-Private: v\r\nContent-Length: 2\r\n\r\nok")
-    assert(statusOf(withHop) == 200, "pedido com hop-by-hop e atendido")
-    assert(seenHead[0].indexOf("Keep-Alive") < 0, "sem Keep-Alive no servico")
-    assert(seenHead[0].indexOf("Upgrade") < 0, "sem Upgrade no servico")
-    assert(seenHead[0].indexOf("Proxy-Authorization") < 0, "sem credencial de proxy no servico")
-    assert(seenHead[0].indexOf("X-Private") < 0, "sem token nomeado no servico")
-    assert(seenHead[0].indexOf("Connection: close") >= 0, "Edge escreve o seu Connection")
+    need(statusOf(withHop) == 200, "falhou")
+    need(seenHead[0].indexOf("Keep-Alive") < 0, "falhou")
+    need(seenHead[0].indexOf("Upgrade") < 0, "falhou")
+    need(seenHead[0].indexOf("Proxy-Authorization") < 0, "falhou")
+    need(seenHead[0].indexOf("X-Private") < 0, "falhou")
+    need(seenHead[0].indexOf("Connection: close") >= 0, "falhou")
 
     // Caminho legitimo continua intacto — e a resposta ao CLIENTE tambem
     // passa pela sanitizacao: o keep-alive do servico local nao sobrevive.
     var normal = httpPostRaw(httpPort, "/", host, listOf<String>(), "ok")
-    assert(statusOf(normal) == 200, "corpo normal entregue")
-    assert(received[0] == "ok", "corpo normal chega inteiro")
-    assert(bodyOf(normal) == "ok", "corpo do cliente preservado")
-    assert(responseHeader(normal, "connection") == "close", "cliente recebe close; recebeu " + responseHeader(normal, "connection"))
-    assert(normal.indexOf("Keep-Alive") < 0, "keep-alive do upstream nao chega ao cliente")
+    need(statusOf(normal) == 200, "falhou")
+    need(received[0] == "ok", "falhou")
+    need(bodyOf(normal) == "ok", "falhou")
+    need(responseHeader(normal, "connection") == "close", "falhou")
+    need(normal.indexOf("Keep-Alive") < 0, "falhou")
 
     // Resposta chunked do upstream: o cliente ve o corpo decodificado e
     // nenhum Transfer-Encoding (que e hop-by-hop).
     var chunkedResp = rawExchange(httpPort, "GET / HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
-    assert(statusOf(chunkedResp) == 200, "chunked chega como 200")
-    assert(chunkedResp.toLowerCase().indexOf("transfer-encoding") < 0, "sem Transfer-Encoding")
-    assert(chunkedResp.indexOf("5\r\nhello") < 0, "sem enquadramento de chunk no corpo")
-    assert(bodyOf(chunkedResp) == "hello world", "corpo decodificado; recebeu '" + bodyOf(chunkedResp) + "'")
-    assert(responseHeader(chunkedResp, "connection") == "close", "close do Edge")
+    need(statusOf(chunkedResp) == 200, "falhou")
+    need(chunkedResp.toLowerCase().indexOf("transfer-encoding") < 0, "falhou")
+    need(chunkedResp.indexOf("5\r\nhello") < 0, "falhou")
+    need(bodyOf(chunkedResp) == "hello world", "falhou")
+    need(responseHeader(chunkedResp, "connection") == "close", "falhou")
 
     // 204 com corpo: o cliente nao recebe os bytes nem um Content-Length falso.
     var noContent = rawExchange(httpPort, "HEAD / HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
-    assert(statusOf(noContent) == 204, "204 chega; recebeu " + intToString(statusOf(noContent)))
-    assert(bodyOf(noContent) == "", "204 sem corpo; recebeu '" + bodyOf(noContent) + "'")
-    assert(noContent.toLowerCase().indexOf("content-length") < 0, "204 sem Content-Length")
+    need(statusOf(noContent) == 204, "falhou")
+    need(bodyOf(noContent) == "", "falhou")
+    need(noContent.toLowerCase().indexOf("content-length") < 0, "falhou")
 
     // CL mentiroso do upstream: corpo real entregue e header reconciliado.
     var lied = rawExchange(httpPort, "PUT / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-    assert(statusOf(lied) == 200, "put atendido")
-    assert(bodyOf(lied) == "ok", "corpo real entregue; recebeu '" + bodyOf(lied) + "'")
-    assert(responseHeader(lied, "content-length") == "2", "CL reconciliado com o corpo real; recebeu " + responseHeader(lied, "content-length"))
+    need(statusOf(lied) == 200, "falhou")
+    need(bodyOf(lied) == "ok", "falhou")
+    need(responseHeader(lied, "content-length") == "2", "falhou")
 
     // Resposta nao-HTTP: 502 KCF131, sem ecoar os bytes do upstream.
     var garbage = rawExchange(httpPort, "DELETE / HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
-    assert(statusOf(garbage) == 502, "lixo do upstream -> 502; recebeu " + intToString(statusOf(garbage)))
-    assert(bodyOf(garbage).indexOf("KCF131") >= 0, "KCF131 no corpo")
-    assert(garbage.indexOf("payload-secreto") < 0, "bytes do upstream nao vazam")
-    assert(garbage.indexOf("nao-vaza") < 0, "headers do upstream nao vazam")
+    need(statusOf(garbage) == 502, "falhou")
+    need(bodyOf(garbage).indexOf("KCF131") >= 0, "falhou")
+    need(garbage.indexOf("payload-secreto") < 0, "falhou")
+    need(garbage.indexOf("nao-vaza") < 0, "falhou")
 
     // 1xx intermediario: o cliente ve o status final e o corpo final.
     var interim = rawExchange(httpPort, "PATCH / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
-    assert(statusOf(interim) == 200, "1xx pulado -> 200; recebeu " + intToString(statusOf(interim)))
-    assert(bodyOf(interim) == "ok", "corpo final; recebeu '" + bodyOf(interim) + "'")
-    assert(interim.indexOf("100 Continue") < 0, "bloco 1xx nao chega ao cliente")
+    need(statusOf(interim) == 200, "falhou")
+    need(bodyOf(interim) == "ok", "falhou")
+    need(interim.indexOf("100 Continue") < 0, "falhou")
     var badCounted = false
     var badWaits = 100
     while (badWaits > 0 && badCounted == false) {
@@ -749,7 +749,7 @@ test "framing: corpo relayado tem exatamente o tamanho declarado", "framing-rela
             badWaits = badWaits - 1
         }
     }
-    assert(badCounted, "resposta invalida contada")
+    need(badCounted, "falhou")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
@@ -792,7 +792,7 @@ test "framing: pedido grande em muitos blocos chega byte-exato ao servico", "fra
             }
         }
     }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-framing-acc-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -808,9 +808,9 @@ test "framing: pedido grande em muitos blocos chega byte-exato ao servico", "fra
     // de tamanho em nenhuma das duas camadas.
     var httpTask = spawn { serveHttp(edgeState, httpPort, 4 * 1024 * 1024, edgeStop) }
     edgeState.setBodyLimit(1024 * 1024)
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -819,7 +819,7 @@ test "framing: pedido grande em muitos blocos chega byte-exato ao servico", "fra
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "falhou")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
     var agentTask = spawn { runAgent(config, true) }
@@ -832,7 +832,7 @@ test "framing: pedido grande em muitos blocos chega byte-exato ao servico", "fra
             attempts = attempts - 1
         }
     }
-    assert(online, "agent online")
+    need(online, "falhou")
 
     // Corpo deterministico com bytes altos (>127) de proposito: a copia e de
     // BYTES, entao nem o buffer com folga nem o caminho do relay podem
@@ -867,9 +867,9 @@ test "framing: pedido grande em muitos blocos chega byte-exato ao servico", "fra
         }
     }
     conn.close()
-    assert(statusOf(response) == 200, "pedido grande entregue; recebido status " + intToString(statusOf(response)))
-    assert(received[0].length == bodySize, "servico local recebe " + intToString(bodySize) + " bytes; recebeu " + intToString(received[0].length))
-    assert(received[0] == body, "corpo byte-exato e na ordem")
+    need(statusOf(response) == 200, "falhou")
+    need(received[0].length == bodySize, "falhou")
+    need(received[0] == body, "falhou")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)

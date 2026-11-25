@@ -20,15 +20,15 @@ import testkit.Support
 // Agent para de empurrar bytes e o cliente recebe 502 KCF115 explicito.
 
 test "relay limite: codigo e Hint", "relaylimit-unit" {
-    assert(errResponseTooLarge().indexOf("KCF115") >= 0, "codigo KCF115")
-    assert(errHint(errResponseTooLarge()).indexOf("maxResponseBytes") >= 0, "Hint aponta o teto")
-    assert(limitMaxResponseBytes() > 0, "teto positivo")
+    need(errResponseTooLarge().indexOf("KCF115") >= 0, "falhou")
+    need(errHint(errResponseTooLarge()).indexOf("maxResponseBytes") >= 0, "falhou")
+    need(limitMaxResponseBytes() > 0, "falhou")
     // Recuo seguro (fonte pura `maxResponseLimitFrom`): zero/negativo recaem
     // no default 16 MiB — com 0 toda resposta com corpo viraria 502 KCF115.
-    assert(limitMaxResponseBytes() == 16777216, "teto de resposta 16 MiB")
-    assert(maxResponseLimitFrom(0) == 16777216, "resposta zero recai no default")
-    assert(maxResponseLimitFrom(-5) == 16777216, "resposta negativo recai no default")
-    assert(maxResponseLimitFrom(1024) == 1024, "resposta positivo passa direto")
+    need(limitMaxResponseBytes() == 16777216, "falhou")
+    need(maxResponseLimitFrom(0) == 16777216, "falhou")
+    need(maxResponseLimitFrom(-5) == 16777216, "falhou")
+    need(maxResponseLimitFrom(1024) == 1024, "falhou")
 }
 
 test "relay limite: resposta acima do teto vira 502 KCF115, nunca 200 truncado", "relaylimit" {
@@ -64,7 +64,7 @@ test "relay limite: resposta acima do teto vira 502 KCF115, nunca 200 truncado",
             }
         }
     }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-rl-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -77,9 +77,9 @@ test "relay limite: resposta acima do teto vira 502 KCF115, nunca 200 truncado",
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -88,7 +88,7 @@ test "relay limite: resposta acima do teto vira 502 KCF115, nunca 200 truncado",
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "falhou")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
     var agentTask = spawn { runAgent(config, true) }
@@ -101,7 +101,7 @@ test "relay limite: resposta acima do teto vira 502 KCF115, nunca 200 truncado",
             attempts = attempts - 1
         }
     }
-    assert(online, "agent online")
+    need(online, "falhou")
 
     var host = "site.mel.kofcloud.io"
     // O desfecho upstream_error agora deixa palavra (familia do LINE_OVERFLOW):
@@ -109,17 +109,17 @@ test "relay limite: resposta acima do teto vira 502 KCF115, nunca 200 truncado",
     // ESTA execucao (precedente do edge_events e2e; o runner e sequencial).
     File(edgeRuntimeLogPath()).delete()
     var oversized = httpGetRaw(httpPort, "/", host)
-    assert(statusOf(oversized) == 502, "resposta grande -> 502 (nao 200 truncado)")
-    assert(bodyOf(oversized).indexOf("KCF115") >= 0, "KCF115 no corpo")
+    need(statusOf(oversized) == 502, "falhou")
+    need(bodyOf(oversized).indexOf("KCF115") >= 0, "falhou")
     // O corpo do servico NAO vaza na resposta de erro.
-    assert(bodyOf(oversized).indexOf("xxxx") < 0, "sem bytes parciais do servico")
+    need(bodyOf(oversized).indexOf("xxxx") < 0, "falhou")
 
     // A vaga de conexao por servico foi liberada e o stream nao ficou preso:
     // o proximo pedido tambem chega ao servico (e tambem estoura).
     var again = httpGetRaw(httpPort, "/", host)
-    assert(statusOf(again) == 502, "segundo pedido tambem 502 (vaga liberada)")
+    need(statusOf(again) == 502, "falhou")
 
-    assert(metricValue(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_response_too_large") >= 1, "recusa contada")
+    need(metricValue(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_response_too_large") >= 1, "falhou")
     // Espera a palavra chegar ao arquivo: o evento do Edge e escrito por
     // outra task e a leitura imediata apos o 502 vira corrida (esta suite ja
     // oscilou entre passar e falhar assim). Teto curto, nunca "assert com
@@ -135,8 +135,8 @@ test "relay limite: resposta acima do teto vira 502 KCF115, nunca 200 truncado",
             waited = waited + 1
         }
     }
-    assert(afterBig.indexOf("upstream: resposta acima do teto (1024 bytes) — 502") >= 0, "palavra do teto de resposta no arquivo")
-    assert(afterBig.indexOf("xxxx") < 0, "o corpo do servico nunca vai para o arquivo")
+    need(afterBig.indexOf("upstream: resposta acima do teto (1024 bytes) — 502") >= 0, "falhou")
+    need(afterBig.indexOf("xxxx") < 0, "falhou")
 
     // Parada limpa.
     writeTextTo(agentStop, "stop")
@@ -192,7 +192,7 @@ test "relay limite: cabecalho sem fim dentro do teto vira 431 KCF116", "relaylim
     var edgeStop = "/tmp/kofcloud-rl-h-edge-" + crypto.randomHex(4) + ".txt"
     File(edgeStop).delete()
     var httpTask = spawn { serveHttp(edgeState, 19956, 2048, edgeStop) }
-    assert(waitForPort(19956, 60), "http no ar")
+    need(waitForPort(19956, 60), "falhou")
 
     var conn = net.connect("127.0.0.1", 19956)
     var line = "X-Flood: "
@@ -213,8 +213,8 @@ test "relay limite: cabecalho sem fim dentro do teto vira 431 KCF116", "relaylim
         }
     }
     conn.close()
-    assert(statusOf(response) == 431, "431 no status")
-    assert(response.indexOf("KCF116") >= 0, "KCF116 no corpo")
+    need(statusOf(response) == 431, "falhou")
+    need(response.indexOf("KCF116") >= 0, "falhou")
 
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)
@@ -238,7 +238,7 @@ test "relay limite: corpo acima do teto de LEITURA e recusado sem acumular", "re
     var edgeStop = "/tmp/kofcloud-rl-c-edge-" + crypto.randomHex(4) + ".txt"
     File(edgeStop).delete()
     var httpTask = spawn { serveHttp(edgeState, 19957, readCap, edgeStop) }
-    assert(waitForPort(19957, 60), "http no ar")
+    need(waitForPort(19957, 60), "falhou")
 
     // (1) Declarado acima do teto, SEM corpo: a recusa tem que sair so com o
     // cabecalho. Sem o corte por `total`, o Edge ficaria bloqueado no receive
@@ -249,8 +249,8 @@ test "relay limite: corpo acima do teto de LEITURA e recusado sem acumular", "re
     conn.send(bytesFromString("POST / HTTP/1.1\r\nHost: x.kofcloud.io\r\nContent-Length: 1000000\r\nConnection: close\r\n\r\n"))
     var response = readAll(conn)
     conn.close()
-    assert(statusOf(response) == 413, "declarado acima do teto -> 413 so com o cabecalho (vazio = bloqueou esperando corpo)")
-    assert(response.indexOf("KCF110") >= 0, "KCF110 no corpo")
+    need(statusOf(response) == 413, "falhou")
+    need(response.indexOf("KCF110") >= 0, "falhou")
     // A metrica e gravada pela task do Edge (spawn) DEPOIS do close: o
     // cliente pode ler antes. Espera limitada em vez de assert imediato.
     var deniedCounted = false
@@ -263,7 +263,7 @@ test "relay limite: corpo acima do teto de LEITURA e recusado sem acumular", "re
             waits = waits - 1
         }
     }
-    assert(deniedCounted, "recusa contada")
+    need(deniedCounted, "falhou")
 
     // (2) Content-Length MENTIROSO (declara 5000, mas o teto de leitura e
     // 4096): o corpo real estoura o teto. O cabecalho viaja num chunk e o
@@ -281,7 +281,7 @@ test "relay limite: corpo acima do teto de LEITURA e recusado sem acumular", "re
     liar.send(bytesFromString(blob))
     var liedResponse = readAll(liar)
     liar.close()
-    assert(statusOf(liedResponse) == 413, "corpo real acima do teto -> 413 (nao segue ao roteamento)")
+    need(statusOf(liedResponse) == 413, "falhou")
 
     // (3) Content-Length SUBDECLARADO (declara 100, manda 5000): o `total`
     // fica abaixo do teto e o corte pelo declarado nao pega — quem recusa e
@@ -293,13 +293,13 @@ test "relay limite: corpo acima do teto de LEITURA e recusado sem acumular", "re
     sneak.send(bytesFromString(blob))
     var sneakResponse = readAll(sneak)
     sneak.close()
-    assert(statusOf(sneakResponse) == 413, "bytes reais acima do teto -> 413 mesmo com declarado pequeno")
+    need(statusOf(sneakResponse) == 413, "falhou")
 
     // Teto de leitura NAO afeta pedido pequeno: mesma instancia, corpo curto.
     var small = httpPostRaw(19957, "/", "x.kofcloud.io", listOf<String>(), "ok")
     // Sem rota, o pequeno cai no 404 opaco — prova que atravessou a leitura
     // (nao foi barrado pelo teto).
-    assert(statusOf(small) == 404, "pedido pequeno passa pela leitura e chega ao roteamento")
+    need(statusOf(small) == 404, "falhou")
 
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)

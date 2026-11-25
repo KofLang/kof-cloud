@@ -28,8 +28,8 @@ test "e2e: servico AUTHENTICATED exige credencial de servico", "auth" {
     appSecret.get("/") { return "svc-secret" }
     var serverPub = spawn { appPub.listen(localPub) }
     var serverSecret = spawn { appSecret.listen(localSecret) }
-    assert(waitForPort(localPub, 60), "servico publico no ar")
-    assert(waitForPort(localSecret, 60), "servico autenticado no ar")
+    need(waitForPort(localPub, 60), "falhou")
+    need(waitForPort(localSecret, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-auth-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -41,9 +41,9 @@ test "e2e: servico AUTHENTICATED exige credencial de servico", "auth" {
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control plane no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http publico no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"mel@example.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -67,94 +67,94 @@ test "e2e: servico AUTHENTICATED exige credencial de servico", "auth" {
             attempts = attempts - 1
         }
     }
-    assert(online, "agent registrado no edge")
+    need(online, "falhou")
 
     // PUBLIC continua livre
-    assert(statusOf(httpGetRaw(httpPort, "/", "pub.mel.kofcloud.io")) == 200, "PUBLIC sem credencial")
-    assert(bodyOf(httpGetRaw(httpPort, "/", "pub.mel.kofcloud.io")) == "svc-pub", "corpo do PUBLIC")
+    need(statusOf(httpGetRaw(httpPort, "/", "pub.mel.kofcloud.io")) == 200, "falhou")
+    need(bodyOf(httpGetRaw(httpPort, "/", "pub.mel.kofcloud.io")) == "svc-pub", "falhou")
 
     // AUTHENTICATED sem credencial -> 401 + WWW-Authenticate
     var noCredential = httpGetRaw(httpPort, "/", "secret.mel.kofcloud.io")
-    assert(statusOf(noCredential) == 401, "sem credencial -> 401")
-    assert(responseHeader(noCredential, "www-authenticate") == "Bearer", "anuncia o esquema")
-    assert(bodyOf(httpGetRaw(httpPort, "/", "secret.mel.kofcloud.io")) != "svc-secret", "nao vaza o conteudo")
+    need(statusOf(noCredential) == 401, "falhou")
+    need(responseHeader(noCredential, "www-authenticate") == "Bearer", "falhou")
+    need(bodyOf(httpGetRaw(httpPort, "/", "secret.mel.kofcloud.io")) != "svc-secret", "falhou")
 
     // credencial invalida -> 401
-    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", "kfs_naoexiste")) == 401, "token invalido -> 401")
+    need(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", "kfs_naoexiste")) == 401, "falhou")
 
     // o token da CONTA nao serve para acesso publico (credenciais separadas)
     var accountAttempt = httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", accountToken)
-    assert(statusOf(accountAttempt) == 401, "token da conta nao autoriza acesso")
+    need(statusOf(accountAttempt) == 401, "falhou")
 
     // emite a credencial do servico e usa
     var mintBody = "{\"serviceId\":\"" + secretId + "\"}"
     var minted = httpPostJson(controlPort, "/v1/services/token", mintBody, accountToken)
-    assert(statusOf(minted) == 200, "emissao ok")
+    need(statusOf(minted) == 200, "falhou")
     var serviceToken = mapField(json.decode<Map<String, String>>(bodyOf(minted)), "token")
-    assert(serviceToken.startsWith("kfs_"), "prefixo kfs_")
+    need(serviceToken.startsWith("kfs_"), "falhou")
 
     var allowed = httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", serviceToken)
-    assert(statusOf(allowed) == 200, "com a credencial do servico -> 200")
-    assert(bodyOf(allowed) == "svc-secret", "corpo do servico")
+    need(statusOf(allowed) == 200, "falhou")
+    need(bodyOf(allowed) == "svc-secret", "falhou")
 
     // revoga: o MESMO token passa a dar 401, sem derrubar o tunel
     var revokeBody = "{\"serviceId\":\"" + secretId + "\",\"token\":\"" + serviceToken + "\"}"
     var revoked = httpPostJson(controlPort, "/v1/services/token/revoke", revokeBody, accountToken)
-    assert(statusOf(revoked) == 200, "revogacao ok")
+    need(statusOf(revoked) == 200, "falhou")
     var denied = httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", serviceToken)
-    assert(statusOf(denied) == 401, "token revogado -> 401")
+    need(statusOf(denied) == 401, "falhou")
     // outro servico nao e afetado: emite novo e funciona de novo
     var minted2 = httpPostJson(controlPort, "/v1/services/token", mintBody, accountToken)
     var serviceToken2 = mapField(json.decode<Map<String, String>>(bodyOf(minted2)), "token")
-    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", serviceToken2)) == 200, "novo token funciona")
+    need(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", serviceToken2)) == 200, "falhou")
     // conta alheia nao revoga: 404 opaco, token continua valendo
     var anaCreated = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"ana@e.com\",\"password\":\"segredo\"}", "")
     var anaToken = mapField(json.decode<Map<String, String>>(bodyOf(anaCreated)), "token")
     var anaAttempt = "{\"serviceId\":\"" + secretId + "\",\"token\":\"" + serviceToken2 + "\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/token/revoke", anaAttempt, anaToken)) == 404, "alheio -> 404 opaco")
-    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", serviceToken2)) == 200, "token intacto apos tentativa alheia")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/token/revoke", anaAttempt, anaToken)) == 404, "falhou")
+    need(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", serviceToken2)) == 200, "falhou")
 
     // inventario: o dono ve as credenciais SEM os valores; alheio recebe 404.
     var listBody = "{\"serviceId\":\"" + secretId + "\"}"
     var listed = httpPostJson(controlPort, "/v1/services/tokens", listBody, accountToken)
-    assert(statusOf(listed) == 200, "inventario ok para o dono")
-    assert(bodyOf(listed).indexOf(serviceToken2) < 0, "valor kfs_ nunca viaja no inventario")
-    assert(bodyOf(listed).indexOf(secretId) >= 0, "inventario traz o servico certo")
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/tokens", listBody, anaToken)) == 404, "alheio nao inventaria")
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/tokens", "{\"serviceId\":\"inexistente\"}", accountToken)) == 404, "inexistente -> 404")
+    need(statusOf(listed) == 200, "falhou")
+    need(bodyOf(listed).indexOf(serviceToken2) < 0, "falhou")
+    need(bodyOf(listed).indexOf(secretId) >= 0, "falhou")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/tokens", listBody, anaToken)) == 404, "falhou")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/tokens", "{\"serviceId\":\"inexistente\"}", accountToken)) == 404, "falhou")
 
     // TTL: emissao com expiracao futura autoriza; TTL invalido = 400 KCF062.
     var timedBody = "{\"serviceId\":\"" + secretId + "\",\"ttlHours\":\"1\"}"
     var timedMint = httpPostJson(controlPort, "/v1/services/token", timedBody, accountToken)
-    assert(statusOf(timedMint) == 200, "emissao com TTL ok")
+    need(statusOf(timedMint) == 200, "falhou")
     var timedToken = mapField(json.decode<Map<String, String>>(bodyOf(timedMint)), "token")
-    assert(timedToken.startsWith("kfs_"), "TTL tambem emite kfs_")
-    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", timedToken)) == 200, "token com TTL futuro autoriza")
-    assert(bodyOf(httpPostJson(controlPort, "/v1/services/tokens", listBody, accountToken)).indexOf("expiresAt") >= 0, "inventario marca expiracao")
+    need(timedToken.startsWith("kfs_"), "falhou")
+    need(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", timedToken)) == 200, "falhou")
+    need(bodyOf(httpPostJson(controlPort, "/v1/services/tokens", listBody, accountToken)).indexOf("expiresAt") >= 0, "falhou")
     var badTtl = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + secretId + "\",\"ttlHours\":\"lixo\"}", accountToken)
-    assert(statusOf(badTtl) == 400, "TTL invalido -> 400")
-    assert(bodyOf(badTtl).indexOf("KCF062") >= 0, "codigo estavel de TTL")
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + secretId + "\",\"ttlHours\":\"0\"}", accountToken)) == 400, "TTL zero -> 400")
+    need(statusOf(badTtl) == 400, "falhou")
+    need(bodyOf(badTtl).indexOf("KCF062") >= 0, "falhou")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + secretId + "\",\"ttlHours\":\"0\"}", accountToken)) == 400, "falhou")
     // TTL que estoura Int fazia WRAP para 101 horas em parseIntSafe (32 bits)
     // e era aceito como expiracao valida.
     var wrappedTtl = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + secretId + "\",\"ttlHours\":\"4294967396\"}", accountToken)
-    assert(statusOf(wrappedTtl) == 400, "TTL com wrap -> 400; recebeu " + intToString(statusOf(wrappedTtl)))
-    assert(bodyOf(wrappedTtl).indexOf("KCF062") >= 0, "KCF062 no TTL estourado")
+    need(statusOf(wrappedTtl) == 400, "falhou")
+    need(bodyOf(wrappedTtl).indexOf("KCF062") >= 0, "falhou")
 
     // Id curto: o inventario traz "id" (8 hex do hash). Primeiro limpa o
     // cenario para o id ser unico: revoga o serviceToken2 pelo valor
     // completo (ja testado acima que funciona). Sobram timedToken (+ o
     // primeiro, ja revogado e podado) — o id do timed e deterministico.
     var cleanupBody = "{\"serviceId\":\"" + secretId + "\",\"token\":\"" + serviceToken2 + "\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/token/revoke", cleanupBody, accountToken)) == 200, "limpa o segundo")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/token/revoke", cleanupBody, accountToken)) == 200, "falhou")
     var listedRaw = bodyOf(httpPostJson(controlPort, "/v1/services/tokens", listBody, accountToken))
     assert(listedRaw.indexOf("\"id\":\"") >= 0, "inventario traz id curto")
     var idNeedle = "\"id\":\""
     var idAt = listedRaw.indexOf(idNeedle)
     var shortId = listedRaw.substring(idAt + idNeedle.length, idAt + idNeedle.length + 8)
     var shortRevoke = "{\"serviceId\":\"" + secretId + "\",\"token\":\"" + shortId + "\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/token/revoke", shortRevoke, accountToken)) == 200, "revoke por id curto unico")
-    assert(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", timedToken)) == 401, "token do id revogado nao autoriza")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/token/revoke", shortRevoke, accountToken)) == 200, "falhou")
+    need(statusOf(httpGetRawAuth(httpPort, "/", "secret.mel.kofcloud.io", timedToken)) == 401, "falhou")
 
     // Nota: nao testamos "PUBLIC com Authorization" porque um servico local
     // Kof (web.app) recusa QUALQUER Authorization antes do handler (L8). Em
@@ -164,7 +164,7 @@ test "e2e: servico AUTHENTICATED exige credencial de servico", "auth" {
     // parada limpa
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
-    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    need(edgeState.isOnline(deviceId) == false, "falhou")
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)
     File(agentStop).delete()
@@ -174,7 +174,7 @@ test "e2e: servico AUTHENTICATED exige credencial de servico", "auth" {
 String publishExposed(Int controlPort, String token, String deviceId, String name, Int localPort, String exposure) {
     var body = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"" + name + "\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localPort) + "\",\"protocol\":\"http\",\"exposure\":\"" + exposure + "\"}"
     var response = httpPostJson(controlPort, "/v1/services", body, token)
-    assert(statusOf(response) == 200, "publicado: " + name)
-    assert(bodyOf(response).indexOf("\"" + exposure + "\"") >= 0, "exposicao registrada: " + name)
+    need(statusOf(response) == 200, "falhou")
+    need(bodyOf(response).indexOf("\"" + exposure + "\"") >= 0, "falhou")
     return response
 }

@@ -20,31 +20,31 @@ import testkit.Support
 
 test "teto por rota: cap do servico e a forma canonica", "route-cap-unit" {
     // Vazio/ausente = global; inteiro positivo = o do servico.
-    assert(serviceMaxBodyCap("", 1000) == 1000, "vazio herda o global")
-    assert(serviceMaxBodyCap(null, 1000) == 1000, "chave ausente (null) herda o global")
-    assert(serviceMaxBodyCap("2048", 1000) == 2048, "servico menor que o global vence")
-    assert(serviceMaxBodyCap("64", 4096) == 64, "teto apertado por rota")
+    need(serviceMaxBodyCap("", 1000) == 1000, "falhou")
+    need(serviceMaxBodyCap(null, 1000) == 1000, "falhou")
+    need(serviceMaxBodyCap("2048", 1000) == 2048, "falhou")
+    need(serviceMaxBodyCap("64", 4096) == 64, "falhou")
     // Recuo seguro da familia: 0, negativo e lixo nunca viram "sem teto"
     // nem teto zero (que recusaria todo corpo).
-    assert(serviceMaxBodyCap("0", 1000) == 1000, "zero recai no global")
-    assert(serviceMaxBodyCap("-5", 1000) == 1000, "negativo recai no global")
-    assert(serviceMaxBodyCap("abc", 1000) == 1000, "lixo recai no global")
-    assert(serviceMaxBodyCap(" 512 ", 1000) == 512, "espacos aparados")
-    assert(serviceMaxBodyCap("512", 0) == 512, "global invalido nao apaga o teto do servico")
+    need(serviceMaxBodyCap("0", 1000) == 1000, "falhou")
+    need(serviceMaxBodyCap("-5", 1000) == 1000, "falhou")
+    need(serviceMaxBodyCap("abc", 1000) == 1000, "falhou")
+    need(serviceMaxBodyCap(" 512 ", 1000) == 512, "falhou")
+    need(serviceMaxBodyCap("512", 0) == 512, "falhou")
     // Texto canonico: null e "" sao a mesma coisa na comparacao de config.
-    assert(serviceCapText(null) == "", "null -> \"\"")
-    assert(serviceCapText(" 7 ") == "7", "aparado")
+    need(serviceCapText(null) == "", "falhou")
+    need(serviceCapText(" 7 ") == "7", "falhou")
     var a = Service("s1", "a", "d", "site", "127.0.0.1", 80, "http", "h", "PUBLIC", "ONLINE", 0L, "", "", "1024")
     var b = Service("s1", "a", "d", "site", "127.0.0.1", 80, "http", "h", "PUBLIC", "ONLINE", 0L, "", "", "")
-    assert(serviceConfigEquals(a, b) == false, "cap diferente = config diferente (drift no --plan)")
-    assert(serviceConfigEquals(a, a) == true, "igual a si mesmo")
+    need(serviceConfigEquals(a, b) == false, "falhou")
+    need(serviceConfigEquals(a, a) == true, "falhou")
     // Validador da autoria (API/CLI/manifesto): "" ok, positivo ok, resto KCF142.
-    assert(validateMaxBodyBytes("") == "", "ausente e valido")
-    assert(validateMaxBodyBytes("8192") == "", "positivo e valido")
-    assert(validateMaxBodyBytes("0").indexOf("KCF142") >= 0, "zero recusado")
-    assert(validateMaxBodyBytes("-1").indexOf("KCF142") >= 0, "negativo recusado")
-    assert(validateMaxBodyBytes("abc").indexOf("KCF142") >= 0, "lixo recusado")
-    assert(errHint(errInvalidMaxBody()).indexOf("httpBodyBytes") >= 0, "Hint aponta o global")
+    need(validateMaxBodyBytes("") == "", "falhou")
+    need(validateMaxBodyBytes("8192") == "", "falhou")
+    need(validateMaxBodyBytes("0").indexOf("KCF142") >= 0, "falhou")
+    need(validateMaxBodyBytes("-1").indexOf("KCF142") >= 0, "falhou")
+    need(validateMaxBodyBytes("abc").indexOf("KCF142") >= 0, "falhou")
+    need(errHint(errInvalidMaxBody()).indexOf("httpBodyBytes") >= 0, "falhou")
 }
 
 // Servidor local que responde 200 com um corpo minusculo e ecoa o tamanho.
@@ -74,7 +74,7 @@ test "teto por rota: 413 no servico apertado, 200 no servico que herda", "route-
 
     var listener = net.listen(localSvc)
     var server = spawn { serveEcho(listener) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-routecap-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -86,9 +86,9 @@ test "teto por rota: 413 no servico apertado, 200 no servico que herda", "route-
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -101,14 +101,14 @@ test "teto por rota: 413 no servico apertado, 200 no servico que herda", "route-
     var tight = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"tight\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\",\"maxBodyBytes\":\"8\"}"
     var loose = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"loose\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
     var tightResp = httpPostJson(controlPort, "/v1/services", tight, token)
-    assert(statusOf(tightResp) == 200, "apertado publicado: " + bodyOf(tightResp))
-    assert(bodyOf(tightResp).indexOf("\"maxBodyBytes\":\"8\"") >= 0, "o fio carrega o teto: " + bodyOf(tightResp))
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", loose, token)) == 200, "solto publicado")
+    need(statusOf(tightResp) == 200, "falhou")
+    need(bodyOf(tightResp).indexOf("\"maxBodyBytes\":\"8\"") >= 0, "falhou")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", loose, token)) == 200, "falhou")
     // Forma invalida e recusada antes de publicar (KCF142).
     var bad = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"bad\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\",\"maxBodyBytes\":\"0\"}"
     var badResp = httpPostJson(controlPort, "/v1/services", bad, token)
-    assert(statusOf(badResp) == 400, "teto 0 recusado: " + intToString(statusOf(badResp)))
-    assert(bodyOf(badResp).indexOf("KCF142") >= 0, "codigo KCF142: " + bodyOf(badResp))
+    need(statusOf(badResp) == 400, "falhou")
+    need(bodyOf(badResp).indexOf("KCF142") >= 0, "falhou")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, token, "", agentStop, "127.0.0.1", tunnelPort, 500)
     var agentTask = spawn { runAgent(config, true) }
@@ -121,19 +121,19 @@ test "teto por rota: 413 no servico apertado, 200 no servico que herda", "route-
             attempts = attempts - 1
         }
     }
-    assert(online, "agent no ar")
+    need(online, "falhou")
 
     // Corpo de 16 bytes: acima do teto de 8 do "tight", abaixo do global.
     var body = "0123456789abcdef"
     var tightPost = httpPostRaw(httpPort, "/", "tight.mel.kofcloud.io", listOf("Content-Length: 16"), body)
-    assert(statusOf(tightPost) == 413, "tight: 413 KCF110: " + intToString(statusOf(tightPost)))
-    assert(bodyOf(tightPost).indexOf("KCF110") >= 0, "teto de politica: " + bodyOf(tightPost))
+    need(statusOf(tightPost) == 413, "falhou")
+    need(bodyOf(tightPost).indexOf("KCF110") >= 0, "falhou")
     // O MESMO corpo passa no "loose": o teto e por rota, nao global.
     var loosePost = httpPostRaw(httpPort, "/", "loose.mel.kofcloud.io", listOf("Content-Length: 16"), body)
-    assert(statusOf(loosePost) == 200, "loose: 200 no mesmo corpo: " + intToString(statusOf(loosePost)))
+    need(statusOf(loosePost) == 200, "falhou")
     // O corpo do eco e o tamanho do pedido (linha + cabecalhos + 16 bytes):
     // prova que os 16 bytes do corpo chegaram de fato ao servico local.
-    assert(bodyOf(loosePost).length > 0, "loose: corpo do eco recebido")
+    need(bodyOf(loosePost).length > 0, "falhou")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1200)

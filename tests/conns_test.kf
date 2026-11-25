@@ -35,7 +35,7 @@ test "conexoes: limite por servico recusa com 429 KCF108", "conns" {
             }
         }
     }
-    assert(waitForPort(localSvc, 60), "servico lento no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-conn-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -48,9 +48,9 @@ test "conexoes: limite por servico recusa com 429 KCF108", "conns" {
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -60,13 +60,13 @@ test "conexoes: limite por servico recusa com 429 KCF108", "conns" {
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
     var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
-    assert(statusOf(published) == 200, "PUBLIC publicado")
+    need(statusOf(published) == 200, "falhou")
     var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
     // Os DOIS servicos antes do connect: o Agent aprende a lista no fetchEdge
     // (hot-reload de servico novo e outro debito, fora deste slice).
     var pubApi = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"api\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
     var apiPublished = httpPostJson(controlPort, "/v1/services", pubApi, accountToken)
-    assert(statusOf(apiPublished) == 200, "segundo PUBLIC publicado")
+    need(statusOf(apiPublished) == 200, "falhou")
     var apiServiceId = mapField(json.decode<Map<String, String>>(bodyOf(apiPublished)), "id")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 1000)
@@ -80,7 +80,7 @@ test "conexoes: limite por servico recusa com 429 KCF108", "conns" {
             attempts = attempts - 1
         }
     }
-    assert(online, "agent registrado no edge")
+    need(online, "falhou")
 
     // Primeira requisicao ocupa a unica vaga (servidor demora 2 s)...
     // Conexao crua manual (sem spawn/await com retorno): envia e NAO le.
@@ -89,31 +89,31 @@ test "conexoes: limite por servico recusa com 429 KCF108", "conns" {
     time.sleep(1000)
     // ...a segunda, concorrente, e recusada sem tocar no tunel.
     var busy = httpGetRaw(httpPort, "/slow", "site.mel.kofcloud.io")
-    assert(statusOf(busy) == 429, "segunda concorrente -> 429")
-    assert(bodyOf(busy).indexOf("KCF108") >= 0, "KCF108 no corpo")
-    assert(responseHeader(busy, "retry-after").length > 0, "Retry-After presente")
+    need(statusOf(busy) == 429, "falhou")
+    need(bodyOf(busy).indexOf("KCF108") >= 0, "falhou")
+    need(responseHeader(busy, "retry-after").length > 0, "falhou")
 
     // A primeira completa: a vaga libera (prova que era ocupacao real).
     // Poll com teto — nunca bloqueia para sempre (readAll poderia).
-    assert(serviceGoneIdle(edgeState, serviceId), "vaga liberada apos resposta lenta")
+    need(serviceGoneIdle(edgeState, serviceId), "falhou")
     firstConn.close()
 
     // Vaga liberada: o proximo passa com corpo integro.
-    assert(bodyOf(httpGetRaw(httpPort, "/slow", "site.mel.kofcloud.io")) == "svc-slow", "vaga liberada")
-    assert(metricValue(observability.metrics(), "kofcloud_edge_http_denied_total_service_overloaded") >= 1, "recusa contada")
+    need(bodyOf(httpGetRaw(httpPort, "/slow", "site.mel.kofcloud.io")) == "svc-slow", "falhou")
+    need(metricValue(observability.metrics(), "kofcloud_edge_http_denied_total_service_overloaded") >= 1, "falhou")
 
     // Outro servico tem cota propria (isolamento por serviceId).
     var apiConn = net.connect("127.0.0.1", httpPort)
     apiConn.send(bytesFromString("GET /slow HTTP/1.1\r\nHost: api.mel.kofcloud.io\r\nConnection: close\r\n\r\n"))
     time.sleep(1000)
     var busyApi = httpGetRaw(httpPort, "/slow", "api.mel.kofcloud.io")
-    assert(statusOf(busyApi) == 429, "api tambem limita a 1")
-    assert(serviceGoneIdle(edgeState, apiServiceId), "vaga da api liberada")
+    need(statusOf(busyApi) == 429, "falhou")
+    need(serviceGoneIdle(edgeState, apiServiceId), "falhou")
     apiConn.close()
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
-    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    need(edgeState.isOnline(deviceId) == false, "falhou")
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)
     File(agentStop).delete()
@@ -125,26 +125,26 @@ test "conexoes: contador libera e Hint orienta", "conns-unit" {
     var registry = Registry("/tmp/kofcloud-connu-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
     edgeState.setServiceConnLimit(2)
-    assert(edgeState.tryAcquireServiceConn("s1") == true, "vaga 1")
-    assert(edgeState.tryAcquireServiceConn("s1") == true, "vaga 2")
-    assert(edgeState.tryAcquireServiceConn("s1") == false, "cheio recusa")
-    assert(edgeState.serviceConnOpen("s1") == 2, "duas abertas")
-    assert(edgeState.tryAcquireServiceConn("s2") == true, "outro servico isolado")
+    need(edgeState.tryAcquireServiceConn("s1") == true, "falhou")
+    need(edgeState.tryAcquireServiceConn("s1") == true, "falhou")
+    need(edgeState.tryAcquireServiceConn("s1") == false, "falhou")
+    need(edgeState.serviceConnOpen("s1") == 2, "falhou")
+    need(edgeState.tryAcquireServiceConn("s2") == true, "falhou")
     edgeState.releaseServiceConn("s1")
-    assert(edgeState.tryAcquireServiceConn("s1") == true, "vaga libera")
+    need(edgeState.tryAcquireServiceConn("s1") == true, "falhou")
     edgeState.releaseServiceConn("s1")
     edgeState.releaseServiceConn("s1")
-    assert(edgeState.serviceConnOpen("s1") == 0, "nunca negativo (remove a chave)")
-    assert(errHint("KCF108: too many connections for this service").indexOf("instantes") >= 0, "Hint sem dado de servico")
+    need(edgeState.serviceConnOpen("s1") == 0, "falhou")
+    need(errHint("KCF108: too many connections for this service").indexOf("instantes") >= 0, "falhou")
 
     // Recuo seguro do teto (fonte pura `serviceConnLimitFrom`): zero/negativo
     // recai no default 64 — com o valor cru, `0` recusaria TODO o relay com
     // 429 KCF108 (o teto e maximo em aberto, 0 >= 0 e sempre verdade).
-    assert(serviceConnLimitFrom(0) == 64, "zero recai no default")
-    assert(serviceConnLimitFrom(-5) == 64, "negativo recai no default")
-    assert(serviceConnLimitFrom(10) == 10, "valor positivo passa")
-    assert(serviceConnLimitFrom(1) == 1, "limite apertado passa")
-    assert(limitServiceConns() == 64, "default 64 na fonte unica")
+    need(serviceConnLimitFrom(0) == 64, "falhou")
+    need(serviceConnLimitFrom(-5) == 64, "falhou")
+    need(serviceConnLimitFrom(10) == 10, "falhou")
+    need(serviceConnLimitFrom(1) == 1, "falhou")
+    need(limitServiceConns() == 64, "falhou")
 
     // O construtor do EdgeState delega na fonte: as 64 vagas do default abrem
     // e a seguinte recusa.
@@ -157,8 +157,8 @@ test "conexoes: contador libera e Hint orienta", "conns-unit" {
         }
         acquired = acquired + 1
     }
-    assert(acquired == cap, "construtor delega na fonte unica")
-    assert(defaultState.tryAcquireServiceConn("s-default") == false, "teto do default fecha")
+    need(acquired == cap, "falhou")
+    need(defaultState.tryAcquireServiceConn("s-default") == false, "falhou")
 }
 
 // Servidor lento deterministico: dorme 2 s, responde corpo fixo.

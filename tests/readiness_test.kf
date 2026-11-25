@@ -13,32 +13,32 @@ import testkit.Support
 
 test "readiness: sonda pura (corrupt 503, absent/ok 200)", "readiness-unit" {
     var corrupt = readinessFor("corrupt")
-    assert(corrupt.code == 503, "corrupt = 503: " + intToString(corrupt.code))
-    assert(corrupt.body.indexOf("\"ok\":\"false\"") >= 0, "corrupt diz ok=false")
-    assert(corrupt.body.indexOf("\"ready\":\"false\"") >= 0, "corrupt diz ready=false")
-    assert(corrupt.body.indexOf("\"state\":\"corrupt\"") >= 0, "corrupt nomeia o estado")
+    need(corrupt.code == 503, "falhou")
+    need(corrupt.body.indexOf("\"ok\":\"false\"") >= 0, "falhou")
+    need(corrupt.body.indexOf("\"ready\":\"false\"") >= 0, "falhou")
+    need(corrupt.body.indexOf("\"state\":\"corrupt\"") >= 0, "falhou")
 
     var absent = readinessFor("absent")
-    assert(absent.code == 200, "absent = 200 (primeiro boot e pronto)")
-    assert(absent.body.indexOf("\"ready\":\"true\"") >= 0, "absent diz ready=true")
-    assert(absent.body.indexOf("\"state\":\"absent\"") >= 0, "absent nomeia o estado")
+    need(absent.code == 200, "falhou")
+    need(absent.body.indexOf("\"ready\":\"true\"") >= 0, "falhou")
+    need(absent.body.indexOf("\"state\":\"absent\"") >= 0, "falhou")
 
     var ok = readinessFor("ok")
-    assert(ok.code == 200, "ok = 200")
-    assert(ok.body.indexOf("\"ready\":\"true\"") >= 0, "ok diz ready=true")
-    assert(ok.body.indexOf("\"state\":\"ok\"") >= 0, "ok nomeia o estado")
+    need(ok.code == 200, "falhou")
+    need(ok.body.indexOf("\"ready\":\"true\"") >= 0, "falhou")
+    need(ok.body.indexOf("\"state\":\"ok\"") >= 0, "falhou")
 
     // Nenhum corpo carrega credencial nem conta (mesma regra do /v1/health).
     var all = corrupt.body + absent.body + ok.body
-    assert(all.indexOf("kfc_") < 0, "sonda nao vaza token de conta")
-    assert(all.indexOf("kfs_") < 0, "sonda nao vaza credencial de servico")
+    need(all.indexOf("kfc_") < 0, "falhou")
+    need(all.indexOf("kfs_") < 0, "falhou")
 
     // Recusa do serve: pura, cita o arquivo e garante que nada foi tocado.
     var refusal = serveCorruptRefusal("/tmp/estado.json")
-    assert(refusal.indexOf("recusado") >= 0, "recusa nomeia o veredito")
-    assert(refusal.indexOf("/tmp/estado.json") >= 0, "recusa cita o arquivo")
-    assert(refusal.indexOf("NAO foi tocado") >= 0, "recusa garante o arquivo intacto")
-    assert(refusal.indexOf("state-backup") >= 0, "recusa aponta o backup")
+    need(refusal.indexOf("recusado") >= 0, "falhou")
+    need(refusal.indexOf("/tmp/estado.json") >= 0, "falhou")
+    need(refusal.indexOf("NAO foi tocado") >= 0, "falhou")
+    need(refusal.indexOf("state-backup") >= 0, "falhou")
 }
 
 test "readiness: e2e — corrupt responde 503 e o serve recusa subir", "readiness-e2e" {
@@ -48,23 +48,23 @@ test "readiness: e2e — corrupt responde 503 e o serve recusa subir", "readines
     var path = "/tmp/kofcloud-ready-" + crypto.randomHex(4) + ".json"
     writeTextTo(path, "{ isto nao e estado }")
     var registry = Registry(path)
-    assert(registry.loadStatus == "corrupt", "arquivo ilegivel na partida = corrupt")
+    need(registry.loadStatus == "corrupt", "falhou")
 
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control plane no ar")
+    need(waitForPort(port, 60), "falhou")
 
     var broken = httpGetRaw(port, "/v1/health", "127.0.0.1")
-    assert(statusOf(broken) == 503, "estado corrupt = 503: " + intToString(statusOf(broken)))
-    assert(bodyOf(broken).indexOf("\"state\":\"corrupt\"") >= 0, "503 nomeia corrupt")
-    assert(bodyOf(broken).indexOf("\"ready\":\"false\"") >= 0, "503 diz ready=false")
+    need(statusOf(broken) == 503, "falhou")
+    need(bodyOf(broken).indexOf("\"state\":\"corrupt\"") >= 0, "falhou")
+    need(bodyOf(broken).indexOf("\"ready\":\"false\"") >= 0, "falhou")
 
     // Fail-closed na partida: o mesmo arquivo ilegivel faz o `serve` recusar
     // (exit 1) e o arquivo continua intacto.
     var code = cmdServe(listOf("--state", path, "--control-port", "18085", "--tunnel-port", "18086", "--http-port", "18087"))
-    assert(code == 1, "serve recusa com estado ilegivel: " + intToString(code))
+    need(code == 1, "falhou")
     var still = readTextOr(path, "")
-    assert(still.indexOf("isto nao e estado") >= 0, "o arquivo ilegivel nao foi tocado")
+    need(still.indexOf("isto nao e estado") >= 0, "falhou")
 }
 
 test "readiness: estado divergente no disco desvia do ready (503 drifted)", "readiness-drift" {
@@ -75,33 +75,33 @@ test "readiness: estado divergente no disco desvia do ready (503 drifted)", "rea
     var port = 18091
     var path = "/tmp/kofcloud-drift-" + crypto.randomHex(4) + ".json"
     var registry = Registry(path)
-    assert(registry.stateChangedOnDisk() == false, "sem arquivo e sem escrita: sem divergencia")
+    need(registry.stateChangedOnDisk() == false, "falhou")
     registry.createAccount("mel", "m@e.com", "segredo")
     var stable = readTextOr(path, "")
-    assert(stable.length > 0, "estado gravado")
+    need(stable.length > 0, "falhou")
     var loaded = Registry(path)
-    assert(loaded.stateChangedOnDisk() == false, "arquivo igual ao carregado: sem divergencia")
+    need(loaded.stateChangedOnDisk() == false, "falhou")
     // Outro processo (ou o operador) escreve o mesma arquivo.
     writeTextTo(path, stable + " ")
-    assert(loaded.stateChangedOnDisk(), "arquivo mudou: divergencia detectada")
+    need(loaded.stateChangedOnDisk(), "falhou")
     var drifted = readinessForWith(loaded.loadStatus, loaded.stateChangedOnDisk())
-    assert(drifted.code == 503, "drift = 503")
-    assert(drifted.body.indexOf("\"state\":\"drifted\"") >= 0, "drift nomeia o estado")
-    assert(drifted.body.indexOf("\"ready\":\"false\"") >= 0, "drift diz ready=false")
-    assert(drifted.body.indexOf("kfc_") < 0, "drift nao vaza credencial")
+    need(drifted.code == 503, "falhou")
+    need(drifted.body.indexOf("\"state\":\"drifted\"") >= 0, "falhou")
+    need(drifted.body.indexOf("\"ready\":\"false\"") >= 0, "falhou")
+    need(drifted.body.indexOf("kfc_") < 0, "falhou")
     // Corrupcao tem precedencia sobre divergencia.
     var corruptWins = readinessForWith("corrupt", true)
-    assert(corruptWins.body.indexOf("\"state\":\"corrupt\"") >= 0, "corrupt vem antes")
+    need(corruptWins.body.indexOf("\"state\":\"corrupt\"") >= 0, "falhou")
     // Health limpo nao muda.
-    assert(readinessForWith("ok", false).code == 200, "sem drift: 200")
+    need(readinessForWith("ok", false).code == 200, "falhou")
     // Doctor: divergencia NAO manda fazer backup nem restaurar.
     var driftLine = doctorControlLine("http://127.0.0.1:" + intToString(port), "{\"state\":\"drifted\"}", "HTTP 503 from http://127.0.0.1/v1/health")
-    assert(driftLine.startsWith("FALHA"), "doctor falha no drift")
-    assert(driftLine.indexOf("outro processo") >= 0, "doctor nomeia a causa")
-    assert(driftLine.indexOf("NAO faca backup") >= 0, "doctor descarta a acao errada")
-    assert(driftLine.indexOf("ilegivel") < 0, "doctor nao chama de corrupcao")
+    need(driftLine.startsWith("FALHA"), "falhou")
+    need(driftLine.indexOf("outro processo") >= 0, "falhou")
+    need(driftLine.indexOf("NAO faca backup") >= 0, "falhou")
+    need(driftLine.indexOf("ilegivel") < 0, "falhou")
     var corruptLine = doctorControlLine("http://127.0.0.1:1", "{\"state\":\"corrupt\"}", "HTTP 503 from x/v1/health")
-    assert(corruptLine.indexOf("ilegivel") >= 0, "corrupt continua ilegivel")
+    need(corruptLine.indexOf("ilegivel") >= 0, "falhou")
 }
 
 test "readiness: e2e — escritor concorrente derruba o ready do processo vivo", "readiness-drift-e2e" {
@@ -111,11 +111,11 @@ test "readiness: e2e — escritor concorrente derruba o ready do processo vivo",
     registry.createAccount("mel", "m@e.com", "segredo")
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control no ar")
+    need(waitForPort(port, 60), "falhou")
     // Outro processo com o mesmo --state grava ANTES de a sonda perguntar.
     writeTextTo(path, readTextOr(path, "") + " ")
     var driftedRaw = httpGetRaw(port, "/v1/health", "127.0.0.1")
     var drifted = statusOf(driftedRaw)
-    assert(drifted == 503, "escritor externo: 503 (got " + intToString(drifted) + ")")
-    assert(bodyOf(driftedRaw).indexOf("\"state\":\"drifted\"") >= 0, "503 nomeia drifted")
+    need(drifted == 503, "falhou")
+    need(bodyOf(driftedRaw).indexOf("\"state\":\"drifted\"") >= 0, "falhou")
 }

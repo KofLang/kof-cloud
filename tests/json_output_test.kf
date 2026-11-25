@@ -14,39 +14,39 @@ import testkit.Support
 test "json: listagens puras (fio identico, presenca unica, vazio e [])", "json-unit" {
     var svc = Service("s1", "a1", "d1", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "ONLINE", 1L, "", "", "")
     var one = serviceListJsonFor(listOf(svc))
-    assert(one == "[" + serviceJson(svc) + "]", "servico: mesma serializacao do fio: " + one)
-    assert(serviceListJsonFor(listOf<Service>()) == "[]", "vazio = [] (nunca texto)")
+    need(one == "[" + serviceJson(svc) + "]", "falhou")
+    need(serviceListJsonFor(listOf<Service>()) == "[]", "falhou")
 
     var dev = Device("d1", "a1", "notebook", "ACTIVE", "pk", 0L, 1L)
     var online = deviceListJsonFor(listOf(dev), "[\"d1\"]", "")
-    assert(online.indexOf("\"tunnel\":\"ONLINE\"") >= 0, "presenca ONLINE do fio: " + online)
-    assert(online.indexOf("\"id\":\"d1\"") >= 0, "id presente")
-    assert(online.indexOf("\"deviceId\":\"d1\"") >= 0, "deviceId (conveniencia do fio)")
+    need(online.indexOf("\"tunnel\":\"ONLINE\"") >= 0, "falhou")
+    need(online.indexOf("\"id\":\"d1\"") >= 0, "falhou")
+    need(online.indexOf("\"deviceId\":\"d1\"") >= 0, "falhou")
     var offline = deviceListJsonFor(listOf(dev), "[]", "")
-    assert(offline.indexOf("\"tunnel\":\"OFFLINE\"") >= 0, "ausente do fio = OFFLINE")
+    need(offline.indexOf("\"tunnel\":\"OFFLINE\"") >= 0, "falhou")
     var unknown = deviceListJsonFor(listOf(dev), "", "KCF004")
-    assert(unknown.indexOf("\"tunnel\":\"desconhecido (KCF004)\"") >= 0, "falha = desconhecido, nunca OFFLINE inventado")
-    assert(deviceListJsonFor(listOf<Device>(), "", "") == "[]", "devices vazio = []")
+    need(unknown.indexOf("\"tunnel\":\"desconhecido (KCF004)\"") >= 0, "falhou")
+    need(deviceListJsonFor(listOf<Device>(), "", "") == "[]", "falhou")
 
     // `presenceOf` e fonte unica: a linha de texto concorda com o --json.
-    assert(presenceOf("d1", "[\"d1\"]", "") == "ONLINE", "presenceOf ONLINE")
-    assert(deviceListLine(dev, "[\"d1\"]", "").endsWith("tunel: ONLINE"), "linha de texto usa a mesma fonte")
+    need(presenceOf("d1", "[\"d1\"]", "") == "ONLINE", "falhou")
+    need(deviceListLine(dev, "[\"d1\"]", "").endsWith("tunel: ONLINE"), "falhou")
 
     // Help anuncia --json nas tres listagens.
     var help = usageText()
-    assert(help.indexOf("device list [--json]") >= 0, "help device list")
-    assert(help.indexOf("service list [--json]") >= 0, "help service list")
-    assert(help.indexOf("domain list [--json]") >= 0, "help domain list")
+    need(help.indexOf("device list [--json]") >= 0, "falhou")
+    need(help.indexOf("service list [--json]") >= 0, "falhou")
+    need(help.indexOf("domain list [--json]") >= 0, "falhou")
 
     // JSON do `domain list`: mesma lista do fio que a linha de texto imprime.
     var custom = DomainEntry("loja.exemplo.com", "custom", "site", "PENDING")
     var domOut = domainListJsonFor(listOf(custom))
-    assert(domOut.indexOf("\"hostname\":\"loja.exemplo.com\"") >= 0, "hostname no json: " + domOut)
-    assert(domOut.indexOf("\"kind\":\"custom\"") >= 0, "kind no json")
-    assert(domOut.indexOf("\"service\":\"site\"") >= 0, "servico vinculado no json")
-    assert(domOut.indexOf("\"status\":\"PENDING\"") >= 0, "status do ciclo no json")
-    assert(domainListJsonFor(listOf<DomainEntry>()) == "[]", "dominios vazio = []")
-    assert(domainListLine(custom).indexOf("PENDING") >= 0, "texto mostra o mesmo status do json")
+    need(domOut.indexOf("\"hostname\":\"loja.exemplo.com\"") >= 0, "falhou")
+    need(domOut.indexOf("\"kind\":\"custom\"") >= 0, "falhou")
+    need(domOut.indexOf("\"service\":\"site\"") >= 0, "falhou")
+    need(domOut.indexOf("\"status\":\"PENDING\"") >= 0, "falhou")
+    need(domainListJsonFor(listOf<DomainEntry>()) == "[]", "falhou")
+    need(domainListLine(custom).indexOf("PENDING") >= 0, "falhou")
 }
 
 test "json: e2e — service list --json imprime lista valida", "json-e2e" {
@@ -54,28 +54,28 @@ test "json: e2e — service list --json imprime lista valida", "json-e2e" {
     var registry = Registry("/tmp/kofcloud-json-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control no ar")
+    need(waitForPort(port, 60), "falhou")
     var created = httpPostJson(port, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
     var dev = httpPostJson(port, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(dev)), "deviceId")
     // Conta sem servico: o fio devolve [] e o formato puro reproduz isso.
     var empty = fetchServices("http://127.0.0.1:" + intToString(port), token)
-    assert(empty.size == 0, "sem servicos")
-    assert(serviceListJsonFor(empty) == "[]", "e2e: sem servico = []")
+    need(empty.size == 0, "falhou")
+    need(serviceListJsonFor(empty) == "[]", "falhou")
     // Publica um servico e a lista JSON vem com o mesmo corpo do fio.
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(port, "/v1/services", pubBody, token)) == 200, "publicado")
+    need(statusOf(httpPostJson(port, "/v1/services", pubBody, token)) == 200, "falhou")
     var services = fetchServices("http://127.0.0.1:" + intToString(port), token)
     var out = serviceListJsonFor(services)
-    assert(out.startsWith("[") && out.endsWith("]"), "array JSON: " + out)
-    assert(out.indexOf("\"name\":\"site\"") >= 0, "servico no array")
+    need(out.startsWith("[") && out.endsWith("]"), "falhou")
+    need(out.indexOf("\"name\":\"site\"") >= 0, "falhou")
 
     // `domain list --json`: o fio mistura wildcard + service + custom; a
     // pura serializa a mesma lista que o texto imprime, sem inventar.
     var domains = json.decode<List<DomainEntry>>(requireOk(http.get("http://127.0.0.1:" + intToString(port) + "/v1/domains", authHeader(token))))
-    assert(domains.size >= 2, "wildcard + service no fio")
+    need(domains.size >= 2, "falhou")
     var domJson = domainListJsonFor(domains)
-    assert(domJson.startsWith("[") && domJson.endsWith("]"), "array JSON de dominios")
-    assert(domJson.indexOf("\"kind\":\"service\"") >= 0, "service no array de dominios: " + domJson)
+    need(domJson.startsWith("[") && domJson.endsWith("]"), "falhou")
+    need(domJson.indexOf("\"kind\":\"service\"") >= 0, "falhou")
 }

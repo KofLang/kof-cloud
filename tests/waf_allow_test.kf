@@ -14,32 +14,32 @@ import testkit.Support
 // declarou). Negacao no Edge: 403 KCF111 antes do relay.
 
 test "allowlist: normaliza e valida metodos", "wafallow-unit" {
-    assert(normalizeAllowMethods("GET,POST", httpVerbs()) == "GET,POST", "lista valida")
-    assert(normalizeAllowMethods(" GET , POST ", httpVerbs()) == "GET,POST", "espacos aparados")
-    assert(normalizeAllowMethods("GET,GET", httpVerbs()) == "GET", "sem repeticao")
-    assert(normalizeAllowMethods("get", httpVerbs()) == "", "minusculo e invalido (comparacao exata)")
-    assert(normalizeAllowMethods("GET,,POST", httpVerbs()) == "", "item vazio invalido")
-    assert(normalizeAllowMethods("TRACE", httpVerbs()) == "", "verbo fora da lista")
-    assert(normalizeAllowMethods("", httpVerbs()) == "", "vazio")
-    assert(errInvalidAllowMethod().indexOf("KCF113") >= 0, "codigo KCF113")
-    assert(errHint(errInvalidAllowMethod()).length > 0, "Hint KCF113")
+    need(normalizeAllowMethods("GET,POST", httpVerbs()) == "GET,POST", "falhou")
+    need(normalizeAllowMethods(" GET , POST ", httpVerbs()) == "GET,POST", "falhou")
+    need(normalizeAllowMethods("GET,GET", httpVerbs()) == "GET", "falhou")
+    need(normalizeAllowMethods("get", httpVerbs()) == "", "falhou")
+    need(normalizeAllowMethods("GET,,POST", httpVerbs()) == "", "falhou")
+    need(normalizeAllowMethods("TRACE", httpVerbs()) == "", "falhou")
+    need(normalizeAllowMethods("", httpVerbs()) == "", "falhou")
+    need(errInvalidAllowMethod().indexOf("KCF113") >= 0, "falhou")
+    need(errHint(errInvalidAllowMethod()).length > 0, "falhou")
 }
 
 test "allowlist: normaliza e valida paths", "wafallow-unit" {
-    assert(normalizeAllowPaths("/api/*,/health") == "/api/*,/health", "lista valida")
-    assert(normalizeAllowPaths(" /api/* ") == "/api/*", "espacos aparados")
-    assert(normalizeAllowPaths("/api/*,/api/*") == "/api/*", "sem repeticao")
-    assert(normalizeAllowPaths("api/*") == "", "sem barra inicial e invalido")
-    assert(normalizeAllowPaths("/a b") == "", "com espaco e invalido")
-    assert(normalizeAllowPaths("") == "", "vazio")
-    assert(errInvalidAllowPath().indexOf("KCF114") >= 0, "codigo KCF114")
-    assert(errHint(errInvalidAllowPath()).length > 0, "Hint KCF114")
+    need(normalizeAllowPaths("/api/*,/health") == "/api/*,/health", "falhou")
+    need(normalizeAllowPaths(" /api/* ") == "/api/*", "falhou")
+    need(normalizeAllowPaths("/api/*,/api/*") == "/api/*", "falhou")
+    need(normalizeAllowPaths("api/*") == "", "falhou")
+    need(normalizeAllowPaths("/a b") == "", "falhou")
+    need(normalizeAllowPaths("") == "", "falhou")
+    need(errInvalidAllowPath().indexOf("KCF114") >= 0, "falhou")
+    need(errHint(errInvalidAllowPath()).length > 0, "falhou")
 }
 
 test "allowlist: splitList reconstroi a lista salva", "wafallow-unit" {
-    assert(splitList("").size == 0, "vazio = sem restricao")
-    assert(splitList("GET,POST").size == 2, "dois itens")
-    assert(splitList("GET").get(0) == "GET", "valor")
+    need(splitList("").size == 0, "falhou")
+    need(splitList("GET,POST").size == 2, "falhou")
+    need(splitList("GET").get(0) == "GET", "falhou")
 }
 
 test "allowlist: servico declarado barra metodo/path fora da lista (403 KCF111)", "wafallow" {
@@ -52,7 +52,7 @@ test "allowlist: servico declarado barra metodo/path fora da lista (403 KCF111)"
     app.get("/api/users") { return "users" }
     app.get("/health") { return "ok" }
     var server = spawn { app.listen(localSvc) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-allow-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -64,9 +64,9 @@ test "allowlist: servico declarado barra metodo/path fora da lista (403 KCF111)"
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, 16777216, edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -78,14 +78,14 @@ test "allowlist: servico declarado barra metodo/path fora da lista (403 KCF111)"
     // Politica malformada nao publica (400 com codigo estavel).
     var badBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"bad\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\",\"allowMethods\":\"get\"}"
     var bad = httpPostJson(controlPort, "/v1/services", badBody, accountToken)
-    assert(statusOf(bad) == 400, "metodo invalido -> 400")
-    assert(bodyOf(bad).indexOf("KCF113") >= 0, "KCF113 no corpo")
+    need(statusOf(bad) == 400, "falhou")
+    need(bodyOf(bad).indexOf("KCF113") >= 0, "falhou")
 
     // Servico com allowlist.
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"api\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\",\"allowMethods\":\"GET\",\"allowPaths\":\"/api/*,/health\"}"
     var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
-    assert(statusOf(published) == 200, "servico com allowlist publicado")
-    assert(bodyOf(published).indexOf("\"allowMethods\":\"GET\"") >= 0, "politica no JSON")
+    need(statusOf(published) == 200, "falhou")
+    need(bodyOf(published).indexOf("\"allowMethods\":\"GET\"") >= 0, "falhou")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
     var agentTask = spawn { runAgent(config, true) }
@@ -98,35 +98,35 @@ test "allowlist: servico declarado barra metodo/path fora da lista (403 KCF111)"
             attempts = attempts - 1
         }
     }
-    assert(online, "agent online")
+    need(online, "falhou")
 
     var host = "api.mel.kofcloud.io"
     var ok = httpGetRaw(httpPort, "/api/users", host)
-    assert(statusOf(ok) == 200, "path permitido -> 200")
-    assert(bodyOf(ok) == "users", "chegou no servico")
-    assert(statusOf(httpGetRaw(httpPort, "/health", host)) == 200, "path exato permitido")
+    need(statusOf(ok) == 200, "falhou")
+    need(bodyOf(ok) == "users", "falhou")
+    need(statusOf(httpGetRaw(httpPort, "/health", host)) == 200, "falhou")
 
     // Traversal NAO fura a allowlist: `/api/../admin` casava o prefixo
     // `/api/*` mas o servico local normaliza para `/admin`. Agora 403.
     var traversal = httpGetRaw(httpPort, "/api/../admin", host)
-    assert(statusOf(traversal) == 403, "traversal na allowlist -> 403")
-    assert(bodyOf(traversal).indexOf("KCF111") >= 0, "KCF111 no traversal")
+    need(statusOf(traversal) == 403, "falhou")
+    need(bodyOf(traversal).indexOf("KCF111") >= 0, "falhou")
     var traversalEnc = httpGetRaw(httpPort, "/api/..%2fadmin", host)
-    assert(statusOf(traversalEnc) == 403, "traversal encoded -> 403")
+    need(statusOf(traversalEnc) == 403, "falhou")
 
     var wrongPath = httpGetRaw(httpPort, "/admin", host)
-    assert(statusOf(wrongPath) == 403, "path fora da lista -> 403")
-    assert(bodyOf(wrongPath).indexOf("KCF111") >= 0, "KCF111 no corpo")
-    assert(responseHeader(wrongPath, "X-KofCloud-WAF") == "blocked", "marcado blocked")
+    need(statusOf(wrongPath) == 403, "falhou")
+    need(bodyOf(wrongPath).indexOf("KCF111") >= 0, "falhou")
+    need(responseHeader(wrongPath, "X-KofCloud-WAF") == "blocked", "falhou")
 
     var wrongMethod = httpPostRaw(httpPort, "/api/users", host, listOf<String>(), "{}")
-    assert(statusOf(wrongMethod) == 403, "metodo fora da lista -> 403")
-    assert(bodyOf(wrongMethod).indexOf("KCF111") >= 0, "KCF111 no metodo tambem")
+    need(statusOf(wrongMethod) == 403, "falhou")
+    need(bodyOf(wrongMethod).indexOf("KCF111") >= 0, "falhou")
 
     // Servico sem politica continua livre (fail-closed so para quem declarou).
     var freeBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"livre\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", freeBody, accountToken)) == 200, "servico livre publicado")
-    assert(statusOf(httpGetRaw(httpPort, "/admin", "livre.mel.kofcloud.io")) != 403, "sem politica nao barra")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", freeBody, accountToken)) == 200, "falhou")
+    need(statusOf(httpGetRaw(httpPort, "/admin", "livre.mel.kofcloud.io")) != 403, "falhou")
 
     // Parada limpa.
     writeTextTo(agentStop, "stop")
@@ -145,29 +145,29 @@ test "allowlist: path ambiguo nao casa o prefixo (traversal nao fura)", "wafallo
     var paths = listOf("/api/*")
     var noMethods = listOf<String>()
 
-    assert(wafAllowCheck("GET", "/api/users", noMethods, paths) == true, "prefixo legitimo passa")
-    assert(wafAllowCheck("GET", "/api/", noMethods, paths) == true, "prefixo com barra passa")
-    assert(wafAllowCheck("GET", "/api/users/123", noMethods, paths) == true, "subpath passa")
-    assert(wafAllowCheck("GET", "/api2/x", noMethods, paths) == false, "prefixo nao vaza para /api2")
+    need(wafAllowCheck("GET", "/api/users", noMethods, paths) == true, "falhou")
+    need(wafAllowCheck("GET", "/api/", noMethods, paths) == true, "falhou")
+    need(wafAllowCheck("GET", "/api/users/123", noMethods, paths) == true, "falhou")
+    need(wafAllowCheck("GET", "/api2/x", noMethods, paths) == false, "falhou")
 
     // Traversal cru e encoded, nos dois formatos de barra.
-    assert(wafAllowCheck("GET", "/api/../admin", noMethods, paths) == false, ".. cru barrado")
-    assert(wafAllowCheck("GET", "/api/..%2fadmin", noMethods, paths) == false, "%2f barrado")
-    assert(wafAllowCheck("GET", "/api/%2e%2e/admin", noMethods, paths) == false, "%2e%2e barrado")
-    assert(wafAllowCheck("GET", "/api/..%5cadmin", noMethods, paths) == false, "%5c barrado")
-    assert(wafAllowCheck("GET", "/api/..\\admin", noMethods, paths) == false, "barra invertida barrada")
-    assert(wafAllowCheck("GET", "/api/./users", noMethods, paths) == false, ". como segmento barrado")
-    assert(wafAllowCheck("GET", "//api/users", noMethods, paths) == false, "segmento vazio barrado")
+    need(wafAllowCheck("GET", "/api/../admin", noMethods, paths) == false, "falhou")
+    need(wafAllowCheck("GET", "/api/..%2fadmin", noMethods, paths) == false, "falhou")
+    need(wafAllowCheck("GET", "/api/%2e%2e/admin", noMethods, paths) == false, "falhou")
+    need(wafAllowCheck("GET", "/api/..%5cadmin", noMethods, paths) == false, "falhou")
+    need(wafAllowCheck("GET", "/api/..\\admin", noMethods, paths) == false, "falhou")
+    need(wafAllowCheck("GET", "/api/./users", noMethods, paths) == false, "falhou")
+    need(wafAllowCheck("GET", "//api/users", noMethods, paths) == false, "falhou")
 
     // Servico SEM allowlist continua livre (o guarda so vale para quem
     // declarou — fail-closed nao pode virar bloqueio universal).
-    assert(wafAllowCheck("GET", "/api/../admin", noMethods, listOf<String>()) == true, "sem allowlist: passa")
+    need(wafAllowCheck("GET", "/api/../admin", noMethods, listOf<String>()) == true, "falhou")
     // Metodo sozinho (sem allowPaths) nao ganha a regra de path.
-    assert(wafAllowCheck("GET", "/qualquer/../x", listOf("GET"), listOf<String>()) == true, "sem allowPaths: sem regra de path")
+    need(wafAllowCheck("GET", "/qualquer/../x", listOf("GET"), listOf<String>()) == true, "falhou")
 
     // O predicado e a fonte unica: segmentos normais nao sao ambiguos.
-    assert(pathHasAmbiguousSegment("/api/users") == false, "segmento normal")
-    assert(pathHasAmbiguousSegment("/api/v1.2/x") == false, "ponto no meio do nome nao conta")
-    assert(pathHasAmbiguousSegment("/api/..") == true, ".. final")
-    assert(pathHasAmbiguousSegment("/.well-known/security.txt") == false, "ponto inicial do nome nao conta")
+    need(pathHasAmbiguousSegment("/api/users") == false, "falhou")
+    need(pathHasAmbiguousSegment("/api/v1.2/x") == false, "falhou")
+    need(pathHasAmbiguousSegment("/api/..") == true, "falhou")
+    need(pathHasAmbiguousSegment("/.well-known/security.txt") == false, "falhou")
 }

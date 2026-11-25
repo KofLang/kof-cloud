@@ -3,41 +3,42 @@ import kofcloud.agent.Agent
 import kofcloud.agent.Backoff
 import kofcloud.util.Limits
 import kofcloud.util.Text
+import testkit.Support
 
 test "backoff: cresce com tentativas e respeita o teto" {
     var base = 500
     var maxDelay = 30000
     var d0 = backoffDelay(0, base, maxDelay)
-    assert(d0 >= 0, "nao negativo")
-    assert(d0 <= base + base / 5 + 2, "primeiro delay perto da base")
+    need(d0 >= 0, "falhou")
+    need(d0 <= base + base / 5 + 2, "falhou")
     var d10 = backoffDelay(10, base, maxDelay)
-    assert(d10 <= maxDelay + maxDelay / 5 + 2, "limitado pelo teto")
+    need(d10 <= maxDelay + maxDelay / 5 + 2, "falhou")
 }
 
 test "backoff: tentativas maiores nao diminuem o teto" {
     var maxDelay = 10000
     var low = backoffDelay(3, 500, maxDelay)
     var high = backoffDelay(20, 500, maxDelay)
-    assert(high >= 0, "alto nao negativo")
-    assert(low <= maxDelay + maxDelay / 5 + 2, "baixo dentro do teto")
+    need(high >= 0, "falhou")
+    need(low <= maxDelay + maxDelay / 5 + 2, "falhou")
 }
 
 test "backoff: defaults coerentes" {
-    assert(defaultBackoffBase() > 0, "base positiva")
-    assert(defaultBackoffMax() > defaultBackoffBase(), "teto maior que base")
+    need(defaultBackoffBase() > 0, "falhou")
+    need(defaultBackoffMax() > defaultBackoffBase(), "falhou")
     // Fonte unica: os defaults delegam no Limits (valores travados + mutacao
     // quebra). Recuos sem recuo silencioso: base nao-positiva volta ao
     // default, teto abaixo da base volta a base.
-    assert(defaultBackoffBase() == limitBackoffBaseMs(), "base do Limits")
-    assert(defaultBackoffMax() == limitBackoffMaxMs(), "teto do Limits")
-    assert(limitBackoffBaseMs() == 500, "default base 500 ms")
-    assert(limitBackoffMaxMs() == 30000, "default teto 30000 ms")
-    assert(backoffBaseLimitFrom(0) == 500, "base zero recai no default")
-    assert(backoffBaseLimitFrom(-3) == 500, "base negativa recai no default")
-    assert(backoffBaseLimitFrom(250) == 250, "base positiva passa direto")
-    assert(backoffMaxLimitFrom(100, 500) == 500, "teto abaixo da base recai na base")
-    assert(backoffMaxLimitFrom(500, 500) == 500, "teto igual a base fica")
-    assert(backoffMaxLimitFrom(60000, 500) == 60000, "teto acima da base passa")
+    need(defaultBackoffBase() == limitBackoffBaseMs(), "falhou")
+    need(defaultBackoffMax() == limitBackoffMaxMs(), "falhou")
+    need(limitBackoffBaseMs() == 500, "falhou")
+    need(limitBackoffMaxMs() == 30000, "falhou")
+    need(backoffBaseLimitFrom(0) == 500, "falhou")
+    need(backoffBaseLimitFrom(-3) == 500, "falhou")
+    need(backoffBaseLimitFrom(250) == 250, "falhou")
+    need(backoffMaxLimitFrom(100, 500) == 500, "falhou")
+    need(backoffMaxLimitFrom(500, 500) == 500, "falhou")
+    need(backoffMaxLimitFrom(60000, 500) == 60000, "falhou")
 }
 
 test "edge drift: linha so quando ranking aponta outro Edge (puro)", "edge-drift" {
@@ -50,23 +51,23 @@ test "edge drift: linha so quando ranking aponta outro Edge (puro)", "edge-drift
 
     // Drift real: ranking aponta outro Edge.
     var drift = edgeDriftLine("edge-a", 7000, other, false)
-    assert(drift.indexOf("edge-b:7000") >= 0, "nomeia o apontado")
-    assert(drift.indexOf("edge-a:7000") >= 0, "nomeia o atual")
-    assert(drift.indexOf("reinicie o connect") >= 0, "diz o proximo passo")
+    need(drift.indexOf("edge-b:7000") >= 0, "falhou")
+    need(drift.indexOf("edge-a:7000") >= 0, "falhou")
+    need(drift.indexOf("reinicie o connect") >= 0, "falhou")
 
     // Mesmo Edge: sem linha (nao e drift).
-    assert(edgeDriftLine("edge-a", 7000, cur, false) == "", "mesmo edge: sem drift")
+    need(edgeDriftLine("edge-a", 7000, cur, false) == "", "falhou")
 
     // Override do operador: config manda, nunca e drift.
-    assert(edgeDriftLine("edge-a", 7000, other, true) == "", "override: sem drift")
+    need(edgeDriftLine("edge-a", 7000, other, true) == "", "falhou")
 
     // Ranking vazio (nenhum Edge respondeu): sem linha.
     var empty = EdgeProbe("", 0, -1)
-    assert(edgeDriftLine("edge-a", 7000, empty, false) == "", "ranking vazio: sem drift")
+    need(edgeDriftLine("edge-a", 7000, empty, false) == "", "falhou")
 
     // Porta diferente no mesmo host tambem e drift.
     var portDrift = edgeDriftLine("edge-a", 7000, EdgeProbe("edge-a", 7001, 5), false)
-    assert(portDrift.indexOf("edge-a:7001") >= 0, "porta diferente e drift")
+    need(portDrift.indexOf("edge-a:7001") >= 0, "falhou")
 
     // Trava de fonte: o refresher registra o drift pelo agenteEvent (o mesmo
     // caminho dos outros sinais, visivel no `logs --runtime`) e guarda o
@@ -82,9 +83,9 @@ test "edge drift: linha so quando ranking aponta outro Edge (puro)", "edge-drift
     var start = text.indexOf("void agentRefresher(")
     var bodyEnd = text.length
     var body = text.substring(start, bodyEnd)
-    assert(body.indexOf("edgeDriftLine(") >= 0, "refresher detecta drift")
-    assert(body.indexOf("agentEvent(\"info\", line)") >= 0, "sinal vai ao runtime log")
-    assert(body.indexOf("endpoint.best") >= 0, "usa o ranking do fetchEdge")
+    need(body.indexOf("edgeDriftLine(") >= 0, "falhou")
+    need(body.indexOf("agentEvent(\"info\", line)") >= 0, "falhou")
+    need(body.indexOf("endpoint.best") >= 0, "falhou")
 }
 
 test "rede ausente: retry espera o passo offline, nunca a base (F16)", "backoff-offline" {
@@ -92,35 +93,35 @@ test "rede ausente: retry espera o passo offline, nunca a base (F16)", "backoff-
     // contra uma rede que nao existe. Sem rede, espera fixa e curta; com
     // rede, o backoff exponencial de sempre.
     var offline = limitOfflineRetryMs()
-    assert(offline == 30000, "default 30000 ms")
-    assert(reconnectWaitMs(false, 0, 500, 30000, offline) == 30000, "offline: passo fixo ja na 1a volta")
-    assert(reconnectWaitMs(false, 9, 500, 30000, offline) == 30000, "offline: nao cresce com tentativas")
-    assert(reconnectWaitMs(false, 0, 500, 30000, 0) == 30000, "offline sem passo -> default, nunca 0")
-    assert(reconnectWaitMs(false, 0, 500, 30000, -5) == 30000, "offline negativo -> default")
-    assert(reconnectWaitMs(false, 0, 500, 30000, 7000) == 7000, "offline respeita a config")
+    need(offline == 30000, "falhou")
+    need(reconnectWaitMs(false, 0, 500, 30000, offline) == 30000, "falhou")
+    need(reconnectWaitMs(false, 9, 500, 30000, offline) == 30000, "falhou")
+    need(reconnectWaitMs(false, 0, 500, 30000, 0) == 30000, "falhou")
+    need(reconnectWaitMs(false, 0, 500, 30000, -5) == 30000, "falhou")
+    need(reconnectWaitMs(false, 0, 500, 30000, 7000) == 7000, "falhou")
     var online = reconnectWaitMs(true, 0, 500, 30000, offline)
-    assert(online >= 0 && online <= 620, "online: volta ao backoff da base")
-    assert(offlineRetryMsFrom(0) == 30000, "recuo: zero volta ao default")
-    assert(offlineRetryMsFrom(-1) == 30000, "recuo: negativo volta ao default")
-    assert(offlineRetryMsFrom(2500) == 2500, "recuo: positivo passa")
+    need(online >= 0 && online <= 620, "falhou")
+    need(offlineRetryMsFrom(0) == 30000, "falhou")
+    need(offlineRetryMsFrom(-1) == 30000, "falhou")
+    need(offlineRetryMsFrom(2500) == 2500, "falhou")
 
     // Eventos: a palavra que o operador ja procura continua com rede; sem
     // rede o texto diz de quem e a falta.
     var line = reconnectLine("control unreachable", true, 750)
-    assert(line.indexOf("reconnecting in 750ms") >= 0, "com rede: mesma palavra")
-    assert(line.indexOf("sem rede") < 0, "com rede: nao acusa a maquina")
+    need(line.indexOf("reconnecting in 750ms") >= 0, "falhou")
+    need(line.indexOf("sem rede") < 0, "falhou")
     var offLine = reconnectLine("control unreachable", false, 30000)
-    assert(offLine.indexOf("sem rede local") >= 0, "sem rede: diz a causa")
-    assert(offLine.indexOf("reconnecting in") < 0, "sem rede: nao culpa o Edge")
-    assert(networkBackLine().indexOf("rede local voltou") >= 0, "volta da rede avisa")
+    need(offLine.indexOf("sem rede local") >= 0, "falhou")
+    need(offLine.indexOf("reconnecting in") < 0, "falhou")
+    need(networkBackLine().indexOf("rede local voltou") >= 0, "falhou")
 
     // Sonda real: `.invalid` (RFC 6761) nunca resolve.
-    assert(hostReachable("kofcloud-offline-probe.invalid") == false, "nome impossivel = sem rede")
+    need(hostReachable("kofcloud-offline-probe.invalid") == false, "falhou")
     // O host fixo da config e quem manda na sonda; sem Edge fixo, cai no
     // control plane (host impossivel tambem).
-    assert(agentNetworkUp("kofcloud-offline-probe.invalid", "http://127.0.0.1:1") == false, "Edge fixo decide")
+    need(agentNetworkUp("kofcloud-offline-probe.invalid", "http://127.0.0.1:1") == false, "falhou")
     // Control plane com host URL ilegivel: "nao afirma nem nega".
-    assert(agentNetworkUp("", "nao-e-url") == true, "sem rotulo para sondar: nao bloqueia")
+    need(agentNetworkUp("", "nao-e-url") == true, "falhou")
 }
 
 test "credencial recusada: o retry diz o que fazer, sem ser fatal", "backoff-authhint" {

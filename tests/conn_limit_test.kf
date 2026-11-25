@@ -22,39 +22,39 @@ String publicConnPath(String name) {
 }
 
 test "conexoes publicas: fonte unica e codigo de erro", "connlimit-unit" {
-    assert(limitPublicConns() == 1024, "default 1024 (o valor documentado)")
-    assert(errTooManyPublicConns().indexOf("KCF117") >= 0, "KCF117")
-    assert(errHint(errTooManyPublicConns()).indexOf("publicConns") >= 0, "Hint aponta o teto")
+    need(limitPublicConns() == 1024, "falhou")
+    need(errTooManyPublicConns().indexOf("KCF117") >= 0, "falhou")
+    need(errHint(errTooManyPublicConns()).indexOf("publicConns") >= 0, "falhou")
 
     // Recuo seguro do teto (fonte pura `publicConnLimitFrom`): zero/negativo
     // recaem no default 1024 — o Edge compara `count >= limit` no accept,
     // entao com 0 a PRIMEIRA conexao ja viraria 503 KCF117 (borda muda,
     // outage total silencioso por um typo na config).
-    assert(publicConnLimitFrom(0) == 1024, "zero recai no default")
-    assert(publicConnLimitFrom(-3) == 1024, "negativo recai no default")
-    assert(publicConnLimitFrom(10) == 10, "valor positivo passa")
-    assert(publicConnLimitFrom(1) == 1, "limite apertado passa")
+    need(publicConnLimitFrom(0) == 1024, "falhou")
+    need(publicConnLimitFrom(-3) == 1024, "falhou")
+    need(publicConnLimitFrom(10) == 10, "falhou")
+    need(publicConnLimitFrom(1) == 1, "falhou")
 
     var registry = Registry(publicConnPath("unit"))
     var state = EdgeState(registry)
-    assert(state.publicConnCount() == 0, "comeca zerado")
-    assert(state.publicConnLimitValue() == limitPublicConns(), "teto vem da fonte unica")
+    need(state.publicConnCount() == 0, "falhou")
+    need(state.publicConnLimitValue() == limitPublicConns(), "falhou")
 
     // Reserva/libera pareados.
     state.setPublicConnLimit(2)
-    assert(state.tryAcquirePublicConn() == true, "1a vaga")
-    assert(state.tryAcquirePublicConn() == true, "2a vaga")
-    assert(state.publicConnCount() == 2, "duas abertas")
-    assert(state.tryAcquirePublicConn() == false, "3a recusada no teto")
-    assert(state.publicConnCount() == 2, "recusa nao incrementa")
+    need(state.tryAcquirePublicConn() == true, "falhou")
+    need(state.tryAcquirePublicConn() == true, "falhou")
+    need(state.publicConnCount() == 2, "falhou")
+    need(state.tryAcquirePublicConn() == false, "falhou")
+    need(state.publicConnCount() == 2, "falhou")
     state.releasePublicConn()
-    assert(state.publicConnCount() == 1, "liberou uma")
-    assert(state.tryAcquirePublicConn() == true, "vaga reaberta")
+    need(state.publicConnCount() == 1, "falhou")
+    need(state.tryAcquirePublicConn() == true, "falhou")
     // Liberar abaixo de zero nao acontece (nao ha vaga negativa).
     state.releasePublicConn()
     state.releasePublicConn()
     state.releasePublicConn()
-    assert(state.publicConnCount() == 0, "piso em zero")
+    need(state.publicConnCount() == 0, "falhou")
 }
 
 test "conexoes publicas: teto de 1 recusa a segunda com 503 e libera ao fechar", "connlimit" {
@@ -68,15 +68,15 @@ test "conexoes publicas: teto de 1 recusa a segunda com 503 e libera ao fechar",
     // porta abrindo uma conexao, e ela ocuparia a vaga e sairia — deixando o
     // teste depender de corrida. Reservando de antemao, a sonda e recusada
     // (503) e o accept responde na mesma hora.
-    assert(state.tryAcquirePublicConn(), "segura a vaga")
+    need(state.tryAcquirePublicConn(), "falhou")
     var httpTask = spawn { serveHttp(state, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(httpPort, 60), "http no ar (sonda recusada com 503, sem pendurar)")
+    need(waitForPort(httpPort, 60), "falhou")
     var attempts = 100
 
     // A segunda e recusada com 503 KCF117.
     var second = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
-    assert(statusOf(second) == 503, "segunda conexao -> 503")
-    assert(bodyOf(second).indexOf("KCF117") >= 0, "KCF117 no corpo")
+    need(statusOf(second) == 503, "falhou")
+    need(bodyOf(second).indexOf("KCF117") >= 0, "falhou")
 
     // Liberar a vaga: um pedido novo volta a ser atendido
     // (404 opaco, porque nao ha rota — o que importa e nao ser 503).
@@ -86,9 +86,9 @@ test "conexoes publicas: teto de 1 recusa a segunda com 503 e libera ao fechar",
         time.sleep(20)
         attempts = attempts - 1
     }
-    assert(state.publicConnCount() == 0, "vaga liberada ao fechar")
+    need(state.publicConnCount() == 0, "falhou")
     var third = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
-    assert(statusOf(third) == 404, "atendido de novo (404 sem rota, nao 503)")
+    need(statusOf(third) == 404, "falhou")
 
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)

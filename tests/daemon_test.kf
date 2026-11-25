@@ -4,41 +4,42 @@ import kofcloud.cli.Usage
 import kofcloud.store.Store
 import kofcloud.util.Hosts
 import kofcloud.util.Text
+import testkit.Support
 
 // Daemon user-level (Fase 7, slice 3): unit systemd gerada localmente.
 // Tudo aqui e puro (texto + paths); systemctl real so no CLI do usuario.
 
 test "daemon: unit tem restart, sem privilegios e aponta o connect", "daemon" {
     var text = daemonUnitText("/usr/local/bin/kof", "http://127.0.0.1:8080")
-    assert(text.indexOf("[Unit]") >= 0, "secao Unit")
-    assert(text.indexOf("[Service]") >= 0, "secao Service")
-    assert(text.indexOf("[Install]") >= 0, "secao Install")
-    assert(text.indexOf("ExecStart=/usr/local/bin/kof cloud connect --control http://127.0.0.1:8080") >= 0, "executa o connect")
-    assert(text.indexOf("Restart=always") >= 0, "restart automatico")
-    assert(text.indexOf("NoNewPrivileges=true") >= 0, "sem escalacao")
-    assert(text.indexOf("WantedBy=default.target") >= 0, "target de usuario (sem root)")
-    assert(text.indexOf("User=") < 0, "sem User= (roda como o proprio usuario)")
+    need(text.indexOf("[Unit]") >= 0, "falhou")
+    need(text.indexOf("[Service]") >= 0, "falhou")
+    need(text.indexOf("[Install]") >= 0, "falhou")
+    need(text.indexOf("ExecStart=/usr/local/bin/kof cloud connect --control http://127.0.0.1:8080") >= 0, "falhou")
+    need(text.indexOf("Restart=always") >= 0, "falhou")
+    need(text.indexOf("NoNewPrivileges=true") >= 0, "falhou")
+    need(text.indexOf("WantedBy=default.target") >= 0, "falhou")
+    need(text.indexOf("User=") < 0, "falhou")
 }
 
 test "daemon: ExecStart usa a forma publica kof cloud connect", "daemon-cloud-prefix" {
     // Contrato com Main.kf (prefixo `cloud` opcional la, obrigatorio aqui):
     // sem ele a unit chamaria um subcomando inexistente no binario do usuario.
     var text = daemonUnitText("kof", "http://127.0.0.1:8080")
-    assert(text.indexOf("ExecStart=kof cloud connect --control ") >= 0, "prefixo cloud presente")
-    assert(text.indexOf("ExecStart=kof connect ") < 0, "sem forma sem prefixo")
+    need(text.indexOf("ExecStart=kof cloud connect --control ") >= 0, "falhou")
+    need(text.indexOf("ExecStart=kof connect ") < 0, "falhou")
     // Com binario absoluto (o que install grava de verdade), igual.
     var abs = daemonUnitText("/usr/local/bin/kof", "http://127.0.0.1:8080")
-    assert(abs.indexOf("ExecStart=/usr/local/bin/kof cloud connect --control http://127.0.0.1:8080") >= 0, "absoluto tambem leva o prefixo")
+    need(abs.indexOf("ExecStart=/usr/local/bin/kof cloud connect --control http://127.0.0.1:8080") >= 0, "falhou")
 }
 
 test "daemon: ajuda documenta device por nome ou id", "daemon-usage" {
     // Regressao do padrao nome|id: revoke/suspend/unsuspend e --device do
     // publish aceitam os dois; o help e que conta isso. Puro, sem rede.
     var help = usageText()
-    assert(help.indexOf("device revoke <nome|deviceId> [--yes]") >= 0, "revoke documenta nome|id e a guarda --yes")
-    assert(help.indexOf("device suspend <nome|deviceId>") >= 0, "suspend documenta nome|id")
-    assert(help.indexOf("device unsuspend <nome|deviceId>") >= 0, "unsuspend documenta nome|id")
-    assert(help.indexOf("[--device <nome>]") >= 0, "publish documenta --device por nome")
+    need(help.indexOf("device revoke <nome|deviceId> [--yes]") >= 0, "falhou")
+    need(help.indexOf("device suspend <nome|deviceId>") >= 0, "falhou")
+    need(help.indexOf("device unsuspend <nome|deviceId>") >= 0, "falhou")
+    need(help.indexOf("[--device <nome>]") >= 0, "falhou")
 }
 
 test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
@@ -50,45 +51,45 @@ test "daemon: ajuda documenta build/artifact do deploy", "deploy-usage" {
     // O nome do manifesto vem da fonte unica (precedente: serveLine monta
     // as portas da fonte; mutacao no default quebra aqui e no help).
     var deployLine = "deploy [--file " + defaultManifestPath() + "] [--check] [--plan]"
-    assert(help.indexOf(deployLine) >= 0, "deploy documenta flags")
+    need(help.indexOf(deployLine) >= 0, "falhou")
     var downLine = "down [--file " + defaultManifestPath() + "] [--prune] [--yes]"
-    assert(help.indexOf(downLine) >= 0, "down documenta flags do manifesto (com --yes)")
+    need(help.indexOf(downLine) >= 0, "falhou")
     // Rota do `usage-parity`: o `--yes` tambem tem de estar na referencia
     // do README (a varredura generica trava so o primeiro token `down`).
     var readmeDown = readTextOr("README.md", "")
-    assert(readmeDown.indexOf("down [--file kofcloud.json] [--prune] [--yes]") >= 0, "README espelha down --yes")
+    need(readmeDown.indexOf("down [--file kofcloud.json] [--prune] [--yes]") >= 0, "falhou")
     var doctorLine = "doctor [--file " + defaultManifestPath() + "]"
-    assert(help.indexOf(doctorLine) >= 0, "doctor documenta --file do manifesto")
-    assert(help.indexOf("build/artifact") >= 0, "deploy anuncia build+artifact do manifesto")
-    assert(help.indexOf("(build)/(artifact)") >= 0, "plan anuncia marcas por linha")
+    need(help.indexOf(doctorLine) >= 0, "falhou")
+    need(help.indexOf("build/artifact") >= 0, "falhou")
+    need(help.indexOf("(build)/(artifact)") >= 0, "falhou")
     var serveLine = "serve [--control-port " + intToString(defaultControlPort()) + "] [--tunnel-port " + intToString(defaultTunnelPort()) + "] [--http-port " + intToString(defaultHttpPort()) + "] [--state <arquivo>] [--backup-dir <dir>] [--panel] [--status-page] [--waf detectar|enforce] [--tls-cert <pem> --tls-key <pem> | --tls-cert-cmd <cmd> --tls-key-cmd <cmd>] [--tunnel-secret-file <arq> | --tunnel-secret-cmd <cmd>]"
-    assert(help.indexOf(serveLine) >= 0, "serve anuncia portas da fonte unica + --state + --backup-dir + --panel + --status-page + --waf + --tls")
-    assert(help.indexOf("com o par TLS o control plane serve HTTPS") >= 0, "serve anuncia o efeito do par TLS")
-    assert(help.indexOf("daemon install|status|uninstall") >= 0, "daemon documentado (README omitia ate este commit)")
+    need(help.indexOf(serveLine) >= 0, "falhou")
+    need(help.indexOf("com o par TLS o control plane serve HTTPS") >= 0, "falhou")
+    need(help.indexOf("daemon install|status|uninstall") >= 0, "falhou")
     // Regressao do slice Fase 19 s3: os comandos novos (rotate/rotation)
     // nao tinham trava no help — o README inclusive copiou o texto errado
     // (rotation com descricao de revoke). Trava as duas linhas da fonte.
-    assert(help.indexOf("service rotate (<nome>|--all) [--ttl <horas>] [--prune]") >= 0, "rotate documenta --all")
-    assert(help.indexOf("service rotation <nome>") >= 0, "rotation documentado")
+    need(help.indexOf("service rotate (<nome>|--all) [--ttl <horas>] [--prune]") >= 0, "falhou")
+    need(help.indexOf("service rotation <nome>") >= 0, "falhou")
     // Slice Fase 19 s1 (SBOM): o audit ganhou --sbom e o help precisa
     // anunciar (precedente: rotate/rotation sem trava apodreceu o README).
-    assert(help.indexOf("audit [--sbom]") >= 0, "audit anuncia --sbom")
+    need(help.indexOf("audit [--sbom]") >= 0, "falhou")
     // Slice Fase 19 s2 parcial (scan): comando novo exige trava no help
     // (mesmo precedente — sem trava, README e help divergem em silencio).
-    assert(help.indexOf("scan [--file <caminho>]") >= 0, "scan documentado")
+    need(help.indexOf("scan [--file <caminho>]") >= 0, "falhou")
     // Slice Fase 17 s2 (freeze, lane): dispatcher/help/README existem mas
     // sem trava — mesmo precedente dos acima. Trava as duas linhas.
-    assert(help.indexOf("freeze service|device <nome|id>") >= 0, "freeze documentado")
-    assert(help.indexOf("unfreeze service|device <nome|id>") >= 0, "unfreeze documentado")
+    need(help.indexOf("freeze service|device <nome|id>") >= 0, "falhou")
+    need(help.indexOf("unfreeze service|device <nome|id>") >= 0, "falhou")
     // Alvo `account` (F17 s2 parcial): o help precisa anunciar as duas formas
     // sem id, senao o operador nao descobre a contencao da conta inteira.
     // Credencial da conta (F19 s3): comando novo exige trava no help.
     // Linha inteira com `|prune`: o assert de prefixo passaria mesmo sem o
     // prune — o mesmo drift que o uso do dispatch tinha (comando existe,
     // ajuda mente por omissao).
-    assert(help.indexOf("token list|revoke <id|kfc_...>|rotate [--ttl <horas>]|rotation|prune") >= 0, "token documentado")
-    assert(help.indexOf("freeze account") >= 0, "freeze account documentado")
-    assert(help.indexOf("unfreeze account") >= 0, "unfreeze account documentado")
+    need(help.indexOf("token list|revoke <id|kfc_...>|rotate [--ttl <horas>]|rotation|prune") >= 0, "falhou")
+    need(help.indexOf("freeze account") >= 0, "falhou")
+    need(help.indexOf("unfreeze account") >= 0, "falhou")
 }
 
 test "daemon: ajuda reconciliada com os comandos reais", "usage-parity" {
@@ -98,53 +99,53 @@ test "daemon: ajuda reconciliada com os comandos reais", "usage-parity" {
     // `service tokens`. O help e a interface que o binario mostra; o
     // README o espelha. Puro, sem rede.
     var help = usageText()
-    assert(help.indexOf("daemon install|status|uninstall   (artefato por SO") >= 0, "help documenta artefato por SO")
-    assert(help.indexOf("systemd --user, sem root") < 0, "texto stale do systemd sai do help")
-    assert(help.indexOf("service tokens   (credenciais validas SEM expiracao na conta)") >= 0, "service tokens documentado")
-    assert(help.indexOf("audit [--sbom] [--verify] [--action <acao>] [--tail <n>]") >= 0, "audit anuncia --action/--tail")
-    assert(help.indexOf("logs [--tail <linhas>] [--runtime|--edge]") >= 0, "logs anuncia --edge")
-    assert(help.indexOf("scan [--file <caminho>] [--tls-cert <pem>]") >= 0, "scan anuncia flags")
+    need(help.indexOf("daemon install|status|uninstall   (artefato por SO") >= 0, "falhou")
+    need(help.indexOf("systemd --user, sem root") < 0, "falhou")
+    need(help.indexOf("service tokens   (credenciais validas SEM expiracao na conta)") >= 0, "falhou")
+    need(help.indexOf("audit [--sbom] [--verify] [--action <acao>] [--tail <n>]") >= 0, "falhou")
+    need(help.indexOf("logs [--tail <linhas>] [--runtime|--edge]") >= 0, "falhou")
+    need(help.indexOf("scan [--file <caminho>] [--tls-cert <pem>]") >= 0, "falhou")
     // A lane do --watch (F13 s3) atualizou o help e deixou os dois
     // documentos do operador para tras (mesmo padrao do drift acima):
     // o README tem --watch no paragrafo de testes mas nao nas duas linhas
     // de comando, e o passo do flows §3.2 nao sabia da flag. Precedente
     // da trava cruzada em arquivo: status-counts le o README do disco.
     var readme = readTextOr("README.md", "")
-    assert(readme.indexOf("[--watch]   # publica (+ verifica; --plan so mostra; --watch observa") >= 0, "README espelha --watch no quick-start")
-    assert(readme.indexOf("[--watch]  (roda build + publica + verifica; --plan so mostra o diff; --watch observa") >= 0, "README espelha --watch na linha de referencia")
+    need(readme.indexOf("[--watch]   # publica (+ verifica; --plan so mostra; --watch observa") >= 0, "falhou")
+    need(readme.indexOf("[--watch]  (roda build + publica + verifica; --plan so mostra o diff; --watch observa") >= 0, "falhou")
     var flows = readTextOr("docs/09-flows.md", "")
-    assert(flows.indexOf("kof cloud deploy [--file kofcloud.json] [--check] [--plan] [--watch]") >= 0, "flows §3.2 anuncia --watch")
+    need(flows.indexOf("kof cloud deploy [--file kofcloud.json] [--check] [--plan] [--watch]") >= 0, "falhou")
     // Exemplo de pipeline CI (F18 s3): o README aponta o arquivo do disco
     // e o teste do deploy o trava contra o help — aqui só garantimos que
     // o caminho continuou existindo na árvore combinada.
-    assert(readTextOr("docs/examples/ci-pipeline.yml", "").length > 0, "exemplo de pipeline CI existe no disco")
-    assert(readTextOr("docs/examples/action.yml", "").length > 0, "exemplo de action reutilizavel existe no disco")
+    need(readTextOr("docs/examples/ci-pipeline.yml", "").length > 0, "falhou")
+    need(readTextOr("docs/examples/action.yml", "").length > 0, "falhou")
     // O push de uso (F18 s4) landou com `usage_push_test.kf`, mas a tabela
     // do 18-implemented ainda dizia "o export push segue pendente" — o
     // drift de prosa que esta execucao fechou. O OTel continua fora; a
     // frase e lida pelo caminho que sobra, entao volta-la para "pendente"
     // (ou apagar o push) quebra aqui.
     var implemented = readTextOr("docs/18-implemented.md", "")
-    assert(implemented.indexOf("o push por webhook (evento `usage.window`") >= 0, "18-implemented registra o push de uso")
-    assert(implemented.indexOf("o export push (webhook/OTel) segue pendente") < 0, "18-implemented nao chama o push de pendente")
+    need(implemented.indexOf("o push por webhook (evento `usage.window`") >= 0, "falhou")
+    need(implemented.indexOf("o export push (webhook/OTel) segue pendente") < 0, "falhou")
     // A lane do `usage --export` (F18 s4 ciclo de billing) atualizou o help
     // (`usage [--export]`, com a janela) e deixou a linha do README no texto
     // antigo sem a flag — mesmo padrao dos drifts acima. A varredura generica
     // abaixo so trava o primeiro token (`usage`), entao o drift de FLAG passa
     // pela rede: aqui a trava e da linha inteira, flag incluida.
-    assert(readme.indexOf("usage [--export]   (uso da conta: requests e bytes roteados pelo Edge; --export fecha a janela") >= 0, "README espelha usage --export com a janela")
+    need(readme.indexOf("usage [--export]   (uso da conta: requests e bytes roteados pelo Edge; --export fecha a janela") >= 0, "falhou")
     // A lane do `domain list --json` (F6 paridade com service/device) atualizou
     // o help (`domain list [--json]`) — mesmo padrao do drift de flag acima:
     // a varredura generica trava so o primeiro token (`domain`), entao sem o
     // assert de linha inteira o README ficaria stale sem a flag. README + help
     // viajam juntos; a prova do json vive em `json_output_test.kf`.
-    assert(help.indexOf("domain list [--json]   (--json = saida estavel para CI)") >= 0, "help anuncia domain list --json")
-    assert(readme.indexOf("domain list [--json]") >= 0, "README espelha domain list --json")
+    need(help.indexOf("domain list [--json]   (--json = saida estavel para CI)") >= 0, "falhou")
+    need(readme.indexOf("domain list [--json]") >= 0, "falhou")
     // O README tambem arrastou o `domain add` so com o webhook: `--dns-cmd`
     // (F18 s1) existia no help, nos testes e na prosa, mas sumia da
     // referencia do usuario. Linha inteira (precedente do token/prune):
     // assert de prefixo passaria sem a fonte de DNS nova.
-    assert(readme.indexOf("domain add <hostname> --service <nome> [--dns-webhook <url> | --dns-cmd <cmd>] [--dry-run]") >= 0, "README espelha domain add com --dns-cmd")
+    need(readme.indexOf("domain add <hostname> --service <nome> [--dns-webhook <url> | --dns-cmd <cmd>] [--dry-run]") >= 0, "falhou")
     // Varredura generica help -> README: todo comando do help tem de ter
     // linha propria na referencia do README. Precedente real: a lane do
     // `usage` (F18 s4) atualizou o help e o paragrafo de suites e esqueceu
@@ -185,7 +186,7 @@ test "daemon: ajuda reconciliada com os comandos reais", "usage-parity" {
                 if (readme.indexOf(cmd + " ") == 0) {
                     found = true
                 }
-                assert(found, "README referencia tem o comando do help: " + cmd)
+                need(found, "falhou")
                 checked = checked + 1
             }
         }
@@ -195,81 +196,81 @@ test "daemon: ajuda reconciliada com os comandos reais", "usage-parity" {
             cursor = nl + 1
         }
     }
-    assert(checked >= 30, "varredura cobriu os comandos do help: " + intToString(checked))
+    need(checked >= 30, "falhou")
 }
 
 test "daemon: paths ficam no espaco do usuario", "daemon-paths" {
-    assert(daemonUnitName() == "kofcloud-agent.service", "nome da unit")
-    assert(daemonUnitPath().endsWith("/.config/systemd/user/kofcloud-agent.service"), "path user-level")
-    assert(daemonUnitDir().indexOf("/etc/systemd") < 0, "longe do sistema")
+    need(daemonUnitName() == "kofcloud-agent.service", "falhou")
+    need(daemonUnitPath().endsWith("/.config/systemd/user/kofcloud-agent.service"), "falhou")
+    need(daemonUnitDir().indexOf("/etc/systemd") < 0, "falhou")
 }
 
 test "daemon: sem systemctl nao quebra (erro honesto)", "daemon-nosysd" {
     // Em ambiente sem systemd (como este teste), daemonIsActive e as
     // chamadas do systemctl devolvem false em vez de lancar.
-    assert(daemonIsActive() == false, "inativo sem systemd")
-    assert(daemonSystemctlIsActive(daemonUnitName()) == false, "falha honesta")
+    need(daemonIsActive() == false, "falhou")
+    need(daemonSystemctlIsActive(daemonUnitName()) == false, "falhou")
 }
 
 test "daemon: subcomandos rejeitam posicional sobrando", "daemon-extra" {
     // Puro, sem rede nem HOME: os comandos-folha nao tem posicionais —
     // qualquer token solto e erro, nao no-op silencioso. (cmdDaemonStatus
     // precisa de HOME/sistema; aqui cobrimos a decisao, igual aos demais.)
-    assert(extraPositional(listOf("x"), 0) == true, "solto barra")
-    assert(extraPositional(listOf<String>(), 0) == false, "vazio ok")
-    assert(extraPositional(listOf("--control", "http://x"), 0) == false, "flag com valor nao e posicional")
-    assert(flagMissingValue(listOf("--control"), "--control") == true, "flag sem valor barra")
-    assert(flagDuplicated(listOf("--control", "a", "--control", "b"), "--control") == true, "flag repetida barra")
+    need(extraPositional(listOf("x"), 0) == true, "falhou")
+    need(extraPositional(listOf<String>(), 0) == false, "falhou")
+    need(extraPositional(listOf("--control", "http://x"), 0) == false, "falhou")
+    need(flagMissingValue(listOf("--control"), "--control") == true, "falhou")
+    need(flagDuplicated(listOf("--control", "a", "--control", "b"), "--control") == true, "falhou")
 }
 
 test "daemon: resolve controle da sessao salvo flag", "daemon-control" {
     // Pura, sem rede nem HOME: mesma precedencia que o install usava
     // inline (flag vence sessao); agora travada por teste.
-    assert(resolveDaemonControl("http://sessao:8080", "") == "http://sessao:8080", "sem flag usa sessao")
-    assert(resolveDaemonControl("http://sessao:8080", "http://flag:9000") == "http://flag:9000", "flag vence sessao")
-    assert(resolveDaemonControl("", "http://flag:9000") == "http://flag:9000", "flag sozinha vale")
-    assert(resolveDaemonControl("http://sessao:8080", "   ") == "http://sessao:8080", "so-espacos cai na sessao")
-    assert(resolveDaemonControl("http://sessao:8080", "  http://flag:9000  ") == "http://flag:9000", "padding apara")
+    need(resolveDaemonControl("http://sessao:8080", "") == "http://sessao:8080", "falhou")
+    need(resolveDaemonControl("http://sessao:8080", "http://flag:9000") == "http://flag:9000", "falhou")
+    need(resolveDaemonControl("", "http://flag:9000") == "http://flag:9000", "falhou")
+    need(resolveDaemonControl("http://sessao:8080", "   ") == "http://sessao:8080", "falhou")
+    need(resolveDaemonControl("http://sessao:8080", "  http://flag:9000  ") == "http://flag:9000", "falhou")
 }
 
 // ---- Fase 13 slice 1: artefato por SO ----
 
 test "daemon s1: launchd gera plist com o mesmo connect", "daemon-os" {
     var text = daemonArtifactText("launchd", "/usr/local/bin/kof", "http://127.0.0.1:8080")
-    assert(text.indexOf("<key>Label</key><string>io.kofcloud.agent</string>") >= 0, "label")
-    assert(text.indexOf("<string>/usr/local/bin/kof</string>") >= 0, "binario")
-    assert(text.indexOf("<string>cloud</string>") >= 0, "prefixo cloud")
-    assert(text.indexOf("<string>connect</string>") >= 0, "connect")
-    assert(text.indexOf("<string>--control</string>") >= 0, "flag")
-    assert(text.indexOf("http://127.0.0.1:8080") >= 0, "url")
-    assert(text.indexOf("<key>KeepAlive</key><true/>") >= 0, "keepalive")
-    assert(text.indexOf("<key>RunAtLoad</key><true/>") >= 0, "roda no login")
-    assert(daemonArtifactPath("launchd").endsWith("/Library/LaunchAgents/io.kofcloud.agent.plist"), "path launchd")
-    assert(daemonActivateHint("launchd").indexOf("launchctl load") >= 0, "ativacao launchd")
+    need(text.indexOf("<key>Label</key><string>io.kofcloud.agent</string>") >= 0, "falhou")
+    need(text.indexOf("<string>/usr/local/bin/kof</string>") >= 0, "falhou")
+    need(text.indexOf("<string>cloud</string>") >= 0, "falhou")
+    need(text.indexOf("<string>connect</string>") >= 0, "falhou")
+    need(text.indexOf("<string>--control</string>") >= 0, "falhou")
+    need(text.indexOf("http://127.0.0.1:8080") >= 0, "falhou")
+    need(text.indexOf("<key>KeepAlive</key><true/>") >= 0, "falhou")
+    need(text.indexOf("<key>RunAtLoad</key><true/>") >= 0, "falhou")
+    need(daemonArtifactPath("launchd").endsWith("/Library/LaunchAgents/io.kofcloud.agent.plist"), "falhou")
+    need(daemonActivateHint("launchd").indexOf("launchctl load") >= 0, "falhou")
 }
 
 test "daemon s1: windows gera script sc.exe sem instalar sozinho", "daemon-os" {
     var text = daemonArtifactText("windows", "C:\\kof\\kof.exe", "http://127.0.0.1:8080")
-    assert(text.indexOf("sc create KofCloudAgent binPath=") >= 0, "cria servico")
-    assert(text.indexOf("cloud connect --control http://127.0.0.1:8080") >= 0, "mesmo connect")
-    assert(text.indexOf("start= auto") >= 0, "inicia com o sistema")
-    assert(text.indexOf("sc start KofCloudAgent") >= 0, "start")
-    assert(daemonArtifactPath("windows").endsWith("/kofcloud-agent-install.cmd"), "path windows")
-    assert(daemonActivateHint("windows").indexOf("Administrador") >= 0, "pede consentimento (admin)")
+    need(text.indexOf("sc create KofCloudAgent binPath=") >= 0, "falhou")
+    need(text.indexOf("cloud connect --control http://127.0.0.1:8080") >= 0, "falhou")
+    need(text.indexOf("start= auto") >= 0, "falhou")
+    need(text.indexOf("sc start KofCloudAgent") >= 0, "falhou")
+    need(daemonArtifactPath("windows").endsWith("/kofcloud-agent-install.cmd"), "falhou")
+    need(daemonActivateHint("windows").indexOf("Administrador") >= 0, "falhou")
 }
 
 test "daemon s1: systemd continua o artefato padrao", "daemon-os" {
-    assert(daemonArtifactText("systemd", "kof", "http://c") == daemonUnitText("kof", "http://c"), "systemd = unit atual")
-    assert(daemonArtifactPath("systemd").endsWith("/.config/systemd/user/kofcloud-agent.service"), "path systemd")
-    assert(daemonActivateHint("systemd").indexOf("systemctl --user enable --now") >= 0, "ativacao systemd")
+    need(daemonArtifactText("systemd", "kof", "http://c") == daemonUnitText("kof", "http://c"), "falhou")
+    need(daemonArtifactPath("systemd").endsWith("/.config/systemd/user/kofcloud-agent.service"), "falhou")
+    need(daemonActivateHint("systemd").indexOf("systemctl --user enable --now") >= 0, "falhou")
 }
 
 test "daemon s1: kind invalido no config cai na deteccao do SO", "daemon-os" {
     // Neste ambiente nao ha launchctl nem HOME com barra invertida.
     var kind = daemonKind()
-    assert(kind == "systemd" || kind == "launchd" || kind == "windows", "kind conhecido")
+    need(kind == "systemd" || kind == "launchd" || kind == "windows", "falhou")
     if (kind == "systemd") {
-        assert(fileExists("/bin/launchctl") == false, "sem launchctl equivale a systemd")
+        need(fileExists("/bin/launchctl") == false, "falhou")
     }
 }
 
@@ -278,7 +279,7 @@ test "daemon: systemctl roda por argv (regressao: string unica nunca executa)", 
     // argumento procura um executavel inexistente e falha (medido). A forma
     // variadica precisa falhar de outro jeito: aqui o binario nao existe,
     // entao devolve false SEM lancar — o que prova que a chamada e feita.
-    assert(daemonSystemctl0("daemon-reload") == false || daemonSystemctl0("daemon-reload") == true, "nao lanca")
+    need(daemonSystemctl0("daemon-reload") == false || daemonSystemctl0("daemon-reload") == true, "falhou")
     // E a prova contraria, executavel real: echo com argv variadico.
-    assert(process.run("echo", "argv-ok").stdout.trim() == "argv-ok", "argv variadico funciona")
+    need(process.run("echo", "argv-ok").stdout.trim() == "argv-ok", "falhou")
 }

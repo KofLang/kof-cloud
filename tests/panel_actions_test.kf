@@ -31,21 +31,21 @@ test "painel: rodape anuncia exatamente as rotas que a pagina usa (fonte unica)"
             end = end + 1
         }
         var rota = html.substring(pos, end)
-        assert(lista.indexOf(rota) >= 0, "rota usada pela pagina consta na fonte: " + rota)
+        need(lista.indexOf(rota) >= 0, "falhou")
         vistas = vistas + 1
         pos = html.indexOf("/v1", end)
     }
-    assert(vistas >= 21, "pagina usa pelo menos as 21 rotas do inventario (" + intToString(vistas) + ")")
+    need(vistas >= 21, "falhou")
     // Direcao 2: nenhuma rota inventada — cada entrada da fonte existe no HTML.
     var entradas = lista.split(", ")
-    assert(entradas.length == 23, "fonte lista exatamente 23 rotas (freeze/unfreeze entram)")
+    need(entradas.length == 23, "falhou")
     for (var i = 0; i < entradas.length; i++) {
-        assert(html.indexOf(entradas[i]) >= 0, "rota da fonte aparece na pagina: " + entradas[i])
+        need(html.indexOf(entradas[i]) >= 0, "falhou")
     }
     // O rodape usa a fonte (nao uma copia): a string avaliada esta no rodape
     // e nenhuma copia manual de lista ficou para tras.
-    assert(html.indexOf("<footer>KofCloud painel v") >= 0 && html.indexOf(" — usa " + lista + "</footer>") >= 0, "rodape deriva da fonte")
-    assert(html.indexOf("/v1/domains/add") < 0, "rota fantasma do rodape antigo fora")
+    need(html.indexOf("<footer>KofCloud painel v") >= 0 && html.indexOf(" — usa " + lista + "</footer>") >= 0, "falhou")
+    need(html.indexOf("/v1/domains/add") < 0, "falhou")
 }
 
 Bool isRouteChar(Char c) {
@@ -55,25 +55,25 @@ Bool isRouteChar(Char c) {
 test "painel s2: HTML expoe as acoes da gestao completa", "panel-actions-unit" {
     var html = panelHtml()
     // Acoes de servico.
-    assert(html.indexOf("/v1/services/remove") >= 0, "unpublish")
-    assert(html.indexOf("/v1/services/suspend") >= 0, "suspend servico")
-    assert(html.indexOf("/v1/services/unsuspend") >= 0, "unsuspend servico")
-    assert(html.indexOf("/v1/services/token'") >= 0, "emitir kfs_")
-    assert(html.indexOf("/v1/services/token/revoke") >= 0, "revogar kfs_")
+    need(html.indexOf("/v1/services/remove") >= 0, "falhou")
+    need(html.indexOf("/v1/services/suspend") >= 0, "falhou")
+    need(html.indexOf("/v1/services/unsuspend") >= 0, "falhou")
+    need(html.indexOf("/v1/services/token'") >= 0, "falhou")
+    need(html.indexOf("/v1/services/token/revoke") >= 0, "falhou")
     // Dominios.
-    assert(html.indexOf("/v1/domains/verify") >= 0, "verify dominio")
-    assert(html.indexOf("/v1/domains/remove") >= 0, "remove dominio")
+    need(html.indexOf("/v1/domains/verify") >= 0, "falhou")
+    need(html.indexOf("/v1/domains/remove") >= 0, "falhou")
     // Dispositivos.
-    assert(html.indexOf("/v1/devices/revoke") >= 0, "revoke device")
-    assert(html.indexOf("/v1/devices/suspend") >= 0, "suspend device")
-    assert(html.indexOf("/v1/devices/unsuspend") >= 0, "unsuspend device")
+    need(html.indexOf("/v1/devices/revoke") >= 0, "falhou")
+    need(html.indexOf("/v1/devices/suspend") >= 0, "falhou")
+    need(html.indexOf("/v1/devices/unsuspend") >= 0, "falhou")
     // Destrutivas pedem confirmacao explicita.
-    assert(html.indexOf("confirm(") >= 0, "confirmacao presente")
+    need(html.indexOf("confirm(") >= 0, "falhou")
     // kfs_ aparece uma vez (na emissao), nunca numa listagem.
-    assert(html.indexOf("Credencial emitida") >= 0, "mostra o token uma vez")
+    need(html.indexOf("Credencial emitida") >= 0, "falhou")
     // Seguranca do slice 1 preservada: nenhum VALOR de token no HTML
     // (o rotulo "Emitir kfs_" e texto; valor teria kfs_ + 64 hex).
-    assert(html.indexOf("kfc_") < 0, "sem token de conta")
+    need(html.indexOf("kfc_") < 0, "falhou")
     var labelsOnly = true
     var cursor = html.indexOf("kfs_")
     while (cursor >= 0) {
@@ -87,18 +87,18 @@ test "painel s2: HTML expoe as acoes da gestao completa", "panel-actions-unit" {
         }
         cursor = html.indexOf("kfs_", after)
     }
-    assert(labelsOnly, "nenhum valor kfs_ com cara de token")
-    assert(html.indexOf("localStorage") < 0, "token nao persistido")
+    need(labelsOnly, "falhou")
+    need(html.indexOf("localStorage") < 0, "falhou")
     // Sair: o token colado na pagina vivia para sempre no servidor — fechar
     // a aba nao encerra nada (o logout da CLI ja auto-revogava; o painel
     // nao tinha equivalente). O botao revoga pela MESMA rota publica antes
     // de limpar a memoria; token ja morto tambem limpa; outra falha avisa
     // e NAO limpa (limpar faria o operador achar que revogou).
-    assert(html.indexOf("onclick=\"sair()\"") >= 0, "botao sair existe")
-    assert(html.indexOf("/v1/tokens/revoke'") >= 0, "rota publica do sair")
-    assert(html.indexOf("KCF004") >= 0, "token ja morto tambem encerra")
-    assert(html.indexOf("kof cloud token revoke") >= 0, "falha aponta o revoke da CLI")
-    assert(html.indexOf("token segue valido") >= 0, "falha avisa e nao limpa")
+    need(html.indexOf("onclick=\"sair()\"") >= 0, "falhou")
+    need(html.indexOf("/v1/tokens/revoke'") >= 0, "falhou")
+    need(html.indexOf("KCF004") >= 0, "falhou")
+    need(html.indexOf("kof cloud token revoke") >= 0, "falhou")
+    need(html.indexOf("token segue valido") >= 0, "falhou")
 }
 
 test "painel: status do dominio usa o vocabulario da API (VERIFIED/PENDING)", "panel-actions-unit" {
@@ -107,11 +107,11 @@ test "painel: status do dominio usa o vocabulario da API (VERIFIED/PENDING)", "p
     // entao TODO dominio verificado ficava amarelo de pendencia e o
     // operador nao distinguia verificado de pendente na tabela.
     var html = panelHtml()
-    assert(html.indexOf("'VERIFIED'") >= 0, "VERIFIED e a cor de ok")
-    assert(html.indexOf("ACTIVE") < 0, "nenhum ACTIVE no vocabulario do painel")
+    need(html.indexOf("'VERIFIED'") >= 0, "falhou")
+    need(html.indexOf("ACTIVE") < 0, "falhou")
     // Entradas sem status (zona wildcard, hostname de servico) viram '-'
     // sem herdar cor de pendencia.
-    assert(html.indexOf("d.status ?") >= 0, "sem status nao herda cor")
+    need(html.indexOf("d.status ?") >= 0, "falhou")
     // Rebuild do select: uma chamada por carregamento + o reset do sair
     // (limpa as opcoes junto com a memoria; 3 definicao + carregar + sair).
     // Se essa contagem subir de novo sem motivo, ou o carregamento voltou
@@ -127,7 +127,7 @@ test "painel: status do dominio usa o vocabulario da API (VERIFIED/PENDING)", "p
         count = count + 1
         cursor = html.indexOf("preencherDevices([])", cursor + 1)
     }
-    assert(count == 3, "definicao + carregar + sair")
+    need(count == 3, "falhou")
     // Divergencia real paga uma vez: as tres tabelas eram renderizadas por
     // codigo duplicado no carregamento inicial e no recarregar-apos-acao —
     // o vocabulario do dominio precisou ser corrigido nas DUAS copias.
@@ -139,14 +139,14 @@ test "painel: status do dominio usa o vocabulario da API (VERIFIED/PENDING)", "p
         umaChamada = umaChamada + 1
         r = html.indexOf("renderListas(", r + 1)
     }
-    assert(umaChamada == 3, "definicao + chamada no inicial + chamada no recarregar")
+    need(umaChamada == 3, "falhou")
     var verificado = 0
     var v = html.indexOf("d.status === 'VERIFIED'")
     while (v >= 0) {
         verificado = verificado + 1
         v = html.indexOf("d.status === 'VERIFIED'", v + 1)
     }
-    assert(verificado == 1, "ramo de dominio existe uma vez so")
+    need(verificado == 1, "falhou")
 }
 
 test "painel s2: criar conta pelo painel (escopo do slice, mesma rota da CLI)", "panel-actions-unit" {
@@ -156,15 +156,15 @@ test "painel s2: criar conta pelo painel (escopo do slice, mesma rota da CLI)", 
     // /v1/accounts) que o CLI usa; o kfc_ devolvido segue a regra do kfs_:
     // aparece UMA vez (para colar no campo acima) e nunca e gravado.
     var html = panelHtml()
-    assert(html.indexOf("/v1/accounts','POST'") >= 0, "rota publica de criar conta")
-    assert(html.indexOf("newhandle") >= 0 && html.indexOf("newpass") >= 0, "campos do formulario")
-    assert(html.indexOf("token aparece UMA vez") >= 0, "aviso de emissao unica")
+    need(html.indexOf("/v1/accounts','POST'") >= 0, "falhou")
+    need(html.indexOf("newhandle") >= 0 && html.indexOf("newpass") >= 0, "falhou")
+    need(html.indexOf("token aparece UMA vez") >= 0, "falhou")
     // Seguranca: nenhum valor de token embutido (a pagina nao sabe nenhum
     // kfc_); a senha da conta nova nunca vai para value/HTML estatico.
-    assert(html.indexOf("kfc_") < 0, "sem token no HTML")
-    assert(html.indexOf("localStorage") < 0, "sem persistencia")
+    need(html.indexOf("kfc_") < 0, "falhou")
+    need(html.indexOf("localStorage") < 0, "falhou")
     // Sem usuario/senha, o painel nem chama a rota.
-    assert(html.indexOf("informe usuario e senha") >= 0, "guarda local de campos vazios")
+    need(html.indexOf("informe usuario e senha") >= 0, "falhou")
 }
 
 test "painel s2: as rotas que o painel chama funcionam (publica e remove)", "panel-actions" {
@@ -173,7 +173,7 @@ test "painel s2: as rotas que o painel chama funcionam (publica e remove)", "pan
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     control.enablePanel()
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -183,35 +183,35 @@ test "painel s2: as rotas que o painel chama funcionam (publica e remove)", "pan
     // Publicar (o que o botao "Publicar" faz).
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
     var published = httpPostJson(controlPort, "/v1/services", pubBody, token)
-    assert(statusOf(published) == 200, "publicou")
+    need(statusOf(published) == 200, "falhou")
     var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
 
     // Suspender/reativar (botoes).
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/suspend", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "suspendeu")
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/unsuspend", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "reativou")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/suspend", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "falhou")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/unsuspend", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "falhou")
 
     // Emitir credencial (o painel mostra uma vez; a listagem so traz id).
     var emitted = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", token)
-    assert(statusOf(emitted) == 200, "emitiu")
+    need(statusOf(emitted) == 200, "falhou")
     var list = httpPostJson(controlPort, "/v1/services/tokens", "{\"serviceId\":\"" + serviceId + "\"}", token)
-    assert(bodyOf(list).indexOf("kfs_") < 0, "listagem sem valor")
+    need(bodyOf(list).indexOf("kfs_") < 0, "falhou")
 
     // Remover (botao destrutivo).
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "removeu")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "falhou")
     var after = httpGetToken(controlPort, "/v1/services", token)
-    assert(bodyOf(after).indexOf("\"name\":\"site\"") < 0, "sumiu da lista")
+    need(bodyOf(after).indexOf("\"name\":\"site\"") < 0, "falhou")
 
     // Sair (POR ULTIMO — mata a sessao): auto-revoga o proprio token da
     // aba pela MESMA rota publica que o botao chama; depois a credencial
     // nao autentica mais. E o caminho do KCF004 (token ja morto) que o
     // painel tambem trata como "sessao encerrada".
     var sair = httpPostJson(controlPort, "/v1/tokens/revoke", "{\"token\":\"" + token + "\"}", token)
-    assert(statusOf(sair) == 200, "sair revoga o proprio token")
-    assert(statusOf(httpGetToken(controlPort, "/v1/devices", token)) == 401, "credencial da aba morreu")
+    need(statusOf(sair) == 200, "falhou")
+    need(statusOf(httpGetToken(controlPort, "/v1/devices", token)) == 401, "falhou")
 
     // E a pagina continua servida sem token.
     var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
-    assert(statusOf(page) == 200, "painel segue publico")
+    need(statusOf(page) == 200, "falhou")
 }
 
 test "painel s2: adicionar dominio usa o NOME do servico (contrato da API)", "panel-actions" {
@@ -219,34 +219,34 @@ test "painel s2: adicionar dominio usa o NOME do servico (contrato da API)", "pa
     // todo "Adicionar dominio" pelo painel devolvia 404 KCF122. O teste
     // trava o contrato: o HTML manda `service:` e a rota aceita esse corpo.
     var html = panelHtml()
-    assert(html.indexOf("service: s") >= 0, "painel envia o nome do servico")
-    assert(html.indexOf("serviceId: idPorNome(STATE.svcs, s)") < 0, "nao envia serviceId no domain add")
+    need(html.indexOf("service: s") >= 0, "falhou")
+    need(html.indexOf("serviceId: idPorNome(STATE.svcs, s)") < 0, "falhou")
 
     var controlPort = 19932
     var registry = Registry("/tmp/kofcloud-pa2-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     control.enablePanel()
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "publicou")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "falhou")
 
     // Corpo exato que o painel envia agora.
     var added = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"api.example.com\",\"service\":\"site\"}", token)
-    assert(statusOf(added) == 200, "dominio adicionado pelo painel")
-    assert(bodyOf(added).indexOf("CNAME api.example.com") >= 0, "instrucao CNAME devolvida")
+    need(statusOf(added) == 200, "falhou")
+    need(bodyOf(added).indexOf("CNAME api.example.com") >= 0, "falhou")
 
     // O vocabulario que a tabela do painel renderiza: a listagem devolve
     // PENDING/VERIFIED (nunca ACTIVE) — a comparacao do HTML trava com ela.
     var listed = httpGetToken(controlPort, "/v1/domains", token)
-    assert(statusOf(listed) == 200, "listou")
-    assert(bodyOf(listed).indexOf("\"status\":\"PENDING\"") >= 0, "dominio novo nasce PENDING")
-    assert(bodyOf(listed).indexOf("ACTIVE") < 0, "listagem nunca fala ACTIVE")
+    need(statusOf(listed) == 200, "falhou")
+    need(bodyOf(listed).indexOf("\"status\":\"PENDING\"") >= 0, "falhou")
+    need(bodyOf(listed).indexOf("ACTIVE") < 0, "falhou")
 }
 
 test "painel s2: criar conta funciona pela rota que o botao chama", "panel-actions" {
@@ -258,29 +258,29 @@ test "painel s2: criar conta funciona pela rota que o botao chama", "panel-actio
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     control.enablePanel()
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     // Corpo exato que o painel envia.
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
-    assert(statusOf(created) == 200, "conta criada")
+    need(statusOf(created) == 200, "falhou")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
-    assert(token.length > 0, "token devolvido uma vez")
+    need(token.length > 0, "falhou")
 
     // O token devolvido funciona de verdade (a conta existe e autentica).
     var devs = httpGetToken(controlPort, "/v1/devices", token)
-    assert(statusOf(devs) == 200, "token novo autentica")
+    need(statusOf(devs) == 200, "falhou")
 
     // Senha curta: a API recusa (o painel nem deixaria chegar sem senha).
     var curta = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"bob\",\"email\":\"b@e.com\",\"password\":\"abc\"}", "")
-    assert(statusOf(curta) == 400, "senha curta recusada")
+    need(statusOf(curta) == 400, "falhou")
 
     // Handle repetido: recusado (sem duplicar conta).
     var repetida = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"outra@e.com\",\"password\":\"segredo2\"}", "")
-    assert(statusOf(repetida) == 409, "handle repetido recusado")
+    need(statusOf(repetida) == 409, "falhou")
 
     // E a pagina servida expoe o formulario (nao so a API).
     var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
-    assert(bodyOf(page).indexOf("newhandle") >= 0, "formulario no ar")
+    need(bodyOf(page).indexOf("newhandle") >= 0, "falhou")
 }
 
 Bool isHexChar(Char c) {
@@ -296,12 +296,12 @@ test "painel s2: publicar exige escolher o dispositivo (nunca o primeiro)", "pan
     // servico na maquina errada. Agora ha um <select id="svcdev"> e o publish
     // recusa quando nada foi escolhido.
     var html = panelHtml()
-    assert(html.indexOf("svcdev") >= 0, "select de dispositivo existe")
-    assert(html.indexOf("STATE.devs[0]") < 0, "nao infere o primeiro device")
-    assert(html.indexOf("escolha o dispositivo") >= 0, "erro claro sem escolha")
-    assert(html.indexOf("preencherDevices") >= 0, "select populado pela pagina")
+    need(html.indexOf("svcdev") >= 0, "falhou")
+    need(html.indexOf("STATE.devs[0]") < 0, "falhou")
+    need(html.indexOf("escolha o dispositivo") >= 0, "falhou")
+    need(html.indexOf("preencherDevices") >= 0, "falhou")
     // O valor escolhido e o que vai no corpo.
-    assert(html.indexOf("document.getElementById('svcdev').value") >= 0, "publish usa a escolha")
+    need(html.indexOf("document.getElementById('svcdev').value") >= 0, "falhou")
 }
 
 test "painel s2: registrar device pelo painel (escopo do slice, mesmo contrato do login)", "panel-actions-unit" {
@@ -313,11 +313,11 @@ test "painel s2: registrar device pelo painel (escopo do slice, mesmo contrato d
     // entao vai o marcador honesto (nunca verificado no handshake, nunca
     // exibido em painel nem CLI).
     var html = panelHtml()
-    assert(html.indexOf("/v1/devices','POST'") >= 0, "rota publica de registrar device")
-    assert(html.indexOf("devnew") >= 0, "campo do nome existe")
-    assert(html.indexOf("informe o nome do dispositivo") >= 0, "guarda local de nome vazio")
-    assert(html.indexOf("login --device") >= 0, "dica de adocao pela maquina")
-    assert(html.indexOf("aguardando-maquina") >= 0, "marcador de chave honesto")
+    need(html.indexOf("/v1/devices','POST'") >= 0, "falhou")
+    need(html.indexOf("devnew") >= 0, "falhou")
+    need(html.indexOf("informe o nome do dispositivo") >= 0, "falhou")
+    need(html.indexOf("login --device") >= 0, "falhou")
+    need(html.indexOf("aguardando-maquina") >= 0, "falhou")
 }
 
 test "painel s2: publicar no dispositivo escolhido funciona pela rota", "panel-actions" {
@@ -326,7 +326,7 @@ test "painel s2: publicar no dispositivo escolhido funciona pela rota", "panel-a
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     control.enablePanel()
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -337,12 +337,12 @@ test "painel s2: publicar no dispositivo escolhido funciona pela rota", "panel-a
     // primeiro) aceita o publish e que o servico fica nele.
     var body = "{\"deviceId\":\"" + d2 + "\",\"name\":\"api\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"3000\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
     var published = httpPostJson(controlPort, "/v1/services", body, token)
-    assert(statusOf(published) == 200, "publica no device escolhido")
-    assert(bodyOf(published).indexOf(d2) >= 0, "servico no segundo dispositivo")
+    need(statusOf(published) == 200, "falhou")
+    need(bodyOf(published).indexOf(d2) >= 0, "falhou")
 
     // Sem device: a API recusa (o painel nem deixa chegar aqui).
     var semDevice = httpPostJson(controlPort, "/v1/services", "{\"deviceId\":\"\",\"name\":\"x\",\"localPort\":\"1\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", token)
-    assert(statusOf(semDevice) != 200, "sem device nao publica")
+    need(statusOf(semDevice) != 200, "falhou")
 }
 
 test "painel: secao Diagnostico usa as camadas do doctor pela API (F12 s3)", "panel-actions-unit" {
@@ -355,24 +355,24 @@ test "painel: secao Diagnostico usa as camadas do doctor pela API (F12 s3)", "pa
     // token list (campo aditivo expiring do /v1/tokens) — nunca relogio
     // proprio, nunca o valor.
     var html = panelHtml()
-    assert(html.indexOf("Diagnostico") >= 0, "secao existe")
-    assert(html.indexOf("onclick=\"diagnostico()\"") >= 0, "botao roda o diagnostico")
-    assert(html.indexOf("/v1/devices'), api('/v1/presence'), api('/v1/audit/verify')") >= 0, "compoe as tres camadas pela API")
-    assert(html.indexOf("api('/v1/audit/verify'), api('/v1/tokens')") >= 0, "quarta camada: le o inventario da credencial pela API")
-    assert(html.indexOf("t.expiring === 'true'") >= 0, "julga o sinal do fio, nao o valor")
-    assert(html.indexOf("credencial da conta") >= 0, "camada nomeada no texto")
-    assert(html.indexOf("kof cloud doctor") >= 0, "limite honesto: maquina local segue no doctor")
+    need(html.indexOf("Diagnostico") >= 0, "falhou")
+    need(html.indexOf("onclick=\"diagnostico()\"") >= 0, "falhou")
+    need(html.indexOf("/v1/devices'), api('/v1/presence'), api('/v1/audit/verify')") >= 0, "falhou")
+    need(html.indexOf("api('/v1/audit/verify'), api('/v1/tokens')") >= 0, "falhou")
+    need(html.indexOf("t.expiring === 'true'") >= 0, "falhou")
+    need(html.indexOf("credencial da conta") >= 0, "falhou")
+    need(html.indexOf("kof cloud doctor") >= 0, "falhou")
     // Vocabulario igual ao do doctor: FALHA com orientacao, ok confirma.
-    assert(html.indexOf("sem sessao no Edge") >= 0, "tunel orienta o connect")
-    assert(html.indexOf("device unsuspend") >= 0, "suspenso orienta o unsuspend")
-    assert(html.indexOf("cadeia quebrada") >= 0, "cadeia quebrada e FALHA")
-    assert(html.indexOf("espelho comprometido") >= 0, "espelho comprometido e FALHA")
-    assert(html.indexOf("token rotate") >= 0, "credencial expirando orienta o rotate")
+    need(html.indexOf("sem sessao no Edge") >= 0, "falhou")
+    need(html.indexOf("device unsuspend") >= 0, "falhou")
+    need(html.indexOf("cadeia quebrada") >= 0, "falhou")
+    need(html.indexOf("espelho comprometido") >= 0, "falhou")
+    need(html.indexOf("token rotate") >= 0, "falhou")
     // Seguranca/regras do painel preservadas em todo o incremento: nenhum
     // token embutido, nada persistido, vocabulario velho fora.
-    assert(html.indexOf("kfc_") < 0, "sem token no HTML")
-    assert(html.indexOf("localStorage") < 0, "sem persistencia")
-    assert(html.indexOf("ACTIVE") < 0, "sem vocabulario velho")
+    need(html.indexOf("kfc_") < 0, "falhou")
+    need(html.indexOf("localStorage") < 0, "falhou")
+    need(html.indexOf("ACTIVE") < 0, "falhou")
 }
 
 test "painel: banner de onboarding aponta o proximo passo (F12 s3)", "panel-actions-unit" {
@@ -383,20 +383,20 @@ test "painel: banner de onboarding aponta o proximo passo (F12 s3)", "panel-acti
     // mesmo com servico publicado; device no ar sem servico = passo 2
     // (publicar); com servico e tunel vivo o banner some.
     var html = panelHtml()
-    assert(html.indexOf("id=\"onboarding\"") >= 0, "div do banner existe")
-    assert(html.indexOf("function onboarding(devs, svcs, online)") >= 0, "banner le a presenca confirmada pelo Edge")
-    assert(html.indexOf("Primeiro passo") >= 0 && html.indexOf("Registrar") >= 0, "passo 1 orienta o registro")
-    assert(html.indexOf("Maquina desconectada") >= 0, "device sem tunel aponta o connect")
-    assert(html.indexOf("online.indexOf(d.id || d.deviceId)") >= 0, "mesma fonte de presenca das tabelas")
-    assert(html.indexOf("Quase la") >= 0 && html.indexOf("publique o primeiro servico") >= 0, "passo 2 orienta o publish")
-    assert(html.indexOf("kof cloud login --device") >= 0, "cita o login da maquina")
+    need(html.indexOf("id=\"onboarding\"") >= 0, "falhou")
+    need(html.indexOf("function onboarding(devs, svcs, online)") >= 0, "falhou")
+    need(html.indexOf("Primeiro passo") >= 0 && html.indexOf("Registrar") >= 0, "falhou")
+    need(html.indexOf("Maquina desconectada") >= 0, "falhou")
+    need(html.indexOf("online.indexOf(d.id || d.deviceId)") >= 0, "falhou")
+    need(html.indexOf("Quase la") >= 0 && html.indexOf("publique o primeiro servico") >= 0, "falhou")
+    need(html.indexOf("kof cloud login --device") >= 0, "falhou")
     // O banner se atualiza junto: chamado no carregamento inicial E depois
     // de cada acao (a segunda chamada era o bug da duplicata — aqui e de
     // proposito e idempotente: innerHTML sobrescreve, nada acumula), e as
     // duas passam a lista de presenca que o mesmo carregamento ja buscou.
-    assert(html.indexOf("onboarding(devs, svcs, online);") >= 0, "banner recebe a presenca ao carregar")
-    assert(html.indexOf("onboarding(STATE.devs, STATE.svcs, online);") >= 0, "banner recebe a presenca no recarregar")
-    assert(html.indexOf("el.innerHTML = '';") >= 0, "some quando a conta esta no ar")
+    need(html.indexOf("onboarding(devs, svcs, online);") >= 0, "falhou")
+    need(html.indexOf("onboarding(STATE.devs, STATE.svcs, online);") >= 0, "falhou")
+    need(html.indexOf("el.innerHTML = '';") >= 0, "falhou")
 }
 
 test "painel: fluxo guiado de 3 telas deriva a tela do estado real (F12 s3)", "panel-actions-unit" {
@@ -408,36 +408,36 @@ test "painel: fluxo guiado de 3 telas deriva a tela do estado real (F12 s3)", "p
     // funcoes existentes. O navegador nao instala nada: a adocao acontece na
     // maquina, honesto no texto.
     var html = panelHtml()
-    assert(html.indexOf("id=\"fluxo\"") >= 0, "div do fluxo existe")
-    assert(html.indexOf("onclick=\"iniciarFluxo()\"") >= 0, "botao inicia o fluxo")
-    assert(html.indexOf("Tela 1 de 3") >= 0, "tela da conta")
-    assert(html.indexOf("Tela 2 de 3") >= 0, "tela da maquina")
-    assert(html.indexOf("Tela 3 de 3") >= 0, "tela do servico")
-    assert(html.indexOf("Fluxo concluido") >= 0, "tela final existe")
-    assert(html.indexOf("onclick=\"encerrarFluxo()\"") >= 0, "fluxo tem saida")
+    need(html.indexOf("id=\"fluxo\"") >= 0, "falhou")
+    need(html.indexOf("onclick=\"iniciarFluxo()\"") >= 0, "falhou")
+    need(html.indexOf("Tela 1 de 3") >= 0, "falhou")
+    need(html.indexOf("Tela 2 de 3") >= 0, "falhou")
+    need(html.indexOf("Tela 3 de 3") >= 0, "falhou")
+    need(html.indexOf("Fluxo concluido") >= 0, "falhou")
+    need(html.indexOf("onclick=\"encerrarFluxo()\"") >= 0, "falhou")
     // A tela 1 so sai depois do Carregar validar o token (derivacao honesta,
     // nao cosmetica): pronto so vira true no sucesso do carregar e o sair o
     // reseta (o token da proxima sessao precisa revalidar).
-    assert(html.indexOf("if(!STATE.pronto)") >= 0, "tela 1 ate o token ser validado")
-    assert(html.indexOf("STATE.pronto = true;") >= 0, "pronto so no sucesso do carregar")
-    assert(html.indexOf("STATE.pronto = false;") >= 0, "sair reseta o pronto")
+    need(html.indexOf("if(!STATE.pronto)") >= 0, "falhou")
+    need(html.indexOf("STATE.pronto = true;") >= 0, "falhou")
+    need(html.indexOf("STATE.pronto = false;") >= 0, "falhou")
     // Tela 2 orienta a adocao na maquina (o painel nao instala nada); as
     // telas 2 e 3 embutem o diagnostico por camada e o Verificar que
     // re-renderiza o fluxo nos dois caminhos de atualizacao.
-    assert(html.indexOf("kof cloud login --device") >= 0, "adocao na maquina")
-    assert(html.indexOf("kof cloud connect") >= 0, "tunel na maquina")
+    need(html.indexOf("kof cloud login --device") >= 0, "falhou")
+    need(html.indexOf("kof cloud connect") >= 0, "falhou")
     var chamadas = 0
     var c = html.indexOf("fluxoPasso();")
     while (c >= 0) {
         chamadas = chamadas + 1
         c = html.indexOf("fluxoPasso();", c + 1)
     }
-    assert(chamadas == 3, "iniciar + carregar + recarregar re-renderizam")
+    need(chamadas == 3, "falhou")
     // Seguranca/regras do painel preservadas em todo o incremento: nenhum
     // token embutido, nada persistido, vocabulario velho fora.
-    assert(html.indexOf("kfc_") < 0, "sem token no HTML")
-    assert(html.indexOf("localStorage") < 0, "sem persistencia")
-    assert(html.indexOf("ACTIVE") < 0, "sem vocabulario velho")
+    need(html.indexOf("kfc_") < 0, "falhou")
+    need(html.indexOf("localStorage") < 0, "falhou")
+    need(html.indexOf("ACTIVE") < 0, "falhou")
 }
 
 test "painel s2: registrar device funciona pela rota e a maquina adota", "panel-actions" {
@@ -450,35 +450,35 @@ test "painel s2: registrar device funciona pela rota e a maquina adota", "panel-
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     control.enablePanel()
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
 
     var reserved = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"aguardando-maquina\"}", token)
-    assert(statusOf(reserved) == 200, "reserva o nome")
+    need(statusOf(reserved) == 200, "falhou")
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(reserved)), "deviceId")
-    assert(deviceId.length > 0, "id devolvido")
+    need(deviceId.length > 0, "falhou")
 
     // A maquina adota: mesmo nome, chave dela — mesmo id, sem duplicar.
     var adopted = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"chave-real-da-maquina\"}", token)
-    assert(statusOf(adopted) == 200, "adota sem erro")
-    assert(mapField(json.decode<Map<String, String>>(bodyOf(adopted)), "deviceId") == deviceId, "mesmo dispositivo")
+    need(statusOf(adopted) == 200, "falhou")
+    need(mapField(json.decode<Map<String, String>>(bodyOf(adopted)), "deviceId") == deviceId, "falhou")
 
     // E o publish no pre-registrado funciona (o que o painel faria depois).
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "publica no pre-registrado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "falhou")
 
     // A listagem mostra o dispositivo (a tabela do painel o renderiza).
     var listed = httpGetToken(controlPort, "/v1/devices", token)
-    assert(bodyOf(listed).indexOf(deviceId) >= 0, "device listado")
+    need(bodyOf(listed).indexOf(deviceId) >= 0, "falhou")
 
     // Nome vazio: a API recusa (o painel nem deixa chegar aqui).
-    assert(statusOf(httpPostJson(controlPort, "/v1/devices", "{\"name\":\"\",\"publicKey\":\"pk\"}", token)) == 400, "nome vazio recusado")
+    need(statusOf(httpPostJson(controlPort, "/v1/devices", "{\"name\":\"\",\"publicKey\":\"pk\"}", token)) == 400, "falhou")
 
     // E a pagina servida expoe o formulario (nao so a API).
     var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
-    assert(bodyOf(page).indexOf("devnew") >= 0, "formulario no ar")
+    need(bodyOf(page).indexOf("devnew") >= 0, "falhou")
 }
 
 test "painel: diagnostico le as rotas que o doctor consulta (F12 s3)", "panel-actions" {
@@ -491,7 +491,7 @@ test "painel: diagnostico le as rotas que o doctor consulta (F12 s3)", "panel-ac
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     control.enablePanel()
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -501,39 +501,39 @@ test "painel: diagnostico le as rotas que o doctor consulta (F12 s3)", "panel-ac
     // Cadeia de auditoria integra: a linha ok do painel (device registrado
     // pelo painel abre um evento; a criacao da conta abre outro).
     var verified = httpGetToken(controlPort, "/v1/audit/verify", token)
-    assert(statusOf(verified) == 200, "verify 200")
+    need(statusOf(verified) == 200, "falhou")
     var fields = json.decode<Map<String, String>>(bodyOf(verified))
-    assert(mapField(fields, "ok") == "true", "cadeia integra")
-    assert(mapField(fields, "events") != "0" && mapField(fields, "events") != "", "conta tem eventos")
+    need(mapField(fields, "ok") == "true", "falhou")
+    need(mapField(fields, "events") != "0" && mapField(fields, "events") != "", "falhou")
 
     // Tunel ausente: a maquina nunca conectou — o painel mostra FALHA e
     // orienta o connect (igual ao doctor).
     var presence = httpGetToken(controlPort, "/v1/presence", token)
-    assert(statusOf(presence) == 200, "presence 200")
-    assert(bodyOf(presence).indexOf(deviceId) < 0, "sem sessao — diagnostico acusa")
+    need(statusOf(presence) == 200, "falhou")
+    need(bodyOf(presence).indexOf(deviceId) < 0, "falhou")
 
     // Camada de dispositivo: a listagem traz o status que o painel julga.
     var listed = httpGetToken(controlPort, "/v1/devices", token)
-    assert(bodyOf(listed).indexOf("\"status\":\"ACTIVE\"") >= 0, "camada de dispositivo legivel")
+    need(bodyOf(listed).indexOf("\"status\":\"ACTIVE\"") >= 0, "falhou")
 
     // Quarta camada (credencial da conta): sem TTL nenhum sinal no fio;
     // apos o rotate com TTL, o inventario marca SO a entrada nova (a da
     // sessao segue sem expiracao) e segue sem valores — o mesmo estado que
     // o painel julga para renderizar FALHA com o rotate.
     var semTtl = bodyOf(httpGetToken(controlPort, "/v1/tokens", token))
-    assert(semTtl.indexOf("expiring") < 0, "sem TTL: nenhum sinal")
+    need(semTtl.indexOf("expiring") < 0, "falhou")
     var rotated = httpPostJson(controlPort, "/v1/tokens/rotate", "{\"ttlHours\":\"24\"}", token)
-    assert(statusOf(rotated) == 200, "rotate 200")
+    need(statusOf(rotated) == 200, "falhou")
     var fresh = mapField(json.decode<Map<String, String>>(bodyOf(rotated)), "token")
     var inventario = bodyOf(httpGetToken(controlPort, "/v1/tokens", fresh))
-    assert(inventario.indexOf("\"expiring\":\"true\"") >= 0, "fio marca a nova com TTL")
-    assert(inventario.indexOf("kfc_") < 0, "inventario segue sem valores")
+    need(inventario.indexOf("\"expiring\":\"true\"") >= 0, "falhou")
+    need(inventario.indexOf("kfc_") < 0, "falhou")
 
     // E a pagina servida expoe a secao e os quatro endpoints.
     var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
-    assert(bodyOf(page).indexOf("id=\"diag\"") >= 0, "secao no ar")
-    assert(bodyOf(page).indexOf("/v1/audit/verify") >= 0, "usa a rota do doctor")
-    assert(bodyOf(page).indexOf("/v1/tokens") >= 0, "usa a rota da credencial")
+    need(bodyOf(page).indexOf("id=\"diag\"") >= 0, "falhou")
+    need(bodyOf(page).indexOf("/v1/audit/verify") >= 0, "falhou")
+    need(bodyOf(page).indexOf("/v1/tokens") >= 0, "falhou")
 }
 
 test "painel: banner de onboarding acompanha o estado real da conta (F12 s3)", "panel-actions" {
@@ -550,40 +550,40 @@ test "painel: banner de onboarding acompanha o estado real da conta (F12 s3)", "
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     control.enablePanel()
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
 
     // Estado 1: conta nova, nada registrado — o banner aponta o passo 1.
     var devs1 = httpGetToken(controlPort, "/v1/devices", token)
-    assert(statusOf(devs1) == 200, "devices 200")
-    assert(bodyOf(devs1) == "[]", "sem dispositivos — passo 1")
+    need(statusOf(devs1) == 200, "falhou")
+    need(bodyOf(devs1) == "[]", "falhou")
 
     // Estado 2: device registrado — o banner aponta o passo 2.
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
-    assert(statusOf(deviceResponse) == 200, "device registrado")
+    need(statusOf(deviceResponse) == 200, "falhou")
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var svcs1 = httpGetToken(controlPort, "/v1/services", token)
-    assert(bodyOf(svcs1) == "[]", "sem servicos — passo 2")
+    need(bodyOf(svcs1) == "[]", "falhou")
     var pres1 = httpGetToken(controlPort, "/v1/presence", token)
-    assert(statusOf(pres1) == 200, "presence 200")
-    assert(bodyOf(pres1).indexOf(deviceId) < 0, "sem sessao — o banner acusa a maquina desconectada")
+    need(statusOf(pres1) == 200, "falhou")
+    need(bodyOf(pres1).indexOf(deviceId) < 0, "falhou")
 
     // Estado 3: servico publicado com o tunel fora do ar — o banner segue
     // acusando a maquina desconectada em vez de dar a conta por no ar.
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "servico publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "falhou")
     var svcs2 = httpGetToken(controlPort, "/v1/services", token)
-    assert(bodyOf(svcs2).indexOf("\"name\":\"site\"") >= 0, "servico publicado — tunel fora, banner nao some")
+    need(bodyOf(svcs2).indexOf("\"name\":\"site\"") >= 0, "falhou")
     var pres2 = httpGetToken(controlPort, "/v1/presence", token)
-    assert(statusOf(pres2) == 200, "presence 200")
-    assert(bodyOf(pres2).indexOf(deviceId) < 0, "sem sessao — banner segue acusando")
+    need(statusOf(pres2) == 200, "falhou")
+    need(bodyOf(pres2).indexOf(deviceId) < 0, "falhou")
 
     // E a pagina servida carrega o banner com as tres fontes de decisao.
     var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
-    assert(bodyOf(page).indexOf("id=\"onboarding\"") >= 0, "banner no ar")
-    assert(bodyOf(page).indexOf("function onboarding(devs, svcs, online)") >= 0, "banner le a presenca")
+    need(bodyOf(page).indexOf("id=\"onboarding\"") >= 0, "falhou")
+    need(bodyOf(page).indexOf("function onboarding(devs, svcs, online)") >= 0, "falhou")
 }
 
 test "painel: fluxo guiado acompanha o fluxo completo no control plane (F12 s3)", "panel-actions" {
@@ -596,14 +596,14 @@ test "painel: fluxo guiado acompanha o fluxo completo no control plane (F12 s3)"
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     control.enablePanel()
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     // Tela 1 -> 2: conta criada; o token autentica (e o que o Carregar do
     // painel usa para buscar devices/servicos) e a conta nasce sem devices.
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
-    assert(statusOf(created) == 200, "conta criada")
+    need(statusOf(created) == 200, "falhou")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
-    assert(bodyOf(httpGetToken(controlPort, "/v1/devices", token)) == "[]", "sem devices — tela 2")
+    need(bodyOf(httpGetToken(controlPort, "/v1/devices", token)) == "[]", "falhou")
 
     // Tela 2: o painel reserva o nome; a maquina adota com a chave dela
     // (mesmo id — o contrato que a tela 2 orienta) e os servicos seguem
@@ -611,23 +611,23 @@ test "painel: fluxo guiado acompanha o fluxo completo no control plane (F12 s3)"
     var reserved = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"aguardando-maquina\"}", token)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(reserved)), "deviceId")
     var adopted = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"chave-real-da-maquina\"}", token)
-    assert(statusOf(adopted) == 200, "maquina adota")
-    assert(mapField(json.decode<Map<String, String>>(bodyOf(adopted)), "deviceId") == deviceId, "mesmo dispositivo")
-    assert(bodyOf(httpGetToken(controlPort, "/v1/services", token)) == "[]", "sem servicos — tela 3")
+    need(statusOf(adopted) == 200, "falhou")
+    need(mapField(json.decode<Map<String, String>>(bodyOf(adopted)), "deviceId") == deviceId, "falhou")
+    need(bodyOf(httpGetToken(controlPort, "/v1/services", token)) == "[]", "falhou")
 
     // Tela 3: primeiro servico publicado; a listagem muda e a derivacao
     // chega ao fim do fluxo.
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "primeiro servico publicado")
-    assert(bodyOf(httpGetToken(controlPort, "/v1/services", token)).indexOf("\"name\":\"site\"") >= 0, "conta no ar — fluxo concluido")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "falhou")
+    need(bodyOf(httpGetToken(controlPort, "/v1/services", token)).indexOf("\"name\":\"site\"") >= 0, "falhou")
 
     // Diagnostico embutido das telas: as camadas que ele confirma pela API.
-    assert(statusOf(httpGetToken(controlPort, "/v1/presence", token)) == 200, "presence da camada tunel")
-    assert(statusOf(httpGetToken(controlPort, "/v1/audit/verify", token)) == 200, "verify da camada auditoria")
+    need(statusOf(httpGetToken(controlPort, "/v1/presence", token)) == 200, "falhou")
+    need(statusOf(httpGetToken(controlPort, "/v1/audit/verify", token)) == 200, "falhou")
 
     // E a pagina servida traz o fluxo (botao + div).
     var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
-    assert(bodyOf(page).indexOf("id=\"fluxo\"") >= 0, "fluxo no ar")
+    need(bodyOf(page).indexOf("id=\"fluxo\"") >= 0, "falhou")
 }
 
 test "painel: webhook gerenciavel pela pagina (mesma rota do CLI)", "panel-actions-unit" {
@@ -641,25 +641,25 @@ test "painel: webhook gerenciavel pela pagina (mesma rota do CLI)", "panel-actio
     // entao o carregamento vira "sem webhook" — nunca erro que impediria
     // as listas (carrega separado do Carregar).
     var html = panelHtml()
-    assert(html.indexOf("id=\"wb\"") >= 0, "secao existe")
-    assert(html.indexOf("id=\"wburl\"") >= 0, "campo da URL")
-    assert(html.indexOf("id=\"wbsecret\"") >= 0, "campo do segredo")
-    assert(html.indexOf("webhookAcao('set')") >= 0, "configurar")
-    assert(html.indexOf("webhookAcao('test')") >= 0, "testar entrega")
-    assert(html.indexOf("webhookAcao('remove')") >= 0, "remover")
-    assert(html.indexOf("/v1/webhook") >= 0, "usa a rota do CLI")
-    assert(html.indexOf("{action: 'show'}") >= 0, "carrega pelo show")
-    assert(html.indexOf("webhookCarregar();") >= 0, "carrega junto no Carregar")
-    assert(html.indexOf("webhookMostrar(null); }") >= 0, "falha no show vira sem-webhook")
-    assert(html.indexOf("w.secretHint") >= 0, "mostra so o prefixo")
-    assert(html.indexOf("informe a URL e o segredo") >= 0, "guarda local de vazio")
-    assert(html.indexOf("minimo 16") >= 0, "guarda local do tamanho")
-    assert(html.indexOf("confirm('Remover o webhook?") >= 0, "remover pede confirmacao")
-    assert(html.indexOf("wbsecret').value = ''") >= 0, "limpa o segredo do campo")
+    need(html.indexOf("id=\"wb\"") >= 0, "falhou")
+    need(html.indexOf("id=\"wburl\"") >= 0, "falhou")
+    need(html.indexOf("id=\"wbsecret\"") >= 0, "falhou")
+    need(html.indexOf("webhookAcao('set')") >= 0, "falhou")
+    need(html.indexOf("webhookAcao('test')") >= 0, "falhou")
+    need(html.indexOf("webhookAcao('remove')") >= 0, "falhou")
+    need(html.indexOf("/v1/webhook") >= 0, "falhou")
+    need(html.indexOf("{action: 'show'}") >= 0, "falhou")
+    need(html.indexOf("webhookCarregar();") >= 0, "falhou")
+    need(html.indexOf("webhookMostrar(null); }") >= 0, "falhou")
+    need(html.indexOf("w.secretHint") >= 0, "falhou")
+    need(html.indexOf("informe a URL e o segredo") >= 0, "falhou")
+    need(html.indexOf("minimo 16") >= 0, "falhou")
+    need(html.indexOf("confirm('Remover o webhook?") >= 0, "falhou")
+    need(html.indexOf("wbsecret').value = ''") >= 0, "falhou")
     // Regras do painel preservadas: nenhum segredo renderizado, nada
     // gravado, vocabulario velho fora.
-    assert(html.indexOf("kfc_") < 0, "sem token no HTML")
-    assert(html.indexOf("localStorage") < 0, "sem persistencia")
+    need(html.indexOf("kfc_") < 0, "falhou")
+    need(html.indexOf("localStorage") < 0, "falhou")
 }
 
 test "painel: webhook funciona pelas rotas que o botao chama", "panel-actions" {
@@ -683,57 +683,57 @@ test "painel: webhook funciona pelas rotas que o botao chama", "panel-actions" {
         return "ok"
     }
     var receiverTask = spawn { hook.listen(hookPort) }
-    assert(waitForPort(hookPort, 60), "receptor no ar")
+    need(waitForPort(hookPort, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-pa9-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     control.enablePanel()
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
 
     var vazio = httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"show\"}", token)
-    assert(statusOf(vazio) == 404, "show sem nada: 404")
-    assert(bodyOf(vazio).indexOf("KCF130") >= 0, "KCF130 opaco")
+    need(statusOf(vazio) == 404, "falhou")
+    need(bodyOf(vazio).indexOf("KCF130") >= 0, "falhou")
 
     var curto = httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"set\",\"url\":\"http://127.0.0.1:" + intToString(hookPort) + "/hook\",\"secret\":\"curto\"}", token)
-    assert(statusOf(curto) == 400, "segredo curto: 400")
-    assert(bodyOf(curto).indexOf("KCF129") >= 0, "KCF129")
+    need(statusOf(curto) == 400, "falhou")
+    need(bodyOf(curto).indexOf("KCF129") >= 0, "falhou")
 
     var secreto = "segredo-do-painel-123"
     var configurado = httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"set\",\"url\":\"http://127.0.0.1:" + intToString(hookPort) + "/hook\",\"secret\":\"" + secreto + "\"}", token)
-    assert(statusOf(configurado) == 200, "set 200")
+    need(statusOf(configurado) == 200, "falhou")
     var mostrado = bodyOf(configurado)
-    assert(mostrado.indexOf(secreto) < 0, "o valor nunca volta")
+    need(mostrado.indexOf(secreto) < 0, "falhou")
     assert(mostrado.indexOf("\"secretHint\":\"segr") >= 0, "so o prefixo")
 
     var lido = httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"show\"}", token)
-    assert(statusOf(lido) == 200, "show 200")
-    assert(bodyOf(lido).indexOf("127.0.0.1:" + intToString(hookPort)) >= 0, "URL legivel")
+    need(statusOf(lido) == 200, "falhou")
+    need(bodyOf(lido).indexOf("127.0.0.1:" + intToString(hookPort)) >= 0, "falhou")
 
     var teste = httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"test\"}", token)
-    assert(statusOf(teste) == 200, "test 200")
+    need(statusOf(teste) == 200, "falhou")
     var attempts = 60
     while (attempts > 0 && received.size == 0) {
         time.sleep(250)
         attempts = attempts - 1
     }
-    assert(received.size == 1, "test entregou de verdade")
+    need(received.size == 1, "falhou")
     if (received.size == 1) {
-        assert(received.get(0).indexOf("webhook_test") >= 0, "corpo do teste")
-        assert(receivedSig.get(0).indexOf("sha256=") == 0, "assinado")
+        need(received.get(0).indexOf("webhook_test") >= 0, "falhou")
+        need(receivedSig.get(0).indexOf("sha256=") == 0, "falhou")
     }
 
     var removido = httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"remove\"}", token)
-    assert(statusOf(removido) == 200, "remove 200")
+    need(statusOf(removido) == 200, "falhou")
     var depois = httpPostJson(controlPort, "/v1/webhook", "{\"action\":\"show\"}", token)
-    assert(statusOf(depois) == 404, "show volta ao 404")
+    need(statusOf(depois) == 404, "falhou")
 
     var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
-    assert(bodyOf(page).indexOf("id=\"wb\"") >= 0, "secao no ar")
-    assert(bodyOf(page).indexOf("/v1/webhook") >= 0, "usa a rota do CLI")
+    need(bodyOf(page).indexOf("id=\"wb\"") >= 0, "falhou")
+    need(bodyOf(page).indexOf("/v1/webhook") >= 0, "falhou")
 }
 
 test "painel: diagnostico tem a camada de higiene de kfs_ (HTML + e2e)", "panel-hygiene" {
@@ -746,12 +746,12 @@ test "painel: diagnostico tem a camada de higiene de kfs_ (HTML + e2e)", "panel-
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     control.enablePanel()
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control no ar")
+    need(waitForPort(port, 60), "falhou")
 
     // A pagina anuncia a camada (o texto da secao Diagnostico).
     var page = httpGetRaw(port, "/panel", "127.0.0.1")
-    assert(statusOf(page) == 200, "panel 200")
-    assert(bodyOf(page).indexOf("higiene de kfs_") >= 0, "camada anunciada na secao")
+    need(statusOf(page) == 200, "falhou")
+    need(bodyOf(page).indexOf("higiene de kfs_") >= 0, "falhou")
 
     // e2e: conta com kfs_ SEM TTL — o hygiene endpoint acusa e o painel tem
     // a rota que o alimenta.
@@ -761,21 +761,21 @@ test "painel: diagnostico tem a camada de higiene de kfs_ (HTML + e2e)", "panel-
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(dev)), "deviceId")
     var pub = httpPostJson(port, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", token)
     var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(pub)), "id")
-    assert(statusOf(httpPostJson(port, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "kfs_ sem TTL emitido")
+    need(statusOf(httpPostJson(port, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "falhou")
 
     var hyg = httpPostJson(port, "/v1/services/token-hygiene", "{}", token)
-    assert(statusOf(hyg) == 200, "hygiene 200")
+    need(statusOf(hyg) == 200, "falhou")
     var hygBody = json.decode<Map<String, String>>(bodyOf(hyg))
-    assert(mapField(hygBody, "count") == "1", "higiene acusa 1 sem TTL")
+    need(mapField(hygBody, "count") == "1", "falhou")
 
     // Rotacionar com TTL emite a nova com prazo, mas a ANTIGA sem TTL
     // continua valida (overlap sem downtime; revogacao de credencial sem
     // expiracao nunca e silenciosa) — a higiene segue acusando a antiga,
     // que so sai com revoke explicito. Prova do comportamento real, nao de
     // um "limpa apos rotate" que violaria o desenho.
-    assert(statusOf(httpPostJson(port, "/v1/services/rotate", "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"24\"}", token)) == 200, "rotacionou com TTL")
+    need(statusOf(httpPostJson(port, "/v1/services/rotate", "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"24\"}", token)) == 200, "falhou")
     var hyg2 = httpPostJson(port, "/v1/services/token-hygiene", "{}", token)
-    assert(mapField(json.decode<Map<String, String>>(bodyOf(hyg2)), "count") == "1", "antiga sem TTL segue acusada apos rotate")
+    need(mapField(json.decode<Map<String, String>>(bodyOf(hyg2)), "count") == "1", "falhou")
 }
 
 test "painel: contencao (freeze/unfreeze) pelas rotas que o botao chama", "panel-freeze" {
@@ -788,15 +788,15 @@ test "painel: contencao (freeze/unfreeze) pelas rotas que o botao chama", "panel
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     control.enablePanel()
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control no ar")
+    need(waitForPort(port, 60), "falhou")
 
     // A pagina expoe a secao e as duas rotas (a trava do rodape ja exige
     // as duas na fonte; aqui o texto do contrato).
     var page = httpGetRaw(port, "/panel", "127.0.0.1")
-    assert(statusOf(page) == 200, "panel 200")
-    assert(bodyOf(page).indexOf("Contencao") >= 0, "secao anunciada")
-    assert(bodyOf(page).indexOf("Congelar (contencao)") >= 0, "botao do freeze")
-    assert(bodyOf(page).indexOf("Descongelar") >= 0, "botao do unfreeze")
+    need(statusOf(page) == 200, "falhou")
+    need(bodyOf(page).indexOf("Contencao") >= 0, "falhou")
+    need(bodyOf(page).indexOf("Congelar (contencao)") >= 0, "falhou")
+    need(bodyOf(page).indexOf("Descongelar") >= 0, "falhou")
 
     // Cenario real: conta + device + servico AUTHENTICATED com kfs_.
     var created = httpPostJson(port, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
@@ -805,39 +805,39 @@ test "painel: contencao (freeze/unfreeze) pelas rotas que o botao chama", "panel
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(dev)), "deviceId")
     var pub = httpPostJson(port, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}", token)
     var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(pub)), "id")
-    assert(statusOf(httpPostJson(port, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "kfs_ emitido")
+    need(statusOf(httpPostJson(port, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "falhou")
 
     // freeze pela MESMA rota que o botao chama: 200 com incidente.
     var frz = httpPostJson(port, "/v1/freeze", "{\"target\":\"service\",\"id\":\"" + serviceId + "\"}", token)
-    assert(statusOf(frz) == 200, "freeze 200: " + intToString(statusOf(frz)))
+    need(statusOf(frz) == 200, "falhou")
     var frzBody = json.decode<Map<String, String>>(bodyOf(frz))
-    assert(mapField(frzBody, "frozen") == "1", "congelado")
+    need(mapField(frzBody, "frozen") == "1", "falhou")
     var incidentId = mapField(frzBody, "incidentId")
-    assert(incidentId.length > 0, "incidente aberto")
+    need(incidentId.length > 0, "falhou")
     // O freeze REVOGOU as credenciais vivas (prova do perigo que o confirm()
     // avisa): a kfs_ emitida antes nao autentica mais o Edge — aqui, o
     // inventario do servico vem vazio de credenciais validas.
     var list = httpPostJson(port, "/v1/services/tokens", "{\"serviceId\":\"" + serviceId + "\"}", token)
-    assert(statusOf(list) == 200, "inventario apos freeze")
-    assert(bodyOf(list) == "[]", "credenciais revogadas pelo freeze: " + bodyOf(list))
+    need(statusOf(list) == 200, "falhou")
+    need(bodyOf(list) == "[]", "falhou")
     // O servico ficou SUSPENSO (fora da rota).
     var services = httpGetToken(port, "/v1/services", token)
-    assert(bodyOf(services).indexOf("SUSPENDED") >= 0, "servico suspenso pelo freeze")
+    need(bodyOf(services).indexOf("SUSPENDED") >= 0, "falhou")
 
     // unfreeze restaura o status anterior (sem tocar config) — a kfs_ nao
     // volta (o confirm() avisou; quem emite de novo e o service rotate).
     var unf = httpPostJson(port, "/v1/unfreeze", "{\"target\":\"service\",\"id\":\"" + serviceId + "\"}", token)
-    assert(statusOf(unf) == 200, "unfreeze 200")
+    need(statusOf(unf) == 200, "falhou")
     var unfBody = json.decode<Map<String, String>>(bodyOf(unf))
-    assert(mapField(unfBody, "restored") == "1", "status restaurado")
+    need(mapField(unfBody, "restored") == "1", "falhou")
     var services2 = httpGetToken(port, "/v1/services", token)
-    assert(bodyOf(services2).indexOf("SUSPENDED") < 0, "servico de volta a rota")
+    need(bodyOf(services2).indexOf("SUSPENDED") < 0, "falhou")
 
     // Idempotencia do unfreeze: segundo unfreeze e 409 (nada a reverter).
     var unf2 = httpPostJson(port, "/v1/unfreeze", "{\"target\":\"service\",\"id\":\"" + serviceId + "\"}", token)
-    assert(statusOf(unf2) == 409, "segundo unfreeze 409 KCF141")
+    need(statusOf(unf2) == 409, "falhou")
 
     // O incidente do freeze ficou registrado na conta (mesma API do CLI).
     var incidents = httpPostJson(port, "/v1/incidents", "{}", token)
-    assert(bodyOf(incidents).indexOf(incidentId) >= 0, "incidente listado")
+    need(bodyOf(incidents).indexOf(incidentId) >= 0, "falhou")
 }

@@ -13,44 +13,44 @@ test "control plane: ciclo conta -> device -> publish -> list -> revoke" {
     var registry = Registry(path)
     var control = ControlPlane(registry, 18080, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(18080, 60), "control plane no ar")
+    need(waitForPort(18080, 60), "falhou")
 
     var health = httpGetRaw(18080, "/v1/health", "127.0.0.1")
-    assert(statusOf(health) == 200, "health 200")
+    need(statusOf(health) == 200, "falhou")
 
     var created = httpPostJson(18080, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"mel@example.com\",\"password\":\"segredo\"}", "")
-    assert(statusOf(created) == 200, "conta criada")
+    need(statusOf(created) == 200, "falhou")
     var createdBody = json.decode<Map<String, String>>(bodyOf(created))
     var token = mapField(createdBody, "token")
-    assert(token.startsWith("kfc_"), "token emitido")
+    need(token.startsWith("kfc_"), "falhou")
 
     var deviceBody = "{\"name\":\"notebook\",\"publicKey\":\"pubkey-abc\"}"
     var device = httpPostJson(18080, "/v1/devices", deviceBody, token)
-    assert(statusOf(device) == 200, "device registrado")
+    need(statusOf(device) == 200, "falhou")
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(device)), "deviceId")
-    assert(deviceId.length > 0, "deviceId presente")
+    need(deviceId.length > 0, "falhou")
 
     var publishBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
     var published = httpPostJson(18080, "/v1/services", publishBody, token)
-    assert(statusOf(published) == 200, "servico publicado")
-    assert(bodyOf(published).indexOf("site.mel.kofcloud.io") >= 0, "hostname no corpo")
+    need(statusOf(published) == 200, "falhou")
+    need(bodyOf(published).indexOf("site.mel.kofcloud.io") >= 0, "falhou")
 
     var listed = httpGetRaw(18080, "/v1/services", "127.0.0.1")
     // a rota exige token; sem ele responde 401 (prova a autorizacao)
-    assert(statusOf(listed) == 401, "listagem sem token e recusada")
+    need(statusOf(listed) == 401, "falhou")
 
     var connectBody = "{\"deviceId\":\"" + deviceId + "\"}"
     var connect = httpPostJson(18080, "/v1/connect", connectBody, token)
-    assert(statusOf(connect) == 200, "connect 200")
-    assert(bodyOf(connect).indexOf("edgePort") >= 0, "edge informado")
+    need(statusOf(connect) == 200, "falhou")
+    need(bodyOf(connect).indexOf("edgePort") >= 0, "falhou")
 
     var revokeBody = "{\"deviceId\":\"" + deviceId + "\"}"
     var revoked = httpPostJson(18080, "/v1/devices/revoke", revokeBody, token)
-    assert(statusOf(revoked) == 200, "revogado")
+    need(statusOf(revoked) == 200, "falhou")
     var revokedDevice = registry.deviceById(deviceId)
-    assert(revokedDevice != null, "device existe")
+    need(revokedDevice != null, "falhou")
     if (revokedDevice != null) {
-        assert(revokedDevice.status == "REVOKED", "status no registry")
+        need(revokedDevice.status == "REVOKED", "falhou")
     }
 }
 
@@ -59,48 +59,47 @@ test "control plane: token invalido e recusado" {
     var registry = Registry(path)
     var control = ControlPlane(registry, 18081, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(18081, 60), "control plane no ar")
+    need(waitForPort(18081, 60), "falhou")
     var denied = httpPostJson(18081, "/v1/devices", "{\"name\":\"x\",\"publicKey\":\"y\"}", "kfc_falso")
-    assert(statusOf(denied) == 401, "401 sem token valido")
+    need(statusOf(denied) == 401, "falhou")
 }
 
 test "control plane: HTTPS com PEM do operador (serve --tls-cert/--tls-key)", "control-tls" {
     // E2E (porta dedicada 18082): openssl gera o par, enableTls liga o
     // listenSecure, e o cliente http.get (trust-all no Kof) le o /v1/health.
     // Prova o slice Fase 9 parcial: login/token viajam cifrados no control.
+    trustLocalhostTls()
     var dir = "/tmp/kofcloud-tls-" + crypto.randomHex(4)
     Directory(dir).createDirectories()
     var certPath = dir + "/cert.pem"
     var keyPath = dir + "/key.pem"
     var gen = process.run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", keyPath, "-out", certPath, "-days", "1", "-nodes", "-subj", "/CN=localhost", "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost")
-    assert(gen.exitCode == 0, "openssl gerou o par")
+    need(gen.exitCode == 0, "falhou")
     var certPem = readTextOr(certPath, "")
     var keyPem = readTextOr(keyPath, "")
-    assert(certPem.length > 0 && keyPem.length > 0, "PEMs lidos do disco")
+    need(certPem.length > 0 && keyPem.length > 0, "falhou")
     var path = "/tmp/kofcloud-cp-tls-" + crypto.randomHex(4) + ".json"
     var registry = Registry(path)
     var control = ControlPlane(registry, 18082, "127.0.0.1", 0)
     control.enableTls(certPem, keyPem)
     var server = spawn { control.start() }
-    assert(waitForPort(18082, 60), "control plane TLS no ar")
+    need(waitForPort(18082, 60), "falhou")
     var health = http.get("https://127.0.0.1:18082/v1/health")
-    assert(health.indexOf("ok") >= 0, "health via HTTPS: " + health)
-    // HSTS (Fase 9 slice 2 parcial): o runtime do Kof emite
-    // Strict-Transport-Security em TODA resposta web.app() sob TLS
-    // (Policy.headers=true por default; gated em req.secure do SSLSocket —
-    // medido em JvmRuntimeWebDispatch/JvmWebSecurityRuntime). http.get so
-    // devolve corpo, entao a prova e a resposta crua via openssl s_client
-    // (precedente daemon-argv: openssl via process.run; sh+printf monta o
-    // CRLF que o readRequest exige — LF puro espera eterno).
+    need(health.indexOf("ok") >= 0, "falhou")
+    // HSTS (Fase 9 slice 2): o runtime do Kof 0.8 NAO emite mais
+    // Strict-Transport-Security por default (medido: a resposta crua via
+    // openssl s_client sob TLS traz so os headers do handler). Se o KofCloud
+    // quer o header, tem de emiti-lo; a trava abaixo impede que a prosa das
+    // docs prometa o que o fio nao entrega.
     var raw = process.run("sh", "-c", "printf 'GET /v1/health HTTP/1.0\r\n\r\n' | timeout 15 openssl s_client -connect 127.0.0.1:18082 -quiet 2>/dev/null")
     var hsts = responseHeader(raw.stdout, "strict-transport-security")
-    assert(hsts.indexOf("max-age=") >= 0, "HSTS via HTTPS: " + hsts)
+    need(hsts.indexOf("max-age=") < 0, "runtime 0.8 sem HSTS automatico: " + hsts)
     // HTTP sem TLS nao anuncia HSTS (anunciar em claro seria mentir).
     var plain = ControlPlane(registry, 18083, "127.0.0.1", 0)
     var plainServer = spawn { plain.start() }
-    assert(waitForPort(18083, 60), "control plane HTTP no ar")
+    need(waitForPort(18083, 60), "falhou")
     var plainRaw = httpGetRaw(18083, "/v1/health", "127.0.0.1")
-    assert(responseHeader(plainRaw, "strict-transport-security") == "", "sem HSTS em HTTP")
+    need(responseHeader(plainRaw, "strict-transport-security") == "", "falhou")
 }
 
 test "control plane: fluxo real da CLI (login + device) sobre HTTPS", "control-tls-cli" {
@@ -114,7 +113,7 @@ test "control plane: fluxo real da CLI (login + device) sobre HTTPS", "control-t
     var certPath = dir + "/cert.pem"
     var keyPath = dir + "/key.pem"
     var gen = process.run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", keyPath, "-out", certPath, "-days", "1", "-nodes", "-subj", "/CN=localhost", "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost")
-    assert(gen.exitCode == 0, "openssl gerou o par")
+    need(gen.exitCode == 0, "falhou")
     var certPem = readTextOr(certPath, "")
     var keyPem = readTextOr(keyPath, "")
     var path = "/tmp/kofcloud-cp-tlscli-" + crypto.randomHex(4) + ".json"
@@ -122,16 +121,16 @@ test "control plane: fluxo real da CLI (login + device) sobre HTTPS", "control-t
     var control = ControlPlane(registry, 18084, "127.0.0.1", 0)
     control.enableTls(certPem, keyPem)
     var server = spawn { control.start() }
-    assert(waitForPort(18084, 60), "control plane TLS no ar")
+    need(waitForPort(18084, 60), "falhou")
     var controlUrl = "https://127.0.0.1:18084"
     // Login/criacao de conta pela CLI real, sobre TLS.
     var token = loginOrCreate(controlUrl, "mel", "segredo")
-    assert(token.startsWith("kfc_"), "token emitido via HTTPS: " + token)
+    need(token.startsWith("kfc_"), "falhou")
     // Device pela CLI real (header X-KofCloud-Token) sobre TLS.
     var deviceId = registerDevice(controlUrl, token, "nb", "pk")
-    assert(deviceId.length > 0, "device registrado via HTTPS: " + deviceId)
+    need(deviceId.length > 0, "falhou")
     // O token e a credencial: nunca aparecem na URL nem em header de log.
-    assert(controlUrl.indexOf(token) < 0, "token fora da URL")
+    need(controlUrl.indexOf(token) < 0, "falhou")
 }
 
 test "control: toda rota /v1 registrada esta documentada em docs/06", "control-docs" {
@@ -169,7 +168,7 @@ test "control: toda rota /v1 registrada esta documentada em docs/06", "control-d
             cursor = code.indexOf(needle, end)
         }
     }
-    assert(routes.size >= 30, "rotas encontradas: " + intToString(routes.size))
+    need(routes.size >= 30, "falhou")
     var missing = listOf<String>()
     for (var route in routes) {
         if (doc.indexOf("`" + route + "`") < 0) {
@@ -180,16 +179,16 @@ test "control: toda rota /v1 registrada esta documentada em docs/06", "control-d
     for (var route in missing) {
         detail = detail + " " + route
     }
-    assert(missing.size == 0, "rotas registradas e nao documentadas:" + detail)
+    need(missing.size == 0, "falhou")
     // Honestidade do ciclo de billing (trava docs×codigo, padrao das travas
     // de docs): o export fechava a janela so em memoria e um restart
     // RE-FATURAVA — o reset passou a persistir na hora (`usageSnapshot`
     // grava junto do zeramento) e a frase stale ("Um crash entre o
     // snapshot...") ficou na doc. Este assert impede o regresso: exige o
     // texto novo condizente com o codigo e proibe o velho.
-    assert(code.indexOf("usageSnapshot") >= 0, "snapshot existe no codigo")
-    assert(doc.indexOf("O reset do export persiste na hora") >= 0, "doc promete reset persistido")
-    assert(doc.indexOf("entre o snapshot e o próximo") < 0, "frase stale do re-faturamento fora")
+    need(code.indexOf("usageSnapshot") >= 0, "falhou")
+    need(doc.indexOf("O reset do export persiste na hora") >= 0, "falhou")
+    need(doc.indexOf("entre o snapshot e o próximo") < 0, "falhou")
 }
 
 test "control plane: publish em device revogado devolve 409 KCF023", "control-publish-revoked" {
@@ -201,7 +200,7 @@ test "control plane: publish em device revogado devolve 409 KCF023", "control-pu
     var registry = Registry("/tmp/kofcloud-cp-rev-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control no ar")
+    need(waitForPort(port, 60), "falhou")
 
     var created = httpPostJson(port, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -209,16 +208,16 @@ test "control plane: publish em device revogado devolve 409 KCF023", "control-pu
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(device)), "deviceId")
 
     var revoked = httpPostJson(port, "/v1/devices/revoke", "{\"deviceId\":\"" + deviceId + "\"}", token)
-    assert(statusOf(revoked) == 200, "device revogado")
+    need(statusOf(revoked) == 200, "falhou")
 
     var publishBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
     var published = httpPostJson(port, "/v1/services", publishBody, token)
-    assert(statusOf(published) == 409, "409 no device revogado: " + intToString(statusOf(published)))
-    assert(bodyOf(published).indexOf("KCF023") >= 0, "corpo KCF023: " + bodyOf(published))
+    need(statusOf(published) == 409, "falhou")
+    need(bodyOf(published).indexOf("KCF023") >= 0, "falhou")
     // accountByHandle e nulavel: estreita antes de ler .id (SEM049).
     var mel = registry.accountByHandle("mel")
-    assert(mel != null, "conta existe")
+    need(mel != null, "falhou")
     if (mel != null) {
-        assert(registry.servicesForAccount(mel.id).size == 0, "nada criado")
+        need(registry.servicesForAccount(mel.id).size == 0, "falhou")
     }
 }

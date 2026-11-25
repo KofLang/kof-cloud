@@ -2,6 +2,7 @@ import kofcloud.cli.Commands
 import kofcloud.cli.Usage
 import kofcloud.store.Store
 import kofcloud.util.Text
+import testkit.Support
 
 // Trava do relatório de controles (Fase 19 slice 4 — meta SOC2-tipo-II):
 // docs/CONTROLS.md mapeia cada controle 1:1 com o mecanismo e a prova. O doc
@@ -45,17 +46,17 @@ List<String> controlSections() {
 
 test "controles: o relatório cita só suítes que existem", "docs-controls" {
     var doc = controlsDoc()
-    assert(doc.length > 0, "docs/CONTROLS.md existe")
+    need(doc.length > 0, "falhou")
     var cited = controlsCitedSuites(doc)
     if (cited.size < 12) {
-        assert(false, "o mapa cita as provas (>=12 suites): " + intToString(cited.size))
+        need(false, "falhou")
     }
     for (var name in cited) {
         // `readTextOr` resolve a partir da raiz do repo (o mesmo caminho que
         // o resto da suite usa); `File.exists` do stdlib nao aceita caminho
         // relativo aqui (medido: toda suite "faltava").
         if (readTextOr("tests/" + name, "MISSING").length == 0) {
-            assert(false, "suíte citada existe: " + name)
+            need(false, "falhou")
         }
     }
 }
@@ -70,11 +71,11 @@ test "controles: toda seção declara o limite (NÃO cobre)", "docs-controls" {
             continue
         }
         found = found + 1
-        assert(sec.indexOf("**Não cobre:**") >= 0, "seção sem o limite (Não cobre): " + sec.substring(0, 20))
+        need(sec.indexOf("**Não cobre:**") >= 0, "falhou")
     }
-    assert(found == controlSections().size, "seções de controle: " + intToString(found) + " (esperado " + intToString(controlSections().size) + ")")
+    need(found == controlSections().size, "falhou")
     for (var head in controlSections()) {
-        assert(doc.indexOf("\n" + head) >= 0 || doc.startsWith(head.substring(3)), "controle presente: " + head)
+        need(doc.indexOf("\n" + head) >= 0 || doc.startsWith(head.substring(3)), "falhou")
     }
 }
 
@@ -240,13 +241,13 @@ test "controles: cada seção cita mecanismo real do repositório", "docs-contro
         "src/kofcloud/util/Text.kf"
     )
     for (var path in anchors) {
-        assert(readTextOr(path, "").length > 0, "mecanismo citado existe: " + path)
+        need(readTextOr(path, "").length > 0, "falhou")
     }
     // Honestidade: os limites declarados no mapa têm de espelhar os do
     // 17-limitations (WORM não imutável, um nó, sem MFA).
-    assert(doc.indexOf("não é WORM real") >= 0, "admite WORM não imutável")
-    assert(doc.indexOf("ponto único de falha") >= 0, "admite nó único")
-    assert(doc.indexOf("não há MFA") >= 0, "admite ausência de MFA")
+    need(doc.indexOf("não é WORM real") >= 0, "falhou")
+    need(doc.indexOf("ponto único de falha") >= 0, "falhou")
+    need(doc.indexOf("não há MFA") >= 0, "falhou")
     var lim = readTextOr("docs/17-limitations.md", "")
-    assert(lim.indexOf("imutável") >= 0, "17-limitations fala da imutabilidade")
+    need(lim.indexOf("imutável") >= 0, "falhou")
 }

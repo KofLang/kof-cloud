@@ -15,24 +15,24 @@ import testkit.Support
 // o Content-Length declarado passa de `kofcloud.limits.httpBodyBytes`.
 
 test "waf corpo: limite default do config e positivo", "wafbody-unit" {
-    assert(limitHttpBodyBytes() > 0, "teto positivo")
-    assert(errBodyTooLarge().indexOf("KCF110") >= 0, "codigo KCF110")
-    assert(errHint(errBodyTooLarge()).length > 0, "tem Hint")
+    need(limitHttpBodyBytes() > 0, "falhou")
+    need(errBodyTooLarge().indexOf("KCF110") >= 0, "falhou")
+    need(errHint(errBodyTooLarge()).length > 0, "falhou")
 
     // Recuo seguro do teto (fonte pura `httpBodyLimitFrom`): zero/negativo
     // recaem no default 1 MiB — o Edge compara `declared > bodyLimit`, entao
     // com 0 TODO pedido com corpo viraria 413 KCF110 (so GET sem corpo
     // escaparia): outage parcial silencioso por um typo na config.
-    assert(httpBodyLimitFrom(0) == 1048576, "zero recai no default")
-    assert(httpBodyLimitFrom(-1) == 1048576, "negativo recai no default")
-    assert(httpBodyLimitFrom(10) == 10, "valor positivo passa")
-    assert(httpBodyLimitFrom(1) == 1, "limite apertado passa")
-    assert(limitHttpBodyBytes() == 1048576, "default 1 MiB na fonte unica")
+    need(httpBodyLimitFrom(0) == 1048576, "falhou")
+    need(httpBodyLimitFrom(-1) == 1048576, "falhou")
+    need(httpBodyLimitFrom(10) == 10, "falhou")
+    need(httpBodyLimitFrom(1) == 1, "falhou")
+    need(limitHttpBodyBytes() == 1048576, "falhou")
 
     // O construtor do EdgeState delega na fonte (o mesmo valor que o
     // HttpFront compara contra o Content-Length declarado).
     var defaultState = EdgeState(Registry("/tmp/kofcloud-wafu-" + crypto.randomHex(4) + ".json"))
-    assert(defaultState.bodyLimitBytes() == limitHttpBodyBytes(), "construtor delega na fonte unica")
+    need(defaultState.bodyLimitBytes() == limitHttpBodyBytes(), "falhou")
 }
 
 test "waf corpo: Content-Length acima do teto e 413 KCF110 antes do relay", "wafbody" {
@@ -46,7 +46,7 @@ test "waf corpo: Content-Length acima do teto e 413 KCF110 antes do relay", "waf
     app.get("/") { return "svc-waf" }
     app.post("/echo") { return "echo:" + body() }
     var server = spawn { app.listen(localSvc) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-waf-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -59,9 +59,9 @@ test "waf corpo: Content-Length acima do teto e 413 KCF110 antes do relay", "waf
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -70,7 +70,7 @@ test "waf corpo: Content-Length acima do teto e 413 KCF110 antes do relay", "waf
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "falhou")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
     var agentTask = spawn { runAgent(config, true) }
@@ -83,10 +83,10 @@ test "waf corpo: Content-Length acima do teto e 413 KCF110 antes do relay", "waf
             attempts = attempts - 1
         }
     }
-    assert(online, "agent online")
+    need(online, "falhou")
 
     var host = "site.mel.kofcloud.io"
-    assert(bodyOf(httpGetRaw(httpPort, "/", host)) == "svc-waf", "GET segue funcionando")
+    need(bodyOf(httpGetRaw(httpPort, "/", host)) == "svc-waf", "falhou")
 
     // Corpo acima do teto: 413 no Edge, com codigo estavel.
     var bigBody = ""
@@ -96,11 +96,11 @@ test "waf corpo: Content-Length acima do teto e 413 KCF110 antes do relay", "waf
         i = i + 1
     }
     var tooBig = httpPostRaw(httpPort, "/echo", host, listOf<String>(), bigBody)
-    assert(statusOf(tooBig) == 413, "acima do teto -> 413")
-    assert(bodyOf(tooBig).indexOf("KCF110") >= 0, "KCF110 no corpo")
+    need(statusOf(tooBig) == 413, "falhou")
+    need(bodyOf(tooBig).indexOf("KCF110") >= 0, "falhou")
 
     // Metrica com motivo proprio (sem dado do cliente).
-    assert(metricValue(observability.metrics(), "kofcloud_edge_http_denied_total_body_too_large") >= 1, "recusa contada")
+    need(metricValue(observability.metrics(), "kofcloud_edge_http_denied_total_body_too_large") >= 1, "falhou")
 
     // Logo no limite (nao acima): passa pelo Edge e chega no servico.
     var atLimit = ""
@@ -110,8 +110,8 @@ test "waf corpo: Content-Length acima do teto e 413 KCF110 antes do relay", "waf
         i = i + 1
     }
     var exact = httpPostRaw(httpPort, "/echo", host, listOf<String>(), atLimit)
-    assert(statusOf(exact) == 200, "no limite -> 200")
-    assert(bodyOf(exact).indexOf("echo:") >= 0, "chegou no servico local")
+    need(statusOf(exact) == 200, "falhou")
+    need(bodyOf(exact).indexOf("echo:") >= 0, "falhou")
 
     // Header grande sem corpo nao e afetado pelo teto de corpo.
     var largeHeader = "X-Padding: "
@@ -121,7 +121,7 @@ test "waf corpo: Content-Length acima do teto e 413 KCF110 antes do relay", "waf
         i = i + 1
     }
     var withHeader = httpPostRaw(httpPort, "/echo", host, listOf(largeHeader), "ok")
-    assert(statusOf(withHeader) == 200, "header grande com corpo pequeno -> 200")
+    need(statusOf(withHeader) == 200, "falhou")
 
     // Parada limpa.
     writeTextTo(agentStop, "stop")

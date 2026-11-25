@@ -50,17 +50,22 @@ String bearerToken(String? authHeader) {
 // json.decode exige TODO campo presente (JSN004) e o Agent/CLI decodificam
 // essas respostas de volta para os tipos. Chaves extras sao ignoradas, entao
 // `deviceId` viaja junto de `id` para conveniencia dos handlers.
+// O Kof 0.8 (JSN006) RECUSA string numerica em campo numero: o objecto do
+// fio e montado a mao para os campos numericos irem como NUMERO JSON, e o
+// lado CLI/Agent converte explicitamente (`jsonIntField`) — um mapa
+// homogeneo de String nao consegue carregar numero. Chaves extras
+// continuam ignoradas (`deviceId` viaja junto de `id`).
 String deviceJson(Device device) {
-    var out = mapOf()
-    out.put("id", device.id)
-    out.put("deviceId", device.id)
-    out.put("accountId", device.accountId)
-    out.put("name", device.name)
-    out.put("status", device.status)
-    out.put("publicKey", device.publicKey)
-    out.put("lastSeenAt", longToString(device.lastSeenAt))
-    out.put("createdAt", longToString(device.createdAt))
-    return json.encode(out)
+    var out = listOf<String>()
+    out.add("\"id\":" + json.encode(device.id))
+    out.add("\"deviceId\":" + json.encode(device.id))
+    out.add("\"accountId\":" + json.encode(device.accountId))
+    out.add("\"name\":" + json.encode(device.name))
+    out.add("\"status\":" + json.encode(device.status))
+    out.add("\"publicKey\":" + json.encode(device.publicKey))
+    out.add("\"lastSeenAt\":" + longToString(device.lastSeenAt))
+    out.add("\"createdAt\":" + longToString(device.createdAt))
+    return "{" + joinStrings(out, ",") + "}"
 }
 
 String serviceJson(Service service) {
@@ -70,17 +75,18 @@ String serviceJson(Service service) {
     out.put("deviceId", service.deviceId)
     out.put("name", service.name)
     out.put("localAddress", service.localAddress)
-    out.put("localPort", intToString(service.localPort))
     out.put("protocol", service.protocol)
     out.put("hostname", service.hostname)
     out.put("exposure", service.exposure)
     out.put("status", service.status)
-    out.put("createdAt", longToString(service.createdAt))
     out.put("allowMethods", service.allowMethods)
     out.put("allowPaths", service.allowPaths)
     // Teto por servico (F10 s2): texto decimal; "" = herda o global.
     out.put("maxBodyBytes", serviceCapText(service.maxBodyBytes))
-    return json.encode(out)
+    // Numeros como NUMERO JSON (JSN006 do Kof 0.8): `localPort` e `createdAt`
+    // saem fora do mapa homogeneo de String.
+    var encoded = json.encode(out)
+    return encoded.substring(0, encoded.length - 1) + ",\"localPort\":" + intToString(service.localPort) + ",\"createdAt\":" + longToString(service.createdAt) + "}"
 }
 
 String serviceListJson(List<Service> services) {

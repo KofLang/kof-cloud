@@ -4,6 +4,7 @@ import kofcloud.edge.Events
 import kofcloud.edge.Tunnel
 import kofcloud.protocol.Session
 import kofcloud.util.Limits
+import testkit.Support
 
 // Limites por dispositivo: dispositivos ativos por conta, servicos por
 // dispositivo e streams simultaneos por tunel (Fase 4).
@@ -17,14 +18,14 @@ test "registry: limite de dispositivos ativos por conta" {
     // `serviceLimitFrom`): zero/negativo recaem no default — com o valor
     // cru, `0` congelava TODO cadastro novo (`count >= 0` sempre verdade),
     // em TODA conta, silencioso.
-    assert(deviceLimitFrom(0) == 5, "zero recai no default")
-    assert(deviceLimitFrom(-2) == 5, "negativo recai no default")
-    assert(deviceLimitFrom(3) == 3, "valor positivo passa")
-    assert(limitDevices() == 5, "default 5 na fonte unica")
-    assert(serviceLimitFrom(0) == 10, "zero recai no default")
-    assert(serviceLimitFrom(-1) == 10, "negativo recai no default")
-    assert(serviceLimitFrom(2) == 2, "valor positivo passa")
-    assert(limitServices() == 10, "default 10 na fonte unica")
+    need(deviceLimitFrom(0) == 5, "falhou")
+    need(deviceLimitFrom(-2) == 5, "falhou")
+    need(deviceLimitFrom(3) == 3, "falhou")
+    need(limitDevices() == 5, "falhou")
+    need(serviceLimitFrom(0) == 10, "falhou")
+    need(serviceLimitFrom(-1) == 10, "falhou")
+    need(serviceLimitFrom(2) == 2, "falhou")
+    need(limitServices() == 10, "falhou")
     var registry = Registry(limitTestPath("devices"))
     registry.setLimits(2, 10)
     var account = registry.createAccount("mel", "m@e.com", "segredo")
@@ -38,9 +39,9 @@ test "registry: limite de dispositivos ativos por conta" {
         blocked = true
         reason = e
     }
-    assert(blocked, "terceiro dispositivo recusado")
-    assert(reason.indexOf("KCF080") >= 0, "motivo do limite")
-    assert(registry.activeDeviceCount(account.id) == 2, "nada foi criado")
+    need(blocked, "falhou")
+    need(reason.indexOf("KCF080") >= 0, "falhou")
+    need(registry.activeDeviceCount(account.id) == 2, "falhou")
 }
 
 test "registry: re-registrar o mesmo dispositivo e idempotente (nao consome vaga)" {
@@ -49,8 +50,8 @@ test "registry: re-registrar o mesmo dispositivo e idempotente (nao consome vaga
     var account = registry.createAccount("mel", "m@e.com", "segredo")
     var first = registry.registerDevice(account, "nb", "pk")
     var again = registry.registerDevice(account, "nb", "pk")
-    assert(first.id == again.id, "mesmo dispositivo")
-    assert(registry.activeDeviceCount(account.id) == 1, "uma vaga apenas")
+    need(first.id == again.id, "falhou")
+    need(registry.activeDeviceCount(account.id) == 1, "falhou")
 }
 
 test "registry: revogar dispositivo libera vaga" {
@@ -59,9 +60,9 @@ test "registry: revogar dispositivo libera vaga" {
     var account = registry.createAccount("mel", "m@e.com", "segredo")
     var d1 = registry.registerDevice(account, "d1", "pk1")
     registry.registerDevice(account, "d2", "pk2")
-    assert(registry.revokeDevice(account.id, d1.id) == true, "revogado")
+    need(registry.revokeDevice(account.id, d1.id) == true, "falhou")
     var created = registry.registerDevice(account, "d3", "pk3")
-    assert(created.name == "d3", "vaga liberada")
+    need(created.name == "d3", "falhou")
 }
 
 test "registry: limite de servicos por dispositivo" {
@@ -79,9 +80,9 @@ test "registry: limite de servicos por dispositivo" {
         blocked = true
         reason = e
     }
-    assert(blocked, "terceiro servico recusado")
-    assert(reason.indexOf("KCF081") >= 0, "motivo do limite")
-    assert(registry.servicesForDevice(device.id).size == 2, "nada foi criado")
+    need(blocked, "falhou")
+    need(reason.indexOf("KCF081") >= 0, "falhou")
+    need(registry.servicesForDevice(device.id).size == 2, "falhou")
 }
 
 test "registry: limite de servicos e por dispositivo, nao por conta" {
@@ -92,7 +93,7 @@ test "registry: limite de servicos e por dispositivo, nao por conta" {
     var d2 = registry.registerDevice(account, "d2", "pk2")
     registry.publishService(account, d1.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
     var other = registry.publishService(account, d2.id, "api", "127.0.0.1", 3000, "http", "PUBLIC", "", "")
-    assert(other.name == "api", "cada dispositivo tem sua cota")
+    need(other.name == "api", "falhou")
 }
 
 test "session: limite de streams simultaneos e libera ao fechar", "streams-limit" {
@@ -101,23 +102,23 @@ test "session: limite de streams simultaneos e libera ao fechar", "streams-limit
     var a = session.openStream()
     var b = session.openStream()
     var c = session.openStream()
-    assert(a.length > 0, "primeiro abre")
-    assert(b.length > 0, "segundo abre")
-    assert(c == "", "terceiro recusado")
-    assert(session.atCapacity(), "sessao no limite")
+    need(a.length > 0, "falhou")
+    need(b.length > 0, "falhou")
+    need(c == "", "falhou")
+    need(session.atCapacity(), "falhou")
     session.closeStream(a)
-    assert(session.atCapacity() == false, "vaga liberada")
-    assert(session.openStream().length > 0, "abre apos liberar")
+    need(session.atCapacity() == false, "falhou")
+    need(session.openStream().length > 0, "falhou")
 
     // Recuo seguro do teto (fonte pura `streamLimitFrom`): zero/negativo
     // recai no default 128 — com o valor cru, `0` recusaria TODO OPEN
     // (atCapacity com 0 >= 0) e nenhum relay passaria, no Edge (429) nem
     // no Agent (RESET LIMIT_EXCEEDED).
-    assert(streamLimitFrom(0) == 128, "zero recai no default")
-    assert(streamLimitFrom(-3) == 128, "negativo recai no default")
-    assert(streamLimitFrom(10) == 10, "valor positivo passa")
-    assert(streamLimitFrom(1) == 1, "limite apertado passa")
-    assert(limitStreams() == 128, "default 128 na fonte unica")
+    need(streamLimitFrom(0) == 128, "falhou")
+    need(streamLimitFrom(-3) == 128, "falhou")
+    need(streamLimitFrom(10) == 10, "falhou")
+    need(streamLimitFrom(1) == 1, "falhou")
+    need(limitStreams() == 128, "falhou")
 
     // O construtor da sessao delega na fonte: as 128 vagas do default abrem
     // e a seguinte recusa.
@@ -130,8 +131,8 @@ test "session: limite de streams simultaneos e libera ao fechar", "streams-limit
         }
         opened = opened + 1
     }
-    assert(opened == cap, "construtor delega na fonte unica")
-    assert(defaults.openStream().length == 0, "teto do default fecha")
+    need(opened == cap, "falhou")
+    need(defaults.openStream().length == 0, "falhou")
 }
 
 test "rate limit: a janela em ms vira SEGUNDOS para o stdlib", "ratelimit-unit" {
@@ -140,43 +141,43 @@ test "rate limit: a janela em ms vira SEGUNDOS para o stdlib", "ratelimit-unit" 
     // 1000 segue barrada apos 1,3 s). O Edge passava `httpWindowMs` direto,
     // entao os 60 s default viravam 60.000 s de bloqueio por hostname — e
     // 101 requisicoes bastavam para causar isso.
-    assert(httpWindowSeconds(60000) == 60, "60 s default em segundos")
-    assert(httpWindowSeconds(1000) == 1, "1 s")
-    assert(httpWindowSeconds(1500) == 2, "arredonda para cima (nunca recusa menos)")
-    assert(httpWindowSeconds(1) == 1, "janela de 1 ms vira 1 s, nunca 0")
+    need(httpWindowSeconds(60000) == 60, "falhou")
+    need(httpWindowSeconds(1000) == 1, "falhou")
+    need(httpWindowSeconds(1500) == 2, "falhou")
+    need(httpWindowSeconds(1) == 1, "falhou")
     // Zerada/negativa recai no default do Retry-After (janela <= 0 no
     // stdlib devolve false e bloquearia tudo para sempre).
-    assert(httpWindowSeconds(0) == limitHttpRetryAfterSec(), "zero recai no default")
-    assert(httpWindowSeconds(-5) == limitHttpRetryAfterSec(), "negativo recai no default")
+    need(httpWindowSeconds(0) == limitHttpRetryAfterSec(), "falhou")
+    need(httpWindowSeconds(-5) == limitHttpRetryAfterSec(), "falhou")
     // O recuo anunciado acompanha a conversao: nunca menor que a espera real.
     var state = EdgeState(Registry("/tmp/kofcloud-rlunit-" + crypto.randomHex(4) + ".json"))
     state.setHttpLimits(3, 60000)
-    assert(state.httpRetryAfterSec() == 61, "janela 60 s -> Retry-After 61 s")
+    need(state.httpRetryAfterSec() == 61, "falhou")
     state.setHttpLimits(3, 1500)
-    assert(state.httpRetryAfterSec() == 3, "janela 1,5 s -> 2 s de janela, Retry-After 3 s")
+    need(state.httpRetryAfterSec() == 3, "falhou")
 
     // Prova fim a fim do comportamento (nao so da conversao): cota 1 numa
     // janela de 1 s realmente libera depois de ~1 s. Sem a conversao este
     // teste ficaria barrado por ~16 minutos.
     var key = "kofcloud-rlunit-probe-" + crypto.randomHex(4)
-    assert(security.rateLimit(key, 1, httpWindowSeconds(1000)) == true, "primeira passa")
-    assert(security.rateLimit(key, 1, httpWindowSeconds(1000)) == false, "segunda barra")
+    need(security.rateLimit(key, 1, httpWindowSeconds(1000)) == true, "falhou")
+    need(security.rateLimit(key, 1, httpWindowSeconds(1000)) == false, "falhou")
     time.sleep(1200)
-    assert(security.rateLimit(key, 1, httpWindowSeconds(1000)) == true, "libera apos a janela")
+    need(security.rateLimit(key, 1, httpWindowSeconds(1000)) == true, "falhou")
 
     // Evidencia do perigo que o recuo evita: cota ZERO no stdlib recusa o
     // primeiro pedido — e todos os seguintes (a borda inteira em 429 para
     // sempre se a config de `httpRequests` fosse passada crua).
     var zeroKey = "kofcloud-rlunit-zero-" + crypto.randomHex(4)
-    assert(security.rateLimit(zeroKey, 0, 1) == false, "cota zero recusa de cara")
+    need(security.rateLimit(zeroKey, 0, 1) == false, "falhou")
 
     // Recuo seguro do teto (fonte pura `httpRequestLimitFrom`): zero/negativo
     // recaem no default 100, positivo passa.
-    assert(httpRequestLimitFrom(0) == 100, "zero recai no default")
-    assert(httpRequestLimitFrom(-1) == 100, "negativo recai no default")
-    assert(httpRequestLimitFrom(10) == 10, "valor positivo passa")
-    assert(httpRequestLimitFrom(1) == 1, "limite apertado passa")
-    assert(limitHttpRequests() == 100, "default 100 na fonte unica")
+    need(httpRequestLimitFrom(0) == 100, "falhou")
+    need(httpRequestLimitFrom(-1) == 100, "falhou")
+    need(httpRequestLimitFrom(10) == 10, "falhou")
+    need(httpRequestLimitFrom(1) == 1, "falhou")
+    need(limitHttpRequests() == 100, "falhou")
 
     // O construtor do EdgeState delega na fonte: o hostname de sonda esgota
     // as 100 requisicoes do default e a seguinte e barrada.
@@ -189,8 +190,8 @@ test "rate limit: a janela em ms vira SEGUNDOS para o stdlib", "ratelimit-unit" 
         }
         served = served + 1
     }
-    assert(served == limitHttpRequests(), "construtor delega na fonte unica")
-    assert(defaultState.checkHttpLimit(probeHost) == false, "cota do default esgota")
+    need(served == limitHttpRequests(), "falhou")
+    need(defaultState.checkHttpLimit(probeHost) == false, "falhou")
 }
 
 test "limits: passo da varredura periodica de credenciais com recuo seguro", "limits-expiry-sweep" {
@@ -198,10 +199,10 @@ test "limits: passo da varredura periodica de credenciais com recuo seguro", "li
     // comando passa `limitExpirySweepMs()` e o laco so dorme nesse valor.
     // Recuo em fonte pura (familia `idleSweepMsFrom`): 0/negativo recaem no
     // default porque `time.sleep(0)` giraria sem parar (busy-loop).
-    assert(expirySweepMsFrom(0) == 60000, "zero recai no default")
-    assert(expirySweepMsFrom(-1) == 60000, "negativo recai no default")
-    assert(expirySweepMsFrom(250) == 250, "positivo passa")
-    assert(limitExpirySweepMs() == 60000, "default travado em 60 s")
+    need(expirySweepMsFrom(0) == 60000, "falhou")
+    need(expirySweepMsFrom(-1) == 60000, "falhou")
+    need(expirySweepMsFrom(250) == 250, "falhou")
+    need(limitExpirySweepMs() == 60000, "falhou")
 }
 
 test "limits: passo do pusher de SERVICES com recuo seguro", "limits-push" {
@@ -209,10 +210,10 @@ test "limits: passo do pusher de SERVICES com recuo seguro", "limits-push" {
     // nesse valor. Recuo em fonte pura (mesma familia do expiry-sweep):
     // 0/negativo virariam busy-loop serializando a lista de cada device a
     // cada iteracao — volta ao default 2000 ms.
-    assert(servicesPushMsFrom(0) == 2000, "zero recai no default")
-    assert(servicesPushMsFrom(-1) == 2000, "negativo recai no default")
-    assert(servicesPushMsFrom(500) == 500, "positivo passa")
-    assert(limitServicesPushMs() == 2000, "default travado em 2 s")
+    need(servicesPushMsFrom(0) == 2000, "falhou")
+    need(servicesPushMsFrom(-1) == 2000, "falhou")
+    need(servicesPushMsFrom(500) == 500, "falhou")
+    need(limitServicesPushMs() == 2000, "falhou")
 }
 
 test "limits: os planos citam as puras de passo/prazo pelo nome", "limits-docs" {
@@ -232,13 +233,13 @@ test "limits: os planos citam as puras de passo/prazo pelo nome", "limits-docs" 
         shipped = shippedRaw
     }
     if (plan.length > 0 && shipped.length > 0) {
-        assert(shipped.indexOf("servicesPushMsFrom") >= 0 && shipped.indexOf("webhookTimeoutSecFrom") >= 0, "linha de limites do 18 lista as puras de passo/prazo")
-        assert(shipped.indexOf("backoffBaseLimitFrom") >= 0 && shipped.indexOf("deployWatchMsFrom") >= 0, "linha de limites do 18 lista backoff e watch")
-        assert(shipped.indexOf("usagePushMsFrom") >= 0, "linha de limites do 18 lista o pusher de uso (F18 s4)")
-        assert(plan.indexOf("servicesPushMsFrom") >= 0, "16-plan cita a pura do pusher")
-        assert(plan.indexOf("webhookTimeoutSecFrom") >= 0, "16-plan cita a pura do prazo do webhook")
-        assert(plan.indexOf("backoffBaseLimitFrom") >= 0 && plan.indexOf("backoffMaxLimitFrom") >= 0, "16-plan cita as puras do backoff (Fase 1)")
-        assert(shipped.indexOf("tokenExpiryWarnMsFrom") >= 0, "linha de limites do 18 lista a janela de aviso do kfc_")
+        need(shipped.indexOf("servicesPushMsFrom") >= 0 && shipped.indexOf("webhookTimeoutSecFrom") >= 0, "falhou")
+        need(shipped.indexOf("backoffBaseLimitFrom") >= 0 && shipped.indexOf("deployWatchMsFrom") >= 0, "falhou")
+        need(shipped.indexOf("usagePushMsFrom") >= 0, "falhou")
+        need(plan.indexOf("servicesPushMsFrom") >= 0, "falhou")
+        need(plan.indexOf("webhookTimeoutSecFrom") >= 0, "falhou")
+        need(plan.indexOf("backoffBaseLimitFrom") >= 0 && plan.indexOf("backoffMaxLimitFrom") >= 0, "falhou")
+        need(shipped.indexOf("tokenExpiryWarnMsFrom") >= 0, "falhou")
     }
 }
 
@@ -252,7 +253,7 @@ test "limits: a familia de passos e prazos mora em Limits.kf", "limits-family" {
     if (limitsRaw != null) {
         limits = limitsRaw
     }
-    assert(limits.length > 0, "a fonte dos limites e legivel")
+    need(limits.length > 0, "falhou")
     var family = listOf<String>()
     family.add("expirySweepMsFrom")
     family.add("servicesPushMsFrom")
@@ -265,7 +266,7 @@ test "limits: a familia de passos e prazos mora em Limits.kf", "limits-family" {
     family.add("tokenExpiryWarnMsFrom")
     var i = 0
     while (i < family.length) {
-        assert(limits.indexOf("Int " + family[i] + "(") >= 0 || limits.indexOf("Long " + family[i] + "(") >= 0, "a familia mora em Limits: " + family[i])
+        need(limits.indexOf("Int " + family[i] + "(") >= 0 || limits.indexOf("Long " + family[i] + "(") >= 0, "falhou")
         i = i + 1
     }
     // E o passo do watch nao pode voltar para a CLI.
@@ -274,6 +275,6 @@ test "limits: a familia de passos e prazos mora em Limits.kf", "limits-family" {
     if (deployRaw != null) {
         deploy = deployRaw
     }
-    assert(deploy.indexOf("Int deployWatchMsFrom(") < 0, "a pura do watch nao volta para a CLI")
-    assert(deploy.indexOf("limitDeployWatchMs()") >= 0, "a CLI consome a fonte unica")
+    need(deploy.indexOf("Int deployWatchMsFrom(") < 0, "falhou")
+    need(deploy.indexOf("limitDeployWatchMs()") >= 0, "falhou")
 }

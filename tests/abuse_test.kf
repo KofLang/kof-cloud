@@ -39,96 +39,96 @@ test "suspensao: servico sai da rota e volta; health nao dessuspende", "abuse" {
     var ana = registry.createAccount("ana", "a@e.com", "segredo")
     var device = registry.registerDevice(mel, "nb", "pk")
     var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
-    assert(registry.resolveRoute(service.hostname) != null, "rota antes")
+    need(registry.resolveRoute(service.hostname) != null, "falhou")
 
-    assert(registry.suspendService(ana.id, service.id) == false, "alheio nao suspende")
-    assert(registry.resolveRoute(service.hostname) != null, "rota intacta")
-    assert(registry.suspendService(mel.id, "inexistente") == false, "inexistente nao suspende")
+    need(registry.suspendService(ana.id, service.id) == false, "falhou")
+    need(registry.resolveRoute(service.hostname) != null, "falhou")
+    need(registry.suspendService(mel.id, "inexistente") == false, "falhou")
 
-    assert(registry.suspendService(mel.id, service.id) == true, "suspende")
+    need(registry.suspendService(mel.id, service.id) == true, "falhou")
     var suspended = registry.serviceById(service.id)
-    assert(suspended != null, "servico existe")
+    need(suspended != null, "falhou")
     if (suspended != null) {
-        assert(suspended.status == "SUSPENDED", "status SUSPENDED")
+        need(suspended.status == "SUSPENDED", "falhou")
     }
-    assert(registry.resolveRoute(service.hostname) == null, "fora da rota (opaco)")
+    need(registry.resolveRoute(service.hostname) == null, "falhou")
 
     // Health do Agent NAO dessuspende.
-    assert(registry.setServiceStatusByName(device.id, "site", "ONLINE") == true, "report aceito (noop)")
+    need(registry.setServiceStatusByName(device.id, "site", "ONLINE") == true, "falhou")
     var still = registry.serviceById(service.id)
     if (still != null) {
-        assert(still.status == "SUSPENDED", "continua SUSPENDED")
+        need(still.status == "SUSPENDED", "falhou")
     }
-    assert(registry.resolveRoute(service.hostname) == null, "rota continua fora")
+    need(registry.resolveRoute(service.hostname) == null, "falhou")
 
     // Status via API tambem nao dessuspende.
-    assert(registry.reportServiceStatus(mel.id, service.id, "ONLINE") == "", "report ok (noop)")
+    need(registry.reportServiceStatus(mel.id, service.id, "ONLINE") == "", "falhou")
     var still2 = registry.serviceById(service.id)
     if (still2 != null) {
-        assert(still2.status == "SUSPENDED", "API nao dessuspende")
+        need(still2.status == "SUSPENDED", "falhou")
     }
 
-    assert(registry.unsuspendService(ana.id, service.id) == false, "alheio nao libera")
-    assert(registry.unsuspendService(mel.id, service.id) == true, "libera")
+    need(registry.unsuspendService(ana.id, service.id) == false, "falhou")
+    need(registry.unsuspendService(mel.id, service.id) == true, "falhou")
     var back = registry.serviceById(service.id)
     if (back != null) {
-        assert(back.status != "SUSPENDED", "voltou a status operacional")
+        need(back.status != "SUSPENDED", "falhou")
     }
-    assert(registry.resolveRoute(service.hostname) != null, "rota de volta")
+    need(registry.resolveRoute(service.hostname) != null, "falhou")
 
     // Auditoria registrou o ciclo sem segredo.
     var actions = auditActions(registry.auditForAccount(mel.id))
-    assert(auditHas(actions, "service.published"), "publish auditado")
-    assert(auditHas(actions, "service.suspended"), "suspend auditado")
-    assert(auditHas(actions, "service.unsuspended"), "unsuspend auditado")
+    need(auditHas(actions, "service.published"), "falhou")
+    need(auditHas(actions, "service.suspended"), "falhou")
+    need(auditHas(actions, "service.unsuspended"), "falhou")
     var anaActions = auditActions(registry.auditForAccount(ana.id))
-    assert(auditHas(anaActions, "service.suspended") == false, "nada de mel vaza para ana")
+    need(auditHas(anaActions, "service.suspended") == false, "falhou")
 
     // Fonte unica: o anel respeita `limitAuditEvents()` (default 100
     // travado; mutacao quebra). Recuo sem recuo silencioso: cap
     // nao-positivo recai no default em vez de desligar a trilha.
-    assert(limitAuditEvents() == 100, "default anel 100 eventos")
-    assert(auditEventLimitFrom(0) == 100, "zero recai no default")
-    assert(auditEventLimitFrom(-2) == 100, "negativo recai no default")
-    assert(auditEventLimitFrom(50) == 50, "positivo passa direto")
+    need(limitAuditEvents() == 100, "falhou")
+    need(auditEventLimitFrom(0) == 100, "falhou")
+    need(auditEventLimitFrom(-2) == 100, "falhou")
+    need(auditEventLimitFrom(50) == 50, "falhou")
 }
 
 test "suspensao: dispositivo recusado no tunel, nada removido", "abuse-device" {
     var registry = Registry("/tmp/kofcloud-abused-" + crypto.randomHex(4) + ".json")
     var mel = registry.createAccount("mel", "m@e.com", "segredo")
     var device = registry.registerDevice(mel, "nb", "pk")
-    assert(registry.suspendDevice(mel.id, device.id) == true, "suspende")
+    need(registry.suspendDevice(mel.id, device.id) == true, "falhou")
     var suspended = registry.deviceById(device.id)
-    assert(suspended != null, "device existe")
+    need(suspended != null, "falhou")
     if (suspended != null) {
-        assert(suspended.status == "SUSPENDED", "status SUSPENDED")
+        need(suspended.status == "SUSPENDED", "falhou")
     }
     // Nada removido: servicos continuam (voltam quando liberar).
-    assert(registry.devicesForAccount(mel.id).size == 1, "device continua listado")
+    need(registry.devicesForAccount(mel.id).size == 1, "falhou")
 
-    assert(registry.unsuspendDevice(mel.id, device.id) == true, "libera")
+    need(registry.unsuspendDevice(mel.id, device.id) == true, "falhou")
     var back = registry.deviceById(device.id)
     if (back != null) {
-        assert(back.status == "ACTIVE", "volta a ACTIVE")
+        need(back.status == "ACTIVE", "falhou")
     }
 
     // Revogar apos suspender funciona (caminho de remocao intacto).
-    assert(registry.suspendDevice(mel.id, device.id) == true, "suspende de novo")
-    assert(registry.revokeDevice(mel.id, device.id) == true, "revoga")
+    need(registry.suspendDevice(mel.id, device.id) == true, "falhou")
+    need(registry.revokeDevice(mel.id, device.id) == true, "falhou")
     var gone = registry.deviceById(device.id)
     if (gone != null) {
-        assert(gone.status == "REVOKED", "revogado vence suspensao")
+        need(gone.status == "REVOKED", "falhou")
     }
     // deviceIsActive/deviceIsSuspended delegam nos construtores (fonte unica
     // dos literais): ativo recem-registrado, inativo suspenso.
     var fresh = registry.registerDevice(mel, "nb2", "pk2")
-    assert(deviceIsActive(fresh) == true, "novo device e ativo")
-    assert(deviceIsSuspended(fresh) == false, "novo device nao e suspenso")
-    assert(deviceIsActive(Device("x", mel.id, "y", "pk", deviceSuspended(), 0, 0)) == false, "suspenso nao e ativo")
-    assert(deviceIsSuspended(Device("x", mel.id, "y", "pk", deviceSuspended(), 0, 0)) == true, "suspenso casa")
-    assert(deviceIsSuspended(Device("x", mel.id, "y", "pk", deviceActive(), 0, 0)) == false, "ativo nao casa")
-    assert(deviceIsActive(Device("x", mel.id, "y", "pk", deviceRevoked(), 0, 0)) == false, "revogado nao e ativo")
-    assert(deviceIsSuspended(Device("x", mel.id, "y", "pk", deviceRevoked(), 0, 0)) == false, "revogado nao e suspenso")
+    need(deviceIsActive(fresh) == true, "falhou")
+    need(deviceIsSuspended(fresh) == false, "falhou")
+    need(deviceIsActive(Device("x", mel.id, "y", "pk", deviceSuspended(), 0, 0)) == false, "falhou")
+    need(deviceIsSuspended(Device("x", mel.id, "y", "pk", deviceSuspended(), 0, 0)) == true, "falhou")
+    need(deviceIsSuspended(Device("x", mel.id, "y", "pk", deviceActive(), 0, 0)) == false, "falhou")
+    need(deviceIsActive(Device("x", mel.id, "y", "pk", deviceRevoked(), 0, 0)) == false, "falhou")
+    need(deviceIsSuspended(Device("x", mel.id, "y", "pk", deviceRevoked(), 0, 0)) == false, "falhou")
 }
 
 test "suspensao: Edge recusa tunel suspenso e esconde rota; audit via HTTP", "abuse-e2e" {
@@ -140,7 +140,7 @@ test "suspensao: Edge recusa tunel suspenso e esconde rota; audit via HTTP", "ab
     var app = web.app()
     app.get("/") { return "svc-abuse" }
     var server = spawn { app.listen(localSvc) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-abusee-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -152,9 +152,9 @@ test "suspensao: Edge recusa tunel suspenso e esconde rota; audit via HTTP", "ab
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -166,12 +166,12 @@ test "suspensao: Edge recusa tunel suspenso e esconde rota; audit via HTTP", "ab
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
     var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
-    assert(statusOf(published) == 200, "PUBLIC publicado")
+    need(statusOf(published) == 200, "falhou")
     var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
 
     // Conta alheia recebe o mesmo 404 opaco.
     var anaSuspend = httpPostJson(controlPort, "/v1/services/suspend", "{\"serviceId\":\"" + serviceId + "\"}", anaToken)
-    assert(statusOf(anaSuspend) == 404, "alheio -> 404 opaco")
+    need(statusOf(anaSuspend) == 404, "falhou")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
     var agentTask = spawn { runAgent(config, true) }
@@ -184,38 +184,38 @@ test "suspensao: Edge recusa tunel suspenso e esconde rota; audit via HTTP", "ab
             attempts = attempts - 1
         }
     }
-    assert(online, "agent registrado no edge")
-    assert(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 200, "rota antes")
+    need(online, "falhou")
+    need(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 200, "falhou")
 
     // Suspende o servico: some da rota (404 opaco), tunel continua.
     var suspended = httpPostJson(controlPort, "/v1/services/suspend", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
-    assert(statusOf(suspended) == 200, "suspende")
-    assert(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 404, "fora da rota (opaco)")
-    assert(edgeState.isOnline(deviceId), "tunel continua vivo")
+    need(statusOf(suspended) == 200, "falhou")
+    need(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 404, "falhou")
+    need(edgeState.isOnline(deviceId), "falhou")
 
     // Libera o servico: a rota volta sem precisar reconectar.
     var unsuspended = httpPostJson(controlPort, "/v1/services/unsuspend", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
-    assert(statusOf(unsuspended) == 200, "libera servico")
-    assert(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-abuse", "rota de volta")
+    need(statusOf(unsuspended) == 200, "falhou")
+    need(bodyOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == "svc-abuse", "falhou")
 
     // Suspende o dispositivo (servico ativo): o proximo request derruba a
     // sessao (enforcement imediato no Edge) e o tunel nao volta (HELLO
     // recusado com fatal).
     var devSuspended = httpPostJson(controlPort, "/v1/devices/suspend", "{\"deviceId\":\"" + deviceId + "\"}", accountToken)
-    assert(statusOf(devSuspended) == 200, "device suspenso")
+    need(statusOf(devSuspended) == 200, "falhou")
     var enforced = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
-    assert(statusOf(enforced) == 503, "request apos suspensao derruba a sessao (opaco)")
-    assert(edgeState.isOnline(deviceId) == false, "sessao caiu apos suspensao do device")
+    need(statusOf(enforced) == 503, "falhou")
+    need(edgeState.isOnline(deviceId) == false, "falhou")
 
     var exposition = observability.metrics()
-    assert(metricValue(exposition, "kofcloud_control_services_suspended_total") >= 1, "suspend contado")
-    assert(metricValue(exposition, "kofcloud_control_devices_suspended_total") >= 1, "device suspend contado")
+    need(metricValue(exposition, "kofcloud_control_services_suspended_total") >= 1, "falhou")
+    need(metricValue(exposition, "kofcloud_control_devices_suspended_total") >= 1, "falhou")
 
     // Auditoria via HTTP: so os proprios eventos, sem segredo.
     var auditRaw = httpGetRaw(controlPort, "/v1/audit", "127.0.0.1")
-    assert(statusOf(auditRaw) == 401, "audit exige token")
+    need(statusOf(auditRaw) == 401, "falhou")
     var anaAudit = httpPostJson(controlPort, "/v1/devices/suspend", "{\"deviceId\":\"" + deviceId + "\"}", anaToken)
-    assert(statusOf(anaAudit) == 404, "ana nao suspende device de mel")
+    need(statusOf(anaAudit) == 404, "falhou")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
@@ -243,21 +243,21 @@ test "suspensao: REVOKED e terminal — unsuspend/suspend nao ressuscitam", "abu
     var registry = Registry("/tmp/kofcloud-abterm-" + crypto.randomHex(4) + ".json")
     var mel = registry.createAccount("mel", "m@e.com", "segredo")
     var device = registry.registerDevice(mel, "nb", "pk")
-    assert(registry.revokeDevice(mel.id, device.id) == true, "revoga")
+    need(registry.revokeDevice(mel.id, device.id) == true, "falhou")
 
     var revokedBefore = registry.deviceById(device.id)
-    assert(revokedBefore != null, "device existe")
+    need(revokedBefore != null, "falhou")
     if (revokedBefore != null) {
-        assert(deviceIsRevoked(revokedBefore.status), "status REVOKED")
+        need(deviceIsRevoked(revokedBefore.status), "falhou")
     }
 
     // Nenhuma transicao tira de REVOKED.
-    assert(registry.unsuspendDevice(mel.id, device.id) == false, "unsuspend recusa")
-    assert(registry.suspendDevice(mel.id, device.id) == false, "suspend recusa")
+    need(registry.unsuspendDevice(mel.id, device.id) == false, "falhou")
+    need(registry.suspendDevice(mel.id, device.id) == false, "falhou")
     var after = registry.deviceById(device.id)
-    assert(after != null, "ainda existe")
+    need(after != null, "falhou")
     if (after != null) {
-        assert(after.status == "REVOKED", "continua REVOKED: " + after.status)
+        need(after.status == "REVOKED", "falhou")
     }
     // Sem auditoria falsa de unsuspend/suspend (nada aconteceu).
     var events = registry.auditForAccount(mel.id)
@@ -267,12 +267,12 @@ test "suspensao: REVOKED e terminal — unsuspend/suspend nao ressuscitam", "abu
             unsuspends = unsuspends + 1
         }
     }
-    assert(unsuspends == 0, "nenhum unsuspend auditado")
+    need(unsuspends == 0, "falhou")
 
     // A fonte unica do predicado: so o proprio literal REVOKED responde true.
-    assert(deviceIsRevoked("REVOKED"), "REVOKED e terminal")
-    assert(deviceIsRevoked("ACTIVE") == false, "ACTIVE nao")
-    assert(deviceIsRevoked("SUSPENDED") == false, "SUSPENDED nao (reversivel)")
+    need(deviceIsRevoked("REVOKED"), "falhou")
+    need(deviceIsRevoked("ACTIVE") == false, "falhou")
+    need(deviceIsRevoked("SUSPENDED") == false, "falhou")
 }
 
 test "suspensao: HTTP recusa suspend/unsuspend de device revogado com 409", "abuse-revoked-http" {
@@ -280,30 +280,30 @@ test "suspensao: HTTP recusa suspend/unsuspend de device revogado com 409", "abu
     var registry = Registry("/tmp/kofcloud-abterm-http-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
     var device = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(device)), "deviceId")
     var revoked = httpPostJson(controlPort, "/v1/devices/revoke", "{\"deviceId\":\"" + deviceId + "\"}", token)
-    assert(statusOf(revoked) == 200, "revoga")
+    need(statusOf(revoked) == 200, "falhou")
 
     var target = "{\"deviceId\":\"" + deviceId + "\"}"
     var unsuspend = httpPostJson(controlPort, "/v1/devices/unsuspend", target, token)
-    assert(statusOf(unsuspend) == 409, "unsuspend 409: " + intToString(statusOf(unsuspend)))
-    assert(bodyOf(unsuspend).indexOf("KCF023") >= 0, "KCF023 no corpo")
+    need(statusOf(unsuspend) == 409, "falhou")
+    need(bodyOf(unsuspend).indexOf("KCF023") >= 0, "falhou")
     var suspend = httpPostJson(controlPort, "/v1/devices/suspend", target, token)
-    assert(statusOf(suspend) == 409, "suspend 409: " + intToString(statusOf(suspend)))
-    assert(bodyOf(suspend).indexOf("KCF023") >= 0, "KCF023 no corpo")
+    need(statusOf(suspend) == 409, "falhou")
+    need(bodyOf(suspend).indexOf("KCF023") >= 0, "falhou")
 
     // Inexistente continua 404 opaco (sem regressao).
     var ghost = httpPostJson(controlPort, "/v1/devices/unsuspend", "{\"deviceId\":\"fantasma\"}", token)
-    assert(statusOf(ghost) == 404, "inexistente 404")
+    need(statusOf(ghost) == 404, "falhou")
 
     var after = registry.deviceById(deviceId)
-    assert(after != null, "device existe")
+    need(after != null, "falhou")
     if (after != null) {
-        assert(after.status == "REVOKED", "continua revogado")
+        need(after.status == "REVOKED", "falhou")
     }
 }

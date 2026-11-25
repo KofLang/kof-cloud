@@ -19,12 +19,12 @@ test "cadeia: eventos encadeiam e a cadeia integra verifica", "chain-unit" {
     var account = registry.createAccount("mel", "m@e.com", "segredo")
     registry.registerDevice(account, "nb", "pk")
     var events = registry.auditForAccount(account.id)
-    assert(events.size >= 2, "dois eventos")
-    assert(auditChainError(events) == "", "cadeia integra")
+    need(events.size >= 2, "falhou")
+    need(auditChainError(events) == "", "falhou")
     // O primeiro evento tem prevHash vazio; o segundo aponta para o primeiro.
-    assert(events.get(0).prevHash == "", "raiz sem anterior")
+    need(events.get(0).prevHash == "", "falhou")
     if (events.size >= 2) {
-        assert(events.get(1).prevHash == events.get(0).hash, "encadeado")
+        need(events.get(1).prevHash == events.get(0).hash, "falhou")
     }
 }
 
@@ -33,7 +33,7 @@ test "cadeia: adulterar um campo quebra no indice certo", "chain-unit" {
     var account = registry.createAccount("mel", "m@e.com", "segredo")
     registry.registerDevice(account, "nb", "pk")
     var events = registry.auditForAccount(account.id)
-    assert(events.size >= 2, "dois eventos")
+    need(events.size >= 2, "falhou")
     // Adultera o TARGET do primeiro evento (mantendo o hash antigo).
     var tampered = listOf<AuditEvent>()
     var i = 0
@@ -45,7 +45,7 @@ test "cadeia: adulterar um campo quebra no indice certo", "chain-unit" {
         }
         i = i + 1
     }
-    assert(auditChainError(tampered) == "0", "quebra no primeiro")
+    need(auditChainError(tampered) == "0", "falhou")
 }
 
 test "cadeia: remover um evento do meio quebra no seguinte", "chain-unit" {
@@ -54,7 +54,7 @@ test "cadeia: remover um evento do meio quebra no seguinte", "chain-unit" {
     registry.registerDevice(account, "nb", "pk")
     registry.publishService(account, registry.devicesForAccount(account.id).get(0).id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
     var events = registry.auditForAccount(account.id)
-    assert(events.size >= 3, "tres eventos")
+    need(events.size >= 3, "falhou")
     // Remove o do meio: o prevHash do seguinte nao fecha mais.
     var withoutMiddle = listOf<AuditEvent>()
     withoutMiddle.add(events.get(0))
@@ -63,18 +63,18 @@ test "cadeia: remover um evento do meio quebra no seguinte", "chain-unit" {
         withoutMiddle.add(events.get(i))
         i = i + 1
     }
-    assert(auditChainError(withoutMiddle) == "1", "quebra no indice 1")
+    need(auditChainError(withoutMiddle) == "1", "falhou")
 }
 
 test "cadeia: hash e deterministico e sensivel a cada campo", "chain-unit" {
     var base = auditEventHash("", "1", "account:mel", "account.login", "acc-1")
-    assert(base == auditEventHash("", "1", "account:mel", "account.login", "acc-1"), "deterministico")
-    assert(base != auditEventHash("", "2", "account:mel", "account.login", "acc-1"), "at muda")
-    assert(base != auditEventHash("", "1", "account:ana", "account.login", "acc-1"), "actor muda")
-    assert(base != auditEventHash("", "1", "account:mel", "account.logout", "acc-1"), "action muda")
-    assert(base != auditEventHash("", "1", "account:mel", "account.login", "acc-2"), "target muda")
-    assert(base != auditEventHash("x", "1", "account:mel", "account.login", "acc-1"), "prev muda")
-    assert(base.length == 64, "sha256 hex")
+    need(base == auditEventHash("", "1", "account:mel", "account.login", "acc-1"), "falhou")
+    need(base != auditEventHash("", "2", "account:mel", "account.login", "acc-1"), "falhou")
+    need(base != auditEventHash("", "1", "account:ana", "account.login", "acc-1"), "falhou")
+    need(base != auditEventHash("", "1", "account:mel", "account.logout", "acc-1"), "falhou")
+    need(base != auditEventHash("", "1", "account:mel", "account.login", "acc-2"), "falhou")
+    need(base != auditEventHash("x", "1", "account:mel", "account.login", "acc-1"), "falhou")
+    need(base.length == 64, "falhou")
 }
 
 test "cadeia: HTTP /v1/audit/verify reporta integra e adulterada", "chain" {
@@ -82,20 +82,20 @@ test "cadeia: HTTP /v1/audit/verify reporta integra e adulterada", "chain" {
     var registry = Registry(chainPath("http"))
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
     httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
 
     var ok = httpGetToken(controlPort, "/v1/audit/verify", token)
-    assert(statusOf(ok) == 200, "verify 200")
-    assert(bodyOf(ok).indexOf("\"ok\":\"true\"") >= 0, "integra")
+    need(statusOf(ok) == 200, "falhou")
+    need(bodyOf(ok).indexOf("\"ok\":\"true\"") >= 0, "falhou")
 
     // A listagem traz os hashes (o terceiro pode verificar por conta propria).
     var listed = httpGetToken(controlPort, "/v1/audit", token)
-    assert(bodyOf(listed).indexOf("\"hash\"") >= 0, "hash exposto")
-    assert(bodyOf(listed).indexOf("\"prevHash\"") >= 0, "prevHash exposto")
+    need(bodyOf(listed).indexOf("\"hash\"") >= 0, "falhou")
+    need(bodyOf(listed).indexOf("\"prevHash\"") >= 0, "falhou")
 
     // Adultera o estado em disco e recarrega: a verificacao acusa.
     var mel = registry.accountByHandle("mel")
@@ -116,8 +116,8 @@ test "cadeia: HTTP /v1/audit/verify reporta integra e adulterada", "chain" {
     }
     registry.audit = tampered
     var broken = httpGetToken(controlPort, "/v1/audit/verify", token)
-    assert(bodyOf(broken).indexOf("\"ok\":\"false\"") >= 0, "adulterada detectada")
-    assert(bodyOf(broken).indexOf("\"brokenAt\":\"0\"") >= 0, "indice do primeiro")
+    need(bodyOf(broken).indexOf("\"ok\":\"false\"") >= 0, "falhou")
+    need(bodyOf(broken).indexOf("\"brokenAt\":\"0\"") >= 0, "falhou")
 }
 test "cadeia: eventos de contas intercaladas NAO quebram a verificacao", "chain-unit" {
     // O anel e global e cada evento encadeia com o anterior do anel; a lista
@@ -131,17 +131,17 @@ test "cadeia: eventos de contas intercaladas NAO quebram a verificacao", "chain-
     registry.registerDevice(mel, "nb-mel2", "pk2")
 
     // A cadeia GLOBAL continua integra.
-    assert(auditChainError(registry.audit) == "", "anel global integro")
+    need(auditChainError(registry.audit) == "", "falhou")
     // E cada conta, isoladamente, tambem — mesmo com eventos intercalados.
     var melEvents = registry.auditForAccount(mel.id)
     var anaEvents = registry.auditForAccount(ana.id)
-    assert(melEvents.size >= 3, "mel com eventos: " + intToString(melEvents.size))
-    assert(anaEvents.size >= 2, "ana com eventos: " + intToString(anaEvents.size))
-    assert(auditChainError(melEvents) == "", "cadeia de mel integra")
-    assert(auditChainError(anaEvents) == "", "cadeia de ana integra")
+    need(melEvents.size >= 3, "falhou")
+    need(anaEvents.size >= 2, "falhou")
+    need(auditChainError(melEvents) == "", "falhou")
+    need(auditChainError(anaEvents) == "", "falhou")
 
     // auditEventAccount separa `<conta>` e `<conta>/<recurso>`.
-    assert(auditEventAccount(melEvents.get(0)) == mel.id, "conta pura")
+    need(auditEventAccount(melEvents.get(0)) == mel.id, "falhou")
 }
 
 test "cadeia: com duas contas, adulterar ainda e detectado", "chain-unit" {
@@ -171,7 +171,7 @@ test "cadeia: com duas contas, adulterar ainda e detectado", "chain-unit" {
             melTampered.add(event)
         }
     }
-    assert(auditChainError(melTampered) == "0", "adulteracao de mel detectada no primeiro")
+    need(auditChainError(melTampered) == "0", "falhou")
     // A cadeia da outra conta segue integra.
     var anaEvents = listOf<AuditEvent>()
     for (var event in tampered) {
@@ -179,7 +179,7 @@ test "cadeia: com duas contas, adulterar ainda e detectado", "chain-unit" {
             anaEvents.add(event)
         }
     }
-    assert(auditChainError(anaEvents) == "", "ana segue integra")
+    need(auditChainError(anaEvents) == "", "falhou")
 }
 
 test "cadeia: HTTP verify fica integra com duas contas ativas", "chain" {
@@ -187,7 +187,7 @@ test "cadeia: HTTP verify fica integra com duas contas ativas", "chain" {
     var registry = Registry(chainPath("http-multi"))
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var melCreated = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var melToken = mapField(json.decode<Map<String, String>>(bodyOf(melCreated)), "token")
@@ -197,9 +197,9 @@ test "cadeia: HTTP verify fica integra com duas contas ativas", "chain" {
     httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", anaToken)
 
     var melVerify = httpGetToken(controlPort, "/v1/audit/verify", melToken)
-    assert(bodyOf(melVerify).indexOf("\"ok\":\"true\"") >= 0, "mel integra: " + bodyOf(melVerify))
+    need(bodyOf(melVerify).indexOf("\"ok\":\"true\"") >= 0, "falhou")
     var anaVerify = httpGetToken(controlPort, "/v1/audit/verify", anaToken)
-    assert(bodyOf(anaVerify).indexOf("\"ok\":\"true\"") >= 0, "ana integra: " + bodyOf(anaVerify))
+    need(bodyOf(anaVerify).indexOf("\"ok\":\"true\"") >= 0, "falhou")
 }
 
 test "filtro de audit: --action e --tail na CLI (puros)", "chain-filter" {
@@ -217,31 +217,31 @@ test "filtro de audit: --action e --tail na CLI (puros)", "chain-filter" {
 
     // Filtro de acao: exato, sem lowercase.
     var revoked = auditFilterAction(events, "device.revoked")
-    assert(revoked.size == 1, "uma revocacao")
-    assert(revoked.get(0).at == "4", "o evento certo")
-    assert(auditFilterAction(events, "device.Revoked").size == 0, "casing nao perdoa typo")
-    assert(auditFilterAction(events, "device.").size == 0, "prefixo nao casa (acao e exata)")
-    assert(auditFilterAction(events, "nao.existe").size == 0, "acao inexistente: vazio")
+    need(revoked.size == 1, "falhou")
+    need(revoked.get(0).at == "4", "falhou")
+    need(auditFilterAction(events, "device.Revoked").size == 0, "falhou")
+    need(auditFilterAction(events, "device.").size == 0, "falhou")
+    need(auditFilterAction(events, "nao.existe").size == 0, "falhou")
 
     // Tail: os mais recentes.
     var tail2 = auditTail(events, 2)
-    assert(tail2.size == 2, "duas no tail")
-    assert(tail2.get(0).at == "3", "mais recente velho")
-    assert(tail2.get(1).at == "4", "o mais recente")
-    assert(auditTail(events, 0).size == 4, "tail 0 = tudo")
-    assert(auditTail(events, -1).size == 4, "negativo = tudo")
-    assert(auditTail(events, 99).size == 4, "acima do tamanho = tudo")
+    need(tail2.size == 2, "falhou")
+    need(tail2.get(0).at == "3", "falhou")
+    need(tail2.get(1).at == "4", "falhou")
+    need(auditTail(events, 0).size == 4, "falhou")
+    need(auditTail(events, -1).size == 4, "falhou")
+    need(auditTail(events, 99).size == 4, "falhou")
 
     // Combinacao: filtra acao DEPOIS tail (ordem real do cmdAudit).
     var combined = auditTail(auditFilterAction(events, "device.registered"), 5)
-    assert(combined.size == 1, "acao + tail")
-    assert(combined.get(0).at == "2", "o evento certo")
+    need(combined.size == 1, "falhou")
+    need(combined.get(0).at == "2", "falhou")
 
     // Linha inclui o ator (antes "quem fez?" exigia a API crua).
     var line = auditLine(events.get(3))
-    assert(line.indexOf("device.revoked") >= 0, "acao na linha")
-    assert(line.indexOf("account:mel") >= 0, "ator na linha")
-    assert(line.indexOf("acc-1/dev-1") >= 0, "alvo na linha")
+    need(line.indexOf("device.revoked") >= 0, "falhou")
+    need(line.indexOf("account:mel") >= 0, "falhou")
+    need(line.indexOf("acc-1/dev-1") >= 0, "falhou")
 }
 
 test "filtro de audit: cmdAudit liga as flags nas funcoes puras (trava de fonte)", "chain-filter" {
@@ -262,11 +262,11 @@ test "filtro de audit: cmdAudit liga as flags nas funcoes puras (trava de fonte)
         end = text.length
     }
     var body = text.substring(start, end)
-    assert(body.indexOf("auditFilterAction(") >= 0, "cmdAudit aplica o filtro de acao")
-    assert(body.indexOf("auditTail(") >= 0, "cmdAudit aplica o tail")
-    assert(body.indexOf("auditLine(") >= 0, "cmdAudit imprime a linha com ator")
-    assert(body.indexOf("flagMissingValue(args, \"--action\")") >= 0, "--action solta barra")
-    assert(body.indexOf("flagDuplicated(args, \"--action\")") >= 0, "--action repetida barra")
+    need(body.indexOf("auditFilterAction(") >= 0, "falhou")
+    need(body.indexOf("auditTail(") >= 0, "falhou")
+    need(body.indexOf("auditLine(") >= 0, "falhou")
+    need(body.indexOf("flagMissingValue(args, \"--action\")") >= 0, "falhou")
+    need(body.indexOf("flagDuplicated(args, \"--action\")") >= 0, "falhou")
 }
 
 test "cadeia: vocabulario de acoes vive em Audit.kf (fonte unica)", "chain-unit" {
@@ -275,14 +275,14 @@ test "cadeia: vocabulario de acoes vive em Audit.kf (fonte unica)", "chain-unit"
     // filtro exato do CLI (`audit --action` nao perdoa typo — medido:
     // `service.token_issued` vivia cru no Registry, o unico sem construtor).
     var audit = readTextOr("src/kofcloud/model/Audit.kf", "")
-    assert(audit.length > 0, "Audit.kf existe")
+    need(audit.length > 0, "falhou")
     var parts = audit.split("service.token_issued")
-    assert(parts.length == 2, "literal so no construtor do Audit.kf")
-    assert(auditServiceTokenIssued() == "service.token_issued", "construtor devolve o vocabulario do fio")
+    need(parts.length == 2, "falhou")
+    need(auditServiceTokenIssued() == "service.token_issued", "falhou")
     var registry = readTextOr("src/kofcloud/control/Registry.kf", "")
-    assert(registry.length > 0, "Registry.kf existe")
-    assert(registry.indexOf("service.token_issued") < 0, "Registry nao tem literal cru de acao")
-    assert(registry.indexOf("auditServiceTokenIssued()") >= 0, "emissao delega no construtor")
+    need(registry.length > 0, "falhou")
+    need(registry.indexOf("service.token_issued") < 0, "falhou")
+    need(registry.indexOf("auditServiceTokenIssued()") >= 0, "falhou")
 }
 
 test "worm: serializacao pura do evento (fio e arquivo na mesma fonte)", "worm-unit" {    // A fonte unica e `auditEventJson`: /v1/audit e o espelho em arquivo
@@ -290,13 +290,13 @@ test "worm: serializacao pura do evento (fio e arquivo na mesma fonte)", "worm-u
     // o terceiro verificador, entao a serializacao nao pode existir em dois
     // lugares (mutacao na pura quebra aqui E na listagem HTTP).
     var line = auditEventJson(AuditEvent("1700000000000", "account:mel", "device.registered", "acc-1/dev-1", "", "abc123"))
-    assert(line.indexOf("\"at\":\"1700000000000\"") >= 0, "at")
-    assert(line.indexOf("\"actor\":\"account:mel\"") >= 0, "ator")
-    assert(line.indexOf("\"action\":\"device.registered\"") >= 0, "acao")
-    assert(line.indexOf("\"target\":\"acc-1/dev-1\"") >= 0, "alvo")
-    assert(line.indexOf("\"prevHash\":\"\"") >= 0, "prevHash (vazio vai)")
-    assert(line.indexOf("\"hash\":\"abc123\"") >= 0, "hash")
-    assert(line.indexOf("senha") < 0 && line.indexOf("password") < 0, "sem dado de cliente: so os 6 campos")
+    need(line.indexOf("\"at\":\"1700000000000\"") >= 0, "falhou")
+    need(line.indexOf("\"actor\":\"account:mel\"") >= 0, "falhou")
+    need(line.indexOf("\"action\":\"device.registered\"") >= 0, "falhou")
+    need(line.indexOf("\"target\":\"acc-1/dev-1\"") >= 0, "falhou")
+    need(line.indexOf("\"prevHash\":\"\"") >= 0, "falhou")
+    need(line.indexOf("\"hash\":\"abc123\"") >= 0, "falhou")
+    need(line.indexOf("senha") < 0 && line.indexOf("password") < 0, "falhou")
 }
 
 test "worm: espelho append-only sobrevive a poda do anel", "worm-unit" {
@@ -310,9 +310,9 @@ test "worm: espelho append-only sobrevive a poda do anel", "worm-unit" {
         registry.createAccount("user" + intToString(i), "user" + intToString(i) + "@e.com", "segredo")
         i = i + 1
     }
-    assert(registry.audit.size == 100, "anel podado em 100: " + intToString(registry.audit.size))
+    need(registry.audit.size == 100, "falhou")
     var raw = readTextOr(wormPath, "FALTA")
-    assert(raw.indexOf("FALTA") < 0, "espelho existe")
+    need(raw.indexOf("FALTA") < 0, "falhou")
     var lines = raw.split("\n")
     var nonEmpty = 0
     for (var line in lines) {
@@ -320,12 +320,12 @@ test "worm: espelho append-only sobrevive a poda do anel", "worm-unit" {
             nonEmpty = nonEmpty + 1
         }
     }
-    assert(nonEmpty == 101, "espelho com todas as linhas: " + intToString(nonEmpty))
+    need(nonEmpty == 101, "falhou")
     // Rescrita inteira do estado (save normal de qualquer mutacao) NAO toca
     // o espelho: o control-state.json e reescrito, o .worm.jsonl so cresce.
     var before = readTextOr(wormPath, "")
     registry.save()
-    assert(readTextOr(wormPath, "") == before, "save nao rescreve o espelho")
+    need(readTextOr(wormPath, "") == before, "falhou")
 }
 
 test "worm: HTTP cria eventos no espelho; adulterar o espelho nao afeta a API", "worm" {
@@ -334,37 +334,37 @@ test "worm: HTTP cria eventos no espelho; adulterar o espelho nao afeta a API", 
     var registry = Registry(state)
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
     httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
 
     var raw = readTextOr(state + ".worm.jsonl", "")
-    assert(raw.indexOf("account.created") >= 0, "evento da conta no espelho")
-    assert(raw.indexOf("device.registered") >= 0, "evento do device no espelho")
+    need(raw.indexOf("account.created") >= 0, "falhou")
+    need(raw.indexOf("device.registered") >= 0, "falhou")
     // A linha do espelho e JSON da fonte unica, com hash (o terceiro pode
     // verificar a trilha do arquivo sem acesso a API). A primeira linha e a
     // raiz da cadeia: prevHash vazio.
     var firstLine = raw.substring(0, raw.indexOf("\n"))
     var decoded = json.decode<Map<String, String>>(firstLine)
-    assert(mapField(decoded, "action") == "account.created", "primeira linha e o primeiro evento")
-    assert(mapField(decoded, "hash").length == 64, "hash sha256 na linha")
-    assert(mapField(decoded, "prevHash") == "", "raiz sem anterior")
+    need(mapField(decoded, "action") == "account.created", "falhou")
+    need(mapField(decoded, "hash").length == 64, "falhou")
+    need(mapField(decoded, "prevHash") == "", "falhou")
 
     // O espelho e trilha REDUNDANTE: adultera-lo nao afeta a API (o anel
     // em memoria e a fonte), nem e sobrescrito no proximo evento — o proximo
     // append cresce a partir do que esta no disco.
     writeTextTo(state + ".worm.jsonl", "{\"hackeado\":true}\n")
     var listed = httpGetToken(controlPort, "/v1/audit", token)
-    assert(statusOf(listed) == 200, "listagem intacta")
-    assert(bodyOf(listed).indexOf("account.created") >= 0, "anel e a fonte, nao o espelho")
+    need(statusOf(listed) == 200, "falhou")
+    need(bodyOf(listed).indexOf("account.created") >= 0, "falhou")
     var mel = registry.accountByHandle("mel")
     if (mel != null) {
         registry.registerDevice(mel, "nb2", "pk2")
     }
-    assert(readTextOr(state + ".worm.jsonl", "").indexOf("hackeado") >= 0, "append preserva o que ha no disco")
-    assert(readTextOr(state + ".worm.jsonl", "").indexOf("device.registered") >= 0, "novo evento entra")
+    need(readTextOr(state + ".worm.jsonl", "").indexOf("hackeado") >= 0, "falhou")
+    need(readTextOr(state + ".worm.jsonl", "").indexOf("device.registered") >= 0, "falhou")
 }
 
 test "worm: verify do espelho tolera raiz desconhecida mas pega adulteracao", "worm-unit" {
@@ -379,17 +379,17 @@ test "worm: verify do espelho tolera raiz desconhecida mas pega adulteracao", "w
         AuditEvent("2", "account:mel", "device.registered", "acc-1/dev-1", h1, h2),
         AuditEvent("3", "account:mel", "device.revoked", "acc-1/dev-1", h2, h3)
     )
-    assert(auditWormChainError(suffix) == "", "sufixo com raiz desconhecida integra")
+    need(auditWormChainError(suffix) == "", "falhou")
     // Adulterar o ALVO da segunda ocorrencia: hash nao bate mais.
     var tampered = listOf(
         suffix.get(0),
         AuditEvent("2", "account:mel", "device.hacked", "acc-1/dev-1", h1, h2),
         suffix.get(2)
     )
-    assert(auditWormChainError(tampered) == "1", "adulteracao no indice 1")
+    need(auditWormChainError(tampered) == "1", "falhou")
     // Remover o do meio: o prevHash do seguinte nao fecha.
     var withoutMiddle = listOf(suffix.get(0), suffix.get(2))
-    assert(auditWormChainError(withoutMiddle) == "1", "remocao no indice 1")
+    need(auditWormChainError(withoutMiddle) == "1", "falhou")
     // Duas contas intercaladas: cada uma com raiz desconhecida propria.
     var hA1 = auditEventHash("fora", "1", "account:mel", "account.created", "acc-1")
     var hA2 = auditEventHash(hA1, "2", "account:mel", "device.registered", "acc-1/dev-1")
@@ -399,7 +399,7 @@ test "worm: verify do espelho tolera raiz desconhecida mas pega adulteracao", "w
         AuditEvent("1", "account:ana", "account.created", "acc-2", "fora", hB1),
         AuditEvent("2", "account:mel", "device.registered", "acc-1/dev-1", hA1, hA2)
     )
-    assert(auditWormChainError(intercalated) == "", "raiz desconhecida por conta")
+    need(auditWormChainError(intercalated) == "", "falhou")
 }
 
 test "worm: auditWormVerify decodifica JSONL e acusa linha ilegivel", "worm-unit" {
@@ -408,41 +408,41 @@ test "worm: auditWormVerify decodifica JSONL e acusa linha ilegivel", "worm-unit
     var h2 = auditEventHash(h1, "2", "account:mel", "device.registered", "acc-1/dev-1")
     var valid2 = auditEventJson(AuditEvent("2", "account:mel", "device.registered", "acc-1/dev-1", h1, h2))
     var ok = auditWormVerify(valid1 + "\n" + valid2 + "\n")
-    assert(ok.parseable == true, "parseavel")
-    assert(ok.brokenAt == "", "integra")
-    assert(ok.events == 2, "dois eventos")
-    assert(auditWormVerify("").parseable == true, "arquivo vazio = integra")
-    assert(auditWormVerify("").brokenAt == "", "vazio integra")
-    assert(auditWormVerify("").events == 0, "vazio zero eventos")
+    need(ok.parseable == true, "falhou")
+    need(ok.brokenAt == "", "falhou")
+    need(ok.events == 2, "falhou")
+    need(auditWormVerify("").parseable == true, "falhou")
+    need(auditWormVerify("").brokenAt == "", "falhou")
+    need(auditWormVerify("").events == 0, "falhou")
     // Linha com lixo (escrita trunca/adultera): parseable=false, brokenAt=parse.
     var broken = auditWormVerify(valid1 + "\n{lixo\n")
-    assert(broken.parseable == false, "linha ilegivel")
-    assert(broken.brokenAt == "parse", "indice de parse: " + broken.brokenAt)
+    need(broken.parseable == false, "falhou")
+    need(broken.brokenAt == "parse", "falhou")
     // Linha valida mas com hash adulterado: brokenAt numerico.
     var hacked = auditEventJson(AuditEvent("1", "account:mel", "account.created", "acc-1", "", "hash-falso"))
     var tampered = auditWormVerify(valid1 + "\n" + hacked + "\n")
-    assert(tampered.parseable == true, "linha decodifica")
-    assert(tampered.brokenAt == "1", "hash falso no indice 1")
+    need(tampered.parseable == true, "falhou")
+    need(tampered.brokenAt == "1", "falhou")
 }
 
 test "worm: Registry.wormVerify le o arquivo real", "worm-unit" {
     var state = chainPath("worm-verify")
     var registry = Registry(state)
     var result = registry.wormVerify()
-    assert(result.parseable == true, "arquivo ausente = parseavel")
-    assert(result.brokenAt == "", "arquivo ausente = integra")
-    assert(result.events == 0, "arquivo ausente = zero")
+    need(result.parseable == true, "falhou")
+    need(result.brokenAt == "", "falhou")
+    need(result.events == 0, "falhou")
     registry.createAccount("mel", "m@e.com", "segredo")
     var result2 = registry.wormVerify()
-    assert(result2.parseable == true, "com evento: parseavel")
-    assert(result2.brokenAt == "", "com evento: integra")
-    assert(result2.events == 1, "um evento: " + intToString(result2.events))
+    need(result2.parseable == true, "falhou")
+    need(result2.brokenAt == "", "falhou")
+    need(result2.events == 1, "falhou")
     // Linha truncada no meio (escrita trunca): parseable=false.
     var good = readTextOr(state + ".worm.jsonl", "")
     writeTextTo(state + ".worm.jsonl", good + "{\"at\":\"1\"," )
     var broken = registry.wormVerify()
-    assert(broken.parseable == false, "linha ilegivel detectada")
-    assert(broken.brokenAt == "parse", "indice de parse")
+    need(broken.parseable == false, "falhou")
+    need(broken.brokenAt == "parse", "falhou")
 }
 
 test "worm: HTTP /v1/audit/verify espelha o estado do arquivo", "worm" {
@@ -451,17 +451,17 @@ test "worm: HTTP /v1/audit/verify espelha o estado do arquivo", "worm" {
     var registry = Registry(state)
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
     httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
 
     var ok = httpGetToken(controlPort, "/v1/audit/verify", token)
-    assert(statusOf(ok) == 200, "verify 200")
-    assert(bodyOf(ok).indexOf("\"ok\":\"true\"") >= 0, "anel integra")
-    assert(bodyOf(ok).indexOf("\"mirrorOk\":\"true\"") >= 0, "espelho integra: " + bodyOf(ok))
-    assert(bodyOf(ok).indexOf("\"mirrorBrokenAt\":\"\"") >= 0, "sem quebra no espelho")
+    need(statusOf(ok) == 200, "falhou")
+    need(bodyOf(ok).indexOf("\"ok\":\"true\"") >= 0, "falhou")
+    need(bodyOf(ok).indexOf("\"mirrorOk\":\"true\"") >= 0, "falhou")
+    need(bodyOf(ok).indexOf("\"mirrorBrokenAt\":\"\"") >= 0, "falhou")
 
     // Espelho com hash falso na linha 2 (a raiz e tolerada, a segunda nao):
     // mirrorOk=false com mirrorBrokenAt=1 — cliente antigo sem os campos
@@ -476,17 +476,17 @@ test "worm: HTTP /v1/audit/verify espelha o estado do arquivo", "worm" {
     var hackedSecond = AuditEvent(events.get(1).at, events.get(1).actor, "device.hacked", events.get(1).target, events.get(0).hash, h2)
     writeTextTo(state + ".worm.jsonl", auditEventJson(events.get(0)) + "\n" + auditEventJson(hackedSecond) + "\n")
     var brokenVerify = httpGetToken(controlPort, "/v1/audit/verify", token)
-    assert(bodyOf(brokenVerify).indexOf("\"mirrorOk\":\"false\"") >= 0, "espelho adulterado: " + bodyOf(brokenVerify))
-    assert(bodyOf(brokenVerify).indexOf("\"mirrorBrokenAt\":\"1\"") >= 0, "quebra no indice 1")
-    assert(bodyOf(brokenVerify).indexOf("\"ok\":\"true\"") >= 0, "anel segue integra (campos aditivos)")
+    need(bodyOf(brokenVerify).indexOf("\"mirrorOk\":\"false\"") >= 0, "falhou")
+    need(bodyOf(brokenVerify).indexOf("\"mirrorBrokenAt\":\"1\"") >= 0, "falhou")
+    need(bodyOf(brokenVerify).indexOf("\"ok\":\"true\"") >= 0, "falhou")
 }
 
 test "worm: podador do espelho mantem linhas inteiras e o evento novo", "worm-unit" {
-    assert(wormMirrorBytesFrom(0) == 8388608, "zero recai no default (8 MiB)")
-    assert(wormMirrorBytesFrom(-5) == 8388608, "negativo recai no default")
-    assert(wormMirrorBytesFrom(12345) == 12345, "valor positivo passa direto")
+    need(wormMirrorBytesFrom(0) == 8388608, "falhou")
+    need(wormMirrorBytesFrom(-5) == 8388608, "falhou")
+    need(wormMirrorBytesFrom(12345) == 12345, "falhou")
     // Sob o teto: byte a byte o append cru.
-    assert(wormMirrorNext("a\n", "b", 1000) == "a\nb\n", "sob teto intacto")
+    need(wormMirrorNext("a\n", "b", 1000) == "a\nb\n", "falhou")
     var h1 = auditEventHash("", "1", "account:mel", "account.created", "acc-1")
     var h2 = auditEventHash(h1, "2", "account:mel", "device.registered", "acc-1/dev-1")
     var h3 = auditEventHash(h2, "3", "account:mel", "device.revoked", "acc-1/dev-1")
@@ -497,14 +497,14 @@ test "worm: podador do espelho mantem linhas inteiras e o evento novo", "worm-un
     // sem partir linha no meio.
     var cap = e2.length + e3.length + 2
     var trimmed = wormMirrorNext(e1 + "\n" + e2 + "\n", e3, cap)
-    assert(trimmed == e2 + "\n" + e3 + "\n", "poda a cabeca em linha inteira")
+    need(trimmed == e2 + "\n" + e3 + "\n", "falhou")
     var verified = auditWormVerify(trimmed)
-    assert(verified.parseable == true, "podado parseavel")
-    assert(verified.brokenAt == "", "podado integra (raiz desconhecida tolerada)")
-    assert(verified.events == 2, "dois eventos no podado: " + intToString(verified.events))
+    need(verified.parseable == true, "falhou")
+    need(verified.brokenAt == "", "falhou")
+    need(verified.events == 2, "falhou")
     // Teto menor que uma linha: o evento novo nunca e descartado.
     var newestOnly = wormMirrorNext(e1 + "\n" + e2 + "\n", e3, 10)
-    assert(newestOnly == e3 + "\n", "so o mais novo sobrevive")
+    need(newestOnly == e3 + "\n", "falhou")
 }
 
 test "worm: Registry poda o espelho pelo teto e o anel fica intacto", "worm" {
@@ -515,18 +515,18 @@ test "worm: Registry poda o espelho pelo teto e o anel fica intacto", "worm" {
     registry.createAccount("bia", "b@e.com", "segredo")
     var full = readTextOr(state + ".worm.jsonl", "")
     var expected = auditEventJson(registry.audit.get(0)) + "\n" + auditEventJson(registry.audit.get(1)) + "\n" + auditEventJson(registry.audit.get(2)) + "\n"
-    assert(full == expected, "append sob teto identico ao cru")
+    need(full == expected, "falhou")
     // Teto que so comporta a linha mais nova: o proximo append poda a cabeca.
     var newest = auditEventJson(registry.audit.get(2))
     registry.setWormCapBytes(newest.length + 10)
     registry.createAccount("dan", "d@e.com", "segredo")
     var trimmed = readTextOr(state + ".worm.jsonl", "")
-    assert(trimmed == auditEventJson(registry.audit.get(3)) + "\n", "espelho podado mantem so o mais novo")
-    assert(registry.audit.size == 4, "anel intacto: " + intToString(registry.audit.size))
+    need(trimmed == auditEventJson(registry.audit.get(3)) + "\n", "falhou")
+    need(registry.audit.size == 4, "falhou")
     var verified = registry.wormVerify()
-    assert(verified.parseable == true, "podado parseavel")
-    assert(verified.brokenAt == "", "podado integra (raiz desconhecida)")
-    assert(verified.events == 1, "um evento no espelho: " + intToString(verified.events))
+    need(verified.parseable == true, "falhou")
+    need(verified.brokenAt == "", "falhou")
+    need(verified.events == 1, "falhou")
 }
 
 test "worm: o espelho nunca carrega segredo (sem kfs_/kfc_/password no jsonl)", "worm-privacy" {
@@ -544,18 +544,18 @@ test "worm: o espelho nunca carrega segredo (sem kfs_/kfc_/password no jsonl)", 
     // Emissao real de kfs_: o valor em claro existe aqui, mas nao pode
     // vazar para o espelho.
     var kfs = registry.issueServiceToken(account.id, service.id)
-    assert(kfs.startsWith("kfs_"), "kfs emitido")
+    need(kfs.startsWith("kfs_"), "falhou")
     // E uma revocacao com o valor completo (o pior caso de vazamento).
-    assert(registry.revokeServiceToken(account.id, service.id, kfs), "kfs revogado")
+    need(registry.revokeServiceToken(account.id, service.id, kfs), "falhou")
 
     var mirrorPath = registry.path + ".worm.jsonl"
     var mirror = readTextOr(mirrorPath, "")
-    assert(mirror.length > 0, "espelho existe e tem eventos")
-    assert(mirror.indexOf("kfs_") < 0, "sem kfs_ no espelho")
-    assert(mirror.indexOf("kfc_") < 0, "sem kfc_ no espelho")
-    assert(mirror.indexOf("segredo-123") < 0, "sem senha no espelho")
-    assert(mirror.indexOf(kfs) < 0, "sem o valor do kfs no espelho")
-    assert(mirror.indexOf(token) < 0, "sem o valor do kfc no espelho")
+    need(mirror.length > 0, "falhou")
+    need(mirror.indexOf("kfs_") < 0, "falhou")
+    need(mirror.indexOf("kfc_") < 0, "falhou")
+    need(mirror.indexOf("segredo-123") < 0, "falhou")
+    need(mirror.indexOf(kfs) < 0, "falhou")
+    need(mirror.indexOf(token) < 0, "falhou")
 
     // E o FIO tem de carregar a MESMA garantia: /v1/audit imprime a mesma
     // serializacao do espelho (fonte unica `auditEventJson`, travada em
@@ -566,15 +566,15 @@ test "worm: o espelho nunca carrega segredo (sem kfs_/kfc_/password no jsonl)", 
     var wirePort = 19915
     var control = ControlPlane(registry, wirePort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(wirePort, 60), "control no ar")
+    need(waitForPort(wirePort, 60), "falhou")
     var wire = httpGetToken(wirePort, "/v1/audit", token)
-    assert(statusOf(wire) == 200, "fio lista eventos")
+    need(statusOf(wire) == 200, "falhou")
     var wireBody = bodyOf(wire)
-    assert(wireBody.indexOf("service.token_issued") >= 0, "fio tem o evento da emissao")
-    assert(wireBody.indexOf("kfs_") < 0, "sem kfs_ no fio")
-    assert(wireBody.indexOf("kfc_") < 0, "sem kfc_ no fio")
-    assert(wireBody.indexOf("segredo-123") < 0, "sem senha no fio")
-    assert(wireBody.indexOf(kfs) < 0, "sem o valor do kfs no fio")
-    assert(wireBody.indexOf(token) < 0, "sem o valor do kfc no fio")
+    need(wireBody.indexOf("service.token_issued") >= 0, "falhou")
+    need(wireBody.indexOf("kfs_") < 0, "falhou")
+    need(wireBody.indexOf("kfc_") < 0, "falhou")
+    need(wireBody.indexOf("segredo-123") < 0, "falhou")
+    need(wireBody.indexOf(kfs) < 0, "falhou")
+    need(wireBody.indexOf(token) < 0, "falhou")
 
 }

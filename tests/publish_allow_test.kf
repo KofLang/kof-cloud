@@ -13,34 +13,34 @@ import testkit.Support
 test "publish allow: flags repetiveis viram CSV", "publish-allow-unit" {
     var args = listOf("site", "--port", "8080", "--allow-method", "GET", "--allow-method", " POST ", "--allow-path", "/api/*", "--allow-path", "/health")
     var methods = flagValues(args, "--allow-method")
-    assert(methods.size == 2, "duas ocorrencias")
-    assert(repeatedCsv(methods) == "GET,POST", "apara e junta")
+    need(methods.size == 2, "falhou")
+    need(repeatedCsv(methods) == "GET,POST", "falhou")
     var paths = flagValues(args, "--allow-path")
-    assert(repeatedCsv(paths) == "/api/*,/health", "paths em CSV")
+    need(repeatedCsv(paths) == "/api/*,/health", "falhou")
     // Ausente = lista vazia (sem restricao).
-    assert(flagValues(listOf("site", "--port", "8080"), "--allow-method").size == 0, "ausente")
+    need(flagValues(listOf("site", "--port", "8080"), "--allow-method").size == 0, "falhou")
     // Item vazio (--allow-method "") invalida o conjunto.
-    assert(repeatedCsv(listOf("GET", "  ")) == "", "item vazio recusado")
+    need(repeatedCsv(listOf("GET", "  ")) == "", "falhou")
 }
 
 test "publish allow: validacao usa as mesmas regras da API", "publish-allow-unit" {
     var ok = normalizeAllowMethods(repeatedCsv(listOf("GET", "POST")), httpVerbs())
-    assert(ok == "GET,POST", "validos passam")
+    need(ok == "GET,POST", "falhou")
     var lower = normalizeAllowMethods(repeatedCsv(listOf("get")), httpVerbs())
-    assert(lower == "", "minusculo recusado (exato)")
+    need(lower == "", "falhou")
     var okPaths = normalizeAllowPaths(repeatedCsv(listOf("/api/*", "/health")))
-    assert(okPaths == "/api/*,/health", "paths validos")
+    need(okPaths == "/api/*,/health", "falhou")
     var badPaths = normalizeAllowPaths(repeatedCsv(listOf("api/*")))
-    assert(badPaths == "", "sem barra recusado")
+    need(badPaths == "", "falhou")
     // Hints uteis para o operador.
-    assert(errHint(errInvalidAllowMethod()).indexOf("allowMethods") >= 0, "Hint do metodo")
-    assert(errHint(errInvalidAllowPath()).indexOf("allowPaths") >= 0, "Hint do path")
+    need(errHint(errInvalidAllowMethod()).indexOf("allowMethods") >= 0, "falhou")
+    need(errHint(errInvalidAllowPath()).indexOf("allowPaths") >= 0, "falhou")
 }
 
 test "publish allow: usage documenta as flags", "publish-allow-usage" {
     var help = usageText()
-    assert(help.indexOf("--allow-method") >= 0, "help do publish anuncia --allow-method")
-    assert(help.indexOf("--allow-path") >= 0, "help do publish anuncia --allow-path")
+    need(help.indexOf("--allow-method") >= 0, "falhou")
+    need(help.indexOf("--allow-path") >= 0, "falhou")
 }
 test "publish allow: e2e com as flags passa e a politica chega ao control plane", "publish-allow-e2e" {
     // As flags estao em `valueFlags()`, mas o e2e prova o fluxo completo:
@@ -52,7 +52,7 @@ test "publish allow: e2e com as flags passa e a politica chega ao control plane"
     var registry = Registry("/tmp/kofcloud-pa-e2e-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -60,10 +60,10 @@ test "publish allow: e2e com as flags passa e a politica chega ao control plane"
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
 
     var published = httpPostJson(controlPort, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\",\"allowMethods\":\"GET\",\"allowPaths\":\"/api/*\"}", token)
-    assert(statusOf(published) == 200, "publicou com politica")
+    need(statusOf(published) == 200, "falhou")
     var service = json.decode<Map<String, String>>(bodyOf(published))
     var allowMethods = mapField(service, "allowMethods")
     var allowPaths = mapField(service, "allowPaths")
-    assert(allowMethods == "GET", "allowMethods guardado")
-    assert(allowPaths == "/api/*", "allowPaths guardado")
+    need(allowMethods == "GET", "falhou")
+    need(allowPaths == "/api/*", "falhou")
 }

@@ -23,15 +23,15 @@ test "contencao: freeze de servico revoga credenciais e abre incidente", "freeze
     var token = registry.issueServiceToken(account.id, service.id, 24)
 
     var result = registry.freezeService(account.id, service.id)
-    assert(result.ok, "congelou")
-    assert(result.revoked == 1, "uma credencial revogada")
-    assert(result.incidentId.length > 0, "incidente aberto")
-    assert(registry.serviceByServiceToken(token) == null, "credencial nao vale mais")
+    need(result.ok, "falhou")
+    need(result.revoked == 1, "falhou")
+    need(result.incidentId.length > 0, "falhou")
+    need(registry.serviceByServiceToken(token) == null, "falhou")
     var after = registry.serviceById(service.id)
-    assert(after != null, "servico ainda existe")
+    need(after != null, "falhou")
     if (after != null) {
-        assert(after.status == "SUSPENDED", "suspenso (nao roteia)")
-        assert(after.hostname == service.hostname, "config preservada")
+        need(after.status == "SUSPENDED", "falhou")
+        need(after.hostname == service.hostname, "falhou")
     }
 }
 
@@ -48,30 +48,30 @@ test "contencao: unfreeze restaura o status anterior", "freeze-unit" {
     // com TTL): as duas morrem no freeze e seguem mortas depois do unfreeze.
     var k1 = registry.issueServiceToken(account.id, service.id)
     var k2 = registry.issueServiceToken(account.id, service.id, 24)
-    assert(registry.pendingRotationCount(service.id) == 2, "overlap vivo antes do freeze")
+    need(registry.pendingRotationCount(service.id) == 2, "falhou")
 
     var frozen = registry.freezeService(account.id, service.id)
-    assert(frozen.ok, "congelou")
-    assert(frozen.revoked == 2, "freeze matou as duas (morte anunciada)")
-    assert(registry.serviceByServiceToken(k1) == null, "antiga morta no freeze")
-    assert(registry.serviceByServiceToken(k2) == null, "nova morta no freeze")
+    need(frozen.ok, "falhou")
+    need(frozen.revoked == 2, "falhou")
+    need(registry.serviceByServiceToken(k1) == null, "falhou")
+    need(registry.serviceByServiceToken(k2) == null, "falhou")
     var during = registry.serviceById(service.id)
-    assert(during != null, "existe durante")
+    need(during != null, "falhou")
     if (during != null) {
-        assert(during.status == "SUSPENDED", "congelado")
+        need(during.status == "SUSPENDED", "falhou")
     }
-    assert(registry.unfreezeService(account.id, service.id).restored, "descongelou")
+    need(registry.unfreezeService(account.id, service.id).restored, "falhou")
     var restored = registry.serviceById(service.id)
-    assert(restored != null, "existe")
+    need(restored != null, "falhou")
     if (restored != null) {
-        assert(restored.status == "ONLINE", "voltou ao status de antes do freeze")
+        need(restored.status == "ONLINE", "falhou")
     }
     // Unfreeze devolve o status, NÃO a credencial: voltar a rotear com a
     // kfs_ antiga valendo faria o containment mentir (o `revoked` do freeze
     // disse que morreram). Reemitir é decisão de `service rotate`.
-    assert(registry.serviceByServiceToken(k1) == null, "antiga segue morta apos o unfreeze")
-    assert(registry.serviceByServiceToken(k2) == null, "nova segue morta apos o unfreeze")
-    assert(registry.pendingRotationCount(service.id) == 0, "sem overlap fantasma apos o unfreeze")
+    need(registry.serviceByServiceToken(k1) == null, "falhou")
+    need(registry.serviceByServiceToken(k2) == null, "falhou")
+    need(registry.pendingRotationCount(service.id) == 0, "falhou")
     // Cruzamento suspensao-previa × freeze: um serviço que JA estava
     // SUSPENDED (decisão administrativa, não freeze) antes do ciclo tem o
     // SUSPENDED como "anterior" — o unfreeze devolve SUSPENDED, nunca um
@@ -81,14 +81,14 @@ test "contencao: unfreeze restaura o status anterior", "freeze-unit" {
     var account2 = registry2.createAccount("mel", "m@e.com", "segredo")
     var device2 = registry2.registerDevice(account2, "nb2", "pk2")
     var service2 = registry2.publishService(account2, device2.id, "api", "127.0.0.1", 8081, "http", "PUBLIC", "", "")
-    assert(registry2.suspendService(account2.id, service2.id), "suspensao previa")
-    assert(registry2.freezeService(account2.id, service2.id).ok, "freeze sobre o suspenso")
-    assert(registry2.unfreezeService(account2.id, service2.id).restored, "descongelou o suspenso")
+    need(registry2.suspendService(account2.id, service2.id), "falhou")
+    need(registry2.freezeService(account2.id, service2.id).ok, "falhou")
+    need(registry2.unfreezeService(account2.id, service2.id).restored, "falhou")
     var back2 = registry2.serviceById(service2.id)
-    assert(back2 != null, "suspenso existe")
+    need(back2 != null, "falhou")
     if (back2 != null) {
-        assert(back2.status == "SUSPENDED", "voltou ao SUSPENDED previo, nao a ONLINE")
-        assert(registry2.resolveRoute(back2.hostname) == null, "rota segue fora apos o ciclo")
+        need(back2.status == "SUSPENDED", "falhou")
+        need(registry2.resolveRoute(back2.hostname) == null, "falhou")
     }
 }
 
@@ -113,21 +113,21 @@ test "contencao: marcas de freeze sobrevivem ao restart", "freeze-unit" {
 
     // Restart: registry novo sobre o MESMO arquivo.
     var reloaded = Registry(path)
-    assert(reloaded.loadStatus == "ok", "estado recarrega")
-    assert(reloaded.unfreezeService(account.id, service.id).restored, "descongelou apos restart")
+    need(reloaded.loadStatus == "ok", "falhou")
+    need(reloaded.unfreezeService(account.id, service.id).restored, "falhou")
     var restored = reloaded.serviceById(service.id)
-    assert(restored != null, "existe apos restart")
+    need(restored != null, "falhou")
     if (restored != null) {
-        assert(restored.status == "ONLINE", "voltou ao status de antes do freeze: " + restored.status)
+        need(restored.status == "ONLINE", "falhou")
     }
-    assert(reloaded.unfreezeDevice(account.id, other.id).restored, "device descongelou apos restart")
+    need(reloaded.unfreezeDevice(account.id, other.id).restored, "falhou")
     var devBack = reloaded.deviceById(other.id)
     if (devBack != null) {
-        assert(devBack.status == "DEGRADED", "device voltou ao anterior: " + devBack.status)
+        need(devBack.status == "DEGRADED", "falhou")
     }
     // E a marca sai do disco: unfreeze repetido nao restaura mais nada.
-    assert(reloaded.unfreezeService(account.id, service.id).restored == false, "marca nao duplicou")
-    assert(reloaded.frozenMarks().size == 0, "mapa vazio apos unfreezes")
+    need(reloaded.unfreezeService(account.id, service.id).restored == false, "falhou")
+    need(reloaded.frozenMarks().size == 0, "falhou")
 
     // Estado antigo (sem a chave freezeMarks) carrega sem quebrar: decode
     // de campo de lista ausente no topo devolve lista vazia — a mesma regra
@@ -135,8 +135,8 @@ test "contencao: marcas de freeze sobrevivem ao restart", "freeze-unit" {
     var legacyPath = freezePath("legacy")
     writeTextTo(legacyPath, "{\"accounts\":[],\"devices\":[],\"services\":[],\"tokens\":[],\"serviceTokens\":[],\"customDomains\":[],\"audit\":[],\"incidents\":[],\"webhooks\":[]}")
     var legacy = Registry(legacyPath)
-    assert(legacy.loadStatus == "ok", "estado antigo carrega sem o campo novo")
-    assert(legacy.frozenMarks().size == 0, "estado antigo comeca sem marcas")
+    need(legacy.loadStatus == "ok", "falhou")
+    need(legacy.frozenMarks().size == 0, "falhou")
 }
 
 test "contencao: remover alvo congelado poda a marca", "freeze-unit" {
@@ -153,25 +153,25 @@ test "contencao: remover alvo congelado poda a marca", "freeze-unit" {
     registry.freezeService(account.id, a.id)
     registry.freezeService(account.id, b.id)
     registry.freezeDevice(account.id, device.id)
-    assert(registry.frozenMarks().size == 3, "tres marcas (dois servicos + device)")
+    need(registry.frozenMarks().size == 3, "falhou")
 
     // Remover um servico congelado leva a marca dele embora.
-    assert(registry.removeService(account.id, a.id), "servico removido")
-    assert(registry.frozenMarks().size == 2, "marca do servico podada")
+    need(registry.removeService(account.id, a.id), "falhou")
+    need(registry.frozenMarks().size == 2, "falhou")
 
     // Revoke e terminal: a marca do device sai junto com a dos servicos
     // que o revoke remove (removeServicesOfDevice).
-    assert(registry.revokeDevice(account.id, device.id), "device revogado")
-    assert(registry.frozenMarks().size == 0, "marcas do device e do servico restante podadas")
+    need(registry.revokeDevice(account.id, device.id), "falhou")
+    need(registry.frozenMarks().size == 0, "falhou")
 
     // A poda persiste no arquivo: reload nao ressuscita marcas.
     var reloaded = Registry(path)
-    assert(reloaded.frozenMarks().size == 0, "poda persiste no arquivo")
+    need(reloaded.frozenMarks().size == 0, "falhou")
 
     // Unfreeze de alvo sem marca segue a semantica honesta: servico removido
     // e 404. Device revogado existe, mas REVOKED e terminal nos dois
     // sentidos: o unfreeze recusa com KCF023 (antes dizia ok/restored).
-    assert(registry.unfreezeService(account.id, a.id).ok == false, "servico removido: ok=false")
+    need(registry.unfreezeService(account.id, a.id).ok == false, "falhou")
     var refused = false
     var code = ""
     try {
@@ -180,8 +180,8 @@ test "contencao: remover alvo congelado poda a marca", "freeze-unit" {
         refused = true
         code = e
     }
-    assert(refused, "unfreeze de device revogado recusa")
-    assert(code.indexOf("KCF023") >= 0, "codigo KCF023: " + code)
+    need(refused, "falhou")
+    need(code.indexOf("KCF023") >= 0, "falhou")
 }
 
 test "contencao: credencial de device terminal poda no load", "freeze-unit" {
@@ -207,21 +207,21 @@ test "contencao: credencial de device terminal poda no load", "freeze-unit" {
     state = state + "\"customDomains\":[],\"audit\":[],\"incidents\":[],\"webhooks\":[],\"freezeMarks\":[]}"
     writeTextTo(legacyPath, state)
     var registry = Registry(legacyPath)
-    assert(registry.loadStatus == "ok", "estado legado carrega")
+    need(registry.loadStatus == "ok", "falhou")
 
     // A credencial do par terminal morre na carga; a do vivo vale.
-    assert(registry.serviceByServiceToken("kfs_morta") == null, "credencial de revogado podada")
+    need(registry.serviceByServiceToken("kfs_morta") == null, "falhou")
     var live = registry.serviceByServiceToken("kfs_viva")
-    assert(live != null, "credencial do vivo vale")
+    need(live != null, "falhou")
     if (live != null) {
-        assert(live.id == "s2", "vale para o servico certo: " + live.id)
+        need(live.id == "s2", "falhou")
     }
 
     // Idempotente: nova carga nao ressuscita nem abre mais nada.
     var again = Registry(legacyPath)
-    assert(again.loadStatus == "ok", "recarrega")
-    assert(again.serviceByServiceToken("kfs_morta") == null, "poda persiste no reload")
-    assert(again.serviceByServiceToken("kfs_viva") != null, "vivo segue valendo")
+    need(again.loadStatus == "ok", "falhou")
+    need(again.serviceByServiceToken("kfs_morta") == null, "falhou")
+    need(again.serviceByServiceToken("kfs_viva") != null, "falhou")
 }
 
 test "contencao: freeze de device cobre todos os servicos dele", "freeze-unit" {
@@ -237,20 +237,20 @@ test "contencao: freeze de device cobre todos os servicos dele", "freeze-unit" {
     var keep = registry.issueServiceToken(account.id, untouched.id, 24)
 
     var result = registry.freezeDevice(account.id, device.id)
-    assert(result.ok, "congelou o device")
-    assert(result.revoked == 2, "revogou as duas do device")
+    need(result.ok, "falhou")
+    need(result.revoked == 2, "falhou")
     var frozenDevice = registry.deviceById(device.id)
-    assert(frozenDevice != null, "device existe")
+    need(frozenDevice != null, "falhou")
     if (frozenDevice != null) {
-        assert(frozenDevice.status == "SUSPENDED", "device suspenso")
+        need(frozenDevice.status == "SUSPENDED", "falhou")
     }
-    assert(registry.serviceByServiceToken(keep) != null, "credencial do outro device intacta")
+    need(registry.serviceByServiceToken(keep) != null, "falhou")
 
-    assert(registry.unfreezeDevice(account.id, device.id).restored, "descongelou")
+    need(registry.unfreezeDevice(account.id, device.id).restored, "falhou")
     var active = registry.deviceById(device.id)
-    assert(active != null, "device existe")
+    need(active != null, "falhou")
     if (active != null) {
-        assert(active.status == "ACTIVE", "volta ativo")
+        need(active.status == "ACTIVE", "falhou")
     }
 }
 
@@ -277,61 +277,61 @@ test "contencao: freeze de conta cobre devices, servicos e kfs_ e restaura cada 
     var otherSession = registry.issueToken(other.id)
 
     var result = registry.freezeAccount(account.id)
-    assert(result.ok, "congelou a conta")
-    assert(result.revoked == 2, "revogou as 2 kfs_ da conta")
-    assert(result.incidentId.length > 0, "incidente da conta aberto")
-    assert(registry.serviceByServiceToken(ta) == null, "kfs_ de a revogada")
-    assert(registry.serviceByServiceToken(tb) == null, "kfs_ de b revogada")
-    assert(registry.serviceByServiceToken(keep) != null, "kfs_ de outra conta intacta")
-    assert(registry.accountByToken(session) != null, "sessao da conta congelada segue valida")
-    assert(registry.accountByToken(otherSession) != null, "sessao da outra conta intacta")
+    need(result.ok, "falhou")
+    need(result.revoked == 2, "falhou")
+    need(result.incidentId.length > 0, "falhou")
+    need(registry.serviceByServiceToken(ta) == null, "falhou")
+    need(registry.serviceByServiceToken(tb) == null, "falhou")
+    need(registry.serviceByServiceToken(keep) != null, "falhou")
+    need(registry.accountByToken(session) != null, "falhou")
+    need(registry.accountByToken(otherSession) != null, "falhou")
 
     var frozenNb = registry.deviceById(nb.id)
     var frozenDesk = registry.deviceById(desk.id)
     if (frozenNb != null) {
-        assert(frozenNb.status == "SUSPENDED", "device nb suspenso")
+        need(frozenNb.status == "SUSPENDED", "falhou")
     }
     if (frozenDesk != null) {
-        assert(frozenDesk.status == "SUSPENDED", "device desk suspenso")
+        need(frozenDesk.status == "SUSPENDED", "falhou")
     }
     var frozenA = registry.serviceById(a.id)
     var frozenB = registry.serviceById(b.id)
     if (frozenA != null) {
-        assert(frozenA.status == "SUSPENDED", "servico a suspenso")
+        need(frozenA.status == "SUSPENDED", "falhou")
     }
     if (frozenB != null) {
-        assert(frozenB.status == "SUSPENDED", "servico b suspenso")
+        need(frozenB.status == "SUSPENDED", "falhou")
     }
     var foreignDevice = registry.deviceById(foreign.id)
     if (foreignDevice != null) {
-        assert(foreignDevice.status == "ACTIVE", "device de outra conta intacto")
+        need(foreignDevice.status == "ACTIVE", "falhou")
     }
     // Nada da conta roteia enquanto congelada.
-    assert(registry.resolveRoute(a.hostname) == null, "hostname de a sem rota")
-    assert(registry.resolveRoute(b.hostname) == null, "hostname de b sem rota")
+    need(registry.resolveRoute(a.hostname) == null, "falhou")
+    need(registry.resolveRoute(b.hostname) == null, "falhou")
 
-    assert(registry.unfreezeAccount(account.id).restored, "descongelou a conta")
+    need(registry.unfreezeAccount(account.id).restored, "falhou")
     var backNb = registry.deviceById(nb.id)
     var backDesk = registry.deviceById(desk.id)
     if (backNb != null) {
-        assert(backNb.status == "ACTIVE", "nb volta ACTIVE")
+        need(backNb.status == "ACTIVE", "falhou")
     }
     if (backDesk != null) {
-        assert(backDesk.status == "ACTIVE", "desk volta ACTIVE")
+        need(backDesk.status == "ACTIVE", "falhou")
     }
     var backA = registry.serviceById(a.id)
     var backB = registry.serviceById(b.id)
     if (backA != null) {
-        assert(statusIsRoutable(backA.status), "a volta a rotear (" + backA.status + ")")
+        need(statusIsRoutable(backA.status), "falhou")
     }
     if (backB != null) {
-        assert(backB.status == "SUSPENDED", "b volta ao SUSPENDED que ja tinha (" + backB.status + ")")
+        need(backB.status == "SUSPENDED", "falhou")
     }
-    assert(registry.resolveRoute(a.hostname) != null, "hostname de a roteia de novo")
+    need(registry.resolveRoute(a.hostname) != null, "falhou")
     // Configuracao preservada.
     if (backA != null) {
-        assert(backA.hostname == a.hostname, "hostname intacto")
-        assert(backA.allowMethods == a.allowMethods, "allowlist intacta")
+        need(backA.hostname == a.hostname, "falhou")
+        need(backA.allowMethods == a.allowMethods, "falhou")
     }
 }
 
@@ -343,23 +343,23 @@ test "contencao: freeze de conta e idempotente na auditoria e no incidente", "fr
 
     var first = registry.freezeAccount(account.id)
     var second = registry.freezeAccount(account.id)
-    assert(first.ok, "primeiro freeze ok")
-    assert(second.ok, "segundo freeze ok (idempotente na acao)")
+    need(first.ok, "falhou")
+    need(second.ok, "falhou")
     // `raiseIncident` nao duplica: o segundo freeze nao abre outro e por isso
     // devolve incidentId vazio (mesmo contrato do freeze de service/device).
-    assert(first.incidentId.length > 0, "primeiro abre incidente")
-    assert(second.incidentId == "", "segundo nao abre incidente novo")
+    need(first.incidentId.length > 0, "falhou")
+    need(second.incidentId == "", "falhou")
     var frozen = 0
     for (var incident in registry.incidentsForAccount(account.id, false)) {
         if (incident.kind == incidentFreezeAccount() && incident.resolvedAt == 0) {
             frozen = frozen + 1
         }
     }
-    assert(frozen == 1, "um incidente aberto de freeze_account")
-    assert(registry.unfreezeAccount(account.id).restored, "unfreeze")
+    need(frozen == 1, "falhou")
+    need(registry.unfreezeAccount(account.id).restored, "falhou")
     var after = registry.serviceById(service.id)
     if (after != null) {
-        assert(statusIsRoutable(after.status), "servico volta a rotear")
+        need(statusIsRoutable(after.status), "falhou")
     }
 }
 
@@ -369,18 +369,18 @@ test "contencao: alvo alheio nao congela", "freeze-unit" {
     var ana = registry.createAccount("ana", "ana@e.com", "segredo")
     var device = registry.registerDevice(mel, "nb", "pk")
     var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
-    assert(registry.freezeService(ana.id, service.id).ok == false, "servico alheio recusado")
-    assert(registry.freezeDevice(ana.id, device.id).ok == false, "device alheio recusado")
-    assert(registry.unfreezeService(ana.id, service.id).ok == false, "unfreeze alheio recusado")
+    need(registry.freezeService(ana.id, service.id).ok == false, "falhou")
+    need(registry.freezeDevice(ana.id, device.id).ok == false, "falhou")
+    need(registry.unfreezeService(ana.id, service.id).ok == false, "falhou")
 }
 
 test "contencao: codigos KCF126/KCF127/KCF128 com Hint", "freeze-unit" {
-    assert(errTargetRequired().indexOf("KCF126") >= 0, "KCF126")
-    assert(errInvalidTarget().indexOf("KCF127") >= 0, "KCF127")
-    assert(errTargetNotFound().indexOf("KCF128") >= 0, "KCF128")
-    assert(errHint(errTargetRequired()).length > 0, "Hint 126")
-    assert(errHint(errInvalidTarget()).length > 0, "Hint 127")
-    assert(errHint(errTargetNotFound()).length > 0, "Hint 128")
+    need(errTargetRequired().indexOf("KCF126") >= 0, "falhou")
+    need(errInvalidTarget().indexOf("KCF127") >= 0, "falhou")
+    need(errTargetNotFound().indexOf("KCF128") >= 0, "falhou")
+    need(errHint(errTargetRequired()).length > 0, "falhou")
+    need(errHint(errInvalidTarget()).length > 0, "falhou")
+    need(errHint(errTargetNotFound()).length > 0, "falhou")
 }
 
 test "contencao: HTTP freeze/unfreeze e incidente listado", "freeze" {
@@ -388,7 +388,7 @@ test "contencao: HTTP freeze/unfreeze e incidente listado", "freeze" {
     var registry = Registry(freezePath("http"))
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -400,37 +400,37 @@ test "contencao: HTTP freeze/unfreeze e incidente listado", "freeze" {
 
     var freezeBody = "{\"target\":\"service\",\"id\":\"" + serviceId + "\"}"
     var frozen = httpPostJson(controlPort, "/v1/freeze", freezeBody, accountToken)
-    assert(statusOf(frozen) == 200, "freeze 200")
+    need(statusOf(frozen) == 200, "falhou")
     var result = json.decode<Map<String, String>>(bodyOf(frozen))
-    assert(mapField(result, "incidentId").length > 0, "incidente devolvido")
+    need(mapField(result, "incidentId").length > 0, "falhou")
 
     var listed = httpPostJson(controlPort, "/v1/incidents", "{}", accountToken)
-    assert(bodyOf(listed).indexOf("freeze_service") >= 0, "incidente de contencao na lista")
+    need(bodyOf(listed).indexOf("freeze_service") >= 0, "falhou")
 
     var unfrozen = httpPostJson(controlPort, "/v1/unfreeze", freezeBody, accountToken)
-    assert(statusOf(unfrozen) == 200, "unfreeze 200")
+    need(statusOf(unfrozen) == 200, "falhou")
 
     // Validacoes.
-    assert(statusOf(httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"service\"}", accountToken)) == 400, "sem id 400")
-    assert(statusOf(httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"edge\",\"id\":\"x\"}", accountToken)) == 400, "alvo invalido 400")
-    assert(statusOf(httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"service\",\"id\":\"naoexiste\"}", accountToken)) == 404, "inexistente 404")
+    need(statusOf(httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"service\"}", accountToken)) == 400, "falhou")
+    need(statusOf(httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"edge\",\"id\":\"x\"}", accountToken)) == 400, "falhou")
+    need(statusOf(httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"service\",\"id\":\"naoexiste\"}", accountToken)) == 404, "falhou")
 
     // Alvo `account`: sem id (o token decide a conta). Congela os devices e
     // servicos do dono, abre o incidente e restaura no unfreeze.
     var acctFreeze = httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"account\"}", accountToken)
-    assert(statusOf(acctFreeze) == 200, "freeze account 200")
+    need(statusOf(acctFreeze) == 200, "falhou")
     var acctResult = json.decode<Map<String, String>>(bodyOf(acctFreeze))
-    assert(mapField(acctResult, "incidentId").length > 0, "incidente da conta devolvido")
+    need(mapField(acctResult, "incidentId").length > 0, "falhou")
     var acctListed = httpPostJson(controlPort, "/v1/incidents", "{}", accountToken)
-    assert(bodyOf(acctListed).indexOf("freeze_account") >= 0, "incidente freeze_account listado")
+    need(bodyOf(acctListed).indexOf("freeze_account") >= 0, "falhou")
     var acctUnfreeze = httpPostJson(controlPort, "/v1/unfreeze", "{\"target\":\"account\"}", accountToken)
-    assert(statusOf(acctUnfreeze) == 200, "unfreeze account 200")
+    need(statusOf(acctUnfreeze) == 200, "falhou")
     // Idempotente no ESTADO (nada quebra), nao na resposta: o segundo
     // unfreeze nao tem nada a reverter, entao 409 KCF141 e a verdade. Antes
     // respondia 200 e "restaurava" um status que ninguem tinha congelado.
     var again = httpPostJson(controlPort, "/v1/unfreeze", "{\"target\":\"account\"}", accountToken)
-    assert(statusOf(again) == 409, "segundo unfreeze: 409 (nada a reverter)")
-    assert(bodyOf(again).indexOf("KCF141") >= 0, "KCF141 no corpo")
+    need(statusOf(again) == 409, "falhou")
+    need(bodyOf(again).indexOf("KCF141") >= 0, "falhou")
 }
 test "contencao: device revogado nao congela (KCF023)", "freeze-unit" {
     // Medido: REVOKED e terminal — a guarda de `setDeviceStatus` recusava o
@@ -450,13 +450,13 @@ test "contencao: device revogado nao congela (KCF023)", "freeze-unit" {
         refused = true
         code = e
     }
-    assert(refused, "freeze de revogado recusa")
-    assert(code.indexOf("KCF023") >= 0, "codigo KCF023: " + code)
-    assert(registry.frozenMarks().size == 0, "nada marcado")
+    need(refused, "falhou")
+    need(code.indexOf("KCF023") >= 0, "falhou")
+    need(registry.frozenMarks().size == 0, "falhou")
     var after = registry.deviceById(device.id)
-    assert(after != null, "device existe")
+    need(after != null, "falhou")
     if (after != null) {
-        assert(after.status == "REVOKED", "revogado continua revogado: " + after.status)
+        need(after.status == "REVOKED", "falhou")
     }
     // Sem incidente nem auditoria de freeze.
     var incidents = registry.incidentsForAccount(mel.id, false)
@@ -466,24 +466,24 @@ test "contencao: device revogado nao congela (KCF023)", "freeze-unit" {
             froze = froze + 1
         }
     }
-    assert(froze == 0, "nenhum incidente de freeze")
+    need(froze == 0, "falhou")
 
     // Conta com device revogado NO MEIO: congela so os vivos, sem marca
     // morta — o unfreeze seguinte restaura so o que entrou no ciclo.
     var live = registry.registerDevice(mel, "vivo", "pk2")
     registry.freezeAccount(mel.id)
-    assert(registry.frozenMarks().get("device/" + device.id) == null, "revogado sem marca")
-    assert(registry.frozenMarks().get("device/" + live.id) != null, "vivo marcado")
-    assert(registry.unfreezeAccount(mel.id).restored, "descongelou")
+    need(registry.frozenMarks().get("device/" + device.id) == null, "falhou")
+    need(registry.frozenMarks().get("device/" + live.id) != null, "falhou")
+    need(registry.unfreezeAccount(mel.id).restored, "falhou")
     var deadAfter = registry.deviceById(device.id)
     if (deadAfter != null) {
-        assert(deadAfter.status == "REVOKED", "revogado intocado: " + deadAfter.status)
+        need(deadAfter.status == "REVOKED", "falhou")
     }
     var liveAfter = registry.deviceById(live.id)
     if (liveAfter != null) {
-        assert(liveAfter.status == "ACTIVE", "vivo restaurado")
+        need(liveAfter.status == "ACTIVE", "falhou")
     }
-    assert(registry.frozenMarks().size == 0, "sem marca sobrando")
+    need(registry.frozenMarks().size == 0, "falhou")
 }
 
 test "contencao: unfreeze honra a terminalidade de revogado (marca legada)", "freeze-unit" {
@@ -501,7 +501,7 @@ test "contencao: unfreeze honra a terminalidade de revogado (marca legada)", "fr
     state = state + "\"freezeMarks\":[{\"target\":\"device/d1\",\"status\":\"ACTIVE\"},{\"target\":\"device/d2\",\"status\":\"SUSPENDED\"}]}"
     writeTextTo(legacyPath, state)
     var registry = Registry(legacyPath)
-    assert(registry.loadStatus == "ok", "estado legado carrega")
+    need(registry.loadStatus == "ok", "falhou")
 
     // Unfreeze direto do revogado: recusa com KCF023, nada muda.
     var refused = false
@@ -512,30 +512,30 @@ test "contencao: unfreeze honra a terminalidade de revogado (marca legada)", "fr
         refused = true
         code = e
     }
-    assert(refused, "unfreeze de revogado recusa")
-    assert(code.indexOf("KCF023") >= 0, "codigo KCF023: " + code)
+    need(refused, "falhou")
+    need(code.indexOf("KCF023") >= 0, "falhou")
     var dead = registry.deviceById("d1")
-    assert(dead != null, "d1 existe")
+    need(dead != null, "falhou")
     if (dead != null) {
-        assert(dead.status == "REVOKED", "revogado intocado: " + dead.status)
+        need(dead.status == "REVOKED", "falhou")
     }
-    assert(registry.frozenMarks().get("device/d1") != null, "marca legada fica inerte (nao apaga em recusa)")
+    need(registry.frozenMarks().get("device/d1") != null, "falhou")
 
     // Na conta: o revogado sai do ciclo sem perder a marca nem contar como
     // restaurado; o vivo restaura de verdade.
     var outcome = registry.unfreezeAccount("acc-x")
-    assert(outcome.ok, "conta existe")
-    assert(outcome.restored, "vivo restaurado")
+    need(outcome.ok, "falhou")
+    need(outcome.restored, "falhou")
     var live = registry.deviceById("d2")
-    assert(live != null, "d2 existe")
+    need(live != null, "falhou")
     if (live != null) {
-        assert(live.status == "SUSPENDED", "d2 restaurou a marca (SUSPENDED): " + live.status)
+        need(live.status == "SUSPENDED", "falhou")
     }
-    assert(registry.frozenMarks().get("device/d1") != null, "marca do revogado nao foi removida no ciclo da conta")
-    assert(registry.frozenMarks().get("device/d2") == null, "marca do vivo saiu")
+    need(registry.frozenMarks().get("device/d1") != null, "falhou")
+    need(registry.frozenMarks().get("device/d2") == null, "falhou")
     var deadAfter = registry.deviceById("d1")
     if (deadAfter != null) {
-        assert(deadAfter.status == "REVOKED", "revogado continua REVOKED: " + deadAfter.status)
+        need(deadAfter.status == "REVOKED", "falhou")
     }
 }
 
@@ -555,41 +555,41 @@ test "contencao: teto das marcas poda inertes e nunca recusa containment", "free
     state = state + "\"freezeMarks\":[{\"target\":\"device/gone1\",\"status\":\"ACTIVE\"},{\"target\":\"service/gone2\",\"status\":\"ACTIVE\"},{\"target\":\"device/d2\",\"status\":\"ACTIVE\"}]}"
     writeTextTo(capPath, state)
     var registry = Registry(capPath)
-    assert(registry.loadStatus == "ok", "estado carrega")
-    assert(freezeMarkLimitFrom(0) == 1000, "zero recai no default")
-    assert(freezeMarkLimitFrom(-7) == 1000, "negativo recai no default")
-    assert(freezeMarkLimitFrom(50) == 50, "valor positivo passa")
-    assert(limitFreezeMarks() == 1000, "default 1000 na fonte unica")
+    need(registry.loadStatus == "ok", "falhou")
+    need(freezeMarkLimitFrom(0) == 1000, "falhou")
+    need(freezeMarkLimitFrom(-7) == 1000, "falhou")
+    need(freezeMarkLimitFrom(50) == 50, "falhou")
+    need(limitFreezeMarks() == 1000, "falhou")
 
     // Classificacao de inerte: removido e servico-removido sao inertes;
     // device vivo e prefixo desconhecido ficam.
-    assert(registry.freezeMarkIsInert("device/gone1"), "device removido e inerte")
-    assert(registry.freezeMarkIsInert("service/gone2"), "servico removido e inerte")
-    assert(registry.freezeMarkIsInert("device/d2") == false, "device vivo nao e inerte")
-    assert(registry.freezeMarkIsInert("outro/alvo") == false, "prefixo desconhecido fica")
+    need(registry.freezeMarkIsInert("device/gone1"), "falhou")
+    need(registry.freezeMarkIsInert("service/gone2"), "falhou")
+    need(registry.freezeMarkIsInert("device/d2") == false, "falhou")
+    need(registry.freezeMarkIsInert("outro/alvo") == false, "falhou")
 
     // 3 marcas > teto 2: o freeze do alvo vivo poda as duas inertes e
     // guarda a viva — containment segue funcionando acima do teto.
     registry.setMaxFreezeMarks(2)
     var result = registry.freezeDevice("acc-x", "d2")
-    assert(result.ok, "containment segue acima do teto")
-    assert(registry.frozenMarks().size == 1, "inertes podadas, so a viva fica")
-    assert(registry.frozenMarks().get("device/d2") != null, "marca viva fica")
-    assert(registry.frozenMarks().get("device/gone1") == null, "marca de removido podada")
-    assert(registry.frozenMarks().get("service/gone2") == null, "marca de servico removido podada")
+    need(result.ok, "falhou")
+    need(registry.frozenMarks().size == 1, "falhou")
+    need(registry.frozenMarks().get("device/d2") != null, "falhou")
+    need(registry.frozenMarks().get("device/gone1") == null, "falhou")
+    need(registry.frozenMarks().get("service/gone2") == null, "falhou")
 
     // Todas vivas acima do teto: nada e podado e o freeze segue ok.
     registry.setMaxFreezeMarks(1)
     var second = registry.freezeDevice("acc-x", "d1")
-    assert(second.ok, "freeze sem inertes acima do teto segue ok")
-    assert(registry.frozenMarks().size == 2, "marcas vivas nao sao podadas")
+    need(second.ok, "falhou")
+    need(registry.frozenMarks().size == 2, "falhou")
 
     // A poda persiste no arquivo (o proximo registry ja nasce sem o residuo).
     var reloaded = Registry(capPath)
-    assert(reloaded.loadStatus == "ok", "estado podado carrega")
-    assert(reloaded.frozenMarks().get("device/d1") != null, "marca viva persiste")
-    assert(reloaded.frozenMarks().get("device/d2") != null, "segunda viva persiste")
-    assert(reloaded.frozenMarks().get("device/gone1") == null, "poda persiste no arquivo")
+    need(reloaded.loadStatus == "ok", "falhou")
+    need(reloaded.frozenMarks().get("device/d1") != null, "falhou")
+    need(reloaded.frozenMarks().get("device/d2") != null, "falhou")
+    need(reloaded.frozenMarks().get("device/gone1") == null, "falhou")
 }
 
 test "contencao: HTTP freeze de device revogado e 409 (nao 200)", "freeze" {
@@ -597,26 +597,26 @@ test "contencao: HTTP freeze de device revogado e 409 (nao 200)", "freeze" {
     var registry = Registry(freezePath("http-revoked"))
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
     var dev = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(dev)), "deviceId")
-    assert(statusOf(httpPostJson(controlPort, "/v1/devices/revoke", "{\"deviceId\":\"" + deviceId + "\"}", token)) == 200, "revogou")
+    need(statusOf(httpPostJson(controlPort, "/v1/devices/revoke", "{\"deviceId\":\"" + deviceId + "\"}", token)) == 200, "falhou")
 
     // Congelar o revogado: 409 KCF023, nao 200 fingindo que congelou.
     var frozen = httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"device\",\"id\":\"" + deviceId + "\"}", token)
-    assert(statusOf(frozen) == 409, "409: " + intToString(statusOf(frozen)))
-    assert(bodyOf(frozen).indexOf("KCF023") >= 0, "corpo KCF023")
+    need(statusOf(frozen) == 409, "falhou")
+    need(bodyOf(frozen).indexOf("KCF023") >= 0, "falhou")
 
     // Descongelar o revogado: mesma recusa (terminal nos dois sentidos).
     var thawed = httpPostJson(controlPort, "/v1/unfreeze", "{\"target\":\"device\",\"id\":\"" + deviceId + "\"}", token)
-    assert(statusOf(thawed) == 409, "unfreeze 409: " + intToString(statusOf(thawed)))
-    assert(bodyOf(thawed).indexOf("KCF023") >= 0, "corpo KCF023 do unfreeze")
+    need(statusOf(thawed) == 409, "falhou")
+    need(bodyOf(thawed).indexOf("KCF023") >= 0, "falhou")
 
     // Congelar o inexistente continua 404 opaco (nao vaza dono/recurso).
     var ghost = httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"device\",\"id\":\"fantasma\"}", token)
-    assert(statusOf(ghost) == 404, "inexistente 404")
+    need(statusOf(ghost) == 404, "falhou")
 }
 
 test "contencao: unfreeze de alvo nao congelado nao apaga suspensao", "freeze-unit" {
@@ -630,41 +630,41 @@ test "contencao: unfreeze de alvo nao congelado nao apaga suspensao", "freeze-un
     var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
 
     // Suspensao deliberada (NAO e freeze).
-    assert(registry.suspendDevice(mel.id, device.id), "suspende device")
-    assert(registry.suspendService(mel.id, service.id), "suspende servico")
+    need(registry.suspendDevice(mel.id, device.id), "falhou")
+    need(registry.suspendService(mel.id, service.id), "falhou")
 
     var svcOutcome = registry.unfreezeService(mel.id, service.id)
-    assert(svcOutcome.ok, "alvo existe e e do dono")
-    assert(svcOutcome.restored == false, "nada a reverter")
+    need(svcOutcome.ok, "falhou")
+    need(svcOutcome.restored == false, "falhou")
     var devOutcome = registry.unfreezeDevice(mel.id, device.id)
-    assert(devOutcome.ok, "device existe")
-    assert(devOutcome.restored == false, "nada a reverter (device)")
+    need(devOutcome.ok, "falhou")
+    need(devOutcome.restored == false, "falhou")
 
     // O status continua exatamente onde o operador deixou.
     var svcAfter = registry.serviceById(service.id)
-    assert(svcAfter != null, "servico existe")
+    need(svcAfter != null, "falhou")
     if (svcAfter != null) {
-        assert(svcAfter.status == "SUSPENDED", "suspensao preservada: " + svcAfter.status)
+        need(svcAfter.status == "SUSPENDED", "falhou")
     }
     var devAfter = registry.deviceById(device.id)
-    assert(devAfter != null, "device existe")
+    need(devAfter != null, "falhou")
     if (devAfter != null) {
-        assert(devAfter.status == "SUSPENDED", "device segue suspenso: " + devAfter.status)
+        need(devAfter.status == "SUSPENDED", "falhou")
     }
     // Sem auditoria falsa de unfreeze.
     var unfreezes = registry.auditCountSince(mel.id, "service.unsuspended", 0)
-    assert(unfreezes == 0, "nada auditado como unfreeze")
+    need(unfreezes == 0, "falhou")
 
     // Conta sem freeze em curso: idem.
-    assert(registry.unfreezeAccount(mel.id).restored == false, "conta sem congelados")
+    need(registry.unfreezeAccount(mel.id).restored == false, "falhou")
     var devStill = registry.deviceById(device.id)
     if (devStill != null) {
-        assert(devStill.status == "SUSPENDED", "conta nao mexeu no suspenso")
+        need(devStill.status == "SUSPENDED", "falhou")
     }
 
     // Alvo inexistente segue sendo outra falha (ok=false -> 404).
-    assert(registry.unfreezeService(mel.id, "fantasma").ok == false, "inexistente: ok=false")
-    assert(registry.unfreezeDevice(mel.id, "fantasma").ok == false, "device inexistente: ok=false")
+    need(registry.unfreezeService(mel.id, "fantasma").ok == false, "falhou")
+    need(registry.unfreezeDevice(mel.id, "fantasma").ok == false, "falhou")
 }
 
 test "contencao: HTTP unfreeze de nao congelado e 409 (nao 200)", "freeze" {
@@ -672,7 +672,7 @@ test "contencao: HTTP unfreeze de nao congelado e 409 (nao 200)", "freeze" {
     var registry = Registry(freezePath("http-notfrozen"))
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
     var dev = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
@@ -681,24 +681,24 @@ test "contencao: HTTP unfreeze de nao congelado e 409 (nao 200)", "freeze" {
     var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(pub)), "id")
 
     // Suspensao deliberada e SEM freeze: unfreeze recusa em vez de "restaurar".
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/suspend", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "suspenso")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/suspend", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "falhou")
     var notFrozen = httpPostJson(controlPort, "/v1/unfreeze", "{\"target\":\"service\",\"id\":\"" + serviceId + "\"}", token)
-    assert(statusOf(notFrozen) == 409, "409: " + intToString(statusOf(notFrozen)))
-    assert(bodyOf(notFrozen).indexOf("KCF141") >= 0, "corpo KCF141")
+    need(statusOf(notFrozen) == 409, "falhou")
+    need(bodyOf(notFrozen).indexOf("KCF141") >= 0, "falhou")
     var still = registry.serviceById(serviceId)
     if (still != null) {
-        assert(still.status == "SUSPENDED", "suspensao preservada")
+        need(still.status == "SUSPENDED", "falhou")
     }
 
     // Freeze de verdade e depois unfreeze: 200 e restaura.
-    assert(statusOf(httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"service\",\"id\":\"" + serviceId + "\"}", token)) == 200, "congelou")
-    assert(statusOf(httpPostJson(controlPort, "/v1/unfreeze", "{\"target\":\"service\",\"id\":\"" + serviceId + "\"}", token)) == 200, "descongelou")
+    need(statusOf(httpPostJson(controlPort, "/v1/freeze", "{\"target\":\"service\",\"id\":\"" + serviceId + "\"}", token)) == 200, "falhou")
+    need(statusOf(httpPostJson(controlPort, "/v1/unfreeze", "{\"target\":\"service\",\"id\":\"" + serviceId + "\"}", token)) == 200, "falhou")
     var back = registry.serviceById(serviceId)
     if (back != null) {
-        assert(back.status == "SUSPENDED", "voltou ao status anterior ao freeze (suspenso): " + back.status)
+        need(back.status == "SUSPENDED", "falhou")
     }
 
     // Inexistente continua 404 opaco.
     var ghost = httpPostJson(controlPort, "/v1/unfreeze", "{\"target\":\"service\",\"id\":\"fantasma\"}", token)
-    assert(statusOf(ghost) == 404, "inexistente 404")
+    need(statusOf(ghost) == 404, "falhou")
 }

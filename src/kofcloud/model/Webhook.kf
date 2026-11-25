@@ -32,6 +32,33 @@ Int webhookSecretMinChars() {
 
 // URL aceitavel: https em qualquer lugar, http so em loopback (dev). Recusa
 // esquemas perigosos (file:, ftp:, javascript:) e host vazio. Pura.
+// O `http.*` do Kof 0.8 VERIFICA TLS por padrao. O control plane em
+// loopback usa o PEM do operador (F9, quase sempre autoassinado) e a sonda
+// de rede do Agent consulta o control: ambos recusariam o proprio servidor
+// (TLS-VERIFY). `http.insecure()` e opt-in POR PROCESSO; o aborto dele fica
+// restrito ao loopback porque as URLs que o KofCloud entrega ao http
+// (control plane e webhooks `http://` do operador) sao validadas em
+// `webhookUrlError` — o http:// so passa em loopback. Control plane remoto
+// continua verificado.
+Bool applyHttpTlsPolicy(String controlUrl) {
+    var trimmed = controlUrl.trim().toLowerCase()
+    var loopback = false
+    if (trimmed.indexOf("//127.0.0.1") >= 0) {
+        loopback = true
+    }
+    if (trimmed.indexOf("//localhost") >= 0) {
+        loopback = true
+    }
+    if (trimmed.indexOf("//[::1]") >= 0) {
+        loopback = true
+    }
+    if (loopback == false) {
+        return false
+    }
+    http.insecure()
+    return true
+}
+
 String webhookUrlError(String url) {
     var trimmed = url.trim()
     if (trimmed.length == 0) {

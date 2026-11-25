@@ -10,18 +10,18 @@ import testkit.Support
 
 test "painel: HTML estatico sem token e sem framework", "panel-unit" {
     var html = panelHtml()
-    assert(html.indexOf("<!doctype html>") == 0, "documento HTML")
-    assert(html.indexOf("/v1/devices") >= 0, "le devices")
-    assert(html.indexOf("/v1/presence") >= 0, "le presence")
-    assert(html.indexOf("/v1/services") >= 0, "le services")
-    assert(html.indexOf("/v1/domains") >= 0, "le domains")
+    need(html.indexOf("<!doctype html>") == 0, "falhou")
+    need(html.indexOf("/v1/devices") >= 0, "falhou")
+    need(html.indexOf("/v1/presence") >= 0, "falhou")
+    need(html.indexOf("/v1/services") >= 0, "falhou")
+    need(html.indexOf("/v1/domains") >= 0, "falhou")
     // Nenhum token embutido: o kfc_ e digitado e vive so na memoria da aba.
-    assert(html.indexOf("kfc_") < 0, "sem token no HTML")
-    assert(html.indexOf("localStorage") < 0, "nao persiste token")
+    need(html.indexOf("kfc_") < 0, "falhou")
+    need(html.indexOf("localStorage") < 0, "falhou")
     // Sem framework: nenhum <script src> externo.
-    assert(html.indexOf("<script src") < 0, "sem dependencia externa")
-    assert(panelVersion().length > 0, "versao presente")
-    assert(panelContentType().indexOf("text/html") >= 0, "content-type")
+    need(html.indexOf("<script src") < 0, "falhou")
+    need(panelVersion().length > 0, "falhou")
+    need(panelContentType().indexOf("text/html") >= 0, "falhou")
 }
 
 test "painel: rota /panel so existe com --panel e serve o HTML", "panel" {
@@ -30,20 +30,20 @@ test "painel: rota /panel so existe com --panel e serve o HTML", "panel" {
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     control.enablePanel()
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control plane no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
-    assert(statusOf(page) == 200, "painel 200")
-    assert(bodyOf(page).indexOf("<!doctype html>") == 0, "corpo e o HTML")
-    assert(bodyOf(page).indexOf("kfc_") < 0, "sem token no corpo servido")
+    need(statusOf(page) == 200, "falhou")
+    need(bodyOf(page).indexOf("<!doctype html>") == 0, "falhou")
+    need(bodyOf(page).indexOf("kfc_") < 0, "falhou")
 
     // A API continua exigindo token: o painel nao abre porta dos fundos.
     var semToken = httpGetRaw(controlPort, "/v1/devices", "127.0.0.1")
-    assert(statusOf(semToken) == 401, "API segue autenticada")
+    need(statusOf(semToken) == 401, "falhou")
 
     // Rota inexistente nao vira painel.
     var outra = httpGetRaw(controlPort, "/painel", "127.0.0.1")
-    assert(statusOf(outra) == 404, "sem rota /painel")
+    need(statusOf(outra) == 404, "falhou")
 }
 
 test "painel: sem --panel a rota nao existe", "panel-off" {
@@ -51,7 +51,7 @@ test "painel: sem --panel a rota nao existe", "panel-off" {
     var registry = Registry("/tmp/kofcloud-paneloff-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control plane no ar")
+    need(waitForPort(controlPort, 60), "falhou")
     var page = httpGetRaw(controlPort, "/panel", "127.0.0.1")
-    assert(statusOf(page) == 404, "sem a flag, /panel e 404")
+    need(statusOf(page) == 404, "falhou")
 }

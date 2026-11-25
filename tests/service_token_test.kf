@@ -3,6 +3,7 @@ import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
 import kofcloud.identity.Tokens
 import kofcloud.util.Text
+import testkit.Support
 
 // Fase 5 — credencial de servico (kfs_) para servicos AUTHENTICATED.
 // O token da conta autoriza a EMISSAO; o token emitido autoriza o ACESSO e
@@ -18,11 +19,11 @@ test "token de servico: resolve o servico que o originou" {
     var device = registry.registerDevice(account, "nb", "pk")
     var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
     var token = registry.issueServiceToken(account.id, service.id)
-    assert(token.startsWith("kfs_"), "prefixo kfs_")
+    need(token.startsWith("kfs_"), "falhou")
     var resolved = registry.serviceByServiceToken(token)
-    assert(resolved != null, "token resolve")
+    need(resolved != null, "falhou")
     if (resolved != null) {
-        assert(resolved.id == service.id, "servico certo")
+        need(resolved.id == service.id, "falhou")
     }
 }
 
@@ -34,9 +35,9 @@ test "token de servico: nao vale para outro servico" {
     var api = registry.publishService(account, device.id, "api", "127.0.0.1", 3000, "http", "AUTHENTICATED", "", "")
     var siteToken = registry.issueServiceToken(account.id, site.id)
     var owner = registry.serviceByServiceToken(siteToken)
-    assert(owner != null, "resolve")
+    need(owner != null, "falhou")
     if (owner != null) {
-        assert(owner.id != api.id, "nao autoriza o outro servico")
+        need(owner.id != api.id, "falhou")
     }
 }
 
@@ -46,8 +47,8 @@ test "token de servico: token invalido ou vazio nao resolve" {
     var device = registry.registerDevice(account, "nb", "pk")
     var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
     registry.issueServiceToken(account.id, service.id)
-    assert(registry.serviceByServiceToken("kfs_naoexiste") == null, "token desconhecido recusado")
-    assert(registry.serviceByServiceToken("") == null, "vazio recusado")
+    need(registry.serviceByServiceToken("kfs_naoexiste") == null, "falhou")
+    need(registry.serviceByServiceToken("") == null, "falhou")
 }
 
 test "token de servico: so a conta dona emite" {
@@ -62,7 +63,7 @@ test "token de servico: so a conta dona emite" {
     } catch (String e) {
         blocked = true
     }
-    assert(blocked, "outra conta nao emite para o meu servico")
+    need(blocked, "falhou")
 }
 
 test "token de servico: remover o servico poda as credenciais" {
@@ -72,17 +73,17 @@ test "token de servico: remover o servico poda as credenciais" {
     var device = registry.registerDevice(account, "nb", "pk")
     var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
     var token = registry.issueServiceToken(account.id, service.id)
-    assert(registry.serviceByServiceToken(token) != null, "vale antes")
-    assert(registry.removeService(account.id, service.id) == true, "servico removido")
-    assert(registry.serviceByServiceToken(token) == null, "token orfao nao vale mais")
+    need(registry.serviceByServiceToken(token) != null, "falhou")
+    need(registry.removeService(account.id, service.id) == true, "falhou")
+    need(registry.serviceByServiceToken(token) == null, "falhou")
     // Cruzamento remoção × higiene: a credencial podada NÃO fica no relatório
     // de higiene ("sem expiração" é para credencial VIVA que ninguém rotacionou —
     // órfã não é pendência, e o serviço nem existe mais para ser nomeado).
-    assert(registry.tokensWithoutExpiry(account.id).size == 0, "orfa sai da higiene")
-    assert(registry.servicesWithUnrotatedTokens(account.id).size == 0, "sem nome fantasma no relatorio")
+    need(registry.tokensWithoutExpiry(account.id).size == 0, "falhou")
+    need(registry.servicesWithUnrotatedTokens(account.id).size == 0, "falhou")
     var reloaded = Registry(path)
-    assert(reloaded.serviceByServiceToken(token) == null, "e continua invalido apos recarregar")
-    assert(reloaded.tokensWithoutExpiry(account.id).size == 0, "e fora da higiene apos recarregar")
+    need(reloaded.serviceByServiceToken(token) == null, "falhou")
+    need(reloaded.tokensWithoutExpiry(account.id).size == 0, "falhou")
 }
 
 test "token de servico: revogar o dispositivo poda as credenciais dos servicos" {
@@ -91,13 +92,13 @@ test "token de servico: revogar o dispositivo poda as credenciais dos servicos" 
     var device = registry.registerDevice(account, "nb", "pk")
     var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
     var token = registry.issueServiceToken(account.id, service.id)
-    assert(registry.revokeDevice(account.id, device.id) == true, "dispositivo revogado")
-    assert(registry.serviceByServiceToken(token) == null, "credencial podada junto")
+    need(registry.revokeDevice(account.id, device.id) == true, "falhou")
+    need(registry.serviceByServiceToken(token) == null, "falhou")
     // Cruzamento revoke-device × higiene (espelho do removeService): a poda
     // do device REVOKED também limpa o relatório — órfã de device morto não
     // é pendência de rotação.
-    assert(registry.tokensWithoutExpiry(account.id).size == 0, "orfa de device morto sai da higiene")
-    assert(registry.servicesWithUnrotatedTokens(account.id).size == 0, "sem nome fantasma no relatorio")
+    need(registry.tokensWithoutExpiry(account.id).size == 0, "falhou")
+    need(registry.servicesWithUnrotatedTokens(account.id).size == 0, "falhou")
 }
 
 test "token de servico: persiste entre recargas do registry" {
@@ -108,7 +109,7 @@ test "token de servico: persiste entre recargas do registry" {
     var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
     var token = registry.issueServiceToken(account.id, service.id)
     var reloaded = Registry(path)
-    assert(reloaded.serviceByServiceToken(token) != null, "token sobrevive ao restart")
+    need(reloaded.serviceByServiceToken(token) != null, "falhou")
 }
 
 test "token de servico: revoke invalida so o token revogado", "token-revoke" {
@@ -118,11 +119,11 @@ test "token de servico: revoke invalida so o token revogado", "token-revoke" {
     var service = registry.publishService(account, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
     var leaked = registry.issueServiceToken(account.id, service.id)
     var spared = registry.issueServiceToken(account.id, service.id)
-    assert(registry.revokeServiceToken(account.id, service.id, leaked) == true, "revogou")
-    assert(registry.serviceByServiceToken(leaked) == null, "vazado nao resolve mais")
-    assert(registry.serviceByServiceToken(spared) != null, "o outro continua valendo")
+    need(registry.revokeServiceToken(account.id, service.id, leaked) == true, "falhou")
+    need(registry.serviceByServiceToken(leaked) == null, "falhou")
+    need(registry.serviceByServiceToken(spared) != null, "falhou")
     // Idempotente: revogar de novo nao e erro de estado, so retorna false.
-    assert(registry.revokeServiceToken(account.id, service.id, leaked) == false, "re-revoke e no-op")
+    need(registry.revokeServiceToken(account.id, service.id, leaked) == false, "falhou")
 }
 
 test "token de servico: revoke exige dono, servico e token validos", "token-revoke-gate" {    var registry = Registry(serviceTokenPath("revoke-gate"))
@@ -132,15 +133,15 @@ test "token de servico: revoke exige dono, servico e token validos", "token-revo
     var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
     var token = registry.issueServiceToken(mel.id, service.id)
     // Outra conta nao revoga (mesmo sabendo o token): false, sem vazar nada.
-    assert(registry.revokeServiceToken(ana.id, service.id, token) == false, "alheio nao revoga")
-    assert(registry.serviceByServiceToken(token) != null, "token intacto apos tentativa alheia")
+    need(registry.revokeServiceToken(ana.id, service.id, token) == false, "falhou")
+    need(registry.serviceByServiceToken(token) != null, "falhou")
     // Servico inexistente: false.
-    assert(registry.revokeServiceToken(mel.id, "inexistente", token) == false, "servico inexistente")
+    need(registry.revokeServiceToken(mel.id, "inexistente", token) == false, "falhou")
     // Token vazio/errado: false.
-    assert(registry.revokeServiceToken(mel.id, service.id, "") == false, "vazio nao revoga")
-    assert(registry.revokeServiceToken(mel.id, service.id, "kfs_inexistente") == false, "desconhecido nao revoga")
+    need(registry.revokeServiceToken(mel.id, service.id, "") == false, "falhou")
+    need(registry.revokeServiceToken(mel.id, service.id, "kfs_inexistente") == false, "falhou")
     // E2E: endpoint HTTP devolve 200 e o token para de autorizar.
-    assert(true, "cobertura HTTP no e2e abaixo")
+    need(true, "falhou")
 }
 
 test "token de servico: inventario lista sem expor valores", "token-list" {
@@ -150,24 +151,24 @@ test "token de servico: inventario lista sem expor valores", "token-list" {
     var device = registry.registerDevice(mel, "nb", "pk")
     var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
     // Vazio antes de emitir.
-    assert(registry.serviceTokensFor(mel.id, service.id).size == 0, "sem credenciais no inicio")
+    need(registry.serviceTokensFor(mel.id, service.id).size == 0, "falhou")
     // Emite duas: o inventario cresce, mas nunca devolve o valor.
     var first = registry.issueServiceToken(mel.id, service.id)
     var second = registry.issueServiceToken(mel.id, service.id)
     var entries = registry.serviceTokensFor(mel.id, service.id)
-    assert(entries.size == 2, "duas credenciais listadas")
+    need(entries.size == 2, "falhou")
     for (var entry in entries) {
-        assert(entry.serviceId == service.id, "inventario so do servico pedido")
-        assert(entry.tokenHash != first && entry.tokenHash != second, "hash guardado, nunca o valor")
-        assert(entry.tokenHash.length > 8, "hash longo o bastante para o id curto")
+        need(entry.serviceId == service.id, "falhou")
+        need(entry.tokenHash != first && entry.tokenHash != second, "falhou")
+        need(entry.tokenHash.length > 8, "falhou")
     }
     // Conta alheia nao ve nada (nem existencia): lista vazia, sem oraculo.
-    assert(registry.serviceTokensFor(ana.id, service.id).size == 0, "alheio ve vazio")
+    need(registry.serviceTokensFor(ana.id, service.id).size == 0, "falhou")
     // Servico inexistente: vazio, sem erro.
-    assert(registry.serviceTokensFor(mel.id, "inexistente").size == 0, "inexistente da vazio")
+    need(registry.serviceTokensFor(mel.id, "inexistente").size == 0, "falhou")
     // Revogar uma tira so ela do inventario.
-    assert(registry.revokeServiceToken(mel.id, service.id, first) == true, "revogou a primeira")
-    assert(registry.serviceTokensFor(mel.id, service.id).size == 1, "so a segunda resta")
+    need(registry.revokeServiceToken(mel.id, service.id, first) == true, "falhou")
+    need(registry.serviceTokensFor(mel.id, service.id).size == 1, "falhou")
 }
 
 test "token de servico: expiracao opcional poda na validacao", "token-ttl" {
@@ -177,37 +178,37 @@ test "token de servico: expiracao opcional poda na validacao", "token-ttl" {
     var service = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
     // Sem TTL: vale para sempre (comportamento antigo), expiresAt zero.
     var forever = registry.issueServiceToken(mel.id, service.id, 0)
-    assert(registry.serviceByServiceToken(forever) != null, "sem TTL continua valendo")
+    need(registry.serviceByServiceToken(forever) != null, "falhou")
     var listed = registry.serviceTokensFor(mel.id, service.id)
-    assert(listed.size == 1, "uma credencial listada")
-    assert(listed.get(0).expiresAt == 0, "sem expiracao marcada")
+    need(listed.size == 1, "falhou")
+    need(listed.get(0).expiresAt == 0, "falhou")
     // Com TTL: expiracao futura marcada, ainda valida.
     var timed = registry.issueServiceToken(mel.id, service.id, 24)
-    assert(registry.serviceByServiceToken(timed) != null, "com TTL futuro vale")
-    assert(registry.serviceTokensFor(mel.id, service.id).size == 2, "duas listadas")
+    need(registry.serviceByServiceToken(timed) != null, "falhou")
+    need(registry.serviceTokensFor(mel.id, service.id).size == 2, "falhou")
     // Expirada: constroi o registro direto no passado (sem dormir 1h).
     var stale = ServiceToken(service.id, mel.id, tokenHash("kfs_vencido"), time.now() - 1000, time.now() - 1)
     registry.serviceTokens.add(stale)
     var expiredBefore = metricCount("kofcloud_control_service_tokens_expired_total")
-    assert(registry.serviceByServiceToken("kfs_vencido") == null, "expirado nao resolve")
-    assert(metricCount("kofcloud_control_service_tokens_expired_total") == expiredBefore + 1, "expiracao conta na metrica")
+    need(registry.serviceByServiceToken("kfs_vencido") == null, "falhou")
+    need(metricCount("kofcloud_control_service_tokens_expired_total") == expiredBefore + 1, "falhou")
     // A poda preguicosa removeu: nem no inventario aparece mais.
-    assert(registry.serviceTokensFor(mel.id, service.id).size == 2, "expirado some do inventario")
+    need(registry.serviceTokensFor(mel.id, service.id).size == 2, "falhou")
     // As validas sobrevivem a poda.
-    assert(registry.serviceByServiceToken(forever) != null, "sem TTL intacto apos poda")
-    assert(registry.serviceByServiceToken(timed) != null, "com TTL intacto apos poda")
+    need(registry.serviceByServiceToken(forever) != null, "falhou")
+    need(registry.serviceByServiceToken(timed) != null, "falhou")
     // TTL longo (720 h = 30 dias) nao pode estourar: em Int (32 bits),
     // `720 * 3600000` = -1702967296 e a credencial nasceria vencida
     // (medido com o CLI 0.6.3). Em Long = 2592000000, no futuro.
     var longTtl = registry.issueServiceToken(mel.id, service.id, 720)
-    assert(registry.serviceByServiceToken(longTtl) != null, "kfs_ de 30 dias nasce valido")
+    need(registry.serviceByServiceToken(longTtl) != null, "falhou")
     var marked = false
     for (var entry in registry.serviceTokensFor(mel.id, service.id)) {
         if (entry.serviceId == service.id && entry.expiresAt > time.now()) {
             marked = true
         }
     }
-    assert(marked, "kfs_ de 30 dias tem expiracao no futuro")
+    need(marked, "falhou")
 }
 
 test "token de servico: revoke aceita id curto unico, recusa ambiguo", "token-short" {
@@ -233,45 +234,45 @@ test "token de servico: revoke aceita id curto unico, recusa ambiguo", "token-sh
     }
     if (i > 0) {
         var ambiguous = firstId.substring(0, i)
-        assert(registry.revokeServiceTokenResult(mel.id, service.id, ambiguous) == "ambiguous", "prefixo comum e ambiguo")
-        assert(registry.serviceByServiceToken(first) != null, "nada removido no ambiguo")
-        assert(registry.serviceByServiceToken(second) != null, "outro intacto no ambiguo")
+        need(registry.revokeServiceTokenResult(mel.id, service.id, ambiguous) == "ambiguous", "falhou")
+        need(registry.serviceByServiceToken(first) != null, "falhou")
+        need(registry.serviceByServiceToken(second) != null, "falhou")
     }
     // Id curto unico: revoga exatamente aquele.
-    assert(registry.revokeServiceTokenResult(mel.id, service.id, firstId) == "revoked", "id unico revoga")
-    assert(registry.serviceByServiceToken(first) == null, "primeiro saiu")
-    assert(registry.serviceByServiceToken(second) != null, "segundo fica")
+    need(registry.revokeServiceTokenResult(mel.id, service.id, firstId) == "revoked", "falhou")
+    need(registry.serviceByServiceToken(first) == null, "falhou")
+    need(registry.serviceByServiceToken(second) != null, "falhou")
     // E o wrapper Bool continua valendo true/false.
-    assert(registry.revokeServiceToken(mel.id, service.id, secondId) == true, "wrapper revoga por id")
+    need(registry.revokeServiceToken(mel.id, service.id, secondId) == true, "falhou")
 }
 
 test "token de servico: serializadores puros sem rede", "token-serial" {
     // shortTokenId: 8 primeiros hex; curto passa direto.
-    assert(shortTokenId("0123456789abcdef") == "01234567", "corta em 8")
-    assert(shortTokenId("abc") == "abc", "curto passa direto")
-    assert(shortTokenId("") == "", "vazio passa direto")
+    need(shortTokenId("0123456789abcdef") == "01234567", "falhou")
+    need(shortTokenId("abc") == "abc", "falhou")
+    need(shortTokenId("") == "", "falhou")
     // Com TTL e sem TTL: expiresAt so aparece quando > 0.
     var forever = ServiceToken("svc-1", "acc-1", "0123456789abcdef", 1000, 0)
     var timed = ServiceToken("svc-1", "acc-1", "0123456789abcdef", 1000, 2000)
     var foreverJson = serviceTokenJson(forever)
     var timedJson = serviceTokenJson(timed)
     var foreverBody = json.decode<Map<String, String>>(foreverJson)
-    assert(mapField(foreverBody, "id") == "01234567", "id curto no inventario")
-    assert(mapField(foreverBody, "serviceId") == "svc-1", "serviceId no inventario")
-    assert(mapField(foreverBody, "expiresAt") == "", "sem TTL: sem expiresAt")
-    assert(foreverJson.indexOf("kfs_") < 0, "nunca vaza o valor")
+    need(mapField(foreverBody, "id") == "01234567", "falhou")
+    need(mapField(foreverBody, "serviceId") == "svc-1", "falhou")
+    need(mapField(foreverBody, "expiresAt") == "", "falhou")
+    need(foreverJson.indexOf("kfs_") < 0, "falhou")
     var timedBody = json.decode<Map<String, String>>(timedJson)
-    assert(mapField(timedBody, "expiresAt") == "2000", "com TTL: expiresAt presente")
+    need(mapField(timedBody, "expiresAt") == "2000", "falhou")
     // Lista: envolve em colchetes, vazia vira [].
     var oneItems = listOf<ServiceToken>()
     oneItems.add(forever)
     var oneList = serviceTokenListJson(oneItems)
-    assert(oneList.startsWith("[") && oneList.endsWith("]"), "lista entre colchetes")
-    assert(oneList.indexOf("01234567") >= 0, "lista carrega o id curto")
-    assert(serviceTokenListJson(listOf<ServiceToken>()) == "[]", "vazia vira []")
+    need(oneList.startsWith("[") && oneList.endsWith("]"), "falhou")
+    need(oneList.indexOf("01234567") >= 0, "falhou")
+    need(serviceTokenListJson(listOf<ServiceToken>()) == "[]", "falhou")
     // joinStrings: separador so entre partes.
-    assert(joinStrings(listOf("a", "b", "c"), ",") == "a,b,c", "junta com virgula")
-    assert(joinStrings(listOf<String>(), ",") == "", "vazia vira vazio")
+    need(joinStrings(listOf("a", "b", "c"), ",") == "a,b,c", "falhou")
+    need(joinStrings(listOf<String>(), ",") == "", "falhou")
 }
 
 // Contador Prometheus atual (0 quando ausente): cada suite roda no mesmo
@@ -296,18 +297,18 @@ test "aviso de expiracao proxima do kfs_ (service token-list)", "svcwarn" {
     var window = limitTokenExpiryWarnMs()
 
     // Sem TTL ("0"): silencio (nao expira nunca).
-    assert(serviceTokenExpiryWarning("0", longToString(now)) == "", "sem TTL: silencio")
-    assert(serviceTokenExpiryWarning("", longToString(now)) == "", "sem campo: silencio")
+    need(serviceTokenExpiryWarning("0", longToString(now)) == "", "falhou")
+    need(serviceTokenExpiryWarning("", longToString(now)) == "", "falhou")
     // Vencida: silencio (o inventario nem lista vencida, mas o helper
     // defende).
-    assert(serviceTokenExpiryWarning(longToString(now - 1), longToString(now)) == "", "vencida: silencio")
+    need(serviceTokenExpiryWarning(longToString(now - 1), longToString(now)) == "", "falhou")
     // Fora da janela: silencio.
-    assert(serviceTokenExpiryWarning(longToString(now + window + 1000), longToString(now)) == "", "fora: silencio")
+    need(serviceTokenExpiryWarning(longToString(now + window + 1000), longToString(now)) == "", "falhou")
     // Dentro da janela: AVISO com a acao.
     var warn = serviceTokenExpiryWarning(longToString(now + window - 1000), longToString(now))
-    assert(warn.indexOf("AVISO") >= 0, "avisa dentro da janela")
-    assert(warn.indexOf("service rotate") >= 0, "aponta a rotacao")
-    assert(warn.indexOf("h —") >= 0, "janela em horas legiveis")
+    need(warn.indexOf("AVISO") >= 0, "falhou")
+    need(warn.indexOf("service rotate") >= 0, "falhou")
+    need(warn.indexOf("h —") >= 0, "falhou")
 }
 
 test "svcwarn: cmdServiceTokenList aplica o aviso (trava de fonte)", "svcwarn" {
@@ -328,7 +329,7 @@ test "svcwarn: cmdServiceTokenList aplica o aviso (trava de fonte)", "svcwarn" {
         end = text.length
     }
     var body = text.substring(start, end)
-    assert(body.indexOf("serviceTokenExpiryWarning(") >= 0, "cmdServiceTokenList aplica o aviso")
+    need(body.indexOf("serviceTokenExpiryWarning(") >= 0, "falhou")
     // O resumo do `service status` tambem conta as perto do fim: passa o
     // relogio do chamador e usa o mesmo predicado — sem isso, o status
     // voltava a contar "com expiracao" sem dizer qual estava no fim.
@@ -338,5 +339,5 @@ test "svcwarn: cmdServiceTokenList aplica o aviso (trava de fonte)", "svcwarn" {
         endStatus = text.length
     }
     var bodyStatus = text.substring(startStatus, endStatus)
-    assert(bodyStatus.indexOf("tokenInventoryLine(entries, longToString(time.now()))") >= 0, "cmdServiceStatus resume o inventario com o relogio do chamador")
+    need(bodyStatus.indexOf("tokenInventoryLine(entries, longToString(time.now()))") >= 0, "falhou")
 }

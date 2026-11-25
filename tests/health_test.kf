@@ -49,41 +49,41 @@ void serveSilent(Listener listener, List<Conn> held) {
 }
 
 test "health: status line e caminho da sonda sao puros", "health-unit" {
-    assert(parseStatusLine("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n") == 200, "200")
-    assert(parseStatusLine("HTTP/1.1 500 Internal Server Error\r\n") == 500, "500")
-    assert(parseStatusLine("HTTP/1.0 404 Not Found") == 404, "sem crlf final")
-    assert(parseStatusLine("garbage") == 0, "nao HTTP")
-    assert(parseStatusLine("") == 0, "vazio")
-    assert(parseStatusLine("HTTP/1.1 abc OK") == 0, "status nao numerico")
+    need(parseStatusLine("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n") == 200, "falhou")
+    need(parseStatusLine("HTTP/1.1 500 Internal Server Error\r\n") == 500, "falhou")
+    need(parseStatusLine("HTTP/1.0 404 Not Found") == 404, "falhou")
+    need(parseStatusLine("garbage") == 0, "falhou")
+    need(parseStatusLine("") == 0, "falhou")
+    need(parseStatusLine("HTTP/1.1 abc OK") == 0, "falhou")
     // Fora de 100-599 nao e status usavel: o parse devolve 0 e o caller
     // trata como resposta quebrada (DEGRADED), nunca como codigo legitimo.
-    assert(parseStatusLine("HTTP/1.1 099 Weird\r\n") == 0, "abaixo de 100")
-    assert(parseStatusLine("HTTP/1.1 600 Nope\r\n") == 0, "acima de 599")
-    assert(parseStatusLine("HTTP/1.1 99 X\r\n") == 0, "2 digitos")
-    assert(parseStatusLine("HTTP/1.1 1234 X\r\n") == 123, "os 3 primeiros digitos valem")
+    need(parseStatusLine("HTTP/1.1 099 Weird\r\n") == 0, "falhou")
+    need(parseStatusLine("HTTP/1.1 600 Nope\r\n") == 0, "falhou")
+    need(parseStatusLine("HTTP/1.1 99 X\r\n") == 0, "falhou")
+    need(parseStatusLine("HTTP/1.1 1234 X\r\n") == 123, "falhou")
     // Mesmo digitos fora da faixa numa linha longa: o resto e motivo, nao codigo.
-    assert(parseStatusLine("HTTP/1.1 200 OK\r\nContent-Length: 4294967396\r\n") == 200, "CL gigante no header nao contamina")
+    need(parseStatusLine("HTTP/1.1 200 OK\r\nContent-Length: 4294967396\r\n") == 200, "falhou")
 
     // Sem allowlist: /. Com allowlist: o primeiro caminho literal — `/` pode
     // nao estar nela e um 403 seria lido como falha de health.
     var plain = healthService(8080, "")
-    assert(healthPath(plain) == "/", "sem allowlist usa /")
+    need(healthPath(plain) == "/", "falhou")
     var restricted = healthService(8080, "/api/health,/api/*")
-    assert(healthPath(restricted) == "/api/health", "allowlist: primeiro literal")
+    need(healthPath(restricted) == "/api/health", "falhou")
     var onlyWild = healthService(8080, "/api/*")
-    assert(healthPath(onlyWild) == "/", "so curinga cai no /")
-    assert(hostHeaderFor(plain) == "site.mel.kofcloud.io", "host do pedido")
-    assert(protocolIsHttp("http") && protocolIsHttp(" HTTP "), "http reconhecido")
+    need(healthPath(onlyWild) == "/", "falhou")
+    need(hostHeaderFor(plain) == "site.mel.kofcloud.io", "falhou")
+    need(protocolIsHttp("http") && protocolIsHttp(" HTTP "), "falhou")
 
     // Fonte unica do prazo: positivo, com recuo seguro.
-    assert(limitHealthTimeoutMs() > 0, "prazo positivo")
+    need(limitHealthTimeoutMs() > 0, "falhou")
     // Teto do cabecalho da sonda tambem na fonte unica: valor travado +
     // delegacao (mudar o default no Limits muda a sonda — mutacao quebra).
     // O teto e do caminho de health, distinto do `maxBytes` do Edge.
-    assert(limitHealthHeadBytes() == 16384, "teto do cabecalho da sonda travado")
-    assert(limitHealthHeadBytes() == limitHealthResponseHeadBytes(), "sonda delega na fonte")
+    need(limitHealthHeadBytes() == 16384, "falhou")
+    need(limitHealthHeadBytes() == limitHealthResponseHeadBytes(), "falhou")
     var healthCycle = limitHealthMs()
-    assert(limitHealthTimeoutMs() < healthCycle, "prazo cabe no ciclo do health")
+    need(limitHealthTimeoutMs() < healthCycle, "falhou")
 }
 
 test "health: 200 = ONLINE, 500 = DEGRADED, sem resposta = DEGRADED, recusa = OFFLINE", "health" {
@@ -99,22 +99,22 @@ test "health: 200 = ONLINE, 500 = DEGRADED, sem resposta = DEGRADED, recusa = OF
     var silentListener = net.listen(silentPort)
     var held = listOf<Conn>()
     var silentServer = spawn { serveSilent(silentListener, held) }
-    assert(waitForPort(okPort, 60), "servico ok no ar")
-    assert(waitForPort(badPort, 60), "servico 500 no ar")
-    assert(waitForPort(silentPort, 60), "servico mudo no ar")
+    need(waitForPort(okPort, 60), "falhou")
+    need(waitForPort(badPort, 60), "falhou")
+    need(waitForPort(silentPort, 60), "falhou")
 
     var okService = healthService(okPort, "")
     var badService = healthService(badPort, "")
     var silentService = healthService(silentPort, "")
     var deadService = healthService(deadPort, "")
 
-    assert(checkService(okService) == statusOnline(), "200 -> ONLINE")
-    assert(checkService(badService) == statusDegraded(), "500 -> DEGRADED (antes: ONLINE so por abrir a porta)")
+    need(checkService(okService) == statusOnline(), "falhou")
+    need(checkService(badService) == statusDegraded(), "falhou")
     var started = time.now()
-    assert(checkService(silentService) == statusDegraded(), "mudo -> DEGRADED no prazo")
+    need(checkService(silentService) == statusDegraded(), "falhou")
     var elapsed = time.now() - started
-    assert(elapsed < limitHealthTimeoutMs() * 3, "prazo respeitado (elapsed=" + intToString(elapsed) + "ms)")
-    assert(checkService(deadService) == statusOffline(), "porta fechada -> OFFLINE")
+    need(elapsed < limitHealthTimeoutMs() * 3, "falhou")
+    need(checkService(deadService) == statusOffline(), "falhou")
 
     okListener.close()
     badListener.close()
@@ -130,16 +130,16 @@ test "health: ciclo le a tabela da sessao (hot-reload), memoria poda removido", 
     // tabela. Puro, sem tunel: trava o contrato que o agentHealth usa — o
     // ciclo sonda o que esta servido AGORA, nao a lista do connect.
     var session = TunnelSession("s1", "d1", "a1", "")
-    assert(currentServiceNames(session).size == 0, "tabela vazia: nada a sondar")
+    need(currentServiceNames(session).size == 0, "falhou")
     var svc = healthService(8080, "")
     session.setServices(listOf(svc))
     var names = currentServiceNames(session)
-    assert(names.size == 1 && names.get(0) == "site", "troca da tabela aparece")
+    need(names.size == 1 && names.get(0) == "site", "falhou")
 
     var last = mapOf()
     last.put("site", statusOnline())
     pruneHealthMemory(last, names)
-    assert(last.get("site") == statusOnline(), "presente continua lembrado")
+    need(last.get("site") == statusOnline(), "falhou")
 
     // Servico removido no hot-reload (trocado por outro nome): sai da tabela
     // E da memoria — se um dia voltar, o primeiro ciclo reporta de novo como
@@ -147,9 +147,9 @@ test "health: ciclo le a tabela da sessao (hot-reload), memoria poda removido", 
     var late = Service("late-id", "acc", "dev", "late", "127.0.0.1", 8081, "http", "late.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "", "")
     session.setServices(listOf(late))
     var swapped = currentServiceNames(session)
-    assert(swapped.size == 1 && swapped.get(0) == "late", "tabela nova, sem tocar na anterior")
+    need(swapped.size == 1 && swapped.get(0) == "late", "falhou")
     pruneHealthMemory(last, swapped)
-    assert(last.get("site") == null, "removido sai da memoria")
+    need(last.get("site") == null, "falhou")
 }
 
 // Servidor que conta SONDA de health: o check envia "GET ... HTTP/1.1";
@@ -195,8 +195,8 @@ test "health: apos hot-reload sonda o servico novo e para de sondar o removido",
     var lateCount = new Int[1]
     lateCount[0] = 0
     var lateServer = spawn { serveCounting(lateListener, lateCount) }
-    assert(waitForPort(firstPort, 60), "primeiro servico no ar")
-    assert(waitForPort(latePort, 60), "servico tardio no ar")
+    need(waitForPort(firstPort, 60), "falhou")
+    need(waitForPort(latePort, 60), "falhou")
 
     var session = TunnelSession("s1", "d1", "a1", "")
     var first = Service("id-1", "acc", "dev", "first", "127.0.0.1", firstPort, "http", "first.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "", "")
@@ -213,8 +213,8 @@ test "health: apos hot-reload sonda o servico novo e para de sondar o removido",
             waits = waits - 1
         }
     }
-    assert(firstProbed, "servico inicial sondado")
-    assert(countValue(lateCount) == 0, "servico ainda nao publicado nao e sondado")
+    need(firstProbed, "falhou")
+    need(countValue(lateCount) == 0, "falhou")
 
     // Hot-reload: some `first`, entra `late` (o Edge poda a rota na mesma troca).
     var late = Service("id-2", "acc", "dev", "late", "127.0.0.1", latePort, "http", "late.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0L, "", "", "")
@@ -230,13 +230,13 @@ test "health: apos hot-reload sonda o servico novo e para de sondar o removido",
             waits = waits - 1
         }
     }
-    assert(lateProbed, "servico novo sondado apos a troca")
+    need(lateProbed, "falhou")
 
     // O removido nao pode continuar sendo sondado: deixa varios ciclos
     // folgados (healthMs=100) e confere que o contador nao andou.
     var settled = countValue(firstCount)
     time.sleep(800)
-    assert(countValue(firstCount) == settled, "removido deixa de ser sondado (" + intToString(settled) + " -> " + intToString(countValue(firstCount)) + ")")
+    need(countValue(firstCount) == settled, "falhou")
 
     // Encerra a task de health e os listeners.
     session.close()
@@ -249,15 +249,15 @@ test "health: status nao-2xx vira DEGRADED (antes 404 ficava ONLINE)", "health" 
     // O desenho dizia "status < 500 = ONLINE", mas isso aprovava 404/403/301:
     // um servico com a rota de saude removida (ou so devolvendo pagina de
     // erro) ficava ONLINE e o Edge roteava para ele. Regra: so 2xx = ONLINE.
-    assert(healthStatusFor(200) == statusOnline(), "200 = ONLINE")
-    assert(healthStatusFor(204) == statusOnline(), "204 = ONLINE")
-    assert(healthStatusFor(299) == statusOnline(), "299 = ONLINE (fim da faixa)")
-    assert(healthStatusFor(301) == statusDegraded(), "301 = DEGRADED")
-    assert(healthStatusFor(403) == statusDegraded(), "403 = DEGRADED")
-    assert(healthStatusFor(404) == statusDegraded(), "404 = DEGRADED")
-    assert(healthStatusFor(500) == statusDegraded(), "500 = DEGRADED")
-    assert(healthStatusFor(199) == statusDegraded(), "1xx = DEGRADED")
-    assert(healthStatusFor(0) == statusDegraded(), "codigo invalido (0) = DEGRADED")
+    need(healthStatusFor(200) == statusOnline(), "falhou")
+    need(healthStatusFor(204) == statusOnline(), "falhou")
+    need(healthStatusFor(299) == statusOnline(), "falhou")
+    need(healthStatusFor(301) == statusDegraded(), "falhou")
+    need(healthStatusFor(403) == statusDegraded(), "falhou")
+    need(healthStatusFor(404) == statusDegraded(), "falhou")
+    need(healthStatusFor(500) == statusDegraded(), "falhou")
+    need(healthStatusFor(199) == statusDegraded(), "falhou")
+    need(healthStatusFor(0) == statusDegraded(), "falhou")
 
     // As superficies que descrevem a regra em prosa (o cabecalho da sonda, o
     // comentario do check pos-deploy e este arquivo) nao voltam para a regra
@@ -272,10 +272,10 @@ test "health: status nao-2xx vira DEGRADED (antes 404 ficava ONLINE)", "health" 
     var thisRaw = File("tests/health_test.kf").readText()
     var thisSrc = ""
     if (thisRaw != null) { thisSrc = thisRaw }
-    assert(healthSrc.length > 0 && deploySrc.length > 0 && thisSrc.length > 0, "fontes legiveis")
-    assert(healthSrc.indexOf("responde < 500") < 0, "cabecalho do Health fala 2xx")
-    assert(deploySrc.indexOf("status < 500 = saudavel") < 0, "comentario do Deploy fala 2xx")
-    assert(thisSrc.indexOf("prazo: 2xx = ONLINE") >= 0, "cabecalho deste teste fala 2xx")
+    need(healthSrc.length > 0 && deploySrc.length > 0 && thisSrc.length > 0, "falhou")
+    need(healthSrc.indexOf("responde < 500") < 0, "falhou")
+    need(deploySrc.indexOf("status < 500 = saudavel") < 0, "falhou")
+    need(thisSrc.indexOf("prazo: 2xx = ONLINE") >= 0, "falhou")
 
     // Fim a fim com servidor real: 404 e 301 nao sao saudaveis para o check
     // local do deploy (mesma sonda do Agent).
@@ -285,11 +285,11 @@ test "health: status nao-2xx vira DEGRADED (antes 404 ficava ONLINE)", "health" 
     var nfServer = spawn { serveRawFixed(nf, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n") }
     var rd = net.listen(redirectPort)
     var rdServer = spawn { serveRawFixed(rd, "HTTP/1.1 301 Moved Permanently\r\nLocation: /x\r\nContent-Length: 0\r\nConnection: close\r\n\r\n") }
-    assert(waitForPort(notFoundPort, 60), "404 no ar")
-    assert(waitForPort(redirectPort, 60), "301 no ar")
-    assert(checkLocalService("127.0.0.1", notFoundPort) == false, "404 nao e 'respondendo'")
-    assert(checkLocalService("127.0.0.1", redirectPort) == false, "301 nao e 'respondendo'")
-    assert(checkService(healthService(notFoundPort, "")) == statusDegraded(), "404 -> DEGRADED pelo Agent")
+    need(waitForPort(notFoundPort, 60), "falhou")
+    need(waitForPort(redirectPort, 60), "falhou")
+    need(checkLocalService("127.0.0.1", notFoundPort) == false, "falhou")
+    need(checkLocalService("127.0.0.1", redirectPort) == false, "falhou")
+    need(checkService(healthService(notFoundPort, "")) == statusDegraded(), "falhou")
     nf.close()
     rd.close()
 }

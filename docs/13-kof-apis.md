@@ -244,3 +244,30 @@ escrita por classe de caractere. A trava usa lista fechada
 (`protocolWireLiterals()`) e helpers com `if` (`assertWith`). Sempre que um
 guard nova precisar disso, liste — e registre a medicao aqui antes de
 confiar na semantica.
+
+### L21 — Kof 0.8.1 endureceu sintaxe, JSON, `split` e TLS ⚠️ **quebrou o repo inteiro ate a migracao**
+
+O toolchain deste host passou a 0.8.1 e quatro mudancas anteriores ao KofCloud
+apareceram de uma vez (todas no `CHANGELOG` do Kof, e todas medidas no ciclo
+de restabilizacao):
+
+* **`PARSE087` — `assert(cond, expr)` e erro de parse.** A mensagem tem de
+  ser **literal**; nem `assert(false, <expr>)` passa. Os testes usam
+  `need(cond, "literal")` (helper em `tests/testkit/Support.kf`) e a
+  verificacao `assert(cond, "literal")`.
+* **`String.split` e LITERAL** (`split("+")` divide em `+`; `split("\\+")`
+  passou a procurar um separador com barra). `split("|")` do `tableCells`
+  continua valido — inteiros/paradeiros sem escape.
+* **`JSN006` estrito (issue #1176).** `json.decode<Record>` recusa string
+  numerica em campo numerico; `Int`/`Long` saem do fio como **numero**.
+  `mapOf()` e homogeneo (`SEM056`: nao aceita `Int` num mapa de `String`),
+  entao o objecto JSON e montado a mao: `deviceJson`/`serviceJson` em
+  `control/ControlPlane.kf` concatenam os campos, e o lado CLI/Agent
+  converte (`jsonIntField`).
+* **`http.*` verifica TLS por padrao** (`TLS-VERIFY`). O control plane de
+  teste usa PEM autoassinado: os e2e chamam `trustLocalhostTls()` (o
+  helper de `Support.kf`) e a CLI/Agent aplicam `applyHttpTlsPolicy`
+  (`model/Webhook.kf`: `http.insecure()` so com control plane em loopback;
+  remoto continua verificado). O runtime 0.8 **nao emite mais**
+  `Strict-Transport-Security` por default — a trava do `control-tls`
+  verifica isso no fio (HSTS passou a exigir implementacao propria).

@@ -2,6 +2,7 @@ import kofcloud.cli.Commands
 import kofcloud.control.Registry
 import kofcloud.model.StateCopy
 import kofcloud.store.Store
+import testkit.Support
 
 // Fase 16 slice 1 (parte sem banco): carga explicita + migracao --dry-run.
 // Antes, um estado ilegivel virava control plane vazio em SILENCIO.
@@ -13,35 +14,35 @@ String migratePath(String name) {
 test "carga: ausente, ok e corrupt sao distinguiveis", "migrate-unit" {
     var path = migratePath("load")
     var fresh = Registry(path)
-    assert(fresh.loadStatus == "absent", "arquivo novo = absent")
+    need(fresh.loadStatus == "absent", "falhou")
     var account = fresh.createAccount("mel", "m@e.com", "segredo")
-    assert(fresh.stateCounts().accounts == 1, "conta gravada")
+    need(fresh.stateCounts().accounts == 1, "falhou")
 
     var reloaded = Registry(path)
-    assert(reloaded.loadStatus == "ok", "estado bom = ok")
-    assert(reloaded.stateCounts().accounts == 1, "conta relida")
+    need(reloaded.loadStatus == "ok", "falhou")
+    need(reloaded.stateCounts().accounts == 1, "falhou")
 
     var corruptPath = migratePath("corrupt")
     writeTextTo(corruptPath, "{\"isto\": \"nao e estado\"}")
     var corrupt = Registry(corruptPath)
-    assert(corrupt.loadStatus == "corrupt", "ilegivel = corrupt (nao silencio)")
-    assert(corrupt.stateCounts().accounts == 0, "comeca vazio, mas avisado")
+    need(corrupt.loadStatus == "corrupt", "falhou")
+    need(corrupt.stateCounts().accounts == 0, "falhou")
     // O arquivo NAO foi sobrescrito pela carga.
     var raw = readTextOr(corruptPath, "")
-    assert(raw.indexOf("nao e estado") >= 0, "arquivo preservado para o operador")
+    need(raw.indexOf("nao e estado") >= 0, "falhou")
 }
 
 test "diff: identicas nao produzem linhas; divergencia lista a lista", "migrate-unit" {
     var a = StateCounts(1, 2, 3, 4, 5, 6, 7, 8, 9)
-    assert(diffCounts(a, a) == "", "identicas = vazio")
+    need(diffCounts(a, a) == "", "falhou")
     var b = StateCounts(1, 2, 3, 4, 5, 6, 7, 8, 9)
     var c = StateCounts(2, 2, 3, 4, 5, 6, 7, 8, 9)
     var diff = diffCounts(b, c)
-    assert(diff.indexOf("accounts: 1 -> 2") >= 0, "conta a diferenca")
-    assert(diff.indexOf("devices") < 0, "lista igual nao aparece")
+    need(diff.indexOf("accounts: 1 -> 2") >= 0, "falhou")
+    need(diff.indexOf("devices") < 0, "falhou")
     // Deterministico: mesma entrada, mesma saida.
-    assert(diffCounts(b, c) == diff, "estavel")
-    assert(countsLine(a).indexOf("accounts=1") >= 0, "resumo legivel")
+    need(diffCounts(b, c) == diff, "falhou")
+    need(countsLine(a).indexOf("accounts=1") >= 0, "falhou")
 }
 
 test "migrate: dry-run compara sem escrever; copia de verdade escreve", "migrate" {
@@ -53,20 +54,20 @@ test "migrate: dry-run compara sem escrever; copia de verdade escreve", "migrate
 
     // dry-run sem destino: so valida.
     var onlyRead = cmdMigrate(listOf("--from", source, "--dry-run"))
-    assert(onlyRead == 0, "dry-run sem --to ok")
-    assert(cmdMigrate(listOf("--from", source, "--dry-run", "--dry-run")) == 1, "dry-run repetido barra")
+    need(onlyRead == 0, "falhou")
+    need(cmdMigrate(listOf("--from", source, "--dry-run", "--dry-run")) == 1, "falhou")
     // dry-run com destino inexistente: compara e NAO cria o destino.
     var dry = cmdMigrate(listOf("--from", source, "--to", target, "--dry-run"))
-    assert(dry == 0, "dry-run ok")
-    assert(fileExists(target) == false, "dry-run nao escreve o destino")
+    need(dry == 0, "falhou")
+    need(fileExists(target) == false, "falhou")
 
     // Copia real.
     var copied = cmdMigrate(listOf("--from", source, "--to", target))
-    assert(copied == 0, "copia ok")
+    need(copied == 0, "falhou")
     var reloaded = Registry(target)
-    assert(reloaded.loadStatus == "ok", "destino valido")
-    assert(reloaded.stateCounts().accounts == 1, "conta copiada")
-    assert(reloaded.stateCounts().devices == 1, "device copiado")
+    need(reloaded.loadStatus == "ok", "falhou")
+    need(reloaded.stateCounts().accounts == 1, "falhou")
+    need(reloaded.stateCounts().devices == 1, "falhou")
 }
 
 test "migrate: origem ilegivel e recusada e nada e escrito", "migrate" {
@@ -74,10 +75,10 @@ test "migrate: origem ilegivel e recusada e nada e escrito", "migrate" {
     var target = migratePath("bad-dst")
     writeTextTo(source, "{ nao e json")
     var code = cmdMigrate(listOf("--from", source, "--to", target))
-    assert(code == 1, "recusa com exit 1")
-    assert(fileExists(target) == false, "nao escreveu destino")
+    need(code == 1, "falhou")
+    need(fileExists(target) == false, "falhou")
     // Origem inexistente tambem recusa.
-    assert(cmdMigrate(listOf("--from", migratePath("nope"))) == 1, "origem ausente")
+    need(cmdMigrate(listOf("--from", migratePath("nope"))) == 1, "falhou")
 }
 test "state-backup: preserva o estado; recusa origem ilegivel e ausente", "migrate" {
     var source = migratePath("bk")
@@ -85,20 +86,20 @@ test "state-backup: preserva o estado; recusa origem ilegivel e ausente", "migra
     registry.createAccount("mel", "m@e.com", "segredo")
     // Preserva o arquivo em disco (conteudo identico), sem tocar no original.
     var backup = registry.backupStateFile("probe")
-    assert(backup == source + ".bak-probe", "caminho do backup ao lado do original")
-    assert(readTextOr(backup, "") == readTextOr(source, ""), "backup identico")
-    assert(readTextOr(source, "").length > 0, "original intacto")
+    need(backup == source + ".bak-probe", "falhou")
+    need(readTextOr(backup, "") == readTextOr(source, ""), "falhou")
+    need(readTextOr(source, "").length > 0, "falhou")
 
     // Sem arquivo nao ha o que copiar.
     var empty = Registry(migratePath("nothing"))
-    assert(empty.backupStateFile("probe") == "", "sem arquivo = sem backup")
+    need(empty.backupStateFile("probe") == "", "falhou")
 
     // CLI: copia e responde 0 com o caminho; ilegivel recusa com 1.
-    assert(cmdStateBackup(listOf("--file", source)) == 0, "backup pela CLI")
-    assert(cmdStateBackup(listOf("--file", empty.path)) == 1, "ausente recusado")
+    need(cmdStateBackup(listOf("--file", source)) == 0, "falhou")
+    need(cmdStateBackup(listOf("--file", empty.path)) == 1, "falhou")
     var bad = migratePath("bk-bad")
     writeTextTo(bad, "isto nao e estado")
-    assert(cmdStateBackup(listOf("--file", bad)) == 1, "ilegivel recusado")
-    assert(fileExists(source) == true, "original continua no lugar")
-    assert(fileExists(backup) == true, "backup do primeiro run continua")
+    need(cmdStateBackup(listOf("--file", bad)) == 1, "falhou")
+    need(fileExists(source) == true, "falhou")
+    need(fileExists(backup) == true, "falhou")
 }

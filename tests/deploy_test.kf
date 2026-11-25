@@ -21,21 +21,21 @@ String deployManifest(String name, String body) {
 
 test "deploy: manifesto valido com defaults", "deploy" {
     var services = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"api\",\"port\":3000,\"exposure\":\"AUTHENTICATED\",\"address\":\"localhost\"}]}")
-    assert(services.size == 2, "dois servicos")
-    assert(services.get(0).name == "site", "nome")
-    assert(services.get(0).port == 8080, "porta numerica")
-    assert(services.get(0).address == "127.0.0.1", "default address")
-    assert(services.get(0).exposure == "PUBLIC", "default exposure")
-    assert(services.get(0).protocol == "http", "default protocol")
-    assert(services.get(1).exposure == "AUTHENTICATED", "exposure explicita")
-    assert(services.get(1).address == "localhost", "address explicito")
-    assert(services.get(1).protocol == "http", "protocol default mesmo com resto explicito")
+    need(services.size == 2, "falhou")
+    need(services.get(0).name == "site", "falhou")
+    need(services.get(0).port == 8080, "falhou")
+    need(services.get(0).address == "127.0.0.1", "falhou")
+    need(services.get(0).exposure == "PUBLIC", "falhou")
+    need(services.get(0).protocol == "http", "falhou")
+    need(services.get(1).exposure == "AUTHENTICATED", "falhou")
+    need(services.get(1).address == "localhost", "falhou")
+    need(services.get(1).protocol == "http", "falhou")
 }
 
 test "deploy: manifesto com port como string (formato da API)", "deploy-str" {
     var services = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":\"8080\"}]}")
-    assert(services.size == 1, "um servico")
-    assert(services.get(0).port == 8080, "port string aceita")
+    need(services.size == 1, "falhou")
+    need(services.get(0).port == 8080, "falhou")
 }
 
 test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
@@ -43,16 +43,16 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     // readTextOr devolve "" e o cmdDeploy/cmdDown respondem "manifesto nao
     // encontrado" antes de qualquer parse ou rede.
     var missing = readTextOr("/tmp/kofcloud-deploy-inexistente-" + crypto.randomHex(8) + ".json", "")
-    assert(missing == "", "inexistente vira vazio")
+    need(missing == "", "falhou")
     var emptyPath = deployManifest("vazio", "")
-    assert(readTextOr(emptyPath, "") == "", "vazio vira vazio")
+    need(readTextOr(emptyPath, "") == "", "falhou")
     var bad1 = ""
     try {
         parseManifest("")
     } catch (String e) {
         bad1 = e
     }
-    assert(bad1 == "manifesto vazio", "vazio")
+    need(bad1 == "manifesto vazio", "falhou")
 
     var bad2 = ""
     try {
@@ -60,7 +60,7 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     } catch (String e) {
         bad2 = e
     }
-    assert(bad2 == "manifesto sem servicos", "vazio recusa")
+    need(bad2 == "manifesto sem servicos", "falhou")
 
     var bad3 = ""
     try {
@@ -68,7 +68,7 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     } catch (String e) {
         bad3 = e
     }
-    assert(bad3 == "servico sem nome na posicao 0", "nome com posicao")
+    need(bad3 == "servico sem nome na posicao 0", "falhou")
 
     var bad4 = ""
     try {
@@ -76,7 +76,7 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     } catch (String e) {
         bad4 = e
     }
-    assert(bad4 == "servico \"site\" sem porta valida (1-65535)", "porta com nome")
+    need(bad4 == "servico \"site\" sem porta valida (1-65535)", "falhou")
 
     var bad5 = ""
     try {
@@ -84,7 +84,7 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     } catch (String e) {
         bad5 = e
     }
-    assert(bad5 == "servico \"b\" sem porta valida (1-65535)", "posicao correta")
+    need(bad5 == "servico \"b\" sem porta valida (1-65535)", "falhou")
 
     var bad6 = ""
     try {
@@ -92,7 +92,7 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     } catch (String e) {
         bad6 = e
     }
-    assert(bad6 == "lista \"services\" nao e um array JSON", "nao-array")
+    need(bad6 == "lista \"services\" nao e um array JSON", "falhou")
 
     var bad7 = ""
     try {
@@ -100,7 +100,7 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     } catch (String e) {
         bad7 = e
     }
-    assert(bad7.indexOf("malformada") >= 0, "truncado")
+    need(bad7.indexOf("malformada") >= 0, "falhou")
 
     // Nome repetido e ambiguidade, nao "dois servicos": o publish e
     // idempotente por nome, entao o segundo item reescrevia a config do
@@ -111,12 +111,12 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     } catch (String e) {
         dupName = e
     }
-    assert(dupName.indexOf("duplicado") >= 0, "nome duplicado recusa")
-    assert(dupName.indexOf("\"site\"") >= 0, "nomeia o servico")
-    assert(dupName.indexOf("posicao 1") >= 0, "aponta a posicao")
+    need(dupName.indexOf("duplicado") >= 0, "falhou")
+    need(dupName.indexOf("\"site\"") >= 0, "falhou")
+    need(dupName.indexOf("posicao 1") >= 0, "falhou")
     // Nomes diferentes, mesmo prefixo, passam (nao e comparacao parcial).
     var similar = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"site2\",\"port\":9090}]}")
-    assert(similar.size == 2, "nomes parecidos sao servicos distintos")
+    need(similar.size == 2, "falhou")
     // Duplicado com espacos sobrando tambem casa (o trim roda antes).
     var dupTrim = ""
     try {
@@ -124,13 +124,13 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     } catch (String e) {
         dupTrim = e
     }
-    assert(dupTrim.indexOf("duplicado") >= 0, "duplicado com padding recusa")
+    need(dupTrim.indexOf("duplicado") >= 0, "falhou")
 
     // Chave "port" dentro de valor nao confunde ("portaria" tem "port" mas
     // sem as aspas de fechamento na posicao certa).
     var tricky = parseManifest("{\"services\":[{\"name\":\"portaria\",\"port\":9000}]}")
-    assert(tricky.get(0).name == "portaria", "substring nao casa")
-    assert(tricky.get(0).port == 9000, "porta certa")
+    need(tricky.get(0).name == "portaria", "falhou")
+    need(tricky.get(0).port == 9000, "falhou")
 
     // Campo repetido na MESMA entrada: `manifestField` devolve a primeira
     // ocorrencia, entao um segundo "exposure":"PUBLIC" era ignorado em
@@ -143,22 +143,22 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     } catch (String e) {
         dupField = e
     }
-    assert(dupField.indexOf("repetido") >= 0, "campo repetido recusa (recebido: " + dupField + ")")
-    assert(dupField.indexOf("\"exposure\"") >= 0, "nomeia o campo")
-    assert(dupField.indexOf("\"db\"") >= 0, "nomeia o servico")
+    need(dupField.indexOf("repetido") >= 0, "falhou")
+    need(dupField.indexOf("\"exposure\"") >= 0, "falhou")
+    need(dupField.indexOf("\"db\"") >= 0, "falhou")
     var dupPortField = ""
     try {
         parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"port\" : 9090}]}")
     } catch (String e) {
         dupPortField = e
     }
-    assert(dupPortField.indexOf("\"port\" repetido") >= 0, "porta repetida (com espaco antes dos dois-pontos)")
+    need(dupPortField.indexOf("\"port\" repetido") >= 0, "falhou")
     // Mesma chave em servicos DIFERENTES nao e repeticao.
     var twoServices = parseManifest("{\"services\":[{\"name\":\"a\",\"port\":8080},{\"name\":\"b\",\"port\":8081}]}")
-    assert(twoServices.size == 2, "port em servicos distintos e normal")
+    need(twoServices.size == 2, "falhou")
     // Chave aparente dentro de string nao conta.
     var quoted = parseManifest("{\"services\":[{\"name\":\"a \\\"port\\\": 1\",\"port\":8080}]}")
-    assert(quoted.get(0).port == 8080, "chave dentro de string nao confunde")
+    need(quoted.get(0).port == 8080, "falhou")
 
     // Exposure desconhecida nao cai para PUBLIC em silencio: typo
     // ("PUBLIK") num servico que devia ser PRIVATE exporia o servico.
@@ -168,10 +168,10 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     } catch (String e) {
         badExposure = e
     }
-    assert(badExposure == "servico \"db\" com exposure invalida: PUBLIK", "exposure com nome e valor")
+    need(badExposure == "servico \"db\" com exposure invalida: PUBLIK", "falhou")
     // Vazia continua defaultando (ausente != invalido); as validas passam.
     var defaulted = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"db\",\"port\":5432,\"exposure\":\"PRIVATE\"}]}")
-    assert(defaulted.get(0).exposure == "PUBLIC", "ausente defaulta")
+    need(defaulted.get(0).exposure == "PUBLIC", "falhou")
 
     // Protocol fora do MVP falha no parse, antes de publicar qualquer coisa.
     var badProtocol = ""
@@ -180,8 +180,8 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     } catch (String e) {
         badProtocol = e
     }
-    assert(badProtocol == "servico \"db\" com protocol invalido: tcp", "protocol com nome e valor")
-    assert(defaulted.get(1).exposure == "PRIVATE", "valida passa")
+    need(badProtocol == "servico \"db\" com protocol invalido: tcp", "falhou")
+    need(defaulted.get(1).exposure == "PRIVATE", "falhou")
 
     // Address fora de loopback falha no parse: o Agent conecta nesse
     // endereco — externo o transformaria em escaneador (SSRF). Lista
@@ -192,10 +192,10 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     } catch (String e) {
         badAddress = e
     }
-    assert(badAddress == "servico \"db\" com address invalido: 10.0.0.5", "address com nome e valor")
+    need(badAddress == "servico \"db\" com address invalido: 10.0.0.5", "falhou")
     var loopbacks = parseManifest("{\"services\":[{\"name\":\"a\",\"port\":1,\"address\":\"localhost\"},{\"name\":\"b\",\"port\":2,\"address\":\"::1\"}]}")
-    assert(loopbacks.get(0).address == "localhost", "localhost passa")
-    assert(loopbacks.get(1).address == "::1", "::1 passa")
+    need(loopbacks.get(0).address == "localhost", "falhou")
+    need(loopbacks.get(1).address == "::1", "falhou")
 
     // Teto de porta: acima de 65535 falha no parse (antes passava e
     // quebrava so no relay/health).
@@ -205,49 +205,49 @@ test "deploy: manifestos invalidos com erro posicional", "deploy-err" {
     } catch (String e) {
         bigPort = e
     }
-    assert(bigPort == "servico \"site\" sem porta valida (1-65535)", "teto com nome e faixa")
+    need(bigPort == "servico \"site\" sem porta valida (1-65535)", "falhou")
 
     // Espacos sobrando sao aparados (manifesto escrito a mao): nome,
     // porta-string, address, exposure e protocol com padding passam
     // aparados; nome so-espacos falha como sem nome (posicional), em vez
     // de publicar um servico em branco.
     var padded = parseManifest("{\"services\":[{\"name\":\"  site  \",\"port\":\" 8080 \",\"address\":\" localhost \",\"exposure\":\" PRIVATE \",\"protocol\":\" http \"}]}")
-    assert(padded.get(0).name == "site", "nome aparado")
-    assert(padded.get(0).port == 8080, "porta string com espaco aceita")
-    assert(padded.get(0).address == "localhost", "address aparado")
-    assert(padded.get(0).exposure == "PRIVATE", "exposure aparada")
-    assert(padded.get(0).protocol == "http", "protocol aparado")
+    need(padded.get(0).name == "site", "falhou")
+    need(padded.get(0).port == 8080, "falhou")
+    need(padded.get(0).address == "localhost", "falhou")
+    need(padded.get(0).exposure == "PRIVATE", "falhou")
+    need(padded.get(0).protocol == "http", "falhou")
     var blankName = ""
     try {
         parseManifest("{\"services\":[{\"name\":\"   \",\"port\":8080}]}")
     } catch (String e) {
         blankName = e
     }
-    assert(blankName == "servico sem nome na posicao 0", "nome so-espacos falha")
+    need(blankName == "servico sem nome na posicao 0", "falhou")
 
     // Allowlist WAF (Fase 10 slice 3): ausente vira "" (sem restricao, como
     // servico legado); presente e normalizado com as mesmas funcoes da API;
     // malformado falha posicional no parse (nao publica regra morta).
     var noPolicy = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
-    assert(noPolicy.get(0).allowMethods == "", "sem allowMethods: vazio")
-    assert(noPolicy.get(0).allowPaths == "", "sem allowPaths: vazio")
+    need(noPolicy.get(0).allowMethods == "", "falhou")
+    need(noPolicy.get(0).allowPaths == "", "falhou")
     var withPolicy = parseManifest("{\"services\":[{\"name\":\"api\",\"port\":3000,\"allowMethods\":\"GET, POST,GET\",\"allowPaths\":\"/api/*, /health\"}]}")
-    assert(withPolicy.get(0).allowMethods == "GET,POST", "metodos normalizados (trim + dedup)")
-    assert(withPolicy.get(0).allowPaths == "/api/*,/health", "paths normalizados (trim)")
+    need(withPolicy.get(0).allowMethods == "GET,POST", "falhou")
+    need(withPolicy.get(0).allowPaths == "/api/*,/health", "falhou")
     var badMethods = ""
     try {
         parseManifest("{\"services\":[{\"name\":\"api\",\"port\":3000,\"allowMethods\":\"get, POST\"}]}")
     } catch (String e) {
         badMethods = e
     }
-    assert(badMethods == "servico \"api\" com allowMethods invalido: get, POST", "metodo minusculo falha")
+    need(badMethods == "servico \"api\" com allowMethods invalido: get, POST", "falhou")
     var badPaths = ""
     try {
         parseManifest("{\"services\":[{\"name\":\"api\",\"port\":3000,\"allowPaths\":\"api/*\"}]}")
     } catch (String e) {
         badPaths = e
     }
-    assert(badPaths == "servico \"api\" com allowPaths invalido: api/*", "path relativo falha")
+    need(badPaths == "servico \"api\" com allowPaths invalido: api/*", "falhou")
 }
 
 test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
@@ -258,35 +258,35 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     live.add(Service("id-veterano", "acc", "dev", "veterano", "127.0.0.1", 9000, "http", "veterano.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
     var wanted = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"mudou\",\"port\":3000,\"exposure\":\"PRIVATE\"}]}")
     var plan = diffDeployment(live, wanted)
-    assert(plan.size == 3, "tres linhas: igual, novo, extra")
-    assert(plan.get(0) == "= site (igual)", "igual detectado")
-    assert(plan.get(1).startsWith("+ mudou"), "novo com +")
-    assert(plan.get(2).startsWith("- veterano"), "extra com - e dica de prune")
+    need(plan.size == 3, "falhou")
+    need(plan.get(0) == "= site (igual)", "falhou")
+    need(plan.get(1).startsWith("+ mudou"), "falhou")
+    need(plan.get(2).startsWith("- veterano"), "falhou")
     // Mudanca de porta vira ~ (vai atualizar), nao + (novo).
     var wanted2 = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":9090}]}")
     var plan2 = diffDeployment(live, wanted2)
-    assert(plan2.size == 2, "mudado + extra")
-    assert(plan2.get(0).startsWith("~ site"), "porta diferente e update")
+    need(plan2.size == 2, "falhou")
+    need(plan2.get(0).startsWith("~ site"), "falhou")
     // Build aparece no plan sem executar: o operador ve que o deploy vai
     // rodar um comando local. Inclusive "=" marca: o deploy executa o build
     // antes de cada publish (mesmo o idempotente), entao "igual" nao e
     // "nada vai acontecer".
     var wanted3 = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"build\":\"npm run build\"},{\"name\":\"novo\",\"port\":3000,\"build\":\"make dist\"},{\"name\":\"mudou\",\"port\":3000,\"exposure\":\"PRIVATE\"}]}")
     var plan3 = diffDeployment(live, wanted3)
-    assert(plan3.get(0) == "= site (build) (igual)", "igual com build marca (vai rodar)")
-    assert(plan3.get(1).startsWith("+ novo (build)"), "novo com build marca")
-    assert(plan3.get(2).startsWith("+ mudou"), "novo sem build nao marca")
+    need(plan3.get(0) == "= site (build) (igual)", "falhou")
+    need(plan3.get(1).startsWith("+ novo (build)"), "falhou")
+    need(plan3.get(2).startsWith("+ mudou"), "falhou")
     var wanted4 = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":9090,\"build\":\"make dist\"}]}")
     var plan4 = diffDeployment(live, wanted4)
-    assert(plan4.get(0).startsWith("~ site (build)"), "mudado com build marca")
+    need(plan4.get(0).startsWith("~ site (build)"), "falhou")
     // Artifact aparece junto no plan sem tocar o disco: o operador ve que o
     // deploy vai conferir um arquivo local (e barrar o publish se sumiu).
     // Combina com build na mesma linha, na mesma ordem do manifesto.
     var wanted5 = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"artifact\":\"dist/index.html\"},{\"name\":\"novo\",\"port\":3000,\"build\":\"npm run build\",\"artifact\":\"dist/app.js\"},{\"name\":\"mudou\",\"port\":3000,\"exposure\":\"PRIVATE\"}]}")
     var plan5 = diffDeployment(live, wanted5)
-    assert(plan5.get(0) == "= site (artifact) (igual)", "igual com artifact marca")
-    assert(plan5.get(1).startsWith("+ novo (build) (artifact)"), "novo com build+artifact marca os dois")
-    assert(plan5.get(2).startsWith("+ mudou"), "novo sem nada nao marca")
+    need(plan5.get(0) == "= site (artifact) (igual)", "falhou")
+    need(plan5.get(1).startsWith("+ novo (build) (artifact)"), "falhou")
+    need(plan5.get(2).startsWith("+ mudou"), "falhou")
     // Allowlist: servico sem politica contra live sem politica segue "=";
     // so-mudanca-de-politica vira "~" (vai atualizar); live sem politica
     // contra manifesto com politica tambem vira "~". O plan agora diz a
@@ -294,12 +294,12 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     // (antes devolvia o existente sem aplicar nada — ver registry_test).
     var wanted6 = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"allowMethods\":\"GET\",\"allowPaths\":\"/api/*\"}]}")
     var plan6 = diffDeployment(live, wanted6)
-    assert(plan6.get(0).startsWith("~ site"), "politica nova vira update")
-    assert(plan6.size == 2, "mudado + extra")
+    need(plan6.get(0).startsWith("~ site"), "falhou")
+    need(plan6.size == 2, "falhou")
     var livePolicy = listOf<Service>()
     livePolicy.add(Service("id-site", "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "GET", "/api/*", ""))
     var plan7 = diffDeployment(livePolicy, wanted6)
-    assert(plan7.get(0) == "= site (igual)", "politica igual segue igual")
+    need(plan7.get(0) == "= site (igual)", "falhou")
 
     // Escopo por device (o manifesto descreve a maquina LOCAL): publicado
     // NOUTRO device nao e "igual" (o publish responderia 409) e nao e
@@ -309,39 +309,39 @@ test "deploy: diff mostra o que mudaria sem aplicar", "deploy-plan" {
     liveDevices.add(Service("id-b", "acc", "devB", "remoto", "127.0.0.1", 7000, "http", "remoto.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
     var wantedDevices = parseManifest("{\"services\":[{\"name\":\"remoto\",\"port\":7000}]}")
     // Sem escopo: igual (comportamento legado, ainda usado por chamadores sem sessao).
-    assert(diffDeployment(liveDevices, wantedDevices).get(0).startsWith("= remoto"), "sem escopo: igual")
+    need(diffDeployment(liveDevices, wantedDevices).get(0).startsWith("= remoto"), "falhou")
     // Com escopo: conflito explicito, nunca "+":
     var scopedPlan = diffDeploymentFor(liveDevices, wantedDevices, "devA")
-    assert(scopedPlan.size == 1, "com escopo: uma linha")
-    assert(scopedPlan.get(0).startsWith("! remoto"), "com escopo: conflito, nao igual")
-    assert(scopedPlan.get(0).indexOf("devB") >= 0, "nomeia o device onde existe")
+    need(scopedPlan.size == 1, "falhou")
+    need(scopedPlan.get(0).startsWith("! remoto"), "falhou")
+    need(scopedPlan.get(0).indexOf("devB") >= 0, "falhou")
     // Extra de outro device nao aparece (o prune nao o alcanca).
     var wantedEmpty = parseManifest("{\"services\":[{\"name\":\"meu\",\"port\":9000}]}")
     var legacyPlan = diffDeployment(listOf<Service>(liveDevices.get(0)), wantedEmpty)
-    assert(legacyPlan.size == 2, "sem escopo: novo + extra")
+    need(legacyPlan.size == 2, "falhou")
     var scopedEmpty = diffDeploymentFor(listOf<Service>(liveDevices.get(0)), wantedEmpty, "devA")
-    assert(scopedEmpty.size == 1, "com escopo: so o novo")
-    assert(scopedEmpty.get(0).startsWith("+ meu"), "com escopo: nada de extra de outro device")
+    need(scopedEmpty.size == 1, "falhou")
+    need(scopedEmpty.get(0).startsWith("+ meu"), "falhou")
     // Servico DESTE device fora do manifesto continua aparecendo como extra.
     var mine = Service("id-a", "acc", "devA", "orfa", "127.0.0.1", 9100, "http", "orfa.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", "")
     var scopedMixed = diffDeploymentFor(listOf<Service>(mine), wantedEmpty, "devA")
-    assert(scopedMixed.size == 2, "novo + orfao do proprio device")
-    assert(scopedMixed.get(1).startsWith("- orfa"), "orfao do proprio device aparece")
+    need(scopedMixed.size == 2, "falhou")
+    need(scopedMixed.get(1).startsWith("- orfa"), "falhou")
 }
 
 test "deploy: sumario do down nao mente quando nada foi removido", "deploy-down-summary" {
     // Puro. Medido: com 3 servicos no manifesto e nenhum publicado o down
     // dizia "3 servico(s) do manifesto removidos" — contava o manifesto, nao
     // o que saiu. O verbo agora depende do que aconteceu.
-    assert(downSummary(3, 0, 0, 0).indexOf("nada a remover") >= 0, "nada removido nao diz removidos")
-    assert(downSummary(3, 0, 0, 0).indexOf("removidos") < 0, "sem verbo de remocao")
-    assert(downSummary(3, 0, 3, 0).indexOf("3 noutro dispositivo") >= 0, "conta os de outro device")
+    need(downSummary(3, 0, 0, 0).indexOf("nada a remover") >= 0, "falhou")
+    need(downSummary(3, 0, 0, 0).indexOf("removidos") < 0, "falhou")
+    need(downSummary(3, 0, 3, 0).indexOf("3 noutro dispositivo") >= 0, "falhou")
     var one = downSummary(3, 1, 0, 0)
-    assert(one == "down ok: 1 servico(s) do manifesto removidos", "um removido: " + one)
+    need(one == "down ok: 1 servico(s) do manifesto removidos", "falhou")
     var two = downSummary(5, 2, 1, 0)
-    assert(two.indexOf("2 servico(s) do manifesto removidos") >= 0, "dois removidos: " + two)
+    need(two.indexOf("2 servico(s) do manifesto removidos") >= 0, "falhou")
     // Falha domina o resumo (nao diz "ok" com falha).
-    assert(downSummary(3, 1, 0, 2) == "down com 2 falha(s)", "falhas no resumo")
+    need(downSummary(3, 1, 0, 2) == "down com 2 falha(s)", "falhou")
 }
 
 test "deploy: down distingue ausente de publicado noutro dispositivo", "deploy-down-scope" {
@@ -352,22 +352,22 @@ test "deploy: down distingue ausente de publicado noutro dispositivo", "deploy-d
     var live = listOf<Service>()
     live.add(Service("id-a", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
     live.add(Service("id-b", "acc", "devB", "outro", "127.0.0.1", 9000, "http", "outro.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
-    assert(serviceIdOnDevice(live, "site", "devA") == "id-a", "alvo do proprio device")
-    assert(serviceIdOnDevice(live, "site", "devB") == "", "nao pega id de outro device")
-    assert(serviceIdOnDevice(live, "outro", "devA") == "", "homonimo alheio nao vira alvo")
-    assert(serviceIdOnDevice(live, "nao-existe", "devA") == "", "inexistente vazio")
-    assert(serviceDeviceElsewhere(live, "outro", "devA") == "devB", "diz onde o alheio vive")
-    assert(serviceDeviceElsewhere(live, "site", "devA") == "", "o proprio nao e 'elsewhere'")
-    assert(serviceDeviceElsewhere(live, "nao-existe", "devA") == "", "inexistente nao e elsewhere")
+    need(serviceIdOnDevice(live, "site", "devA") == "id-a", "falhou")
+    need(serviceIdOnDevice(live, "site", "devB") == "", "falhou")
+    need(serviceIdOnDevice(live, "outro", "devA") == "", "falhou")
+    need(serviceIdOnDevice(live, "nao-existe", "devA") == "", "falhou")
+    need(serviceDeviceElsewhere(live, "outro", "devA") == "devB", "falhou")
+    need(serviceDeviceElsewhere(live, "site", "devA") == "", "falhou")
+    need(serviceDeviceElsewhere(live, "nao-existe", "devA") == "", "falhou")
     var line = downElsewhereLine("outro", "devB")
-    assert(line.indexOf("outro") >= 0, "mensagem nomeia o servico")
-    assert(line.indexOf("devB") >= 0, "mensagem nomeia o device")
-    assert(line.indexOf("nao removido") >= 0, "diz que nada foi removido")
-    assert(line.indexOf("down") >= 0, "orienta rodar la")
+    need(line.indexOf("outro") >= 0, "falhou")
+    need(line.indexOf("devB") >= 0, "falhou")
+    need(line.indexOf("nao removido") >= 0, "falhou")
+    need(line.indexOf("down") >= 0, "falhou")
     // Nome igual em DOIS devices: o proprio vence (remove o dele).
     live.add(Service("id-a2", "acc", "devA", "dup", "127.0.0.1", 7000, "http", "dup.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
     live.add(Service("id-b2", "acc", "devB", "dup", "127.0.0.1", 7001, "http", "dup.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
-    assert(serviceIdOnDevice(live, "dup", "devA") == "id-a2", "homonimo: mira o proprio")
+    need(serviceIdOnDevice(live, "dup", "devA") == "id-a2", "falhou")
 }
 
 test "deploy: down exige --yes (guarda pura + contagem de orfaos)", "deploy-down-guard" {
@@ -383,25 +383,25 @@ test "deploy: down exige --yes (guarda pura + contagem de orfaos)", "deploy-down
     services.add(ManifestService("site", "127.0.0.1", 8080, "PUBLIC", "http", "", "", "", "", ""))
     // So o proprio device conta: "velho" (devA, fora do manifesto) = 1 orfao;
     // "alheio" (devB) nunca e orfao do prune.
-    assert(downOrphanCount(live, services, "devA") == 1, "um orfao do proprio device")
-    assert(downOrphanCount(live, services, "devB") == 1, "para devB, 'alheio' e o orfao")
+    need(downOrphanCount(live, services, "devA") == 1, "falhou")
+    need(downOrphanCount(live, services, "devB") == 1, "falhou")
     var noServices = listOf<ManifestService>()
-    assert(downOrphanCount(live, noServices, "devA") == 2, "sem manifesto, todos do device sao orfaos")
+    need(downOrphanCount(live, noServices, "devA") == 2, "falhou")
     // Mensagem: nomeia os declarados, e os orfaos so com --prune.
     var msg = downConfirmationRequired(3, 2, true)
-    assert(msg.indexOf("3 declarado(s)") >= 0, "conta os declarados")
-    assert(msg.indexOf("2 orfao(s)") >= 0, "conta orfaos com --prune")
-    assert(msg.indexOf("irreversivel") >= 0, "avisa irreversibilidade")
-    assert(msg.indexOf("down --yes") >= 0, "aponta como prosseguir")
+    need(msg.indexOf("3 declarado(s)") >= 0, "falhou")
+    need(msg.indexOf("2 orfao(s)") >= 0, "falhou")
+    need(msg.indexOf("irreversivel") >= 0, "falhou")
+    need(msg.indexOf("down --yes") >= 0, "falhou")
     var plain = downConfirmationRequired(1, 5, false)
-    assert(plain.indexOf("orfao") < 0, "sem --prune nao fala de orfaos")
+    need(plain.indexOf("orfao") < 0, "falhou")
 }
 
 test "deploy: down --yes repetido barra no uso", "deploy-down-guard" {
     // Booleana repetida barra antes de qualquer rede (mesma regra do
     // --prune/--check), entao roda sem sessao.
     var bad = cmdDown(listOf("--yes", "--yes"))
-    assert(bad == 1, "down --yes repetido barra no uso: " + intToString(bad))
+    need(bad == 1, "falhou")
 }
 
 test "deploy: build opcional no manifesto executa antes do publish", "deploy-build" {
@@ -410,98 +410,98 @@ test "deploy: build opcional no manifesto executa antes do publish", "deploy-bui
     // build (comportamento anterior, inalterado); presente e repassado como
     // esta; vazio equivale a ausente.
     var plain = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
-    assert(plain.get(0).build == "", "ausente vira vazio")
+    need(plain.get(0).build == "", "falhou")
     var withBuild = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"build\":\"npm run build\"}]}")
-    assert(withBuild.get(0).build == "npm run build", "comando repassado")
-    assert(withBuild.get(0).port == 8080, "resto intacto")
+    need(withBuild.get(0).build == "npm run build", "falhou")
+    need(withBuild.get(0).port == 8080, "falhou")
     var emptyBuild = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"build\":\"\"}]}")
-    assert(emptyBuild.get(0).build == "", "vazio vira ausente")
+    need(emptyBuild.get(0).build == "", "falhou")
     // Execucao: vazio = skip honesto (nao toca o shell); true = ok;
     // false = exit 1 com motivo; comando inexistente = erro honesto.
     var skipped = runServiceBuild("")
-    assert(skipped.ok == true, "sem build: ok")
-    assert(skipped.detail == "sem build", "sem build: motivo")
+    need(skipped.ok == true, "falhou")
+    need(skipped.detail == "sem build", "falhou")
     var good = runServiceBuild("/bin/true")
-    assert(good.ok == true, "exit 0: ok")
+    need(good.ok == true, "falhou")
     var bad = runServiceBuild("/bin/false")
-    assert(bad.ok == false, "exit 1: falha")
-    assert(bad.detail.indexOf("exit 1") >= 0, "exit no motivo")
+    need(bad.ok == false, "falhou")
+    need(bad.detail.indexOf("exit 1") >= 0, "falhou")
     var missing = runServiceBuild("/nao/existe/kofcloud-build-" + crypto.randomHex(4))
-    assert(missing.ok == false, "inexistente: falha honesta")
+    need(missing.ok == false, "falhou")
     // Medido: `process.run("echo hi")` procura um executavel com o nome
     // inteiro e falha com exit -1 — o exemplo documentado
     // ("npm run build") nunca funcionou. O build roda pelo shell.
     var withArgs = runServiceBuild("echo hi")
-    assert(withArgs.ok == true, "comando com argumentos: ok")
+    need(withArgs.ok == true, "falhou")
     var shellExit = runServiceBuild("exit 3")
-    assert(shellExit.ok == false, "exit do shell propaga")
-    assert(shellExit.detail.indexOf("exit 3") >= 0, "motivo com o codigo")
+    need(shellExit.ok == false, "falhou")
+    need(shellExit.detail.indexOf("exit 3") >= 0, "falhou")
     var pipeline = runServiceBuild("echo um | tr a-z A-Z")
-    assert(pipeline.ok == true, "pipe funciona (shell de verdade)")
+    need(pipeline.ok == true, "falhou")
     var badCmd = runServiceBuild("no-such-cmd-kofcloud-" + crypto.randomHex(4))
-    assert(badCmd.ok == false, "comando inexistente pelo shell falha")
+    need(badCmd.ok == false, "falhou")
     var blankArg = runServiceBuild("   ")
-    assert(blankArg.ok == true, "so-espacos nao chega ao shell")
+    need(blankArg.ok == true, "falhou")
     // Diagnostico: so "exit N" obrigava o operador a reproduzir o comando.
     // O detalhe agora traz a ultima linha de stderr (canal de erro), com
     // stdout como alternativa — uma linha so, nunca o comando.
     var explain = runServiceBuild("echo 'erro: modulo ausente' >&2; exit 2")
-    assert(explain.ok == false, "falha com stderr")
-    assert(explain.detail.indexOf("exit 2") >= 0, "codigo no detalhe")
-    assert(explain.detail.indexOf("erro: modulo ausente") >= 0, "ultima linha do stderr")
+    need(explain.ok == false, "falhou")
+    need(explain.detail.indexOf("exit 2") >= 0, "falhou")
+    need(explain.detail.indexOf("erro: modulo ausente") >= 0, "falhou")
     var stdoutOnly = runServiceBuild("echo 'falhou no passo 3'; exit 1")
-    assert(stdoutOnly.detail.indexOf("falhou no passo 3") >= 0, "stdout quando stderr vazio")
+    need(stdoutOnly.detail.indexOf("falhou no passo 3") >= 0, "falhou")
     var silent = runServiceBuild("exit 4")
-    assert(silent.detail == "build falhou (exit 4)", "sem saida: so o codigo")
+    need(silent.detail == "build falhou (exit 4)", "falhou")
     var noisy = runServiceBuild("echo primeira >&2; echo ULTIMA >&2; exit 5")
-    assert(noisy.detail.indexOf("ULTIMA") >= 0, "ultima linha")
-    assert(noisy.detail.indexOf("primeira") < 0, "nao despeja a saida toda")
-    assert(lastLineOf("a\n\nb  \n") == "b", "lastLineOf apara e ignora vazias")
-    assert(lastLineOf("") == "", "lastLineOf vazio")
-    assert(buildFailureDetail(7, "", "") == "build falhou (exit 7)", "detalhe minimo")
+    need(noisy.detail.indexOf("ULTIMA") >= 0, "falhou")
+    need(noisy.detail.indexOf("primeira") < 0, "falhou")
+    need(lastLineOf("a\n\nb  \n") == "b", "falhou")
+    need(lastLineOf("") == "", "falhou")
+    need(buildFailureDetail(7, "", "") == "build falhou (exit 7)", "falhou")
     // Artefato opcional: ausente vira "" (sem checagem, como sem build);
     // presente e repassado como esta; vazio equivale a ausente.
-    assert(plain.get(0).artifact == "", "sem artifact: vazio")
+    need(plain.get(0).artifact == "", "falhou")
     var withArtifact = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"build\":\"npm run build\",\"artifact\":\"dist/index.html\"}]}")
-    assert(withArtifact.get(0).artifact == "dist/index.html", "caminho repassado")
-    assert(withArtifact.get(0).build == "npm run build", "build intacto")
+    need(withArtifact.get(0).artifact == "dist/index.html", "falhou")
+    need(withArtifact.get(0).build == "npm run build", "falhou")
     var emptyArtifact = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"artifact\":\"\"}]}")
-    assert(emptyArtifact.get(0).artifact == "", "vazio vira ausente")
+    need(emptyArtifact.get(0).artifact == "", "falhou")
     // So-espacos equivale a ausente (trim no parse): nao marca (build)/
     // (artifact) no plan, nao executa shell vazio, nao barra o publish.
     var blankBuild = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"build\":\"   \"}]}")
-    assert(blankBuild.get(0).build == "", "build so-espacos vira ausente")
+    need(blankBuild.get(0).build == "", "falhou")
     var blankArtifact = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":8080,\"artifact\":\"   \"}]}")
-    assert(blankArtifact.get(0).artifact == "", "artifact so-espacos vira ausente")
+    need(blankArtifact.get(0).artifact == "", "falhou")
     // Defesa em profundidade (puras toleram direto, sem passar pelo parse):
     // so-espacos comporta-se como ausente em run/build, plan e check.
     var blankSkipped = runServiceBuild("   ")
-    assert(blankSkipped.ok == true, "build direto so-espacos: skip")
-    assert(blankSkipped.detail == "sem build", "build direto so-espacos: motivo")
-    assert(artifactProblem("site", "   ") == "", "artifact direto so-espacos: nada a apontar")
+    need(blankSkipped.ok == true, "falhou")
+    need(blankSkipped.detail == "sem build", "falhou")
+    need(artifactProblem("site", "   ") == "", "falhou")
     // artifactProblem pura (so File().exists(), sem rede/HOME): sem
     // artifact = "" (sem checagem); caminho existente = ""; inexistente =
     // problema formatado igual ao do --check (mesma funcao nos dois).
-    assert(artifactProblem("site", "") == "", "sem artifact: nada a apontar")
-    assert(artifactProblem("site", "src/Main.kf") == "", "existente: ok")
+    need(artifactProblem("site", "") == "", "falhou")
+    need(artifactProblem("site", "src/Main.kf") == "", "falhou")
     var ghost = "/nao/existe/kofcloud-artifact-" + crypto.randomHex(4)
     var flagged = artifactProblem("site", ghost)
-    assert(flagged.indexOf("site") >= 0, "nomeia o servico")
-    assert(flagged.indexOf("artefato ausente") >= 0, "nomeia o problema")
-    assert(flagged.indexOf(ghost) >= 0, "mostra o caminho")
-    assert(flagged.indexOf("deploy") >= 0, "orienta o re-deploy")
+    need(flagged.indexOf("site") >= 0, "falhou")
+    need(flagged.indexOf("artefato ausente") >= 0, "falhou")
+    need(flagged.indexOf(ghost) >= 0, "falhou")
+    need(flagged.indexOf("deploy") >= 0, "falhou")
     // Medido: `File(dir).exists()` e true para DIRETORIO, entao o deploy
     // publicava um servico cujo "artefato" era uma pasta. Exige-se conteudo
     // legivel (readText != null), nao so existencia.
     var dir = "/tmp/kofcloud-deploy-diretorio-" + crypto.randomHex(4)
     Directory(dir).createDirectories()
-    assert(artifactProblem("site", dir) != "", "diretorio nao e artefato")
+    need(artifactProblem("site", dir) != "", "falhou")
     var plainFile = dir + "/index.html"
     File(plainFile).writeText("<h1>oi</h1>")
-    assert(artifactProblem("site", plainFile) == "", "arquivo dentro do dir: ok")
+    need(artifactProblem("site", plainFile) == "", "falhou")
     var emptyFile = dir + "/vazio"
     File(emptyFile).writeText("")
-    assert(artifactProblem("site", emptyFile) == "", "arquivo vazio ainda e artefato")
+    need(artifactProblem("site", emptyFile) == "", "falhou")
     File(emptyFile).delete()
 }
 
@@ -515,7 +515,7 @@ test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {
     registry.setLimits(5, 40)
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control plane no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     // Conta + device + UM servico fora do manifesto (deploy nao toca nele).
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
@@ -523,7 +523,7 @@ test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", accountToken)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var extraBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"extra\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"9999\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", extraBody, accountToken)) == 200, "extra fora do manifesto")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", extraBody, accountToken)) == 200, "falhou")
 
     var manifest = "{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"api\",\"port\":3000,\"exposure\":\"AUTHENTICATED\"}]}"
     var file = deployManifest("e2e", manifest)
@@ -531,34 +531,34 @@ test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {
     // deploy via HTTP direto (o cmdDeploy precisa de sessao local; aqui
     // exercitamos o protocolo que ele usa, com o mesmo corpo).
     var services = parseManifest(manifest)
-    assert(services.size == 2, "manifesto parseado")
+    need(services.size == 2, "falhou")
     for (var wanted in services) {
         var body = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"" + wanted.name + "\",\"localAddress\":\"" + wanted.address + "\",\"localPort\":\"" + intToString(wanted.port) + "\",\"protocol\":\"http\",\"exposure\":\"" + wanted.exposure + "\"}"
-        assert(statusOf(httpPostJson(controlPort, "/v1/services", body, accountToken)) == 200, "publicado: " + wanted.name)
+        need(statusOf(httpPostJson(controlPort, "/v1/services", body, accountToken)) == 200, "falhou")
     }
     // Idempotente: publicar de novo nao duplica.
     for (var wanted in services) {
         var body = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"" + wanted.name + "\",\"localAddress\":\"" + wanted.address + "\",\"localPort\":\"" + intToString(wanted.port) + "\",\"protocol\":\"http\",\"exposure\":\"" + wanted.exposure + "\"}"
-        assert(statusOf(httpPostJson(controlPort, "/v1/services", body, accountToken)) == 200, "re-publica ok")
+        need(statusOf(httpPostJson(controlPort, "/v1/services", body, accountToken)) == 200, "falhou")
     }
     // Tres servicos agora (extra + 2 do manifesto), sem duplicata.
     var listedRaw = httpGetToken(controlPort, "/v1/services", accountToken)
-    assert(statusOf(listedRaw) == 200, "lista autenticada")
-    assert(countOccurrences(bodyOf(listedRaw), "\"name\"") == 3, "tres servicos, sem duplicata")
+    need(statusOf(listedRaw) == 200, "falhou")
+    need(countOccurrences(bodyOf(listedRaw), "\"name\"") == 3, "falhou")
 
     // down remove SO os do manifesto (extra sobrevive).
     for (var wanted in services) {
         var target = serviceIdByNameIn(listedRaw, wanted.name)
-        assert(target.length > 0, "alvo existe: " + wanted.name)
+        need(target.length > 0, "falhou")
         var removeBody = "{\"serviceId\":\"" + target + "\"}"
-        assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", removeBody, accountToken)) == 200, "removido: " + wanted.name)
+        need(statusOf(httpPostJson(controlPort, "/v1/services/remove", removeBody, accountToken)) == 200, "falhou")
     }
     // down idempotente: remover de novo da 404, sem quebrar nada.
     var ghost = "{\"serviceId\":\"inexistente\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", ghost, accountToken)) == 404, "remover de novo -> 404")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/remove", ghost, accountToken)) == 404, "falhou")
     var afterRaw = httpGetToken(controlPort, "/v1/services", accountToken)
-    assert(countOccurrences(bodyOf(afterRaw), "\"name\"") == 1, "so o extra sobreviveu")
-    assert(bodyOf(afterRaw).indexOf("\"extra\"") >= 0, "extra intacto")
+    need(countOccurrences(bodyOf(afterRaw), "\"name\"") == 1, "falhou")
+    need(bodyOf(afterRaw).indexOf("\"extra\"") >= 0, "falhou")
 
     // --prune fecha o drift: orfao do MESMO device some; de outro device,
     // nunca (escopo do prune e o device atual).
@@ -571,17 +571,17 @@ test "deploy: fim a fim publica e down remove so o manifesto", "deploy-e2e" {
     var otherId = mapField(json.decode<Map<String, String>>(bodyOf(otherDevice)), "deviceId")
     var homonymBody = "{\"deviceId\":\"" + otherId + "\",\"name\":\"extra\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"9998\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
     var homonymResp = httpPostJson(controlPort, "/v1/services", homonymBody, accountToken)
-    assert(statusOf(homonymResp) == 409, "nome do outro device -> 409; recebeu " + intToString(statusOf(homonymResp)))
-    assert(bodyOf(homonymResp).indexOf("KCF139") >= 0, "KCF139 no corpo")
+    need(statusOf(homonymResp) == 409, "falhou")
+    need(bodyOf(homonymResp).indexOf("KCF139") >= 0, "falhou")
     var otherBody = "{\"deviceId\":\"" + otherId + "\",\"name\":\"alheio\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"9998\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", otherBody, accountToken)) == 200, "servico de outro device")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", otherBody, accountToken)) == 200, "falhou")
     // Simula o prune: diff dos publicados DESTE device contra o manifesto.
     var prePrune = httpGetToken(controlPort, "/v1/services", accountToken)
     var pruned = pruneOrphans(controlPort, accountToken, deviceId, services)
-    assert(pruned == 1, "um orfao podado (o extra)")
+    need(pruned == 1, "falhou")
     var postPrune = httpGetToken(controlPort, "/v1/services", accountToken)
-    assert(bodyOf(postPrune).indexOf("\"extra\"") < 0, "extra sumiu")
-    assert(bodyOf(postPrune).indexOf("\"alheio\"") >= 0, "outro device intacto")
+    need(bodyOf(postPrune).indexOf("\"extra\"") < 0, "falhou")
+    need(bodyOf(postPrune).indexOf("\"alheio\"") >= 0, "falhou")
 }
 
 // Replica a regra do cmdDown --prune via protocolo: remove publicados
@@ -601,7 +601,7 @@ Int pruneOrphans(Int controlPort, String token, String deviceId, List<ManifestSe
         }
         if (declared == false) {
             var removeBody = "{\"serviceId\":\"" + service.id + "\"}"
-            assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", removeBody, token)) == 200, "podado: " + service.name)
+            need(statusOf(httpPostJson(controlPort, "/v1/services/remove", removeBody, token)) == 200, "falhou")
             pruned = pruned + 1
         }
     }
@@ -614,7 +614,7 @@ test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-che
     var registry = Registry(path)
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control plane no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -625,14 +625,14 @@ test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-che
     var controlUrl = "http://127.0.0.1:" + intToString(controlPort)
     for (var wanted in services) {
         var body = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"" + wanted.name + "\",\"localAddress\":\"" + wanted.address + "\",\"localPort\":\"" + intToString(wanted.port) + "\",\"protocol\":\"http\",\"exposure\":\"" + wanted.exposure + "\"}"
-        assert(statusOf(httpPostJson(controlPort, "/v1/services", body, accountToken)) == 200, "publicado")
+        need(statusOf(httpPostJson(controlPort, "/v1/services", body, accountToken)) == 200, "falhou")
     }
 
     // Publicado mas sem ninguem escutando: check acusa, sem derrubar nada.
     var down = verifyDeployment(controlUrl, accountToken, services)
-    assert(down.size == 1, "um problema")
-    assert(down.get(0).indexOf("site") >= 0, "nomeia o servico")
-    assert(down.get(0).indexOf("sem resposta") >= 0, "diz que nao responde")
+    need(down.size == 1, "falhou")
+    need(down.get(0).indexOf("site") >= 0, "falhou")
+    need(down.get(0).indexOf("sem resposta") >= 0, "falhou")
 
     // Sobe um servico HTTP de verdade na porta: check aprova. O listener
     // que apenas aceitava e fechava passava no connect TCP antigo; com a
@@ -649,11 +649,11 @@ test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-che
             }
         }
     }
-    assert(waitForPort(19729, 60), "servico local no ar")
+    need(waitForPort(19729, 60), "falhou")
     var up = verifyDeployment(controlUrl, accountToken, services)
-    assert(up.size == 0, "tudo saudavel")
-    assert(checkLocalService("127.0.0.1", 19729), "check unitario ok")
-    assert(checkLocalService("127.0.0.1", 19728) == false, "porta fechada recusa")
+    need(up.size == 0, "falhou")
+    need(checkLocalService("127.0.0.1", 19729), "falhou")
+    need(checkLocalService("127.0.0.1", 19728) == false, "falhou")
 
     // Escopo por device: o manifesto descreve a maquina LOCAL. Publicado
     // noutro device nao e "publicado aqui" — antes o --check/doctor davam
@@ -661,15 +661,15 @@ test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-che
     var otherDev = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"outro\",\"publicKey\":\"pk2\"}", accountToken)
     var otherDevId = mapField(json.decode<Map<String, String>>(bodyOf(otherDev)), "deviceId")
     var elsewhere = "{\"deviceId\":\"" + otherDevId + "\",\"name\":\"noutro\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19729\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", elsewhere, accountToken)) == 200, "publicado noutro device")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", elsewhere, accountToken)) == 200, "falhou")
     var wantedElsewhere = parseManifest("{\"services\":[{\"name\":\"noutro\",\"port\":19729}]}")
     // Sem escopo (compatibilidade): o chamador antigo aprova.
-    assert(verifyDeployment(controlUrl, accountToken, wantedElsewhere).size == 0, "sem escopo: aprovava")
+    need(verifyDeployment(controlUrl, accountToken, wantedElsewhere).size == 0, "falhou")
     var scoped = verifyDeploymentFor(controlUrl, accountToken, wantedElsewhere, deviceId)
-    assert(scoped.size == 1, "com escopo: um problema")
-    assert(scoped.get(0).indexOf("noutro") >= 0, "nomeia o servico")
-    assert(scoped.get(0).indexOf("dispositivo") >= 0, "diz que e noutro device")
-    assert(scoped.get(0).indexOf("kof cloud deploy") >= 0, "orienta o re-deploy")
+    need(scoped.size == 1, "falhou")
+    need(scoped.get(0).indexOf("noutro") >= 0, "falhou")
+    need(scoped.get(0).indexOf("dispositivo") >= 0, "falhou")
+    need(scoped.get(0).indexOf("kof cloud deploy") >= 0, "falhou")
     listener.close()
 
     // Drift de config: remove e republica o mesmo nome com porta/exposicao
@@ -678,14 +678,14 @@ test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-che
     // acusa ANTES de testar resposta, com o diff e a dica de re-deploy.
     var listedDrift = httpGetToken(controlPort, "/v1/services", accountToken)
     var driftTarget = serviceIdByNameIn(listedDrift, "site")
-    assert(driftTarget.length > 0, "alvo existe")
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + driftTarget + "\"}", accountToken)) == 200, "removido")
+    need(driftTarget.length > 0, "falhou")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + driftTarget + "\"}", accountToken)) == 200, "falhou")
     var driftBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19728\",\"protocol\":\"http\",\"exposure\":\"PRIVATE\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", driftBody, accountToken)) == 200, "republicado com drift")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", driftBody, accountToken)) == 200, "falhou")
     var drifted = verifyDeployment(controlUrl, accountToken, services)
-    assert(drifted.size == 1, "um problema de drift")
-    assert(drifted.get(0).indexOf("config diferente") >= 0, "acusa o drift")
-    assert(drifted.get(0).indexOf("deploy") >= 0, "orienta o re-deploy")
+    need(drifted.size == 1, "falhou")
+    need(drifted.get(0).indexOf("config diferente") >= 0, "falhou")
+    need(drifted.get(0).indexOf("deploy") >= 0, "falhou")
 
     // Artefato declarado mas ausente no disco: mesmo publicado e
     // respondendo, o check avisa staleness (e o doctor tambem, via o mesmo
@@ -694,9 +694,9 @@ test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-che
     // tem id novo — re-lista em vez de reusar o driftTarget removido).
     var relisted = httpGetToken(controlPort, "/v1/services", accountToken)
     var driftedId = serviceIdByNameIn(relisted, "site")
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + driftedId + "\"}", accountToken)) == 200, "drift removido")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + driftedId + "\"}", accountToken)) == 200, "falhou")
     var cleanBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19729\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", cleanBody, accountToken)) == 200, "republicado limpo")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", cleanBody, accountToken)) == 200, "falhou")
     // Reabre o listener: o verify checa resposta antes do artefato, e o
     // listener original fechou no fim do cenario anterior.
     var listener2 = net.listen(19729)
@@ -711,14 +711,14 @@ test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-che
             }
         }
     }
-    assert(waitForPort(19729, 60), "servico local no ar de novo")
+    need(waitForPort(19729, 60), "falhou")
     var staleManifest = "{\"services\":[{\"name\":\"site\",\"port\":19729,\"artifact\":\"/nao/existe/kofcloud-artifact-" + crypto.randomHex(4) + "\"}]}"
     var stale = verifyDeployment(controlUrl, accountToken, parseManifest(staleManifest))
-    assert(stale.size == 1, "um aviso de artefato")
-    assert(stale.get(0).indexOf("artefato ausente") >= 0, "nomeia o artefato")
-    assert(stale.get(0).indexOf("deploy") >= 0, "orienta o re-deploy")
+    need(stale.size == 1, "falhou")
+    need(stale.get(0).indexOf("artefato ausente") >= 0, "falhou")
+    need(stale.get(0).indexOf("deploy") >= 0, "falhou")
     var noArtifact = verifyDeployment(controlUrl, accountToken, services)
-    assert(noArtifact.size == 0, "sem artifact: tudo saudavel")
+    need(noArtifact.size == 0, "falhou")
 
     // Drift de politica WAF: remove e republica sem allowlist (o publish e
     // idempotente — re-publicar retorna o existente; drift real vem de
@@ -726,18 +726,18 @@ test "deploy: verify acusa servico fora do ar e aprova quando sobe", "deploy-che
     // resposta, como porta/exposure/protocol. Politica igual = saudavel.
     var relistedPolicy = httpGetToken(controlPort, "/v1/services", accountToken)
     var policyId = serviceIdByNameIn(relistedPolicy, "site")
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + policyId + "\"}", accountToken)) == 200, "removido p/ drift de politica")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + policyId + "\"}", accountToken)) == 200, "falhou")
     var bareBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19729\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", bareBody, accountToken)) == 200, "republicado sem politica")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", bareBody, accountToken)) == 200, "falhou")
     var policyManifest = "{\"services\":[{\"name\":\"site\",\"port\":19729,\"allowMethods\":\"GET\",\"allowPaths\":\"/api/*\"}]}"
     var driftedPolicy = verifyDeployment(controlUrl, accountToken, parseManifest(policyManifest))
-    assert(driftedPolicy.size == 1, "um problema de drift de politica")
-    assert(driftedPolicy.get(0).indexOf("config diferente") >= 0, "acusa o drift")
-    assert(driftedPolicy.get(0).indexOf("allowMethods") >= 0, "nomeia o campo")
-    assert(driftedPolicy.get(0).indexOf("deploy") >= 0, "orienta o re-deploy")
+    need(driftedPolicy.size == 1, "falhou")
+    need(driftedPolicy.get(0).indexOf("config diferente") >= 0, "falhou")
+    need(driftedPolicy.get(0).indexOf("allowMethods") >= 0, "falhou")
+    need(driftedPolicy.get(0).indexOf("deploy") >= 0, "falhou")
     var bareManifest = "{\"services\":[{\"name\":\"site\",\"port\":19729}]}"
     var bareOk = verifyDeployment(controlUrl, accountToken, parseManifest(bareManifest))
-    assert(bareOk.size == 0, "sem politica nos dois lados: saudavel")
+    need(bareOk.size == 0, "falhou")
     listener2.close()
 }
 
@@ -791,29 +791,29 @@ String serviceIdByNameIn(String servicesRaw, String name) {
 test "deploy: loadManifestFile distingue ausente, invalido e valido", "deploy-load" {
     // Pura na decisao (so IO: ler + parsear) — cobre o caminho que
     // cmdDeploy/cmdDown usam antes de qualquer rede/sessao.
-    assert(resolveManifestPath("") == "kofcloud.json", "vazio vira default")
-    assert(resolveManifestPath("   ") == "kofcloud.json", "so-espacos vira default")
-    assert(resolveManifestPath("  /tmp/x.json  ") == "/tmp/x.json", "padding apara")
-    assert(resolveManifestPath("/tmp/x.json") == "/tmp/x.json", "flag passa direto")
+    need(resolveManifestPath("") == "kofcloud.json", "falhou")
+    need(resolveManifestPath("   ") == "kofcloud.json", "falhou")
+    need(resolveManifestPath("  /tmp/x.json  ") == "/tmp/x.json", "falhou")
+    need(resolveManifestPath("/tmp/x.json") == "/tmp/x.json", "falhou")
     var missing = loadManifestFile("/tmp/kofcloud-deploy-ausente-" + crypto.randomHex(8) + ".json")
-    assert(missing.ok == false, "inexistente falha")
-    assert(missing.error.indexOf("nao encontrado") >= 0, "diz que nao achou")
-    assert(missing.services.size == 0, "sem servicos no erro")
+    need(missing.ok == false, "falhou")
+    need(missing.error.indexOf("nao encontrado") >= 0, "falhou")
+    need(missing.services.size == 0, "falhou")
     var emptyPath = deployManifest("vazio-load", "")
     var empty = loadManifestFile(emptyPath)
-    assert(empty.ok == false, "vazio falha")
-    assert(empty.error.indexOf("nao encontrado") >= 0, "vazio e 'nao encontrado'")
+    need(empty.ok == false, "falhou")
+    need(empty.error.indexOf("nao encontrado") >= 0, "falhou")
     var badPath = deployManifest("bad-load", "{\"services\":[{\"name\":\"x\"}]}")
     var bad = loadManifestFile(badPath)
-    assert(bad.ok == false, "invalido falha")
-    assert(bad.error.indexOf("invalido") >= 0, "diz que e invalido")
-    assert(bad.error.indexOf(badPath) >= 0, "erro cita o caminho")
+    need(bad.ok == false, "falhou")
+    need(bad.error.indexOf("invalido") >= 0, "falhou")
+    need(bad.error.indexOf(badPath) >= 0, "falhou")
     var goodPath = deployManifest("good-load", "{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
     var good = loadManifestFile(goodPath)
-    assert(good.ok == true, "valido passa")
-    assert(good.error == "", "sem erro no ok")
-    assert(good.services.size == 1, "um servico")
-    assert(good.services.get(0).name == "site", "nome certo")
+    need(good.ok == true, "falhou")
+    need(good.error == "", "falhou")
+    need(good.services.size == 1, "falhou")
+    need(good.services.get(0).name == "site", "falhou")
 }
 
 test "deploy: scan acusa segredo no manifesto e aprova o limpo", "deploy-scan" {
@@ -821,17 +821,17 @@ test "deploy: scan acusa segredo no manifesto e aprova o limpo", "deploy-scan" {
     // zero achados; kfs_/kfc_/password em qualquer servico = achado com o
     // nome (sem vazar o valor); vazio = limpo.
     var clean = scanManifestSecrets("{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
-    assert(clean.size == 0, "limpo passa")
-    assert(scanManifestSecrets("").size == 0, "vazio passa")
-    assert(scanManifestSecrets("   ").size == 0, "so-espacos passa")
+    need(clean.size == 0, "falhou")
+    need(scanManifestSecrets("").size == 0, "falhou")
+    need(scanManifestSecrets("   ").size == 0, "falhou")
     var leaked = scanManifestSecrets("{\"services\":[{\"name\":\"site\",\"port\":8080},{\"name\":\"api\",\"port\":3000,\"build\":\"deploy kfs_abc123\"}]}")
-    assert(leaked.size == 1, "um achado: " + intToString(leaked.size))
-    assert(leaked.get(0).indexOf("api") >= 0, "nomeia o servico")
-    assert(leaked.get(0).indexOf("kfs_abc123") < 0, "nao vaza o valor")
+    need(leaked.size == 1, "falhou")
+    need(leaked.get(0).indexOf("api") >= 0, "falhou")
+    need(leaked.get(0).indexOf("kfs_abc123") < 0, "falhou")
     var account = scanManifestSecrets("{\"services\":[{\"name\":\"db\",\"port\":5432,\"password\":\"segredo\"}]}")
-    assert(account.size == 1, "password tambem e achado")
+    need(account.size == 1, "falhou")
     var accountToken = scanManifestSecrets("{\"services\":[{\"name\":\"site\",\"port\":8080,\"artifact\":\"kfc_x\"}]}")
-    assert(accountToken.size == 1, "kfc_ tambem e achado")
+    need(accountToken.size == 1, "falhou")
 }
 
 test "deploy: check local usa GET com prazo (500 e servico mudo nao passam)", "deploy-check-http" {
@@ -887,21 +887,21 @@ test "deploy: check local usa GET com prazo (500 e servico mudo nao passam)", "d
             }
         }
     }
-    assert(waitForPort(okPort, 60), "servico ok no ar")
-    assert(waitForPort(badPort, 60), "servico 500 no ar")
-    assert(waitForPort(mutePort, 60), "servico mudo no ar")
+    need(waitForPort(okPort, 60), "falhou")
+    need(waitForPort(badPort, 60), "falhou")
+    need(waitForPort(mutePort, 60), "falhou")
 
-    assert(checkLocalService("127.0.0.1", okPort), "200 responde")
-    assert(checkLocalService("127.0.0.1", badPort) == false, "500 nao passa")
+    need(checkLocalService("127.0.0.1", okPort), "falhou")
+    need(checkLocalService("127.0.0.1", badPort) == false, "falhou")
     var started = time.now()
-    assert(checkLocalService("127.0.0.1", mutePort) == false, "mudo nao passa")
+    need(checkLocalService("127.0.0.1", mutePort) == false, "falhou")
     var elapsed = time.now() - started
-    assert(elapsed < 15000, "prazo aplicado (elapsed=" + intToString(elapsed) + "ms)")
-    assert(checkLocalService("127.0.0.1", 20137) == false, "porta fechada recusa")
+    need(elapsed < 15000, "falhou")
+    need(checkLocalService("127.0.0.1", 20137) == false, "falhou")
 
     // Protocolo nao-http continua no connect simples (nao ha sonda melhor).
-    assert(checkLocalServiceFor("127.0.0.1", okPort, "tcp"), "tcp = connect ok")
-    assert(checkLocalServiceFor("127.0.0.1", 20137, "tcp") == false, "tcp porta fechada")
+    need(checkLocalServiceFor("127.0.0.1", okPort, "tcp"), "falhou")
+    need(checkLocalServiceFor("127.0.0.1", 20137, "tcp") == false, "falhou")
 
     okListener.close()
     badListener.close()
@@ -929,19 +929,19 @@ test "deploy: check acusa servico SUSPENSO com a dica do unsuspend", "deploy-che
     live.add(Service("id-site", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "SUSPENDED", 0, "", "", ""))
 
     // Puro (`suspendedByName`, o ponto da decisao): sem rede. Sem escopo.
-    assert(statusIsSuspended(suspendedByName(live, "site", "")), "sem escopo: suspenso acusado")
+    need(statusIsSuspended(suspendedByName(live, "site", "")), "falhou")
     // Com escopo no mesmo device: acusado.
-    assert(statusIsSuspended(suspendedByName(live, "site", "devA")), "escopo certo: suspenso")
+    need(statusIsSuspended(suspendedByName(live, "site", "devA")), "falhou")
     // Homonimo NOUTRO device: nao conta (o caso dele e "publicado noutro
     // dispositivo", que ja tem problema proprio).
-    assert(suspendedByName(live, "site", "devB") == "", "homonimo alheio: vazio")
+    need(suspendedByName(live, "site", "devB") == "", "falhou")
     // Sem match: vazio (o "nao publicado" e tratado antes).
-    assert(suspendedByName(live, "outro", "devA") == "", "inexistente: vazio")
+    need(suspendedByName(live, "outro", "devA") == "", "falhou")
 
     // ONLINE/UNKNOWN/OFFLINE nao caem na dica do unsuspend.
     var online = listOf<Service>()
     online.add(Service("id-site", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "ONLINE", 0, "", "", ""))
-    assert(statusIsSuspended(suspendedByName(online, "site", "devA")) == false, "online nao e suspenso")
+    need(statusIsSuspended(suspendedByName(online, "site", "devA")) == false, "falhou")
 
     // Fim a fim: control plane de verdade, servico suspenso pela API. O
     // check acusa o SUSPENSO (e nao "sem resposta") mesmo com o processo
@@ -950,7 +950,7 @@ test "deploy: check acusa servico SUSPENSO com a dica do unsuspend", "deploy-che
     var registry = Registry("/tmp/kofcloud-depsusp-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
     var dev = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
@@ -967,25 +967,25 @@ test "deploy: check acusa servico SUSPENSO com a dica do unsuspend", "deploy-che
             }
         }
     }
-    assert(waitForPort(19822, 60), "servico local no ar")
+    need(waitForPort(19822, 60), "falhou")
     var pub = httpPostJson(controlPort, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19822\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", token)
-    assert(statusOf(pub) == 200, "publicado")
+    need(statusOf(pub) == 200, "falhou")
     var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(pub)), "id")
     var susp = httpPostJson(controlPort, "/v1/services/suspend", "{\"serviceId\":\"" + serviceId + "\"}", token)
-    assert(statusOf(susp) == 200, "suspenso")
+    need(statusOf(susp) == 200, "falhou")
 
     var wanted = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":19822}]}")
     var controlUrl = "http://127.0.0.1:" + intToString(controlPort)
     var problems = verifyDeploymentFor(controlUrl, token, wanted, deviceId)
-    assert(problems.size == 1, "um problema: " + intToString(problems.size))
-    assert(problems.get(0).indexOf("SUSPENSO") >= 0, "nomeia o estado: " + problems.get(0))
-    assert(problems.get(0).indexOf("unsuspend") >= 0, "dica do unsuspend")
-    assert(problems.get(0).indexOf("kof cloud deploy") < 0, "deploy nao resolve (nao dessuspende)")
-    assert(checkLocalService("127.0.0.1", 19822), "o processo local esta de pe (o problema e o status)")
+    need(problems.size == 1, "falhou")
+    need(problems.get(0).indexOf("SUSPENSO") >= 0, "falhou")
+    need(problems.get(0).indexOf("unsuspend") >= 0, "falhou")
+    need(problems.get(0).indexOf("kof cloud deploy") < 0, "falhou")
+    need(checkLocalService("127.0.0.1", 19822), "falhou")
 
     // Unsuspend volta ao verde.
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/unsuspend", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "liberado")
-    assert(verifyDeploymentFor(controlUrl, token, wanted, deviceId).size == 0, "liberado: tudo saudavel")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/unsuspend", "{\"serviceId\":\"" + serviceId + "\"}", token)) == 200, "falhou")
+    need(verifyDeploymentFor(controlUrl, token, wanted, deviceId).size == 0, "falhou")
     listener.close()
 }
 test "deploy: check avisa kfs_ perto do fim (mesmo predicado do token-list)", "deploy-kfswarn" {
@@ -994,18 +994,18 @@ test "deploy: check avisa kfs_ perto do fim (mesmo predicado do token-list)", "d
     var agora = longToString(now)
     var calm = listOf<ServiceTokenEntry>()
     calm.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", longToString(now + window + 86400000L)))
-    assert(kfsExpiryCheckLine("api", calm, agora) == "", "fora da janela: silencio")
+    need(kfsExpiryCheckLine("api", calm, agora) == "", "falhou")
     var expired = listOf<ServiceTokenEntry>()
     expired.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", longToString(now - 1)))
-    assert(kfsExpiryCheckLine("api", expired, agora) == "", "vencida: silencio")
+    need(kfsExpiryCheckLine("api", expired, agora) == "", "falhou")
     var hot = listOf<ServiceTokenEntry>()
     hot.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", null))
     hot.add(ServiceTokenEntry("svc", "e5f6a7b8", "1700000000000", longToString(now + window - 1000L)))
     var line = kfsExpiryCheckLine("api", hot, agora)
-    assert(line.indexOf("api:") >= 0, "nomeia o servico: " + line)
-    assert(line.indexOf("1 credencial(is)") >= 0, "conta so a perto do fim: " + line)
-    assert(line.indexOf("service rotate api") >= 0, "orienta a rotacao: " + line)
-    assert(line.indexOf("a1b2c3d4") < 0, "nao vaza nem o id curto")
+    need(line.indexOf("api:") >= 0, "falhou")
+    need(line.indexOf("1 credencial(is)") >= 0, "falhou")
+    need(line.indexOf("service rotate api") >= 0, "falhou")
+    need(line.indexOf("a1b2c3d4") < 0, "falhou")
 
     var raw = File("src/kofcloud/cli/Deploy.kf").readText()
     var text = ""
@@ -1016,56 +1016,56 @@ test "deploy: check avisa kfs_ perto do fim (mesmo predicado do token-list)", "d
         return
     }
     var startCheck = text.indexOf("Int cmdDeploy(")
-    assert(startCheck >= 0, "acha o cmdDeploy")
+    need(startCheck >= 0, "falhou")
     var endCheck = text.indexOf("Int cmdDown(", startCheck)
-    assert(endCheck > startCheck, "acha o fim do cmdDeploy")
+    need(endCheck > startCheck, "falhou")
     var bodyCheck = text.substring(startCheck, endCheck)
     // Ancora de indentacao (nao so presenca): o laco do check corre
     // INCONDICIONALMENTE no nivel do corpo (4 espacos). Um dead-code wrap
     // (`if (falso) { laco }`) re-indenta e a trava fica vermelha — lacuna
     // real: esse wrap passou sem ficar vermelho no commit 2af856a.
     var loopCall = "for (var warn in kfsExpiryWarningsFor(session.controlUrl, session.token, services, identity.deviceId, now)) {"
-    assert(bodyCheck.indexOf("\n    " + loopCall) >= 0, "check consulta os avisos no nivel do corpo")
-    assert(bodyCheck.indexOf("check: aviso: ") >= 0, "check imprime o aviso sem mudar o exit")
-    assert(bodyCheck.indexOf("check: aviso: ") < bodyCheck.indexOf("check ok: "), "aviso sai antes do veredito")
+    need(bodyCheck.indexOf("\n    " + loopCall) >= 0, "falhou")
+    need(bodyCheck.indexOf("check: aviso: ") >= 0, "falhou")
+    need(bodyCheck.indexOf("check: aviso: ") < bodyCheck.indexOf("check ok: "), "falhou")
     // O --plan descreve o que o deploy faria; o aviso do que o deploy NAO
     // conserta (credencial vencendo) tem de aparecer la tambem, com o
     // MESMO busca (a 2a chamada no corpo — a 1a e do --check), no nivel
     // do bloco --plan (12 espacos; wrap re-indenta e quebra).
-    assert(bodyCheck.indexOf("kfsExpiryWarningsFor(session.controlUrl, session.token, services, identity.deviceId, now)", bodyCheck.indexOf("kfsExpiryWarningsFor(session.controlUrl, session.token, services, identity.deviceId, now)") + 1) >= 0, "plan consulta os avisos (2a chamada)")
-    assert(bodyCheck.indexOf("\n            " + loopCall) >= 0, "plan consulta os avisos no nivel do bloco --plan")
-    assert(bodyCheck.indexOf("plan: aviso: ") >= 0, "plan imprime o aviso")
-    assert(bodyCheck.indexOf("plan: aviso: ") < bodyCheck.indexOf("var plan = diffDeploymentFor"), "aviso sai antes do diff")
+    need(bodyCheck.indexOf("kfsExpiryWarningsFor(session.controlUrl, session.token, services, identity.deviceId, now)", bodyCheck.indexOf("kfsExpiryWarningsFor(session.controlUrl, session.token, services, identity.deviceId, now)") + 1) >= 0, "falhou")
+    need(bodyCheck.indexOf("\n            " + loopCall) >= 0, "falhou")
+    need(bodyCheck.indexOf("plan: aviso: ") >= 0, "falhou")
+    need(bodyCheck.indexOf("plan: aviso: ") < bodyCheck.indexOf("var plan = diffDeploymentFor"), "falhou")
 
     var controlPort = 19881
     var path = "/tmp/kofcloud-depkfswarn-" + crypto.randomHex(4) + ".json"
     var registry = Registry(path)
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control plane no ar")
+    need(waitForPort(controlPort, 60), "falhou")
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var token = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pub = httpPostJson(controlPort, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"api\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19882\",\"protocol\":\"http\",\"exposure\":\"AUTHENTICATED\"}", token)
-    assert(statusOf(pub) == 200, "servico AUTHENTICATED publicado")
+    need(statusOf(pub) == 200, "falhou")
     var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(pub)), "id")
     var wanted = parseManifest("{\"services\":[{\"name\":\"api\",\"port\":19882,\"exposure\":\"AUTHENTICATED\"}]}")
     var controlUrl = "http://127.0.0.1:" + intToString(controlPort)
     var fioNow = longToString(time.now())
-    assert(kfsExpiryWarningsFor(controlUrl, token, wanted, deviceId, fioNow).size == 0, "sem kfs_: silencio")
+    need(kfsExpiryWarningsFor(controlUrl, token, wanted, deviceId, fioNow).size == 0, "falhou")
 
     var issue = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\",\"ttlHours\":\"1\"}", token)
-    assert(statusOf(issue) == 200, "kfs_ de 1h emitida")
+    need(statusOf(issue) == 200, "falhou")
     var warnings = kfsExpiryWarningsFor(controlUrl, token, wanted, deviceId, fioNow)
-    assert(warnings.size == 1, "um aviso: " + intToString(warnings.size))
-    assert(warnings.get(0).indexOf("api:") >= 0, "nomeia o servico: " + warnings.get(0))
-    assert(warnings.get(0).indexOf("service rotate api") >= 0, "orienta a rotacao: " + warnings.get(0))
+    need(warnings.size == 1, "falhou")
+    need(warnings.get(0).indexOf("api:") >= 0, "falhou")
+    need(warnings.get(0).indexOf("service rotate api") >= 0, "falhou")
 
     var pub2 = httpPostJson(controlPort, "/v1/services", "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"19883\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}", token)
-    assert(statusOf(pub2) == 200, "servico PUBLIC publicado")
+    need(statusOf(pub2) == 200, "falhou")
     var wantedPublic = parseManifest("{\"services\":[{\"name\":\"site\",\"port\":19883}]}")
-    assert(kfsExpiryWarningsFor(controlUrl, token, wantedPublic, deviceId, fioNow).size == 0, "PUBLIC nao tem kfs_: silencio")
+    need(kfsExpiryWarningsFor(controlUrl, token, wantedPublic, deviceId, fioNow).size == 0, "falhou")
 }
 
 // Fonte unica das travas de exemplo (deploy-ci/deploy-action): extrai o
@@ -1089,8 +1089,8 @@ Int assertCitedCommands(String text, String help, String label) {
             }
         }
         var cmd = text.substring(start, end)
-        assert(cmd.length > 0, label + ": token extraido apos kof cloud")
-        assert(help.indexOf("  " + cmd + " ") >= 0 || help.indexOf("  " + cmd + "\n") >= 0, label + ": comando citado existe no help: " + cmd)
+        need(cmd.length > 0, "falhou")
+        need(help.indexOf("  " + cmd + " ") >= 0 || help.indexOf("  " + cmd + "\n") >= 0, "falhou")
         cited = cited + 1
         cursor = text.indexOf("kof cloud ", end)
     }
@@ -1107,25 +1107,25 @@ test "deploy: exemplo de pipeline CI cita so comandos reais", "deploy-ci" {
     // Actions e env do passo). Mesmo padrao da trava cruzada usage-parity:
     // o teste le o arquivo do disco.
     var example = readTextOr("docs/examples/ci-pipeline.yml", "")
-    assert(example.length > 0, "exemplo existe e e legivel")
-    assert(example.indexOf("self-hosted") >= 0, "runner self-hosted no topo (pre-requisito honesto)")
-    assert(example.indexOf("connect") >= 0, "diz que a maquina roda o connect")
+    need(example.length > 0, "falhou")
+    need(example.indexOf("self-hosted") >= 0, "falhou")
+    need(example.indexOf("connect") >= 0, "falhou")
 
     // Toda invocacao citada existe no help (fonte unica acima).
     var help = usageText()
     var cited = assertCitedCommands(example, help, "pipeline")
-    assert(cited >= 3, "exemplo cita comandos de verdade: " + intToString(cited))
+    need(cited >= 3, "falhou")
 
     // O fluxo citado e o do slice: login com device fixo, diff sem aplicar,
     // deploy com verificacao — as 3 fases do CI/GitOps do plano.
-    assert(example.indexOf("kof cloud login") >= 0, "login no exemplo")
-    assert(example.indexOf("--device ci") >= 0, "device fixo ci (sem girar devices a cada run)")
-    assert(example.indexOf("kof cloud deploy --plan") >= 0, "plano revisavel")
-    assert(example.indexOf("kof cloud deploy --check") >= 0, "deploy verificado")
+    need(example.indexOf("kof cloud login") >= 0, "falhou")
+    need(example.indexOf("--device ci") >= 0, "falhou")
+    need(example.indexOf("kof cloud deploy --plan") >= 0, "falhou")
+    need(example.indexOf("kof cloud deploy --check") >= 0, "falhou")
 
     // Credencial nunca literal: a senha vem de segredo mascarado e chega ao
     // comando por env do passo ($KOF_PASSWORD), nunca inline no run.
-    assert(example.indexOf("secrets.KOF_PASSWORD") >= 0, "senha vem de segredo do Actions")
+    need(example.indexOf("secrets.KOF_PASSWORD") >= 0, "falhou")
     assert(example.indexOf("KOF_PASSWORD\")") >= 0 || example.indexOf("KOF_PASSWORD\"") >= 0, "senha via env do passo")
     assert(example.indexOf("password: \"") < 0 && example.indexOf("password:adef") < 0, "sem senha literal no exemplo")
 }
@@ -1137,24 +1137,24 @@ test "deploy: exemplo de action reutilizavel cita so comandos reais", "deploy-ac
     // self-hosted esta no topo e a senha nunca aparece literal (input do
     // composite alimentado de secrets.*, chegando por env do passo).
     var action = readTextOr("docs/examples/action.yml", "")
-    assert(action.length > 0, "exemplo da action existe e e legivel")
-    assert(action.indexOf("self-hosted") >= 0, "runner self-hosted no topo (pre-requisito honesto)")
-    assert(action.indexOf("connect") >= 0, "diz que a maquina roda o connect")
-    assert(action.indexOf("using: 'composite'") >= 0, "action composite (sem imagem proprietaria)")
+    need(action.length > 0, "falhou")
+    need(action.indexOf("self-hosted") >= 0, "falhou")
+    need(action.indexOf("connect") >= 0, "falhou")
+    need(action.indexOf("using: 'composite'") >= 0, "falhou")
 
     var help = usageText()
     var cited = assertCitedCommands(action, help, "action")
-    assert(cited >= 3, "action cita comandos de verdade: " + intToString(cited))
+    need(cited >= 3, "falhou")
 
-    assert(action.indexOf("kof cloud login") >= 0, "login na action")
-    assert(action.indexOf("kof cloud deploy --plan") >= 0, "plano revisavel")
-    assert(action.indexOf("kof cloud deploy --check") >= 0, "deploy verificado")
-    assert(action.indexOf("default: 'ci'") >= 0, "device fixo ci por default")
+    need(action.indexOf("kof cloud login") >= 0, "falhou")
+    need(action.indexOf("kof cloud deploy --plan") >= 0, "falhou")
+    need(action.indexOf("kof cloud deploy --check") >= 0, "falhou")
+    need(action.indexOf("default: 'ci'") >= 0, "falhou")
 
     // Credencial nunca literal: input obrigatorio com dica de segredo e
     // consumo por env do passo, nunca inline no run.
-    assert(action.indexOf("inputs.password") >= 0, "senha vem de input do composite")
-    assert(action.indexOf("KOF_PASSWORD: ${{ inputs.password }}") >= 0, "senha via env do passo")
-    assert(action.indexOf("secrets.") >= 0, "dica de alimentar o input de secrets.*")
+    need(action.indexOf("inputs.password") >= 0, "falhou")
+    need(action.indexOf("KOF_PASSWORD: ${{ inputs.password }}") >= 0, "falhou")
+    need(action.indexOf("secrets.") >= 0, "falhou")
     assert(action.indexOf("password: \"") < 0 && action.indexOf("password:adef") < 0, "sem senha literal na action")
 }

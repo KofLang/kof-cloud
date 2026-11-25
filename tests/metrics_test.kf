@@ -34,48 +34,48 @@ test "metricas: nomes e saidas no formato Prometheus", "metrics" {
     noteHttpFinished("ok", "", 120, 450, 9)
     noteHttpFinished("denied", "KCF100", 100, 60, 2)
     var exposition = observability.metrics()
-    assert(metricHas(exposition, "kofcloud_edge_tunnel_accepted_total"), "tuneis aceitos")
-    assert(metricHas(exposition, "kofcloud_edge_http_requests_total"), "requisicoes")
-    assert(metricHas(exposition, "kofcloud_edge_http_denied_total"), "negadas")
-    assert(metricHas(exposition, "kofcloud_edge_http_denied_total_no_route"), "negada por motivo")
+    need(metricHas(exposition, "kofcloud_edge_tunnel_accepted_total"), "falhou")
+    need(metricHas(exposition, "kofcloud_edge_http_requests_total"), "falhou")
+    need(metricHas(exposition, "kofcloud_edge_http_denied_total"), "falhou")
+    need(metricHas(exposition, "kofcloud_edge_http_denied_total_no_route"), "falhou")
     // Mapeamento KCF→sufixo travado: cada negada do front tem seu contador;
     // KCF106 (streams) cai no fallback _other (sem sufixo proprio, por desenho).
     noteHttpFinished("denied", "KCF101", 10, 20, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_auth_required"), "auth")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_auth_required"), "falhou")
     noteHttpFinished("denied", "KCF102", 10, 20, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_device_offline"), "offline")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_device_offline"), "falhou")
     noteHttpFinished("denied", "KCF103", 10, 20, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_service_down"), "down")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_service_down"), "falhou")
     noteHttpFinished("denied", "KCF107", 10, 20, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_rate_limited"), "rate")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_rate_limited"), "falhou")
     noteHttpFinished("denied", "KCF108", 10, 20, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_service_overloaded"), "sobrecarga")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_service_overloaded"), "falhou")
     noteHttpFinished("denied", "KCF109", 10, 20, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_waf_denied"), "waf")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_waf_denied"), "falhou")
     noteHttpFinished("denied", "KCF111", 10, 20, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_waf_allow_denied"), "allowlist")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_waf_allow_denied"), "falhou")
     noteHttpFinished("denied", "KCF106", 10, 20, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_other"), "streams cai no fallback")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_other"), "falhou")
     // Os vizinhos da mesma familia tinham sufixo e KCF116 caia no _other:
     // "cabeçalho grande demais" ficava indistinguivel de qualquer negada
     // sem motivo mapeado. A invariante abaixo trava o conjunto inteiro.
     noteHttpFinished("denied", "KCF116", 10, 20, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_headers_too_large"), "cabecalho grande")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_headers_too_large"), "falhou")
     noteHttpFinished("denied", "KCF118", 10, 20, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_framing"), "enquadramento")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_framing"), "falhou")
     noteHttpFinished("denied", "KCF119", 10, 20, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_host"), "host ambiguo")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_host"), "falhou")
     noteHttpFinished("denied", "KCF132", 10, 20, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_request_line"), "linha de requisicao")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_request_line"), "falhou")
     noteHttpFinished("denied", "KCF133", 10, 20, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_header_line"), "linha de header")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_invalid_header_line"), "falhou")
     noteHttpFinished("denied", "KCF136", 10, 20, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_head_with_body"), "HEAD com corpo")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_head_with_body"), "falhou")
     noteHttpFinished("denied", "KCF110", 10, 20, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_body_too_large"), "corpo grande")
-    assert(metricHas(exposition, "kofcloud_edge_http_request_bytes_total"), "bytes de pedido")
-    assert(metricHas(exposition, "kofcloud_edge_http_response_bytes_total"), "bytes de resposta")
-    assert(metricValue(exposition, "kofcloud_edge_tunnel_sessions_open") == 1, "gauge de sessoes")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_denied_total_body_too_large"), "falhou")
+    need(metricHas(exposition, "kofcloud_edge_http_request_bytes_total"), "falhou")
+    need(metricHas(exposition, "kofcloud_edge_http_response_bytes_total"), "falhou")
+    need(metricValue(exposition, "kofcloud_edge_tunnel_sessions_open") == 1, "falhou")
 }
 
 test "metricas: falhas de upstream contam por sufixo proprio", "metrics-upstream" {
@@ -83,13 +83,13 @@ test "metricas: falhas de upstream contam por sufixo proprio", "metrics-upstream
     // caia no contador generico e nao dava para separar "servico devolveu
     // nada" de "stream resetado".
     noteHttpFinished("upstream_error", "KCF112", 10, 0, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_timeout"), "timeout")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_timeout"), "falhou")
     noteHttpFinished("upstream_error", "KCF115", 10, 0, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_response_too_large"), "resposta grande")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_response_too_large"), "falhou")
     noteHttpFinished("upstream_error", "KCF131", 10, 0, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_invalid_response"), "resposta invalida")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_invalid_response"), "falhou")
     noteHttpFinished("upstream_error", "KCF105", 10, 0, 1)
-    assert(metricHas(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_empty_response"), "resposta vazia")
+    need(metricHas(observability.metrics(), "kofcloud_edge_http_upstream_errors_total_empty_response"), "falhou")
 }
 
 test "metricas: recusas de tunel contam por motivo", "metrics-tunnel" {
@@ -102,38 +102,38 @@ test "metricas: recusas de tunel contam por motivo", "metrics-tunnel" {
     noteTunnelRefused("DEVICE_REVOKED")
     var exposition = observability.metrics()
     var after = metricValue(exposition, "kofcloud_edge_tunnel_refused_total")
-    assert(after == before + 1, "recusa contada")
-    assert(metricHas(exposition, "kofcloud_edge_tunnel_refused_total_revoked_device"), "motivo contado")
+    need(after == before + 1, "falhou")
+    need(metricHas(exposition, "kofcloud_edge_tunnel_refused_total_revoked_device"), "falhou")
     // Mapeamento motivo→sufixo travado: cada motivo do refuseTunnel tem
     // seu contador; AUTH_FAILED cai no fallback _auth (sem sufixo proprio).
     noteTunnelRefused("VERSION_UNSUPPORTED")
-    assert(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_version"), "versao")
+    need(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_version"), "falhou")
     noteTunnelRefused("DEVICE_UNKNOWN")
-    assert(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_unknown_device"), "desconhecido")
+    need(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_unknown_device"), "falhou")
     noteTunnelRefused("DEVICE_SUSPENDED")
-    assert(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_suspended_device"), "suspenso")
+    need(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_suspended_device"), "falhou")
     noteTunnelRefused("LINE_OVERFLOW")
-    assert(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_line_overflow"), "overflow")
+    need(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_line_overflow"), "falhou")
     noteTunnelRefused("IDLE_TIMEOUT")
-    assert(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_idle_timeout"), "idle")
+    need(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_idle_timeout"), "falhou")
     noteTunnelRefused("AUTH_FAILED")
-    assert(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_auth"), "auth cai no fallback")
+    need(metricHas(observability.metrics(), "kofcloud_edge_tunnel_refused_total_auth"), "falhou")
     noteTunnelClosed(0)
-    assert(metricValue(observability.metrics(), "kofcloud_edge_tunnel_sessions_open") == 0, "gauge zera ao fechar")
+    need(metricValue(observability.metrics(), "kofcloud_edge_tunnel_sessions_open") == 0, "falhou")
 }
 
 test "metricas: latencia cai em faixa e a faixa conta", "metrics-latency" {
     // Pura: a classificacao vem da lista unica `latencyBucketLimitsMs`,
     // entao os rotulos sao derivados (nunca digitados). Bordas inclusivas.
-    assert(latencyBucketLimitsMs().get(0) == 50, "primeira faixa = 50 ms")
-    assert(latencyBucketSuffix(0) == "_le_50", "zero na primeira faixa")
-    assert(latencyBucketSuffix(50) == "_le_50", "borda inclusiva em 50")
-    assert(latencyBucketSuffix(51) == "_le_100", "acima de 50 cai na proxima")
-    assert(latencyBucketSuffix(250) == "_le_250", "borda inclusiva em 250")
-    assert(latencyBucketSuffix(999) == "_le_1000", "perto do teto de 1 s")
-    assert(latencyBucketSuffix(2000) == "_le_2000", "borda inclusiva no ultimo limite")
-    assert(latencyBucketSuffix(2001) == "_gt_2000", "acima do ultimo limite")
-    assert(latencyBucketSuffix(-5) == "_le_50", "relogio ajustado nao some da contagem")
+    need(latencyBucketLimitsMs().get(0) == 50, "falhou")
+    need(latencyBucketSuffix(0) == "_le_50", "falhou")
+    need(latencyBucketSuffix(50) == "_le_50", "falhou")
+    need(latencyBucketSuffix(51) == "_le_100", "falhou")
+    need(latencyBucketSuffix(250) == "_le_250", "falhou")
+    need(latencyBucketSuffix(999) == "_le_1000", "falhou")
+    need(latencyBucketSuffix(2000) == "_le_2000", "falhou")
+    need(latencyBucketSuffix(2001) == "_gt_2000", "falhou")
+    need(latencyBucketSuffix(-5) == "_le_50", "falhou")
 
     // E2E na mesma funcao do produto: uma requisicao lenta (>= 60 ms) tem
     // que aparecer na faixa certa e a soma das faixas nao pode encolher.
@@ -143,9 +143,9 @@ test "metricas: latencia cai em faixa e a faixa conta", "metrics-latency" {
     }
     noteHttpFinished("ok", "", 10, 20, 75)
     var exposition = observability.metrics()
-    assert(metricValue(exposition, "kofcloud_edge_http_request_latency_ms_le_100") == before + 1, "75 ms conta em le_100")
+    need(metricValue(exposition, "kofcloud_edge_http_request_latency_ms_le_100") == before + 1, "falhou")
     // O histograma continua sendo alimentado pela mesma chamada (sum+count).
-    assert(metricHas(exposition, "kofcloud_edge_http_request_latency_ms_count"), "histograma segue contando")
+    need(metricHas(exposition, "kofcloud_edge_http_request_latency_ms_count"), "falhou")
 }
 
 test "metricas: Edge real conta ok/negada e bytes fim a fim", "metrics-e2e" {
@@ -157,7 +157,7 @@ test "metricas: Edge real conta ok/negada e bytes fim a fim", "metrics-e2e" {
     var app = web.app()
     app.get("/") { return "svc-metrics" }
     var server = spawn { app.listen(localSvc) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-met-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -169,9 +169,9 @@ test "metricas: Edge real conta ok/negada e bytes fim a fim", "metrics-e2e" {
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -180,14 +180,14 @@ test "metricas: Edge real conta ok/negada e bytes fim a fim", "metrics-e2e" {
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "falhou")
 
     var requestsBefore = metricValue(observability.metrics(), "kofcloud_edge_http_requests_total")
     var deniedBefore = metricValue(observability.metrics(), "kofcloud_edge_http_denied_total")
 
     // sem tunel: negada conta como denied/device_offline
     var offline = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
-    assert(statusOf(offline) == 503, "offline -> 503")
+    need(statusOf(offline) == 503, "falhou")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
     var agentTask = spawn { runAgent(config, true) }
@@ -200,27 +200,27 @@ test "metricas: Edge real conta ok/negada e bytes fim a fim", "metrics-e2e" {
             attempts = attempts - 1
         }
     }
-    assert(online, "agent registrado no edge")
+    need(online, "falhou")
 
     var ok = httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")
-    assert(statusOf(ok) == 200, "roteia com tunel")
-    assert(bodyOf(ok) == "svc-metrics", "corpo do servico")
+    need(statusOf(ok) == 200, "falhou")
+    need(bodyOf(ok) == "svc-metrics", "falhou")
 
     var unknown = httpGetRaw(httpPort, "/", "naoexiste.mel.kofcloud.io")
-    assert(statusOf(unknown) == 404, "desconhecido -> 404")
+    need(statusOf(unknown) == 404, "falhou")
 
     var exposition = observability.metrics()
-    assert(metricValue(exposition, "kofcloud_edge_http_requests_total") == requestsBefore + 3, "tres requisicoes contadas")
-    assert(metricValue(exposition, "kofcloud_edge_http_denied_total") == deniedBefore + 2, "duas negadas contadas")
-    assert(metricHas(exposition, "kofcloud_edge_http_denied_total_device_offline"), "offline por motivo")
-    assert(metricHas(exposition, "kofcloud_edge_http_denied_total_no_route"), "sem rota por motivo")
-    assert(metricHas(exposition, "kofcloud_edge_http_request_latency_ms_count"), "latencia amostrada")
-    assert(metricValue(exposition, "kofcloud_edge_http_request_bytes_total") >= 0, "bytes somados")
-    assert(metricValue(observability.metrics(), "kofcloud_edge_tunnel_accepted_total") >= 1, "tunel contado")
+    need(metricValue(exposition, "kofcloud_edge_http_requests_total") == requestsBefore + 3, "falhou")
+    need(metricValue(exposition, "kofcloud_edge_http_denied_total") == deniedBefore + 2, "falhou")
+    need(metricHas(exposition, "kofcloud_edge_http_denied_total_device_offline"), "falhou")
+    need(metricHas(exposition, "kofcloud_edge_http_denied_total_no_route"), "falhou")
+    need(metricHas(exposition, "kofcloud_edge_http_request_latency_ms_count"), "falhou")
+    need(metricValue(exposition, "kofcloud_edge_http_request_bytes_total") >= 0, "falhou")
+    need(metricValue(observability.metrics(), "kofcloud_edge_tunnel_accepted_total") >= 1, "falhou")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
-    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    need(edgeState.isOnline(deviceId) == false, "falhou")
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)
     File(agentStop).delete()
@@ -230,11 +230,11 @@ test "metricas: Edge real conta ok/negada e bytes fim a fim", "metrics-e2e" {
 test "metricas: exposicao nunca carrega dado de cliente", "metrics-privacy" {
     noteHttpFinished("denied", "KCF101", 80, 50, 1)
     var exposition = observability.metrics()
-    assert(exposition.indexOf("kfc_") < 0, "sem token de conta")
-    assert(exposition.indexOf("kfs_") < 0, "sem token de servico")
-    assert(exposition.indexOf("kofcloud.io") < 0, "sem hostname")
-    assert(exposition.indexOf("Authorization") < 0, "sem header")
-    assert(metricHas(exposition, "kofcloud_edge_http_denied_total_auth_required"), "motivo agregado sim")
+    need(exposition.indexOf("kfc_") < 0, "falhou")
+    need(exposition.indexOf("kfs_") < 0, "falhou")
+    need(exposition.indexOf("kofcloud.io") < 0, "falhou")
+    need(exposition.indexOf("Authorization") < 0, "falhou")
+    need(metricHas(exposition, "kofcloud_edge_http_denied_total_auth_required"), "falhou")
 }
 
 test "metricas: GET /metrics expos sem auth e contadores do control plane", "metrics-endpoint" {
@@ -242,12 +242,12 @@ test "metricas: GET /metrics expos sem auth e contadores do control plane", "met
     var registry = Registry("/tmp/kofcloud-metep-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control plane no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     // Sem autenticacao, igual ao /v1/health: so agregados.
     var exposition = httpGetRaw(controlPort, "/v1/metrics", "127.0.0.1")
-    assert(statusOf(exposition) == 200, "/metrics 200 sem token")
-    assert(bodyOf(exposition).indexOf("kofcloud_control_") < 0 || metricHas(bodyOf(exposition), "kofcloud_control_accounts_created_total"), "export Prometheus")
+    need(statusOf(exposition) == 200, "falhou")
+    need(bodyOf(exposition).indexOf("kofcloud_control_") < 0 || metricHas(bodyOf(exposition), "kofcloud_control_accounts_created_total"), "falhou")
 
     var accountsBefore = metricValue(bodyOf(exposition), "kofcloud_control_accounts_created_total")
     if (accountsBefore < 0) {
@@ -255,48 +255,48 @@ test "metricas: GET /metrics expos sem auth e contadores do control plane", "met
     }
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
-    assert(statusOf(created) == 200, "conta criada")
+    need(statusOf(created) == 200, "falhou")
     var account = json.decode<Map<String, String>>(bodyOf(created))
     var accountToken = mapField(account, "token")
 
     var logged = httpPostJson(controlPort, "/v1/login", "{\"handle\":\"mel\",\"password\":\"segredo\"}", "")
-    assert(statusOf(logged) == 200, "login ok")
+    need(statusOf(logged) == 200, "falhou")
 
     var device = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", accountToken)
-    assert(statusOf(device) == 200, "device registrado")
+    need(statusOf(device) == 200, "falhou")
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(device)), "deviceId")
 
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"8080\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
     var published = httpPostJson(controlPort, "/v1/services", pubBody, accountToken)
-    assert(statusOf(published) == 200, "servico publicado")
+    need(statusOf(published) == 200, "falhou")
     var serviceId = mapField(json.decode<Map<String, String>>(bodyOf(published)), "id")
 
     var minted = httpPostJson(controlPort, "/v1/services/token", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
-    assert(statusOf(minted) == 200, "token emitido")
+    need(statusOf(minted) == 200, "falhou")
 
     var domReg = httpPostJson(controlPort, "/v1/domains", "{\"hostname\":\"api.example.com\",\"service\":\"site\"}", accountToken)
-    assert(statusOf(domReg) == 200, "dominio registrado")
+    need(statusOf(domReg) == 200, "falhou")
 
     var removed = httpPostJson(controlPort, "/v1/services/remove", "{\"serviceId\":\"" + serviceId + "\"}", accountToken)
-    assert(statusOf(removed) == 200, "servico removido")
+    need(statusOf(removed) == 200, "falhou")
 
     var revoked = httpPostJson(controlPort, "/v1/devices/revoke", "{\"deviceId\":\"" + deviceId + "\"}", accountToken)
-    assert(statusOf(revoked) == 200, "device revogado")
+    need(statusOf(revoked) == 200, "falhou")
 
     var domDel = httpPostJson(controlPort, "/v1/domains/remove", "{\"hostname\":\"api.example.com\"}", accountToken)
-    assert(statusOf(domDel) == 404, "dominio caiu com o servico (poda)")
+    need(statusOf(domDel) == 404, "falhou")
 
     var after = bodyOf(httpGetRaw(controlPort, "/v1/metrics", "127.0.0.1"))
-    assert(metricValue(after, "kofcloud_control_accounts_created_total") == accountsBefore + 1, "conta contada")
-    assert(metricHas(after, "kofcloud_control_logins_total"), "login contado")
-    assert(metricHas(after, "kofcloud_control_devices_registered_total"), "device contado")
-    assert(metricHas(after, "kofcloud_control_devices_revoked_total"), "revogacao contada")
-    assert(metricHas(after, "kofcloud_control_services_published_total"), "publicacao contada")
-    assert(metricHas(after, "kofcloud_control_services_removed_total"), "remocao contada")
-    assert(metricHas(after, "kofcloud_control_service_tokens_issued_total"), "token contado")
-    assert(metricHas(after, "kofcloud_control_domains_registered_total"), "dominio contado")
-    assert(after.indexOf("mel@") < 0, "sem email")
-    assert(after.indexOf("api.example.com") < 0, "sem hostname")
+    need(metricValue(after, "kofcloud_control_accounts_created_total") == accountsBefore + 1, "falhou")
+    need(metricHas(after, "kofcloud_control_logins_total"), "falhou")
+    need(metricHas(after, "kofcloud_control_devices_registered_total"), "falhou")
+    need(metricHas(after, "kofcloud_control_devices_revoked_total"), "falhou")
+    need(metricHas(after, "kofcloud_control_services_published_total"), "falhou")
+    need(metricHas(after, "kofcloud_control_services_removed_total"), "falhou")
+    need(metricHas(after, "kofcloud_control_service_tokens_issued_total"), "falhou")
+    need(metricHas(after, "kofcloud_control_domains_registered_total"), "falhou")
+    need(after.indexOf("mel@") < 0, "falhou")
+    need(after.indexOf("api.example.com") < 0, "falhou")
 }
 
 test "metricas: contadores do control plane tambem valem sem HTTP", "metrics-registry" {
@@ -307,23 +307,23 @@ test "metricas: contadores do control plane tambem valem sem HTTP", "metrics-reg
     registry.issueServiceToken(mel.id, service.id)
     registry.registerCustomDomain(mel.id, "loja.example.com", service.id)
     registry.verifyCustomDomainWith(mel.id, "loja.example.com", listOf("10.0.0.1"))
-    assert(registry.removeService(mel.id, service.id) == true, "servico removido")
+    need(registry.removeService(mel.id, service.id) == true, "falhou")
     var exposition = observability.metrics()
-    assert(metricHas(exposition, "kofcloud_control_services_published_total"), "publicacao sem HTTP conta")
-    assert(metricHas(exposition, "kofcloud_control_domains_verified_total") || metricHas(exposition, "kofcloud_control_domains_registered_total"), "dominio sem HTTP conta")
+    need(metricHas(exposition, "kofcloud_control_services_published_total"), "falhou")
+    need(metricHas(exposition, "kofcloud_control_domains_verified_total") || metricHas(exposition, "kofcloud_control_domains_registered_total"), "falhou")
 }
 
 test "metricas: tamanho da resposta cai em faixa (KiB) e conta", "metrics-size" {
     // Pura: rotulos derivados da lista unica responseSizeBucketLimitsKb().
-    assert(responseSizeBucketSuffix(0) == "_kb_le_1", "zero na menor faixa")
-    assert(responseSizeBucketSuffix(1024) == "_kb_le_1", "1 KiB inclusivo")
-    assert(responseSizeBucketSuffix(1025) == "_kb_le_4", "acima de 1 KiB")
-    assert(responseSizeBucketSuffix(16384) == "_kb_le_16", "16 KiB inclusivo")
-    assert(responseSizeBucketSuffix(1048576) == "_kb_le_1024", "1 MiB inclusivo")
-    assert(responseSizeBucketSuffix(1048577) == "_kb_gt_1024", "acima de 1 MiB")
+    need(responseSizeBucketSuffix(0) == "_kb_le_1", "falhou")
+    need(responseSizeBucketSuffix(1024) == "_kb_le_1", "falhou")
+    need(responseSizeBucketSuffix(1025) == "_kb_le_4", "falhou")
+    need(responseSizeBucketSuffix(16384) == "_kb_le_16", "falhou")
+    need(responseSizeBucketSuffix(1048576) == "_kb_le_1024", "falhou")
+    need(responseSizeBucketSuffix(1048577) == "_kb_gt_1024", "falhou")
     var limits = responseSizeBucketLimitsKb()
-    assert(limits.size >= 3, "faixas suficientes")
-    assert(limits.get(limits.size - 1) == 1024, "ultima faixa = 1 MiB")
+    need(limits.size >= 3, "falhou")
+    need(limits.get(limits.size - 1) == 1024, "falhou")
 
     // Contagem real pela funcao do produto.
     var before = metricValue(observability.metrics(), "kofcloud_edge_http_response_bytes_total_size_kb_le_16")
@@ -332,7 +332,7 @@ test "metricas: tamanho da resposta cai em faixa (KiB) e conta", "metrics-size" 
     }
     noteHttpFinished("ok", "", 10, 16384, 5)
     var exposition = observability.metrics()
-    assert(metricValue(exposition, "kofcloud_edge_http_response_bytes_total_size_kb_le_16") == before + 1, "16 KiB conta na faixa")
+    need(metricValue(exposition, "kofcloud_edge_http_response_bytes_total_size_kb_le_16") == before + 1, "falhou")
 
     // Resposta zero nao entra na faixa (nao e relay): com uma resposta real
     // de 1 KiB antes e outra depois, a le_1 nao pode subir duas vezes.
@@ -342,7 +342,7 @@ test "metricas: tamanho da resposta cai em faixa (KiB) e conta", "metrics-size" 
         oneKb = 0
     }
     noteResponseSize(0)
-    assert(metricValue(observability.metrics(), "kofcloud_edge_http_response_bytes_total_size_kb_le_1") == oneKb, "zero nao conta")
+    need(metricValue(observability.metrics(), "kofcloud_edge_http_response_bytes_total_size_kb_le_1") == oneKb, "falhou")
 }
 
 test "metricas: todo KCF passado ao noteHttpFinished tem sufixo (invariante de fonte)", "metrics-invariant" {
@@ -379,9 +379,9 @@ test "metricas: todo KCF passado ao noteHttpFinished tem sufixo (invariante de f
     for (var code in missing) {
         detail = detail + " " + code
     }
-    assert(missing.size == 0, "emitidos sem sufixo em Metrics.kf:" + detail)
+    need(missing.size == 0, "falhou")
     for (var code in exempt) {
-        assert(body.indexOf("\"" + code + "\"") < 0, code + " nao deveria ter ramo proprio")
+        need(body.indexOf("\"" + code + "\"") < 0, "falhou")
     }
 }
 
@@ -397,31 +397,31 @@ test "metricas: gauge de conexoes publicas abertas acompanha acquire/release", "
     // Gauge frio nao aparece na exposicao (vale -1 ate a primeira emissao —
     // ver `metricHas`/`metrics-tunnel`): agir antes de assertar, nunca ler
     // exposição fria. O próprio acquire já prova que o gauge existe.
-    assert(edgeState.tryAcquirePublicConn(), "vaga 1 alimenta o gauge")
+    need(edgeState.tryAcquirePublicConn(), "falhou")
     var expo = observability.metrics()
-    assert(metricHas(expo, "kofcloud_edge_http_connections_open"), "gauge existe")
+    need(metricHas(expo, "kofcloud_edge_http_connections_open"), "falhou")
 
     // Segunda vaga reservada: gauge acompanha para cima.
-    assert(edgeState.tryAcquirePublicConn(), "vaga 2")
+    need(edgeState.tryAcquirePublicConn(), "falhou")
     expo = observability.metrics()
-    assert(metricValue(expo, "kofcloud_edge_http_connections_open") == 2, "duas abertas")
+    need(metricValue(expo, "kofcloud_edge_http_connections_open") == 2, "falhou")
 
     // Liberada uma: desce. Liberada a outra: volta ao base.
     edgeState.releasePublicConn()
     expo = observability.metrics()
-    assert(metricValue(expo, "kofcloud_edge_http_connections_open") == 1, "uma apos liberar")
+    need(metricValue(expo, "kofcloud_edge_http_connections_open") == 1, "falhou")
     edgeState.releasePublicConn()
     expo = observability.metrics()
-    assert(metricValue(expo, "kofcloud_edge_http_connections_open") == 0, "zera com todas liberadas")
+    need(metricValue(expo, "kofcloud_edge_http_connections_open") == 0, "falhou")
 
     // Recusa no teto nao muda o gauge (a vaga nao foi reservada).
     var state2 = EdgeState(registry)
     state2.setPublicConnLimit(1)
-    assert(state2.tryAcquirePublicConn(), "primeira passa")
-    assert(state2.tryAcquirePublicConn() == false, "segunda recusa (teto 1)")
+    need(state2.tryAcquirePublicConn(), "falhou")
+    need(state2.tryAcquirePublicConn() == false, "falhou")
     expo = observability.metrics()
-    assert(metricValue(expo, "kofcloud_edge_http_connections_open") == 1, "recusa nao soma")
-    assert(state2.publicConnCount() == 1, "contador interno coerente")
+    need(metricValue(expo, "kofcloud_edge_http_connections_open") == 1, "falhou")
+    need(state2.publicConnCount() == 1, "falhou")
 }
 
 test "metricas: gauge de vagas de relay por servico (total sem rotulo)", "metrics-relay-conns" {
@@ -436,34 +436,34 @@ test "metricas: gauge de vagas de relay por servico (total sem rotulo)", "metric
     // Gauge frio nao aparece na exposicao (vale -1 ate a primeira emissao —
     // mesmo idioma do `metrics-conns-open`): agir antes de assertar, nunca
     // ler exposicao fria. O proprio acquire ja alimenta o gauge.
-    assert(edgeState.tryAcquireServiceConn("svc-a"), "vaga a alimenta o gauge")
+    need(edgeState.tryAcquireServiceConn("svc-a"), "falhou")
     var expo = observability.metrics()
-    assert(metricHas(expo, "kofcloud_edge_tunnel_service_conns_open"), "gauge existe")
+    need(metricHas(expo, "kofcloud_edge_tunnel_service_conns_open"), "falhou")
     edgeState.releaseServiceConn("svc-a")
     expo = observability.metrics()
-    assert(metricValue(expo, "kofcloud_edge_tunnel_service_conns_open") == 0, "zera sem relay")
+    need(metricValue(expo, "kofcloud_edge_tunnel_service_conns_open") == 0, "falhou")
 
     // Dois servicos com vagas abertas: total soma os dois.
-    assert(edgeState.tryAcquireServiceConn("svc-a"), "vaga a")
-    assert(edgeState.tryAcquireServiceConn("svc-a"), "vaga a 2")
-    assert(edgeState.tryAcquireServiceConn("svc-b"), "vaga b")
+    need(edgeState.tryAcquireServiceConn("svc-a"), "falhou")
+    need(edgeState.tryAcquireServiceConn("svc-a"), "falhou")
+    need(edgeState.tryAcquireServiceConn("svc-b"), "falhou")
     expo = observability.metrics()
-    assert(metricValue(expo, "kofcloud_edge_tunnel_service_conns_open") == 3, "a(2) + b(1) = 3")
+    need(metricValue(expo, "kofcloud_edge_tunnel_service_conns_open") == 3, "falhou")
 
     // Liberacao por servico: desce o total.
     edgeState.releaseServiceConn("svc-a")
     expo = observability.metrics()
-    assert(metricValue(expo, "kofcloud_edge_tunnel_service_conns_open") == 2, "a(1) + b(1)")
+    need(metricValue(expo, "kofcloud_edge_tunnel_service_conns_open") == 2, "falhou")
 
     // Zera quando o ultimo de cada servico sai (o mapa remove a chave).
     edgeState.releaseServiceConn("svc-a")
     edgeState.releaseServiceConn("svc-b")
     expo = observability.metrics()
-    assert(metricValue(expo, "kofcloud_edge_tunnel_service_conns_open") == 0, "zera")
+    need(metricValue(expo, "kofcloud_edge_tunnel_service_conns_open") == 0, "falhou")
 
     // Isolamento de contagem continua valendo (o gauge le o mesmo mapa).
-    assert(edgeState.serviceConnOpen("svc-a") == 0, "a zerado")
-    assert(edgeState.serviceConnOpen("svc-b") == 0, "b zerado")
+    need(edgeState.serviceConnOpen("svc-a") == 0, "falhou")
+    need(edgeState.serviceConnOpen("svc-b") == 0, "falhou")
 }
 
 test "metricas: gauge de streams abertos reflete o relay vivo (nao 0 fixo)", "metrics-streams-open" {
@@ -476,27 +476,27 @@ test "metricas: gauge de streams abertos reflete o relay vivo (nao 0 fixo)", "me
     var edgeState = EdgeState(registry)
 
     var expo = observability.metrics()
-    assert(metricHas(expo, "kofcloud_edge_tunnel_streams_open"), "gauge existe")
+    need(metricHas(expo, "kofcloud_edge_tunnel_streams_open"), "falhou")
 
     // Sessao viva com 2 streams abertos: total reflete a sessao.
     var session = TunnelSession("s1", "dev-1", "acc", "")
     session.openStream()
     session.openStream()
     edgeState.bind("dev-1", session)
-    assert(edgeState.streamsOpenTotal() == 2, "dois streams vivos")
+    need(edgeState.streamsOpenTotal() == 2, "falhou")
     noteStreamsOpen(edgeState.streamsOpenTotal())
     expo = observability.metrics()
-    assert(metricValue(expo, "kofcloud_edge_tunnel_streams_open") == 2, "gauge = 2")
+    need(metricValue(expo, "kofcloud_edge_tunnel_streams_open") == 2, "falhou")
 
     // Fecha um stream: total cai; some a sessao: total zera.
     var firstId = session.inboxes.keys().get(0)
     session.closeStream(firstId)
-    assert(edgeState.streamsOpenTotal() == 1, "um stream vivo")
+    need(edgeState.streamsOpenTotal() == 1, "falhou")
     edgeState.unbind("dev-1", "s1")
-    assert(edgeState.streamsOpenTotal() == 0, "sessao fora = zero streams")
+    need(edgeState.streamsOpenTotal() == 0, "falhou")
     noteStreamsOpen(edgeState.streamsOpenTotal())
     expo = observability.metrics()
-    assert(metricValue(expo, "kofcloud_edge_tunnel_streams_open") == 0, "gauge zera")
+    need(metricValue(expo, "kofcloud_edge_tunnel_streams_open") == 0, "falhou")
 
     // Deux sessoes somam (nunca rotulo por cliente: so o numero).
     var a = TunnelSession("s2", "dev-2", "acc", "")
@@ -506,7 +506,7 @@ test "metricas: gauge de streams abertos reflete o relay vivo (nao 0 fixo)", "me
     b.openStream()
     edgeState.bind("dev-2", a)
     edgeState.bind("dev-3", b)
-    assert(edgeState.streamsOpenTotal() == 3, "soma entre sessoes")
+    need(edgeState.streamsOpenTotal() == 3, "falhou")
 
     // Trava de fonte: o fim da requisicao fotografia o total vivo (e nao 0).
     var raw = File("src/kofcloud/edge/HttpFront.kf").readText()
@@ -519,7 +519,7 @@ test "metricas: gauge de streams abertos reflete o relay vivo (nao 0 fixo)", "me
     }
     var start = text.indexOf("void handlePublicConnection(")
     var body = text.substring(start, text.indexOf("void refusePublicConnection(", start))
-    assert(body.indexOf("noteStreamsOpen(state.streamsOpenTotal())") >= 0, "foto no finally")
+    need(body.indexOf("noteStreamsOpen(state.streamsOpenTotal())") >= 0, "falhou")
     var metrics = readTextOr("src/kofcloud/edge/Metrics.kf", "")
-    assert(metrics.indexOf("gauge(metricStreamsOpen(), 0)") < 0, "nao grava 0 fixo")
+    need(metrics.indexOf("gauge(metricStreamsOpen(), 0)") < 0, "falhou")
 }

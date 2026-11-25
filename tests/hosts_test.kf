@@ -7,144 +7,145 @@ import kofcloud.store.Store
 import kofcloud.util.Hosts
 import kofcloud.util.Limits
 import kofcloud.util.Text
+import testkit.Support
 
 test "hostname: monta e valida" {
-    assert(serviceHostname("site", "mel") == "site.mel.kofcloud.io", "hostname")
-    assert(accountZone("mel") == "mel.kofcloud.io", "zona")
+    need(serviceHostname("site", "mel") == "site.mel.kofcloud.io", "falhou")
+    need(accountZone("mel") == "mel.kofcloud.io", "falhou")
 }
 
 test "handle: aceita apenas rotulo DNS valido" {
-    assert(validHandle("mel") == true, "valido")
-    assert(validHandle("ab") == false, "curto demais")
-    assert(validHandle("Mel") == false, "maiuscula")
-    assert(validHandle("-mel") == false, "hifen no inicio")
-    assert(validHandle("mel-") == false, "hifen no fim")
-    assert(validHandle("me l") == false, "espaco")
-    assert(validHandle("mel_1") == false, "underscore")
+    need(validHandle("mel") == true, "falhou")
+    need(validHandle("ab") == false, "falhou")
+    need(validHandle("Mel") == false, "falhou")
+    need(validHandle("-mel") == false, "falhou")
+    need(validHandle("mel-") == false, "falhou")
+    need(validHandle("me l") == false, "falhou")
+    need(validHandle("mel_1") == false, "falhou")
 }
 
 test "host only: remove a porta e normaliza (DNS nao distingue caixa)", "host-normalize" {
-    assert(hostOnly("site.mel.kofcloud.io:8080") == "site.mel.kofcloud.io", "com porta")
-    assert(hostOnly("site.mel.kofcloud.io") == "site.mel.kofcloud.io", "sem porta")
+    need(hostOnly("site.mel.kofcloud.io:8080") == "site.mel.kofcloud.io", "falhou")
+    need(hostOnly("site.mel.kofcloud.io") == "site.mel.kofcloud.io", "falhou")
     // DNS e case-insensitive (RFC 1035 §2.3.1) e o Edge compara contra o
     // hostname minusculo gerado no publish. Normalizar aqui cobre o
     // roteamento E a chave do rate limit: sem isso cada variacao de caixa
     // virava bucket proprio (101 pedidos + troca de caixa = evasao do 429).
-    assert(hostOnly("Site.Mel.KofCloud.IO") == "site.mel.kofcloud.io", "caixa")
-    assert(hostOnly("  API.MEL.KOFCLOUD.IO:8080  ") == "api.mel.kofcloud.io", "caixa + porta + espacos")
+    need(hostOnly("Site.Mel.KofCloud.IO") == "site.mel.kofcloud.io", "falhou")
+    need(hostOnly("  API.MEL.KOFCLOUD.IO:8080  ") == "api.mel.kofcloud.io", "falhou")
     // Ponto final marca FQDN absoluto — mesmo nome, cliente honesto (curl/dig).
-    assert(hostOnly("site.mel.kofcloud.io.") == "site.mel.kofcloud.io", "FQDN com ponto")
-    assert(hostOnly("SITE.MEL.KOFCLOUD.IO.:8080") == "site.mel.kofcloud.io", "tudo junto")
+    need(hostOnly("site.mel.kofcloud.io.") == "site.mel.kofcloud.io", "falhou")
+    need(hostOnly("SITE.MEL.KOFCLOUD.IO.:8080") == "site.mel.kofcloud.io", "falhou")
 }
 
 test "address: so loopback publica (anti-SSRF)", "hosts-loopback" {
     // Lista fechada: o Agent conecta nesse endereco a cada request —
     // qualquer outro valor o transformaria em escaneador da rede local.
-    assert(validLocalAddress("127.0.0.1") == true, "loopback IPv4")
-    assert(validLocalAddress("localhost") == true, "localhost")
-    assert(validLocalAddress("::1") == true, "loopback IPv6")
-    assert(validLocalAddress("0.0.0.0") == false, "todas as interfaces recusa")
-    assert(validLocalAddress("10.0.0.5") == false, "rede privada recusa")
-    assert(validLocalAddress("169.254.169.254") == false, "metadata cloud recusa")
-    assert(validLocalAddress("example.com") == false, "hostname externo recusa")
-    assert(validLocalAddress("") == false, "vazio recusa (default e antes)")
-    assert(validLocalAddress("127.0.0.2") == false, "quase-loopback recusa")
+    need(validLocalAddress("127.0.0.1") == true, "falhou")
+    need(validLocalAddress("localhost") == true, "falhou")
+    need(validLocalAddress("::1") == true, "falhou")
+    need(validLocalAddress("0.0.0.0") == false, "falhou")
+    need(validLocalAddress("10.0.0.5") == false, "falhou")
+    need(validLocalAddress("169.254.169.254") == false, "falhou")
+    need(validLocalAddress("example.com") == false, "falhou")
+    need(validLocalAddress("") == false, "falhou")
+    need(validLocalAddress("127.0.0.2") == false, "falhou")
     // defaultLocalAddress e a fonte unica do default (API, manifesto e CLI):
     // tem que estar dentro da lista fechada anti-SSRF.
-    assert(validLocalAddress(defaultLocalAddress()) == true, "default e loopback valido")
+    need(validLocalAddress(defaultLocalAddress()) == true, "falhou")
 }
 
 test "host: extrai o servico do hostname da conta" {
-    assert(serviceFromHost("site.mel.kofcloud.io", "mel") == "site", "servico")
-    assert(serviceFromHost("api.mel.kofcloud.io", "mel") == "api", "api")
-    assert(serviceFromHost("mel.kofcloud.io", "mel") == "", "sem servico")
-    assert(serviceFromHost("site.outra.kofcloud.io", "mel") == "", "outra conta")
-    assert(serviceFromHost("a.b.mel.kofcloud.io", "mel") == "", "dois rotulos")
+    need(serviceFromHost("site.mel.kofcloud.io", "mel") == "site", "falhou")
+    need(serviceFromHost("api.mel.kofcloud.io", "mel") == "api", "falhou")
+    need(serviceFromHost("mel.kofcloud.io", "mel") == "", "falhou")
+    need(serviceFromHost("site.outra.kofcloud.io", "mel") == "", "falhou")
+    need(serviceFromHost("a.b.mel.kofcloud.io", "mel") == "", "falhou")
 }
 
 test "exposicao: PRIVATE nao e roteavel" {
-    assert(exposureIsRoutable(Exposure.PUBLIC) == true, "public")
-    assert(exposureIsRoutable(Exposure.AUTHENTICATED) == true, "authenticated")
-    assert(exposureIsRoutable(Exposure.PRIVATE) == false, "private")
-    assert(exposureName(exposureFrom("PRIVATE")) == "PRIVATE", "round trip")
-    assert(exposureName(exposureFrom("qualquer")) == "PUBLIC", "default public")
+    need(exposureIsRoutable(Exposure.PUBLIC) == true, "falhou")
+    need(exposureIsRoutable(Exposure.AUTHENTICATED) == true, "falhou")
+    need(exposureIsRoutable(Exposure.PRIVATE) == false, "falhou")
+    need(exposureName(exposureFrom("PRIVATE")) == "PRIVATE", "falhou")
+    need(exposureName(exposureFrom("qualquer")) == "PUBLIC", "falhou")
     // exposureRequiresAuth recebe a string do modelo (Service.exposure
     // viaja como string) — fonte unica do literal AUTHENTICATED para os
     // pontos que so tem a string (HttpFront: gate 401 + dropCredential).
-    assert(exposureRequiresAuth("AUTHENTICATED") == true, "autenticado exige")
-    assert(exposureRequiresAuth("PUBLIC") == false, "publico nao exige")
-    assert(exposureRequiresAuth("PRIVATE") == false, "privado nao exige")
+    need(exposureRequiresAuth("AUTHENTICATED") == true, "falhou")
+    need(exposureRequiresAuth("PUBLIC") == false, "falhou")
+    need(exposureRequiresAuth("PRIVATE") == false, "falhou")
     // exposureIsKnown e a fonte unica do vocabulario para os 3 pontos que
     // validam entrada crua (API, manifesto, CLI): delegam no predicado em
     // vez de repetir os 3 literais (um typo num deles passaria nos outros).
-    assert(exposureIsKnown("PUBLIC") == true, "public conhecido")
-    assert(exposureIsKnown("AUTHENTICATED") == true, "autenticado conhecido")
-    assert(exposureIsKnown("PRIVATE") == true, "privado conhecido")
-    assert(exposureIsKnown("PUBLIK") == false, "typo recusado")
-    assert(exposureIsKnown("") == false, "vazio recusado")
+    need(exposureIsKnown("PUBLIC") == true, "falhou")
+    need(exposureIsKnown("AUTHENTICATED") == true, "falhou")
+    need(exposureIsKnown("PRIVATE") == true, "falhou")
+    need(exposureIsKnown("PUBLIK") == false, "falhou")
+    need(exposureIsKnown("") == false, "falhou")
     // protocolIsSupported e a fonte unica do protocolo do tunel (so http):
     // API e manifesto delegam (KCF046) em vez de repetir o literal.
-    assert(protocolIsSupported("http") == true, "http suportado")
-    assert(protocolIsSupported("tcp") == false, "tcp recusado")
-    assert(protocolIsSupported("HTTP") == false, "maiusculo recusado")
-    assert(protocolIsSupported("") == false, "vazio recusado")
+    need(protocolIsSupported("http") == true, "falhou")
+    need(protocolIsSupported("tcp") == false, "falhou")
+    need(protocolIsSupported("HTTP") == false, "falhou")
+    need(protocolIsSupported("") == false, "falhou")
     // Defaults single-source: os 3 pontos (API, manifesto, CLI) defaultam
     // pelo construtor; os asserts travam o valor e a consistencia interna
     // (default sempre passa na propria validacao).
-    assert(defaultExposure() == "PUBLIC", "default exposure")
-    assert(exposureIsKnown(defaultExposure()) == true, "default exposure valido")
-    assert(defaultProtocol() == "http", "default protocol")
-    assert(protocolIsSupported(defaultProtocol()) == true, "default protocol valido")
+    need(defaultExposure() == "PUBLIC", "falhou")
+    need(exposureIsKnown(defaultExposure()) == true, "falhou")
+    need(defaultProtocol() == "http", "falhou")
+    need(protocolIsSupported(defaultProtocol()) == true, "falhou")
 }
 
 test "status: OFFLINE nao roteia, ONLINE e UNKNOWN roteiam", "status-routable" {
-    assert(statusIsRoutable("ONLINE") == true, "online")
-    assert(statusIsRoutable("UNKNOWN") == true, "unknown ainda tenta")
-    assert(statusIsRoutable("DEGRADED") == true, "degraded")
-    assert(statusIsRoutable("OFFLINE") == false, "offline")
+    need(statusIsRoutable("ONLINE") == true, "falhou")
+    need(statusIsRoutable("UNKNOWN") == true, "falhou")
+    need(statusIsRoutable("DEGRADED") == true, "falhou")
+    need(statusIsRoutable("OFFLINE") == false, "falhou")
     // Os predicados delegam nos construtores (fonte unica do literal):
     // statusDegraded() tinha zero chamadores antes disso.
-    assert(statusIsRoutable(statusDegraded()) == true, "helper degradado roteia")
-    assert(statusIsRoutable(statusOnline()) == true, "helper online roteia")
-    assert(statusIsSuspended(statusSuspended()) == true, "helper suspenso casa")
+    need(statusIsRoutable(statusDegraded()) == true, "falhou")
+    need(statusIsRoutable(statusOnline()) == true, "falhou")
+    need(statusIsSuspended(statusSuspended()) == true, "falhou")
 }
 
 test "text: parseIntSafe aceita digito e recusa lixo" {
-    assert(parseIntSafe("8080", 0) == 8080, "numero")
-    assert(parseIntSafe("", 7) == 7, "vazio usa default")
-    assert(parseIntSafe("80a", 7) == 7, "lixo usa default")
-    assert(parseIntSafe("-5", 0) == -5, "negativo")
+    need(parseIntSafe("8080", 0) == 8080, "falhou")
+    need(parseIntSafe("", 7) == 7, "falhou")
+    need(parseIntSafe("80a", 7) == 7, "falhou")
+    need(parseIntSafe("-5", 0) == -5, "falhou")
     // parsePortSafe/parseIntBounded sao as unicas portas/contagens de entrada
     // (auditoria de wrap, Fase 14 slice 2q/2r/2s + 2t): parseIntSafe em texto
     // de usuario/CLI/API/rede e wrap — se voce esta adicionando um, pare:
     // use o parser com teto. (Contadores internos sao outra familia: ve
     // Session.pending/EdgeState.serviceConns, escritos pelo proprio codigo.)
-    assert(parsePortSafe("4294968080", 0) == 0, "porta com wrap nao vira 784")
-    assert(parsePortSafe("4294967296", 0) == 0, "porta 2^32 nao vira 0")
-    assert(parseIntBounded("4294967396", -1, 2147483647) == -1, "contagem com wrap falha")
-    assert(parseIntBounded("4294967396", -1, 100) == -1, "teto pequeno falha primeiro")
-    assert(parseIntBounded("100", -1, 2147483647) == 100, "normal passa")
+    need(parsePortSafe("4294968080", 0) == 0, "falhou")
+    need(parsePortSafe("4294967296", 0) == 0, "falhou")
+    need(parseIntBounded("4294967396", -1, 2147483647) == -1, "falhou")
+    need(parseIntBounded("4294967396", -1, 100) == -1, "falhou")
+    need(parseIntBounded("100", -1, 2147483647) == 100, "falhou")
 }
 
 test "text: bodyContainsId casa id exato entre aspas" {
     var body = "[\"abc-123\",\"def-456\"]"
-    assert(bodyContainsId(body, "abc-123") == true, "id presente")
-    assert(bodyContainsId(body, "abc-12") == false, "prefixo nao casa")
-    assert(bodyContainsId(body, "zzz") == false, "ausente")
-    assert(bodyContainsId(body, "") == false, "vazio nunca casa")
-    assert(bodyContainsId("[]", "abc-123") == false, "lista vazia")
+    need(bodyContainsId(body, "abc-123") == true, "falhou")
+    need(bodyContainsId(body, "abc-12") == false, "falhou")
+    need(bodyContainsId(body, "zzz") == false, "falhou")
+    need(bodyContainsId(body, "") == false, "falhou")
+    need(bodyContainsId("[]", "abc-123") == false, "falhou")
 }
 
 test "text: bearerValue extrai o token do Authorization" {
     // Fonte unica do parsing (control plane + Edge delegam): Bearer com
     // qualquer caixa, valor cru sem esquema, vazio e padding.
-    assert(bearerValue("Bearer abc123") == "abc123", "bearer minusculo")
-    assert(bearerValue("BEARER abc123") == "abc123", "bearer maiusculo")
-    assert(bearerValue("bearer abc123") == "abc123", "bearer exato")
-    assert(bearerValue("abc123") == "abc123", "cru passa direto")
-    assert(bearerValue("") == "", "vazio vira vazio")
-    assert(bearerValue("Bearer   abc123  ") == "abc123", "padding aparado")
-    assert(bearerValue("Bearer ") == "", "so esquema vira vazio")
+    need(bearerValue("Bearer abc123") == "abc123", "falhou")
+    need(bearerValue("BEARER abc123") == "abc123", "falhou")
+    need(bearerValue("bearer abc123") == "abc123", "falhou")
+    need(bearerValue("abc123") == "abc123", "falhou")
+    need(bearerValue("") == "", "falhou")
+    need(bearerValue("Bearer   abc123  ") == "abc123", "falhou")
+    need(bearerValue("Bearer ") == "", "falhou")
 }
 
 test "text: identificadores U da matriz sao unicos", "u-matrix" {
@@ -155,7 +156,7 @@ test "text: identificadores U da matriz sao unicos", "u-matrix" {
     // de trava em doc versionado: security-policy e postmortem-template.
     // Caminho relativo ao repo: o runner usa a raiz como cwd.
     var matrix = readTextOr("docs/15-tests.md", "")
-    assert(matrix.length > 0, "matriz existe e nao e vazia")
+    need(matrix.length > 0, "falhou")
     // Cada "| Unn |" conta uma linha; U com 3 digitos nao aparece hoje, e
     // "| U1 |" nao casa "| U10 |" porque exige os espacos dos dois lados.
     var i = 1
@@ -163,12 +164,12 @@ test "text: identificadores U da matriz sao unicos", "u-matrix" {
         var marker = "| U" + intToString(i) + " |"
         var first = matrix.indexOf(marker, 0)
         if (first >= 0) {
-            assert(matrix.indexOf(marker, first + 1) < 0, "U" + intToString(i) + " duplicado na matriz")
+            need(matrix.indexOf(marker, first + 1) < 0, "falhou")
         }
         i = i + 1
     }
-    assert(matrix.indexOf("| U54 |") >= 0, "U54 (framing) presente")
-    assert(matrix.indexOf("| U51 |") >= 0, "U51 (login-error) presente")
+    need(matrix.indexOf("| U54 |") >= 0, "falhou")
+    need(matrix.indexOf("| U51 |") >= 0, "falhou")
 }
 
 // Conta as declaracoes `test "` que COMECAM uma linha (o runner so aceita
@@ -212,7 +213,7 @@ test "text: contagem por suite no STATUS bate com os arquivos", "status-counts" 
     // tabela dava 307 contra 309 reais). Cada linha com UM arquivo tem de
     // bater com a contagem real de `test "` daquele arquivo.
     var status = readTextOr("docs/STATUS.md", "")
-    assert(status.length > 0, "STATUS existe")
+    need(status.length > 0, "falhou")
     var checked = 0
     var sumReal = 0
     for (var line in status.split("\n")) {
@@ -242,13 +243,13 @@ test "text: contagem por suite no STATUS bate com os arquivos", "status-counts" 
             continue
         }
         var real = countTestDeclarations(path)
-        assert(real == declared, path + " declara " + intToString(declared) + " no STATUS mas tem " + intToString(real) + " testes")
+        need(real == declared, "falhou")
         checked = checked + 1
         sumReal = sumReal + real
     }
     // Sanidade da propria trava: se o formato da tabela mudar e nada casar,
     // ela nao pode passar em silencio.
-    assert(checked >= 40, "tabela do STATUS reconhecida; linhas conferidas=" + intToString(checked))
+    need(checked >= 40, "falhou")
     // Total e contadores de suites em PROSA, derivados ao vivo — nunca
     // hardcoded. A mesma mentira silenciosa que a tabela punia existia fora
     // dela: README e STATUS diziam "56 suites" com a suite real em 57 (drift
@@ -258,69 +259,69 @@ test "text: contagem por suite no STATUS bate com os arquivos", "status-counts" 
     // Sanidade: uma linha em prosa fora do formato esperado nao pode passar.
     var suites = checked
     var totalIdx = status.indexOf("Total: ")
-    assert(totalIdx >= 0, "STATUS declara o total")
+    need(totalIdx >= 0, "falhou")
     var testesIdx = status.indexOf(" testes", totalIdx)
-    assert(testesIdx > totalIdx + 7, "formato do total no STATUS")
+    need(testesIdx > totalIdx + 7, "falhou")
     var declaredTotal = parseIntBounded(status.substring(totalIdx + 7, testesIdx), -1, 1000000)
-    assert(declaredTotal == sumReal, "STATUS declara Total: " + intToString(declaredTotal) + " mas os arquivos somam " + intToString(sumReal))
+    need(declaredTotal == sumReal, "falhou")
     var suiteMark = "# " + intToString(suites) + " suites"
-    assert(status.indexOf(suiteMark) >= 0, "STATUS cita " + suiteMark)
+    need(status.indexOf(suiteMark) >= 0, "falhou")
     var readme = readTextOr("README.md", "")
     var readmeMark = "(" + intToString(suites) + " suites)"
-    assert(readme.indexOf(readmeMark) >= 0, "README cita " + intToString(suites) + " suites")
+    need(readme.indexOf(readmeMark) >= 0, "falhou")
     // O resumo final da CLI ("57 passed, 0 failed") conta SUITES — o mesmo
     // contador reconhecido acima; a frase do run total no STATUS viaja junto.
     var runMark = "`" + intToString(suites) + " passed, 0 failed`"
-    assert(status.indexOf(runMark) >= 0, "STATUS cita o run total de " + intToString(suites) + " passed")
-    assert(suites > 50, "sanidade da trava de suites=" + intToString(suites))
+    need(status.indexOf(runMark) >= 0, "falhou")
+    need(suites > 50, "falhou")
 }
 
 test "text: tailLines devolve as ultimas linhas", "logs-tail" {
     var log = "l1\nl2\nl3\n"
-    assert(tailLines(log, 2) == "l2\nl3\n", "duas ultimas")
-    assert(tailLines(log, 5) == log, "mais que o total devolve tudo")
-    assert(tailLines(log, 0) == log, "zero devolve tudo")
-    assert(tailLines(log, -1) == log, "negativo devolve tudo")
-    assert(tailLines("so-uma\n", 1) == "so-uma\n", "linha unica")
-    assert(tailLines("", 3) == "", "vazio devolve vazio")
+    need(tailLines(log, 2) == "l2\nl3\n", "falhou")
+    need(tailLines(log, 5) == log, "falhou")
+    need(tailLines(log, 0) == log, "falhou")
+    need(tailLines(log, -1) == log, "falhou")
+    need(tailLines("so-uma\n", 1) == "so-uma\n", "falhou")
+    need(tailLines("", 3) == "", "falhou")
     // Sem trailing newline: a parcial conta como linha.
-    assert(tailLines("a\nb", 1) == "b\n", "parcial conta")
+    need(tailLines("a\nb", 1) == "b\n", "falhou")
     // `--tail` lia com parseIntSafe (32 bits): 4294967396 virava 100 e era
     // aceito em silencio — o usuario pedia bilhoes e recebia cem linhas.
-    assert(parseIntBounded("100", -1, 2147483647) == 100, "tail normal")
-    assert(parseIntBounded(" 100 ", -1, 2147483647) == 100, "tail com espacos")
-    assert(parseIntBounded("4294967396", -1, 2147483647) == -1, "acima de 2^32 nao vira 100")
-    assert(parseIntBounded("4294967296", -1, 2147483647) == -1, "2^32 nao vira 0")
-    assert(parseIntBounded("2147483648", -1, 2147483647) == -1, "acima do teto de Int")
-    assert(parseIntBounded("2147483647", -1, 2147483647) == 2147483647, "teto cabe")
-    assert(parseIntBounded("0", -1, 2147483647) == -1 && parseIntBounded("-3", -1, 2147483647) == -1, "zero e negativo")
-    assert(parseIntBounded("12x", -1, 2147483647) == -1 && parseIntBounded("", -1, 2147483647) == -1, "lixo e vazio")
+    need(parseIntBounded("100", -1, 2147483647) == 100, "falhou")
+    need(parseIntBounded(" 100 ", -1, 2147483647) == 100, "falhou")
+    need(parseIntBounded("4294967396", -1, 2147483647) == -1, "falhou")
+    need(parseIntBounded("4294967296", -1, 2147483647) == -1, "falhou")
+    need(parseIntBounded("2147483648", -1, 2147483647) == -1, "falhou")
+    need(parseIntBounded("2147483647", -1, 2147483647) == 2147483647, "falhou")
+    need(parseIntBounded("0", -1, 2147483647) == -1 && parseIntBounded("-3", -1, 2147483647) == -1, "falhou")
+    need(parseIntBounded("12x", -1, 2147483647) == -1 && parseIntBounded("", -1, 2147483647) == -1, "falhou")
 }
 
 test "text: trimLogHead corta o inicio em linhas inteiras", "logs-cap" {
     var log = "l1-antiga\nl2\nl3-recente\n"
     // Teto folgado: nada muda.
-    assert(trimLogHead(log, 1000) == log, "dentro do teto intacto")
+    need(trimLogHead(log, 1000) == log, "falhou")
     // Teto zero/desligado: nada muda.
-    assert(trimLogHead(log, 0) == log, "teto zero desliga")
+    need(trimLogHead(log, 0) == log, "falhou")
     // Teto curto: corta l1, mantem o fim em linhas inteiras.
     var trimmed = trimLogHead(log, 12)
-    assert(trimmed.indexOf("l1-antiga") < 0, "inicio velho sai")
-    assert(trimmed.indexOf("l3-recente") >= 0, "recente fica")
-    assert(trimmed.endsWith("\n"), "termina em linha inteira")
-    assert(trimmed.length <= 12 + "l2\n".length, "perde no maximo uma linha parcial")
+    need(trimmed.indexOf("l1-antiga") < 0, "falhou")
+    need(trimmed.indexOf("l3-recente") >= 0, "falhou")
+    need(trimmed.endsWith("\n"), "falhou")
+    need(trimmed.length <= 12 + "l2\n".length, "falhou")
     // Fonte unica do teto (os dois logs — agent.log e runtime — e o test do
     // help passam pela mesma funcao). Recuo em fonte pura: com 0/negativo o
     // trimLogHead devolve o texto SEM cortar (maxBytes <= 0 = sem teto) e os
     // DOIS logs crescem sem limite — disco cheio e o Agent morre numa
     // escrita. Zero nunca foi "sem log" (a saida continua no stdout).
-    assert(logBytesFrom(0) == 262144, "log zero recai no default")
-    assert(logBytesFrom(-1) == 262144, "log negativo recai no default")
-    assert(logBytesFrom(100000) == 100000, "log positivo passa")
-    assert(limitLogBytes() == 262144, "default travado")
+    need(logBytesFrom(0) == 262144, "falhou")
+    need(logBytesFrom(-1) == 262144, "falhou")
+    need(logBytesFrom(100000) == 100000, "falhou")
+    need(limitLogBytes() == 262144, "falhou")
     // Sem newline no trecho util: devolve o fim cru.
     var flat = trimLogHead("abcdefghij", 4)
-    assert(flat == "ghij", "sem newline corta cru")
+    need(flat == "ghij", "falhou")
 }
 
 test "text: tokenInventoryLine resume credenciais sem vazar valor", "token-status" {
@@ -331,116 +332,116 @@ test "text: tokenInventoryLine resume credenciais sem vazar valor", "token-statu
     var now = 1000000000000L
     var agora = longToString(now)
     var empty = listOf<ServiceTokenEntry>()
-    assert(tokenInventoryLine(empty, agora) == "", "sem credenciais, sem linha")
+    need(tokenInventoryLine(empty, agora) == "", "falhou")
     var plain = listOf<ServiceTokenEntry>()
     plain.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", null))
     var one = tokenInventoryLine(plain, agora)
-    assert(one.indexOf("1 emitida(s)") >= 0, "conta uma")
-    assert(one.indexOf("a1b2c3d4") < 0, "nao vaza nem o id curto")
-    assert(one.indexOf("expiracao") < 0, "sem TTL, sem aviso")
+    need(one.indexOf("1 emitida(s)") >= 0, "falhou")
+    need(one.indexOf("a1b2c3d4") < 0, "falhou")
+    need(one.indexOf("expiracao") < 0, "falhou")
     var mixed = listOf<ServiceTokenEntry>()
     mixed.add(ServiceTokenEntry("svc", "a1b2c3d4", "1700000000000", null))
     mixed.add(ServiceTokenEntry("svc", "e5f6a7b8", "1700000000000", "1730000000000"))
     var two = tokenInventoryLine(mixed, agora)
-    assert(two.indexOf("2 emitida(s)") >= 0, "conta duas")
-    assert(two.indexOf("1 com expiracao") >= 0, "aponta que ha prazo")
-    assert(two.indexOf("token-list") >= 0, "orienta o proximo passo")
+    need(two.indexOf("2 emitida(s)") >= 0, "falhou")
+    need(two.indexOf("1 com expiracao") >= 0, "falhou")
+    need(two.indexOf("token-list") >= 0, "falhou")
     // Perto do fim: contagem com o mesmo predicado/janela do `token-list`.
     var longe = longToString(now + limitTokenExpiryWarnMs() + 86400000L)
     var calmo = listOf<ServiceTokenEntry>()
     calmo.add(ServiceTokenEntry("svc", "e5f6a7b8", "1700000000000", longe))
     var semAviso = tokenInventoryLine(calmo, agora)
-    assert(semAviso.indexOf("com expiracao") >= 0, "prazo fora da janela segue contado")
-    assert(semAviso.indexOf("AVISO") < 0, "fora da janela: silencio")
+    need(semAviso.indexOf("com expiracao") >= 0, "falhou")
+    need(semAviso.indexOf("AVISO") < 0, "falhou")
     var perto = longToString(now + limitTokenExpiryWarnMs() - 1000L)
     var alerta = listOf<ServiceTokenEntry>()
     alerta.add(ServiceTokenEntry("svc", "e5f6a7b8", "1700000000000", perto))
     var comAviso = tokenInventoryLine(alerta, agora)
-    assert(comAviso.indexOf("AVISO") >= 0, "dentro da janela: avisa")
-    assert(comAviso.indexOf("1 expira(m)") >= 0, "conta quantas estao perto")
-    assert(comAviso.indexOf("service rotate") >= 0, "aponta a rotacao")
+    need(comAviso.indexOf("AVISO") >= 0, "falhou")
+    need(comAviso.indexOf("1 expira(m)") >= 0, "falhou")
+    need(comAviso.indexOf("service rotate") >= 0, "falhou")
     var vencida = listOf<ServiceTokenEntry>()
     vencida.add(ServiceTokenEntry("svc", "e5f6a7b8", "1700000000000", longToString(now - 1L)))
-    assert(tokenInventoryLine(vencida, agora).indexOf("AVISO") < 0, "vencida nao avisa (mesmo predicado da lista)")
+    need(tokenInventoryLine(vencida, agora).indexOf("AVISO") < 0, "falhou")
     var duas = listOf<ServiceTokenEntry>()
     duas.add(ServiceTokenEntry("svc", "e5f6a7b8", "1700000000000", perto))
     duas.add(ServiceTokenEntry("svc", "c9d8e7f6", "1700000000000", longe))
     var mistas = tokenInventoryLine(duas, agora)
-    assert(mistas.indexOf("2 com expiracao") >= 0, "as duas com prazo seguem no resumo")
-    assert(mistas.indexOf("1 expira(m)") >= 0, "conta so as da janela")
+    need(mistas.indexOf("2 com expiracao") >= 0, "falhou")
+    need(mistas.indexOf("1 expira(m)") >= 0, "falhou")
 }
 
 test "text: validatePublishLocal barra exposure/address ruins sem rede", "publish-local" {
     // Pura, sem rede nem HOME (precedente: doctorTunnelLine): o cmdPublish
     // chama antes de qualquer fetch; aqui cobrimos a decisao direto.
-    assert(validatePublishLocal("site", 8080, "PUBLIC", "127.0.0.1") == "", "caso valido passa")
-    assert(validatePublishLocal("site", 8080, "PRIVATE", "localhost") == "", "localhost passa")
-    assert(validatePublishLocal("", 8080, "PUBLIC", "127.0.0.1").indexOf("uso:") >= 0, "sem nome pede uso")
-    assert(validatePublishLocal("site", 0, "PUBLIC", "127.0.0.1").indexOf("uso:") >= 0, "sem porta pede uso")
-    assert(validatePublishLocal("site", 99999, "PUBLIC", "127.0.0.1").indexOf("1-65535") >= 0, "teto de porta no CLI")
-    assert(validatePublishLocal("site", 8080, "PUBLIK", "127.0.0.1").indexOf("exposure invalida") >= 0, "typo nao vira PUBLIC")
-    assert(validatePublishLocal("site", 8080, "PUBLIC", "10.0.0.5").indexOf("address invalido") >= 0, "externo barra (SSRF)")
-    assert(validatePublishLocal("site", 8080, "PUBLIC", "169.254.169.254").indexOf("127.0.0.1") >= 0, "metadata barra com dica")
+    need(validatePublishLocal("site", 8080, "PUBLIC", "127.0.0.1") == "", "falhou")
+    need(validatePublishLocal("site", 8080, "PRIVATE", "localhost") == "", "falhou")
+    need(validatePublishLocal("", 8080, "PUBLIC", "127.0.0.1").indexOf("uso:") >= 0, "falhou")
+    need(validatePublishLocal("site", 0, "PUBLIC", "127.0.0.1").indexOf("uso:") >= 0, "falhou")
+    need(validatePublishLocal("site", 99999, "PUBLIC", "127.0.0.1").indexOf("1-65535") >= 0, "falhou")
+    need(validatePublishLocal("site", 8080, "PUBLIK", "127.0.0.1").indexOf("exposure invalida") >= 0, "falhou")
+    need(validatePublishLocal("site", 8080, "PUBLIC", "10.0.0.5").indexOf("address invalido") >= 0, "falhou")
+    need(validatePublishLocal("site", 8080, "PUBLIC", "169.254.169.254").indexOf("127.0.0.1") >= 0, "falhou")
     // Trim como o parseManifest: padding passa aparado; so-espacos falha
     // como ausente no nome (fail-fast local). Exposure/address so-espacos
     // falham NO VALIDADOR PURO (ele nao defaulta — o default vive no
     // chamador); no fluxo real o cmdPublish apara + defaulta antes
     // (igual ao parse do manifesto), entao esse caminho nao dispara.
-    assert(validatePublishLocal("  site  ", 8080, " PUBLIC ", " localhost ") == "", "padding passa aparado")
-    assert(validatePublishLocal("   ", 8080, "PUBLIC", "127.0.0.1").indexOf("uso:") >= 0, "nome so-espacos pede uso")
-    assert(validatePublishLocal("site", 8080, "   ", "127.0.0.1").indexOf("exposure invalida") >= 0, "exposure so-espacos falha no puro")
-    assert(validatePublishLocal("site", 8080, "PUBLIC", "   ").indexOf("address invalido") >= 0, "address so-espacos falha no puro")
+    need(validatePublishLocal("  site  ", 8080, " PUBLIC ", " localhost ") == "", "falhou")
+    need(validatePublishLocal("   ", 8080, "PUBLIC", "127.0.0.1").indexOf("uso:") >= 0, "falhou")
+    need(validatePublishLocal("site", 8080, "   ", "127.0.0.1").indexOf("exposure invalida") >= 0, "falhou")
+    need(validatePublishLocal("site", 8080, "PUBLIC", "   ").indexOf("address invalido") >= 0, "falhou")
 }
 
 test "text: validTtlHours aceita vazio e positivos", "ttl-local" {
     // Pura, sem rede nem HOME: o cmdServiceToken chama antes de buscar
     // servicos (fail-fast local, mesma regra do KCF062 na API). Trim como o
     // parseManifest: padding passa aparado; so-espacos = ausente (sem TTL).
-    assert(validTtlHours("") == true, "ausente = sem expiracao")
-    assert(validTtlHours("24") == true, "horas ok")
-    assert(validTtlHours("1") == true, "minimo ok")
-    assert(validTtlHours("  24  ") == true, "padding passa aparado")
-    assert(validTtlHours("   ") == true, "so-espacos = sem expiracao")
-    assert(validTtlHours("0") == false, "zero recusa")
-    assert(validTtlHours("  0  ") == false, "zero com padding recusa")
-    assert(validTtlHours("-5") == false, "negativo recusa")
-    assert(validTtlHours("lixo") == false, "texto recusa")
-    assert(validTtlHours("  lixo  ") == false, "texto com padding recusa")
+    need(validTtlHours("") == true, "falhou")
+    need(validTtlHours("24") == true, "falhou")
+    need(validTtlHours("1") == true, "falhou")
+    need(validTtlHours("  24  ") == true, "falhou")
+    need(validTtlHours("   ") == true, "falhou")
+    need(validTtlHours("0") == false, "falhou")
+    need(validTtlHours("  0  ") == false, "falhou")
+    need(validTtlHours("-5") == false, "falhou")
+    need(validTtlHours("lixo") == false, "falhou")
+    need(validTtlHours("  lixo  ") == false, "falhou")
     // 4294967396 virava 100 horas com parseIntSafe (wrap de 32 bits).
-    assert(validTtlHours("4294967396") == false, "ttl acima de 2^32 recusa")
-    assert(validTtlHours("4294967296") == false, "ttl 2^32 nao vira 0")
+    need(validTtlHours("4294967396") == false, "falhou")
+    need(validTtlHours("4294967296") == false, "falhou")
 }
 
 test "text: validateServePorts barra porta fora da faixa", "serve-ports" {
     // Pura, sem rede nem HOME: o cmdServe chama antes de abrir qualquer
     // listener (fail-fast, sem bind parcial). Os defaults vêm da fonte
     // unica (Hosts): mudar la muda aqui sem caçar literal.
-    assert(defaultControlPort() == 8080, "control default travado")
-    assert(defaultTunnelPort() == 7000, "tunel default travado")
-    assert(defaultHttpPort() == 8081, "http default travado")
-    assert(validateServePorts(defaultControlPort(), defaultTunnelPort(), defaultHttpPort()) == "", "defaults passam")
-    assert(validateServePorts(1, 1, 1).length == 0, "minimo passa")
-    assert(validateServePorts(65535, 65535, 65535).length == 0, "maximo passa")
-    assert(validateServePorts(0, defaultTunnelPort(), defaultHttpPort()).indexOf("control-port") >= 0, "zero barra no control")
-    assert(validateServePorts(defaultControlPort(), 70000, defaultHttpPort()).indexOf("tunnel-port") >= 0, "teto barra no tunel")
-    assert(validateServePorts(defaultControlPort(), defaultTunnelPort(), -1).indexOf("http-port") >= 0, "negativa barra no http")
-    assert(defaultControlUrl() == "http://127.0.0.1:" + intToString(defaultControlPort()), "controlUrl usa o default")
+    need(defaultControlPort() == 8080, "falhou")
+    need(defaultTunnelPort() == 7000, "falhou")
+    need(defaultHttpPort() == 8081, "falhou")
+    need(validateServePorts(defaultControlPort(), defaultTunnelPort(), defaultHttpPort()) == "", "falhou")
+    need(validateServePorts(1, 1, 1).length == 0, "falhou")
+    need(validateServePorts(65535, 65535, 65535).length == 0, "falhou")
+    need(validateServePorts(0, defaultTunnelPort(), defaultHttpPort()).indexOf("control-port") >= 0, "falhou")
+    need(validateServePorts(defaultControlPort(), 70000, defaultHttpPort()).indexOf("tunnel-port") >= 0, "falhou")
+    need(validateServePorts(defaultControlPort(), defaultTunnelPort(), -1).indexOf("http-port") >= 0, "falhou")
+    need(defaultControlUrl() == "http://127.0.0.1:" + intToString(defaultControlPort()), "falhou")
     // Porta lida sem estouro de Int: 4294968080 fazia wrap para 784 e era
     // aceita em silencio; 4294967296 virava 0.
-    assert(parsePortSafe("8080", 0) == 8080, "porta normal")
-    assert(parsePortSafe(" 8080 ", 0) == 8080, "espacos")
-    assert(parsePortSafe("1", 0) == 1 && parsePortSafe("65535", 0) == 65535, "faixa")
-    assert(parsePortSafe("4294968080", -1) == -1, "acima de 2^32 nao faz wrap")
-    assert(parsePortSafe("4294967296", -1) == -1, "2^32 exato nao vira 0")
-    assert(parsePortSafe("65536", -1) == -1, "acima do teto")
-    assert(parsePortSafe("0", -1) == -1 && parsePortSafe("-1", -1) == -1, "zero e negativo")
-    assert(parsePortSafe("8080x", -1) == -1 && parsePortSafe("", -1) == -1, "lixo e vazio")
+    need(parsePortSafe("8080", 0) == 8080, "falhou")
+    need(parsePortSafe(" 8080 ", 0) == 8080, "falhou")
+    need(parsePortSafe("1", 0) == 1 && parsePortSafe("65535", 0) == 65535, "falhou")
+    need(parsePortSafe("4294968080", -1) == -1, "falhou")
+    need(parsePortSafe("4294967296", -1) == -1, "falhou")
+    need(parsePortSafe("65536", -1) == -1, "falhou")
+    need(parsePortSafe("0", -1) == -1 && parsePortSafe("-1", -1) == -1, "falhou")
+    need(parsePortSafe("8080x", -1) == -1 && parsePortSafe("", -1) == -1, "falhou")
     // Flag do serve: ausente usa o default; presente e invalida vira -1 e a
     // validacao recusa (nunca cai no default em silencio).
-    assert(portFlagValue("", defaultControlPort()) == defaultControlPort(), "ausente = default")
-    assert(portFlagValue("   ", defaultControlPort()) == defaultControlPort(), "so espacos = default")
-    assert(portFlagValue("4294968080", defaultControlPort()) == -1, "flag estourada = -1")
-    assert(validateServePorts(portFlagValue("4294968080", defaultControlPort()), defaultTunnelPort(), defaultHttpPort()).indexOf("control-port") >= 0, "flag estourada barra")
+    need(portFlagValue("", defaultControlPort()) == defaultControlPort(), "falhou")
+    need(portFlagValue("   ", defaultControlPort()) == defaultControlPort(), "falhou")
+    need(portFlagValue("4294968080", defaultControlPort()) == -1, "falhou")
+    need(validateServePorts(portFlagValue("4294968080", defaultControlPort()), defaultTunnelPort(), defaultHttpPort()).indexOf("control-port") >= 0, "falhou")
 }
 
 test "text: flag sem valor nao vira default silencioso", "flag-missing" {
@@ -448,41 +449,41 @@ test "text: flag sem valor nao vira default silencioso", "flag-missing" {
     // de "presente sem valor" — flagMissingValue fecha o buraco para as
     // flags cujo default mentiria sobre a intencao (ex.: --ttl solto
     // viraria "sem expiracao").
-    assert(flagMissingValue(listOf<String>(), "--ttl") == false, "ausente nao e erro")
-    assert(flagMissingValue(listOf("--ttl"), "--ttl") == true, "flag sozinha no fim")
-    assert(flagMissingValue(listOf("--ttl", "--check"), "--ttl") == true, "flag seguida de flag")
-    assert(flagMissingValue(listOf("--ttl", "24"), "--ttl") == false, "flag com valor ok")
-    assert(flagMissingValue(listOf("site", "--port"), "--port") == true, "port sem valor")
-    assert(flagMissingValue(listOf("--port", "8080"), "--other") == false, "outra flag nao casa")
-    assert(flagMissingValue(listOf("api.example.com", "--service"), "--service") == true, "service solto barra")
-    assert(flagMissingValue(listOf("--tail"), "--tail") == true, "tail solto barra")
+    need(flagMissingValue(listOf<String>(), "--ttl") == false, "falhou")
+    need(flagMissingValue(listOf("--ttl"), "--ttl") == true, "falhou")
+    need(flagMissingValue(listOf("--ttl", "--check"), "--ttl") == true, "falhou")
+    need(flagMissingValue(listOf("--ttl", "24"), "--ttl") == false, "falhou")
+    need(flagMissingValue(listOf("site", "--port"), "--port") == true, "falhou")
+    need(flagMissingValue(listOf("--port", "8080"), "--other") == false, "falhou")
+    need(flagMissingValue(listOf("api.example.com", "--service"), "--service") == true, "falhou")
+    need(flagMissingValue(listOf("--tail"), "--tail") == true, "falhou")
 }
 
 test "text: flagDuplicated barra repeticao silenciosa", "flag-dup" {
     // Pura, sem rede nem HOME: `flagValue` leria a primeira ocorrencia e
     // ignoraria a segunda — ambiguidade que vira surpresa (o operador acha
     // que vale a ultima). Fail-fast antes de qualquer efeito.
-    assert(flagDuplicated(listOf<String>(), "--port") == false, "ausente ok")
-    assert(flagDuplicated(listOf("--port", "8080"), "--port") == false, "unica ok")
-    assert(flagDuplicated(listOf("--port", "80", "--port", "8080"), "--port") == true, "duplicada barra")
-    assert(flagDuplicated(listOf("--port", "80", "--port"), "--port") == true, "duplicada sem valor tambem")
-    assert(flagDuplicated(listOf("--port", "8080"), "--ttl") == false, "outra flag nao casa")
-    assert(flagDuplicated(listOf("--ttl", "24", "--ttl", "48"), "--ttl") == true, "ttl duplicado barra")
-    assert(flagDuplicated(listOf("--tail", "10", "--tail", "20"), "--tail") == true, "tail duplicado barra")
-    assert(flagDuplicated(listOf("--service", "a", "--service", "b"), "--service") == true, "service duplicado barra")
+    need(flagDuplicated(listOf<String>(), "--port") == false, "falhou")
+    need(flagDuplicated(listOf("--port", "8080"), "--port") == false, "falhou")
+    need(flagDuplicated(listOf("--port", "80", "--port", "8080"), "--port") == true, "falhou")
+    need(flagDuplicated(listOf("--port", "80", "--port"), "--port") == true, "falhou")
+    need(flagDuplicated(listOf("--port", "8080"), "--ttl") == false, "falhou")
+    need(flagDuplicated(listOf("--ttl", "24", "--ttl", "48"), "--ttl") == true, "falhou")
+    need(flagDuplicated(listOf("--tail", "10", "--tail", "20"), "--tail") == true, "falhou")
+    need(flagDuplicated(listOf("--service", "a", "--service", "b"), "--service") == true, "falhou")
     // Booleanas repetidas tambem barram: `hasFlag` leria a primeira em
     // silencio (medido: `down --prune --prune` rodava normal). Cobrem as
     // guardas de deploy/down/incidents/migrate/logs/serve (precedente:
     // --all/--prune do rotate e --sbom/--verify do audit).
-    assert(flagDuplicated(listOf("--check", "--check"), "--check") == true, "check duplicado barra")
-    assert(flagDuplicated(listOf("--plan", "--plan"), "--plan") == true, "plan duplicado barra")
-    assert(flagDuplicated(listOf("--prune"), "--prune") == false, "prune unico ok")
-    assert(flagDuplicated(listOf("--prune", "--prune"), "--prune") == true, "prune duplicado barra")
-    assert(flagDuplicated(listOf("--all", "--all"), "--all") == true, "all duplicado barra")
-    assert(flagDuplicated(listOf("--dry-run", "--dry-run"), "--dry-run") == true, "dry-run duplicado barra")
-    assert(flagDuplicated(listOf("--runtime", "--runtime"), "--runtime") == true, "runtime duplicado barra")
-    assert(flagDuplicated(listOf("--panel", "--panel"), "--panel") == true, "panel duplicado barra")
-    assert(flagDuplicated(listOf("--status-page", "--status-page"), "--status-page") == true, "status-page duplicado barra")
+    need(flagDuplicated(listOf("--check", "--check"), "--check") == true, "falhou")
+    need(flagDuplicated(listOf("--plan", "--plan"), "--plan") == true, "falhou")
+    need(flagDuplicated(listOf("--prune"), "--prune") == false, "falhou")
+    need(flagDuplicated(listOf("--prune", "--prune"), "--prune") == true, "falhou")
+    need(flagDuplicated(listOf("--all", "--all"), "--all") == true, "falhou")
+    need(flagDuplicated(listOf("--dry-run", "--dry-run"), "--dry-run") == true, "falhou")
+    need(flagDuplicated(listOf("--runtime", "--runtime"), "--runtime") == true, "falhou")
+    need(flagDuplicated(listOf("--panel", "--panel"), "--panel") == true, "falhou")
+    need(flagDuplicated(listOf("--status-page", "--status-page"), "--status-page") == true, "falhou")
 }
 
 test "text: extraPositional barra posicional sobrando", "extra-positional" {
@@ -490,50 +491,50 @@ test "text: extraPositional barra posicional sobrando", "extra-positional" {
     // em silencio e o resto sumiria — typo que vira acao errada sem aviso.
     // Valores de flag nao contam como posicionais (lista fechada em
     // extraPositional, igual as flags que flagValue entende).
-    assert(extraPositional(listOf<String>(), 1) == false, "vazio ok")
-    assert(extraPositional(listOf("site"), 1) == false, "exato ok")
-    assert(extraPositional(listOf("site", "lixo"), 1) == true, "segundo posicional barra")
-    assert(extraPositional(listOf("site", "--port", "8080"), 1) == false, "valor de flag nao conta")
-    assert(extraPositional(listOf("site", "--port", "8080", "lixo"), 1) == true, "extra apos flag barra")
-    assert(extraPositional(listOf("site", "kfs_x", "lixo"), 2) == true, "terceiro posicional barra")
-    assert(extraPositional(listOf("site", "kfs_x"), 2) == false, "dois exatos ok")
-    assert(extraPositional(listOf("site", "--ttl", "24"), 1) == false, "ttl com valor nao conta")
+    need(extraPositional(listOf<String>(), 1) == false, "falhou")
+    need(extraPositional(listOf("site"), 1) == false, "falhou")
+    need(extraPositional(listOf("site", "lixo"), 1) == true, "falhou")
+    need(extraPositional(listOf("site", "--port", "8080"), 1) == false, "falhou")
+    need(extraPositional(listOf("site", "--port", "8080", "lixo"), 1) == true, "falhou")
+    need(extraPositional(listOf("site", "kfs_x", "lixo"), 2) == true, "falhou")
+    need(extraPositional(listOf("site", "kfs_x"), 2) == false, "falhou")
+    need(extraPositional(listOf("site", "--ttl", "24"), 1) == false, "falhou")
     // Extratores firstPositional/secondPositional agora compartilham a mesma
     // fonte unica (positionalArgs): a flag pode vir antes do argumento sem que
     // o VALOR da flag seja confundido com o argumento (defeito real medido).
-    assert(firstPositional(listOf("--port", "8080", "site")) == "site", "flag antes do primeiro posicional")
-    assert(firstPositional(listOf("site", "--port", "8080")) == "site", "flag depois do primeiro posicional")
-    assert(firstPositional(listOf("--password", "segredo", "mel")) == "mel", "senha antes do handle nao vira handle")
-    assert(firstPositional(listOf("--ttl", "24", "--all")) == "", "so flags = sem posicional")
-    assert(firstPositional(listOf<String>()) == "", "vazio = sem posicional")
+    need(firstPositional(listOf("--port", "8080", "site")) == "site", "falhou")
+    need(firstPositional(listOf("site", "--port", "8080")) == "site", "falhou")
+    need(firstPositional(listOf("--password", "segredo", "mel")) == "mel", "falhou")
+    need(firstPositional(listOf("--ttl", "24", "--all")) == "", "falhou")
+    need(firstPositional(listOf<String>()) == "", "falhou")
     // secondPositional pula o valor de flags intermediarias e preserva a ordem.
-    assert(secondPositional(listOf("set", "--secret", "s", "https://hook.com")) == "https://hook.com", "segredo antes da url nao vira url")
-    assert(secondPositional(listOf("set", "https://hook.com", "--secret", "s")) == "https://hook.com", "segredo depois da url")
-    assert(secondPositional(listOf("site", "kfs_x")) == "kfs_x", "segundo posicional direto")
-    assert(secondPositional(listOf("so-um")) == "", "um posicional so = sem segundo")
-    assert(secondPositional(listOf("--service", "s")) == "", "so flag = sem segundo")
+    need(secondPositional(listOf("set", "--secret", "s", "https://hook.com")) == "https://hook.com", "falhou")
+    need(secondPositional(listOf("set", "https://hook.com", "--secret", "s")) == "https://hook.com", "falhou")
+    need(secondPositional(listOf("site", "kfs_x")) == "kfs_x", "falhou")
+    need(secondPositional(listOf("so-um")) == "", "falhou")
+    need(secondPositional(listOf("--service", "s")) == "", "falhou")
     // positionalArgs expoe a lista pura.
     var pos = positionalArgs(listOf("--control", "http://c", "mel", "--device", "nb"))
-    assert(pos.size == 1 && pos.get(0) == "mel", "so o handle e posicional")
+    need(pos.size == 1 && pos.get(0) == "mel", "falhou")
 }
 
 test "text: comandos sem posicional rejeitam sobra", "extra-zero" {
     // logout/connect/disconnect/status/doctor/deploy/down nao tem
     // posicionais: qualquer token solto e erro, nao no-op silencioso.
-    assert(extraPositional(listOf("qualquer"), 0) == true, "um solto barra")
-    assert(extraPositional(listOf<String>(), 0) == false, "vazio ok")
-    assert(extraPositional(listOf("--file", "k.json"), 0) == false, "so flag com valor ok")
-    assert(extraPositional(listOf("x", "--file", "k.json"), 0) == true, "posicional com flag barra")
+    need(extraPositional(listOf("qualquer"), 0) == true, "falhou")
+    need(extraPositional(listOf<String>(), 0) == false, "falhou")
+    need(extraPositional(listOf("--file", "k.json"), 0) == false, "falhou")
+    need(extraPositional(listOf("x", "--file", "k.json"), 0) == true, "falhou")
 }
 
 test "text: domainListLine mostra status so do custom", "domain-list-line" {
     // Pura, sem rede (precedente: tokenInventoryLine): wildcard/service nao
     // tem ciclo PENDING/VERIFIED; custom mostra para o operador saber se
     // falta o DNS.
-    assert(domainListLine(DomainEntry("mel.kofcloud.io", "wildcard", "", "")) == "wildcard  mel.kofcloud.io", "wildcard sem status")
-    assert(domainListLine(DomainEntry("site.mel.kofcloud.io", "service", "site", "")) == "service  site.mel.kofcloud.io", "service sem status")
-    assert(domainListLine(DomainEntry("api.example.com", "custom", "site", "PENDING")) == "custom  api.example.com  PENDING", "custom PENDING")
-    assert(domainListLine(DomainEntry("api.example.com", "custom", "site", "VERIFIED")) == "custom  api.example.com  VERIFIED", "custom VERIFIED")
+    need(domainListLine(DomainEntry("mel.kofcloud.io", "wildcard", "", "")) == "wildcard  mel.kofcloud.io", "falhou")
+    need(domainListLine(DomainEntry("site.mel.kofcloud.io", "service", "site", "")) == "service  site.mel.kofcloud.io", "falhou")
+    need(domainListLine(DomainEntry("api.example.com", "custom", "site", "PENDING")) == "custom  api.example.com  PENDING", "falhou")
+    need(domainListLine(DomainEntry("api.example.com", "custom", "site", "VERIFIED")) == "custom  api.example.com  VERIFIED", "falhou")
 }
 
 test "text: customDomainsFor filtra customs do servico", "custom-domains-for" {    // Pura, sem rede (precedente: domainListLine): o `service status`
@@ -545,41 +546,41 @@ test "text: customDomainsFor filtra customs do servico", "custom-domains-for" { 
     domains.add(DomainEntry("api.example.com", "custom", "site", "PENDING"))
     domains.add(DomainEntry("loja.example.com", "custom", "loja", "VERIFIED"))
     var only = customDomainsFor(domains, "site")
-    assert(only.size == 1, "so o custom do servico")
-    assert(only.get(0).hostname == "api.example.com", "o custom certo")
-    assert(domainListLine(only.get(0)).indexOf("PENDING") >= 0, "linha reutiliza domainListLine")
-    assert(customDomainsFor(domains, "loja").size == 1, "outro servico ve o seu")
-    assert(customDomainsFor(domains, "novo").size == 0, "sem custom: vazio")
-    assert(customDomainsFor(listOf<DomainEntry>(), "site").size == 0, "lista vazia: vazio")
+    need(only.size == 1, "falhou")
+    need(only.get(0).hostname == "api.example.com", "falhou")
+    need(domainListLine(only.get(0)).indexOf("PENDING") >= 0, "falhou")
+    need(customDomainsFor(domains, "loja").size == 1, "falhou")
+    need(customDomainsFor(domains, "novo").size == 0, "falhou")
+    need(customDomainsFor(listOf<DomainEntry>(), "site").size == 0, "falhou")
 }
 
 test "text: notFoundLine trava mensagens da CLI", "not-found-line" {
     // Puras, sem rede (precedente: domainListLine): fonte unica das 11
     // mensagens "nao encontrado" (7 servico + 4 dispositivo) — se o texto
     // mudar, muda num lugar so e este teste acusa.
-    assert(serviceNotFoundLine("site") == "servico nao encontrado: site", "servico exato")
-    assert(deviceNotFoundLine("dev1") == "dispositivo nao encontrado: dev1", "dispositivo exato")
+    need(serviceNotFoundLine("site") == "servico nao encontrado: site", "falhou")
+    need(deviceNotFoundLine("dev1") == "dispositivo nao encontrado: dev1", "falhou")
     // Guarda de sessao: ~20 pontos bare + 9 com dica convergem na forma com
     // dica — o operador sem sessao recebe a mesma orientacao em todo comando.
-    assert(notLoggedInLine() == "nao logado — rode: kof cloud login <handle> --password <senha>", "forma com dica")
-    assert(notLoggedInLine().indexOf("kof cloud login") >= 0, "dica acionavel")
+    need(notLoggedInLine() == "nao logado — rode: kof cloud login <handle> --password <senha>", "falhou")
+    need(notLoggedInLine().indexOf("kof cloud login") >= 0, "falhou")
     // Linhas de uso duplicadas em dois guardas do mesmo comando (fonte
     // unica): cada helper abaixo cobre 2 call sites (flag + args).
-    assert(usoServiceTokenLine() == "uso: kof cloud service token <nome> [--ttl <horas>]", "uso token")
+    need(usoServiceTokenLine() == "uso: kof cloud service token <nome> [--ttl <horas>]", "falhou")
     // Uso do dispatch (grupo sem subcomando): precisa listar TODOS os subs
     // que o runXxx despacha — antes `service` omitia tokens|rotate|rotation
     // e `token` omitia prune (medido: o comando existia, o help anunciava,
     // o uso mentia). Puras, sem rede.
-    assert(usoServiceDispatchLine() == "uso: kof cloud service list|status|suspend|unsuspend|token <nome>|token-list <nome>|token-revoke <nome> <kfs_...|id>|tokens|rotate|rotation", "uso service dispatch")
-    assert(usoTokenDispatchLine() == "uso: kof cloud token list|revoke|rotate|rotation|prune", "uso token dispatch")
+    need(usoServiceDispatchLine() == "uso: kof cloud service list|status|suspend|unsuspend|token <nome>|token-list <nome>|token-revoke <nome> <kfs_...|id>|tokens|rotate|rotation", "falhou")
+    need(usoTokenDispatchLine() == "uso: kof cloud token list|revoke|rotate|rotation|prune", "falhou")
     // Os outros 3 dispatch (device/domain/daemon) ja listavam tudo — agora
     // tambem em fonte unica (mesmo padrao, sem refatorar formato).
-    assert(usoDeviceDispatchLine() == "uso: kof cloud device list|revoke|suspend|unsuspend <nome|id>", "uso device dispatch")
-    assert(usoDomainDispatchLine() == "uso: kof cloud domain list|add|verify|remove", "uso domain dispatch")
-    assert(usoDaemonDispatchLine() == "uso: kof cloud daemon install|status|uninstall", "uso daemon dispatch")
-    assert(usoServeLine().indexOf("kof cloud serve") >= 0, "uso serve")
-    assert(usoLogsLine() == "uso: kof cloud logs [--tail <linhas>] [--runtime|--edge]", "uso logs")
-    assert(usoDomainAddLine() == "uso: kof cloud domain add <hostname> --service <nome> [--dns-webhook <url> | --dns-cmd <cmd>] [--dry-run]", "uso domain add")
+    need(usoDeviceDispatchLine() == "uso: kof cloud device list|revoke|suspend|unsuspend <nome|id>", "falhou")
+    need(usoDomainDispatchLine() == "uso: kof cloud domain list|add|verify|remove", "falhou")
+    need(usoDaemonDispatchLine() == "uso: kof cloud daemon install|status|uninstall", "falhou")
+    need(usoServeLine().indexOf("kof cloud serve") >= 0, "falhou")
+    need(usoLogsLine() == "uso: kof cloud logs [--tail <linhas>] [--runtime|--edge]", "falhou")
+    need(usoDomainAddLine() == "uso: kof cloud domain add <hostname> --service <nome> [--dns-webhook <url> | --dns-cmd <cmd>] [--dry-run]", "falhou")
 }
 
 test "text: matchServiceName apara antes de comparar", "service-name-match" {
@@ -589,12 +590,12 @@ test "text: matchServiceName apara antes de comparar", "service-name-match" {
     var services = listOf<Service>()
     services.add(Service("id1", "acc", "dev", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 1000, "", "", ""))
     services.add(Service("id2", "acc", "dev", "loja", "127.0.0.1", 3000, "http", "loja.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 1000, "", "", ""))
-    assert(matchServiceName(services, "site") == "id1", "exato resolve")
-    assert(matchServiceName(services, "  site  ") == "id1", "padding resolve")
-    assert(matchServiceName(services, "loja") == "id2", "segundo resolve")
-    assert(matchServiceName(services, "   ") == "", "so-espacos nao casa")
-    assert(matchServiceName(services, "outro") == "", "inexistente vazio")
-    assert(matchServiceName(listOf<Service>(), "site") == "", "lista vazia: vazio")
+    need(matchServiceName(services, "site") == "id1", "falhou")
+    need(matchServiceName(services, "  site  ") == "id1", "falhou")
+    need(matchServiceName(services, "loja") == "id2", "falhou")
+    need(matchServiceName(services, "   ") == "", "falhou")
+    need(matchServiceName(services, "outro") == "", "falhou")
+    need(matchServiceName(listOf<Service>(), "site") == "", "falhou")
     // Homonimo entre devices: antes o matcher devolvia o PRIMEIRO que casava
     // (a ordem da lista decidia o device) e o comando agia no errado sem
     // avisar. Agora resolveServiceName marca ambiguo e matchServiceName
@@ -602,21 +603,21 @@ test "text: matchServiceName apara antes de comparar", "service-name-match" {
     var devA = Service("idA", "acc", "devA", "dup", "127.0.0.1", 8080, "http", "dup.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 1000, "", "", "")
     var devB = Service("idB", "acc", "devB", "dup", "127.0.0.1", 9090, "http", "dup.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 1000, "", "", "")
     var amb = resolveServiceName(listOf<Service>(devA, devB), "dup")
-    assert(amb.ambiguous, "homonimo marcado ambiguo")
-    assert(amb.uniqueId == "", "ambiguo nao escolhe id")
-    assert(amb.deviceIds.size == 2, "lista os dois devices")
-    assert(amb.deviceIds.contains("devA") && amb.deviceIds.contains("devB"), "devices certos")
-    assert(matchServiceName(listOf<Service>(devA, devB), "dup") == "", "matcher devolve vazio no ambiguo")
+    need(amb.ambiguous, "falhou")
+    need(amb.uniqueId == "", "falhou")
+    need(amb.deviceIds.size == 2, "falhou")
+    need(amb.deviceIds.contains("devA") && amb.deviceIds.contains("devB"), "falhou")
+    need(matchServiceName(listOf<Service>(devA, devB), "dup") == "", "falhou")
     // Ordem da lista nao muda o veredito (era o defeito).
-    assert(resolveServiceName(listOf<Service>(devB, devA), "dup").ambiguous, "ordem inversa tambem ambiguo")
+    need(resolveServiceName(listOf<Service>(devB, devA), "dup").ambiguous, "falhou")
     var single = resolveServiceName(listOf<Service>(devA), "dup")
-    assert(single.uniqueId == "idA" && single.ambiguous == false, "unico resolve")
+    need(single.uniqueId == "idA" && single.ambiguous == false, "falhou")
     var none = resolveServiceName(listOf<Service>(devA), "outro")
-    assert(none.uniqueId == "" && none.ambiguous == false, "inexistente nao e ambiguo")
+    need(none.uniqueId == "" && none.ambiguous == false, "falhou")
     var line = serviceAmbiguousLine("dup", listOf<String>("devA", "devB"))
-    assert(line.indexOf("dup") >= 0, "mensagem nomeia o servico")
-    assert(line.indexOf("2 dispositivos") >= 0, "mensagem conta os devices")
-    assert(line.indexOf("devA") >= 0 && line.indexOf("devB") >= 0, "mensagem lista os devices")
+    need(line.indexOf("dup") >= 0, "falhou")
+    need(line.indexOf("2 dispositivos") >= 0, "falhou")
+    need(line.indexOf("devA") >= 0 && line.indexOf("devB") >= 0, "falhou")
 }
 
 test "text: resolveLoginInputs apara sem tocar na senha", "login-trim" {
@@ -625,15 +626,15 @@ test "text: resolveLoginInputs apara sem tocar na senha", "login-trim" {
     // padding entram limpos, --device so-espacos vira vazio (o chamador
     // cai no default "default"), e a senha passa intacta (credencial).
     var padded = resolveLoginInputs("  mel  ", "  http://127.0.0.1:8080  ", "  notebook  ")
-    assert(padded.handle == "mel", "handle aparado")
-    assert(padded.control == "http://127.0.0.1:8080", "control aparado")
-    assert(padded.device == "notebook", "device aparado")
+    need(padded.handle == "mel", "falhou")
+    need(padded.control == "http://127.0.0.1:8080", "falhou")
+    need(padded.device == "notebook", "falhou")
     var blank = resolveLoginInputs("mel", "http://127.0.0.1:8080", "   ")
-    assert(blank.device == "", "device so-espacos vira vazio (default no chamador)")
+    need(blank.device == "", "falhou")
     var clean = resolveLoginInputs("mel", "http://127.0.0.1:8080", "notebook")
-    assert(clean.handle == "mel", "limpo passa direto")
-    assert(clean.control == "http://127.0.0.1:8080", "control limpo passa direto")
-    assert(clean.device == "notebook", "device limpo passa direto")
+    need(clean.handle == "mel", "falhou")
+    need(clean.control == "http://127.0.0.1:8080", "falhou")
+    need(clean.device == "notebook", "falhou")
 }
 
 test "text: resolveWafMode so aceita detectar|enforce", "serve-waf" {
@@ -641,66 +642,66 @@ test "text: resolveWafMode so aceita detectar|enforce", "serve-waf" {
     // ausente/vazio/so-espacos = detectar; padding apara; lixo vira "?"
     // (o cmdServe barra com uso, sem default mentiroso). O fio ate o
     // EdgeState (setWafEnforce) e o e2e `waf-flag` provam o efeito.
-    assert(resolveWafMode("") == "detectar", "ausente cai no detectar")
-    assert(resolveWafMode("   ") == "detectar", "so-espacos cai no detectar")
-    assert(resolveWafMode("  enforce  ") == "enforce", "padding apara")
-    assert(resolveWafMode("detectar") == "detectar", "detectar passa")
-    assert(resolveWafMode("enforce") == "enforce", "enforce passa")
-    assert(resolveWafMode("ENFORCE") == "?", "caixa importa (fail-closed no parse)")
-    assert(resolveWafMode("block") == "?", "lixo vira interrogação")
+    need(resolveWafMode("") == "detectar", "falhou")
+    need(resolveWafMode("   ") == "detectar", "falhou")
+    need(resolveWafMode("  enforce  ") == "enforce", "falhou")
+    need(resolveWafMode("detectar") == "detectar", "falhou")
+    need(resolveWafMode("enforce") == "enforce", "falhou")
+    need(resolveWafMode("ENFORCE") == "?", "falhou")
+    need(resolveWafMode("block") == "?", "falhou")
     // Guardas do cmdServe (precedente: serve-state): --waf solto ou
     // repetido barra antes de qualquer listener, igual as portas.
-    assert(flagMissingValue(listOf("--waf"), "--waf") == true, "waf solto barra")
-    assert(flagMissingValue(listOf("--waf", "--state"), "--waf") == true, "waf seguido de flag barra")
-    assert(flagMissingValue(listOf("--waf", "enforce"), "--waf") == false, "waf com valor ok")
-    assert(flagDuplicated(listOf("--waf", "a", "--waf", "b"), "--waf") == true, "waf repetido barra")
+    need(flagMissingValue(listOf("--waf"), "--waf") == true, "falhou")
+    need(flagMissingValue(listOf("--waf", "--state"), "--waf") == true, "falhou")
+    need(flagMissingValue(listOf("--waf", "enforce"), "--waf") == false, "falhou")
+    need(flagDuplicated(listOf("--waf", "a", "--waf", "b"), "--waf") == true, "falhou")
 }
 
 test "text: resolveTlsPair exige o par cert+key", "serve-tls" {
     // Pura, sem rede nem HOME (precedente: resolveWafMode): ausente = ""
     // (HTTP, comportamento atual); metade sozinha = erro (nao default
     // silencioso); padding apara; o par volta colado por "\n".
-    assert(resolveTlsPair("", "") == "", "ausente = sem TLS")
-    assert(resolveTlsPair("   ", "") == "", "so-espacos = sem TLS")
-    assert(resolveTlsPair("/c.pem", "") == "tls exige --tls-cert e --tls-key juntos (par ausente)", "key sozinha barra")
-    assert(resolveTlsPair("", "/k.pem") == "tls exige --tls-cert e --tls-key juntos (par ausente)", "cert sozinho barra")
-    assert(resolveTlsPair("  /c.pem  ", "  /k.pem  ") == "/c.pem\n/k.pem", "par apara e cola")
-    assert(controlScheme("") == "http", "sem TLS anuncia http")
-    assert(controlScheme("/c.pem\n/k.pem") == "https", "com TLS anuncia https")
+    need(resolveTlsPair("", "") == "", "falhou")
+    need(resolveTlsPair("   ", "") == "", "falhou")
+    need(resolveTlsPair("/c.pem", "") == "tls exige --tls-cert e --tls-key juntos (par ausente)", "falhou")
+    need(resolveTlsPair("", "/k.pem") == "tls exige --tls-cert e --tls-key juntos (par ausente)", "falhou")
+    need(resolveTlsPair("  /c.pem  ", "  /k.pem  ") == "/c.pem\n/k.pem", "falhou")
+    need(controlScheme("") == "http", "falhou")
+    need(controlScheme("/c.pem\n/k.pem") == "https", "falhou")
     // Guardas do cmdServe (precedente: serve-state): --tls-cert/--tls-key
     // soltas ou repetidas barram antes de qualquer listener.
-    assert(flagMissingValue(listOf("--tls-cert"), "--tls-cert") == true, "cert solto barra")
-    assert(flagMissingValue(listOf("--tls-cert", "c.pem"), "--tls-cert") == false, "cert com valor ok")
-    assert(flagMissingValue(listOf("--tls-key"), "--tls-key") == true, "key solta barra")
-    assert(flagDuplicated(listOf("--tls-key", "a", "--tls-key", "b"), "--tls-key") == true, "key repetida barra")
+    need(flagMissingValue(listOf("--tls-cert"), "--tls-cert") == true, "falhou")
+    need(flagMissingValue(listOf("--tls-cert", "c.pem"), "--tls-cert") == false, "falhou")
+    need(flagMissingValue(listOf("--tls-key"), "--tls-key") == true, "falhou")
+    need(flagDuplicated(listOf("--tls-key", "a", "--tls-key", "b"), "--tls-key") == true, "falhou")
     // Aviso de expiracao (Fase 9 slice 3 parcial): pura sobre o exitCode
     // do `openssl x509 -checkend` (0 = valido alem do prazo). Decisao
     // separada do IO para testar sem openssl e sem disco.
-    assert(tlsCertExpiringSoon(0) == false, "valido alem do prazo: sem aviso")
-    assert(tlsCertExpiringSoon(1) == true, "expira dentro: avisa")
+    need(tlsCertExpiringSoon(0) == false, "falhou")
+    need(tlsCertExpiringSoon(1) == true, "falhou")
     // Janela do `-checkend` em fonte unica (30 dias = 2592000 s): os 5 pontos
     // que consultam o openssl (serve, domain status/verify, scan, doctor) e os
     // testes que geram PEM real passam por aqui — mudar o prazo muda todos
     // juntos. Valor travado + mutacao quebra.
-    assert(tlsCheckendWindowSec() == "2592000", "janela de 30 dias travada")
-    assert(parseIntSafe(tlsCheckendWindowSec(), 0) == 30 * 24 * 60 * 60, "30 dias em segundos")
+    need(tlsCheckendWindowSec() == "2592000", "falhou")
+    need(parseIntSafe(tlsCheckendWindowSec(), 0) == 30 * 24 * 60 * 60, "falhou")
 }
 
 test "text: resolveStatePath apara e cai no default", "serve-state" {
     // Pura (precedente: resolveLoginInputs): --state ausente/vazio/
     // so-espacos = default; padding apara; caminho limpo passa direto.
     var def = kofcloudHome() + "/control-state.json"
-    assert(resolveStatePath("") == def, "ausente cai no default")
-    assert(resolveStatePath("   ") == def, "so-espacos cai no default")
-    assert(resolveStatePath("  /tmp/estado.json  ") == "/tmp/estado.json", "padding apara")
-    assert(resolveStatePath("/tmp/estado.json") == "/tmp/estado.json", "limpo passa direto")
+    need(resolveStatePath("") == def, "falhou")
+    need(resolveStatePath("   ") == def, "falhou")
+    need(resolveStatePath("  /tmp/estado.json  ") == "/tmp/estado.json", "falhou")
+    need(resolveStatePath("/tmp/estado.json") == "/tmp/estado.json", "falhou")
     // Guardas do cmdServe (precedente: flag-missing/flag-dup): --state
     // solto ou repetido barra antes de qualquer listener, igual as portas.
-    assert(flagMissingValue(listOf("--state"), "--state") == true, "state solto barra")
-    assert(flagMissingValue(listOf("--state", "--control-port"), "--state") == true, "state seguido de flag barra")
-    assert(flagMissingValue(listOf("--state", "/tmp/x.json"), "--state") == false, "state com valor ok")
-    assert(flagDuplicated(listOf("--state", "a", "--state", "b"), "--state") == true, "state repetido barra")
-    assert(flagDuplicated(listOf("--state", "a"), "--state") == false, "state unico ok")
+    need(flagMissingValue(listOf("--state"), "--state") == true, "falhou")
+    need(flagMissingValue(listOf("--state", "--control-port"), "--state") == true, "falhou")
+    need(flagMissingValue(listOf("--state", "/tmp/x.json"), "--state") == false, "falhou")
+    need(flagDuplicated(listOf("--state", "a", "--state", "b"), "--state") == true, "falhou")
+    need(flagDuplicated(listOf("--state", "a"), "--state") == false, "falhou")
 }
 
 test "text: sbom cobre os 49 fontes com hash verificavel", "audit-sbom" {
@@ -708,21 +709,21 @@ test "text: sbom cobre os 49 fontes com hash verificavel", "audit-sbom" {
     // quebra se adicionarem modulo — mesmo padrao do errors-hint-all),
     // linha no formato sha256sum, UNREADABLE honesto em vez de hash falso.
     var modules = sbomModules()
-    assert(modules.size == 49, "49 fontes (edge/Events entra): " + intToString(modules.size))
-    assert(modules.get(0) == "src/kofcloud/agent/Agent.kf", "primeiro modulo")
-    assert(modules.get(modules.size - 1) == "src/Main.kf", "ultimo modulo")
-    assert(sbomLine("a/b.kf", "") == "UNREADABLE  a/b.kf", "ilegivel nao vira hash")
+    need(modules.size == 49, "falhou")
+    need(modules.get(0) == "src/kofcloud/agent/Agent.kf", "falhou")
+    need(modules.get(modules.size - 1) == "src/Main.kf", "falhou")
+    need(sbomLine("a/b.kf", "") == "UNREADABLE  a/b.kf", "falhou")
     var line = sbomLine("a/b.kf", "conteudo")
-    assert(line == crypto.sha256("conteudo") + "  a/b.kf", "formato sha256sum")
-    assert(line.indexOf("  a/b.kf") >= 0, "caminho na linha")
+    need(line == crypto.sha256("conteudo") + "  a/b.kf", "falhou")
+    need(line.indexOf("  a/b.kf") >= 0, "falhou")
     var text = sbomText(listOf("a/b.kf", "c/d.kf"), listOf("x", ""))
-    assert(text.indexOf(crypto.sha256("x") + "  a/b.kf") >= 0, "primeira linha com hash")
-    assert(text.indexOf("UNREADABLE  c/d.kf") >= 0, "segunda linha honesta")
+    need(text.indexOf(crypto.sha256("x") + "  a/b.kf") >= 0, "falhou")
+    need(text.indexOf("UNREADABLE  c/d.kf") >= 0, "falhou")
     // O hash e verificavel por fora: mesmo algoritmo do Tokens (sha256).
     var probe = File("src/kofcloud/model/Exposure.kf").readText()
-    assert(probe != null && probe.length > 0, "fonte real legivel")
+    need(probe != null && probe.length > 0, "falhou")
     if (probe != null) {
-        assert(sbomLine("src/kofcloud/model/Exposure.kf", probe).startsWith(crypto.sha256(probe)), "hash do disco")
+        need(sbomLine("src/kofcloud/model/Exposure.kf", probe).startsWith(crypto.sha256(probe)), "falhou")
     }
 }
 
@@ -732,20 +733,20 @@ test "text: limitacoes distinguem chunked de pedido e de resposta", "limits-docs
     // Fase 10 slice 2g (decodeChunked, prova em framing_test). Afirmacao so
     // do lado do pedido continua honesta; a do lado da resposta nao.
     var limits = readTextOr("docs/17-limitations.md", "")
-    assert(limits.length > 0, "17-limitations existe")
+    need(limits.length > 0, "falhou")
     var bullet = ""
     for (var line in limits.split("\n")) {
         if (line.startsWith("* `Transfer-Encoding` / chunked **no pedido**")) {
             bullet = line
         }
     }
-    assert(bullet.length > 0, "bullet do chunked declara o lado do pedido")
-    assert(bullet.indexOf("**não decodificado**") < 0, "sem 'nao decodificado' sem lado")
-    assert(limits.indexOf("decodeChunked") >= 0, "resposta decodificada citada")
-    assert(limits.indexOf("`framing-chunked-unit`") >= 0, "prova da resposta citada")
+    need(bullet.length > 0, "falhou")
+    need(bullet.indexOf("**não decodificado**") < 0, "falhou")
+    need(limits.indexOf("decodeChunked") >= 0, "falhou")
+    need(limits.indexOf("`framing-chunked-unit`") >= 0, "falhou")
     var apis = readTextOr("docs/13-kof-apis.md", "")
-    assert(apis.indexOf("utils/decodeChunked") >= 0, "13-kof-apis aponta o decodificador")
-    assert(apis.indexOf("o que fica fora é o **streaming**") >= 0, "13-kof-apis separa decode de streaming")
+    need(apis.indexOf("utils/decodeChunked") >= 0, "falhou")
+    need(apis.indexOf("o que fica fora é o **streaming**") >= 0, "falhou")
 }
 
 test "text: breakdowns por tag da matriz U batem com os arquivos", "u-counts" {
@@ -762,7 +763,7 @@ test "text: breakdowns por tag da matriz U batem com os arquivos", "u-counts" {
     // TODAS as pecas sao "tag ×n" (pecas nuas como `tag` sem × ou prosa
     // impossibilitam a soma); omitir uma tag contavel quebra pela soma.
     var matrix = readTextOr("docs/15-tests.md", "")
-    assert(matrix.length > 0, "matriz existe e nao e vazia")
+    need(matrix.length > 0, "falhou")
     var rows = 0
     var tagChecks = 0
     for (var line in matrix.split("\n")) {
@@ -805,17 +806,18 @@ test "text: breakdowns por tag da matriz U batem com os arquivos", "u-counts" {
             continue
         }
         var src = readTextOr("tests/" + path, "")
-        assert(src.length > 0, "arquivo da suite existe: tests/" + path)
+        need(src.length > 0, "falhou")
         var declaredTotal = parseIntBounded(digits, -1, 100000)
         var realTotal = countTestDeclarations("tests/" + path)
-        assert(realTotal == declaredTotal, "tests/" + path + " declara " + intToString(declaredTotal) + " mas tem " + intToString(realTotal) + " testes")
+        need(realTotal == declaredTotal, "falhou")
         rows = rows + 1
         var allCounted = true
         var sum = 0
-        // "+" e regex-quantifier: o split do stdlib trata o argumento como
-        // regex, entao o separador escapa ("\+" casa o + literal). Mesma
-        // licao do split("|") do tableCells acima.
-        var pieces = suite.substring(j + 1, close).split("\\+")
+        // O `split` do stdlib (Kof 0.8) trata o argumento como LITERAL —
+        // `split("|")` divide em "|" e `split("+")` em "+" (medido: o
+        // escape `\+` virou parte do separador e a peca inteira deixou de
+        // ser dividida). Mesma licao do tableCells acima.
+        var pieces = suite.substring(j + 1, close).split("+")
         for (var piece in pieces) {
             // Peca = tag entre crases + "×n" FORA delas
             // ("`freeze-unit` ×14"); peca sem crase (prosa) ou tag sem ×
@@ -852,21 +854,21 @@ test "text: breakdowns por tag da matriz U batem com os arquivos", "u-counts" {
                 continue
             }
             var n = parseIntBounded(rest.substring(dStart), -1, 100000)
-            assert(n >= 0, "contagem de " + tag + " parseia")
+            need(n >= 0, "falhou")
             var real = src.split(", \"" + tag + "\"").length - 1
-            assert(real == n, "tests/" + path + ": tag " + tag + " declara ×" + intToString(n) + " mas tem " + intToString(real))
+            need(real == n, "falhou")
             sum = sum + n
             tagChecks = tagChecks + 1
         }
         if (allCounted) {
-            assert(sum == declaredTotal, "tests/" + path + ": breakdown soma " + intToString(sum) + " mas o total declarado e " + intToString(declaredTotal))
+            need(sum == declaredTotal, "falhou")
         }
     }
     // Sanidade da propria trava: se o formato da coluna mudar e nada casar,
     // ela nao pode passar em silencio (mesma regra do status-counts). Pisos
     // proporcionais ao que a matriz tem hoje (26 breakdowns, 24 ×N).
-    assert(rows >= 20, "linhas com breakdown reconhecidas=" + intToString(rows))
-    assert(tagChecks >= 20, "tags conferidas=" + intToString(tagChecks))
+    need(rows >= 20, "falhou")
+    need(tagChecks >= 20, "falhou")
 }
 
 test "text: provas citadas no plano batem com os arquivos", "prova-counts" {
@@ -882,7 +884,7 @@ test "text: provas citadas no plano batem com os arquivos", "prova-counts" {
     // travada; "`doctor-tls`, 3 testes a mais" e delta historico), lista de
     // tags sem ×N e substantivo que nao e "testes".
     var plan = readTextOr("docs/16-plan.md", "")
-    assert(plan.length > 0, "plano existe")
+    need(plan.length > 0, "falhou")
     var pos = 0
     var citations = 0
     var totalChecks = 0
@@ -897,10 +899,10 @@ test "text: provas citadas no plano batem com os arquivos", "prova-counts" {
             end = end + 1
         }
         var name = plan.substring(at + 6, end)
-        assert(name.endsWith(".kf"), "citacao termina em .kf: " + name)
-        assert(name.indexOf("/") < 0, "citacao e arquivo simples: " + name)
+        need(name.endsWith(".kf"), "falhou")
+        need(name.indexOf("/") < 0, "falhou")
         var src = readTextOr("tests/" + name, "")
-        assert(src.length > 0, "tests/" + name + " citado no plano existe")
+        need(src.length > 0, "falhou")
         citations = citations + 1
         pos = end + 1
         // O parentese opcional vem apos a crase de fechamento (e espacos).
@@ -945,7 +947,7 @@ test "text: provas citadas no plano batem com os arquivos", "prova-counts" {
             if (isTotal) {
                 var n = parseIntBounded(inner.substring(0, dEnd), -1, 1000000)
                 var real = countTestDeclarations("tests/" + name)
-                assert(real == n, "plano cita tests/" + name + " com " + intToString(n) + " testes mas o arquivo tem " + intToString(real))
+                need(real == n, "falhou")
                 totalChecks = totalChecks + 1
             }
         }
@@ -976,7 +978,7 @@ test "text: provas citadas no plano batem com os arquivos", "prova-counts" {
                     if (dEnd2 > 0) {
                         var n2 = parseIntBounded(cur.substring(0, dEnd2), -1, 100000)
                         var real2 = src.split(", \"" + tag + "\"").length - 1
-                        assert(real2 == n2, "plano cita " + tag + " ×" + intToString(n2) + " em tests/" + name + " mas o arquivo tem " + intToString(real2))
+                        need(real2 == n2, "falhou")
                         pieceChecks = pieceChecks + 1
                     }
                 }
@@ -987,9 +989,9 @@ test "text: provas citadas no plano batem com os arquivos", "prova-counts" {
     // Sanidade da propria trava: se o formato da prosa mudar e nada casar,
     // ela nao pode passar em silencio. Pisos proporcionais ao que o plano
     // tem hoje (104 citacoes, 33 totais, 4 pecas ×N).
-    assert(citations >= 90, "citacoes reconhecidas=" + intToString(citations))
-    assert(totalChecks >= 28, "totais conferidos=" + intToString(totalChecks))
-    assert(pieceChecks >= 4, "pecas ×N conferidas=" + intToString(pieceChecks))
+    need(citations >= 90, "falhou")
+    need(totalChecks >= 28, "falhou")
+    need(pieceChecks >= 4, "falhou")
 }
 
 test "text: toda lacuna Lnn dos dois docs existe nos dois", "lacunas-docs" {
@@ -1001,7 +1003,7 @@ test "text: toda lacuna Lnn dos dois docs existe nos dois", "lacunas-docs" {
     // outro".
     var limits = readTextOr("docs/17-limitations.md", "")
     var apis = readTextOr("docs/13-kof-apis.md", "")
-    assert(limits.length > 0 && apis.length > 0, "os dois docs existem")
+    need(limits.length > 0 && apis.length > 0, "falhou")
     var inLimits = listOf<String>()
     for (var i = 1; i <= 25; i++) {
         var id = "L" + intToString(i)
@@ -1035,6 +1037,19 @@ test "text: toda lacuna Lnn dos dois docs existe nos dois", "lacunas-docs" {
     }
     // A L18 é o caso concreto que motivou a trava: o contorno citado nos
     // dois docs é o mesmo (lista fechada + helper de rótulo).
-    assert(limits.indexOf("protocolWireLiterals") >= 0, "17-limitations cita o contorno")
-    assert(apis.indexOf("protocolWireLiterals") >= 0, "13-kof-apis cita o contorno")
+    need(limits.indexOf("protocolWireLiterals") >= 0, "falhou")
+    need(apis.indexOf("protocolWireLiterals") >= 0, "falhou")
+}
+
+test "http: TLS verificado so cede o loopback do control (Kof 0.8)", "http-tls-policy" {
+    // O http.* do Kof 0.8 verifica TLS por padrao; o control plane em
+    // loopback usa PEM autoassinado (F9) e recusaria a si mesmo. O opt-out
+    // e por processo e a decisao e pura: so URL de control em loopback.
+    need(applyHttpTlsPolicy("http://127.0.0.1:8080") == true, "127.0.0.1: opt-out")
+    need(applyHttpTlsPolicy("https://127.0.0.1:8443") == true, "https loopback: opt-out")
+    need(applyHttpTlsPolicy("http://localhost:8080") == true, "localhost: opt-out")
+    need(applyHttpTlsPolicy("http://[::1]:8080") == true, "::1: opt-out")
+    need(applyHttpTlsPolicy("https://cloud.example.com") == false, "control remoto: verificado")
+    need(applyHttpTlsPolicy("http://10.0.0.5:8080") == false, "nao-loopback: verificado")
+    need(applyHttpTlsPolicy("") == false, "vazio: verificado")
 }

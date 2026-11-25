@@ -5,22 +5,23 @@ import kofcloud.protocol.LineCodec
 import kofcloud.protocol.Session
 import kofcloud.protocol.Tunnel
 import kofcloud.protocol.Version
+import testkit.Support
 
 test "framing: linha completa e resto parcial" {
     var codec = LineCodec()
     codec.feed(bytesFromString("{\"t\":\"PING\"}\n{\"t\":\"P"))
     var first = codec.nextLine()
-    assert(first == "{\"t\":\"PING\"}", "primeira linha")
-    assert(codec.nextLine() == "", "segunda incompleta")
+    need(first == "{\"t\":\"PING\"}", "falhou")
+    need(codec.nextLine() == "", "falhou")
     assert(codec.remainder() == "{\"t\":\"P", "resto guardado")
 }
 
 test "framing: linha partida em dois feeds" {
     var codec = LineCodec()
     codec.feed(bytesFromString("{\"t\":\"DA"))
-    assert(codec.hasLine() == false, "sem linha ainda")
+    need(codec.hasLine() == false, "falhou")
     codec.feed(bytesFromString("TA\"}\n"))
-    assert(codec.nextLine() == "{\"t\":\"DATA\"}", "remontada")
+    need(codec.nextLine() == "{\"t\":\"DATA\"}", "falhou")
 }
 
 test "bytes: base64 preserva bytes altos" {
@@ -30,14 +31,14 @@ test "bytes: base64 preserva bytes altos" {
     data[2] = 255
     data[3] = 10
     var back = bytesFromBase64(bytesToBase64(data))
-    assert(back.length == 4, "tamanho")
+    need(back.length == 4, "falhou")
     var ok = true
     for (var i = 0; i < data.length; i++) {
         if (data[i] != back[i]) {
             ok = false
         }
     }
-    assert(ok, "byte preserving")
+    need(ok, "falhou")
 }
 
 test "bytes: base64 e byte-exato (4/3, sem expansao UTF-8)" {
@@ -48,58 +49,58 @@ test "bytes: base64 e byte-exato (4/3, sem expansao UTF-8)" {
     data[0] = 0
     data[1] = -56
     data[2] = -1
-    assert(bytesToBase64(data) == "AMj/", "tabela RFC 4648, byte a byte")
+    need(bytesToBase64(data) == "AMj/", "falhou")
     var big = new Byte[9000]
     for (var i = 0; i < 9000; i++) {
         big[i] = (i % 251) as Byte
     }
     var encoded = bytesToBase64(big)
-    assert(encoded.length == 12000, "9000 bytes -> 12000 chars")
-    assert(bytesToString(bytesFromBase64(encoded)) == bytesToString(big), "ida e volta")
+    need(encoded.length == 12000, "falhou")
+    need(bytesToString(bytesFromBase64(encoded)) == bytesToString(big), "falhou")
     // padding identico ao stdlib nas bordas de 1 e 2 bytes
     var one = new Byte[1]
     one[0] = 65
-    assert(bytesToBase64(one) == "QQ==", "1 byte")
+    need(bytesToBase64(one) == "QQ==", "falhou")
     var two = new Byte[2]
     two[0] = 65
     two[1] = 66
-    assert(bytesToBase64(two) == "QUI=", "2 bytes")
-    assert(bytesToBase64(bytesEmpty()) == "", "vazio")
+    need(bytesToBase64(two) == "QUI=", "falhou")
+    need(bytesToBase64(bytesEmpty()) == "", "falhou")
 }
 
 test "bytes: base64 decodifica tolerante (ignora invalido, para no '=')" {
-    assert(bytesToString(bytesFromBase64("TWFu\n")) == "Man", "espaco em branco ignorado")
-    assert(bytesToString(bytesFromBase64("TQ==")) == "M", "1 byte com padding")
-    assert(bytesToString(bytesFromBase64("TWE=")) == "Ma", "2 bytes com padding")
-    assert(bytesFromBase64("").length == 0, "vazio")
+    need(bytesToString(bytesFromBase64("TWFu\n")) == "Man", "falhou")
+    need(bytesToString(bytesFromBase64("TQ==")) == "M", "falhou")
+    need(bytesToString(bytesFromBase64("TWE=")) == "Ma", "falhou")
+    need(bytesFromBase64("").length == 0, "falhou")
 }
 
 test "bytes: concat e slice" {
     var a = bytesFromString("abc")
     var b = bytesFromString("de")
     var joined = bytesConcat(a, b)
-    assert(joined.length == 5, "concatenado")
-    assert(bytesToString(bytesSlice(joined, 1, 4)) == "bcd", "slice")
+    need(joined.length == 5, "falhou")
+    need(bytesToString(bytesSlice(joined, 1, 4)) == "bcd", "falhou")
 }
 
 test "bytes: buffer com folga (bytesGrown) preserva o conteudo e nao encolhe" {
     var buf = new Byte[0]
-    assert(bytesGrown(buf, 0).length == 0, "nada a crescer")
+    need(bytesGrown(buf, 0).length == 0, "falhou")
     var grown = bytesGrown(buf, 5)
-    assert(grown.length >= 5, "cresce para caber")
+    need(grown.length >= 5, "falhou")
     for (var i = 0; i < 5; i++) {
         grown[i] = i as Byte
     }
     // ja cabe: devolve o MESMO buffer (sem copia nem zeragem do conteudo)
     var same = bytesGrown(grown, 3)
-    assert(same.length == grown.length, "nao encolhe")
-    assert((same[0] as Int) == 0 && (same[1] as Int) == 1 && (same[4] as Int) == 4, "conteudo preservado")
+    need(same.length == grown.length, "falhou")
+    need((same[0] as Int) == 0 && (same[1] as Int) == 1 && (same[4] as Int) == 4, "falhou")
     // crescer de novo preserva os bytes ja escritos (dobra ou salta para o
     // tamanho exato, o que for maior)
     var big = bytesGrown(grown, 1000)
-    assert(big.length >= 1000, "cresce para o necessario")
+    need(big.length >= 1000, "falhou")
     for (var i = 0; i < 5; i++) {
-        assert(big[i] == i as Byte, "prefixo preservado")
+        need((big[i] as Int) == i, "falhou")
     }
 }
 
@@ -115,30 +116,30 @@ test "bytes: bytesToString e linear (corpo de 200 KiB sem estourar o timeout)" {
         data[i] = ((i * 7) % 256) as Byte
     }
     var text = bytesToString(data)
-    assert(text.length == size, "tamanho preservado; recebeu " + intToString(text.length))
-    assert((text.charAt(0) as Int) == 0, "primeiro byte")
+    need(text.length == size, "falhou")
+    need((text.charAt(0) as Int) == 0, "falhou")
     // posicao 73, porque 73*7 = 511 e 511 % 256 = 255 — indice nao e valor.
-    assert((text.charAt(73) as Int) == 255, "byte alto (assinado -> 0..255) em 73")
-    assert((text.charAt(size - 1) as Int) == (((size - 1) * 7) % 256), "ultimo byte")
+    need((text.charAt(73) as Int) == 255, "falhou")
+    need((text.charAt(size - 1) as Int) == (((size - 1) * 7) % 256), "falhou")
     // o Char carrega a forma SEM sinal (0..255), nao o Byte assinado
     // bytesFromString trunca o Char para Byte ASSINADO (medido fora do suite:
     // 255 -> -1); no suite inteiro o mesmo par devolveu -1 para o 73 e 255
     // para o proprio text73 — nao confio no valor, so no tamanho. A ida e
     // volta byte-exata Byte[] <-> String e a do base64, nao a desta ponte.
-    assert(bytesFromString(text).length == size, "ida e volta preserva o tamanho")
+    need(bytesFromString(text).length == size, "falhou")
     // multiplo exato do bloco: o `concat` final com "" devolvia o buffer
     // interno do concat com folga (medido: 200 KiB viravam 400 KiB). 6144
     // = 2 blocos de 3072, entao o laco fecha bloco sem resto.
     var exact = bytesToString(new Byte[6144])
-    assert(exact.length == 6144, "multiplo exato do bloco nao dobra; recebeu " + intToString(exact.length))
+    need(exact.length == 6144, "falhou")
     var three = bytesToBase64(new Byte[9000])
-    assert(three.length == 12000, "base64 de multiplo de 3 sem resto; recebeu " + intToString(three.length))
+    need(three.length == 12000, "falhou")
 }
 
 test "bytes: indice de substring" {
     var data = bytesFromString("GET / HTTP/1.1\r\n\r\nbody")
-    assert(bytesIndexOf(data, "\r\n\r\n", 0) == 14, "fim dos headers")
-    assert(bytesIndexOf(data, "zzz", 0) == -1, "ausente")
+    need(bytesIndexOf(data, "\r\n\r\n", 0) == 14, "falhou")
+    need(bytesIndexOf(data, "zzz", 0) == -1, "falhou")
 }
 
 test "frame: encode tem terminador e decode volta" {
@@ -146,11 +147,11 @@ test "frame: encode tem terminador e decode volta" {
     frame.put("s", "7")
     frame.put("d", "aGk=")
     var line = encodeFrame(frame)
-    assert(line.endsWith("\n"), "terminador")
+    need(line.endsWith("\n"), "falhou")
     var back = decodeFrame(line.substring(0, line.length - 1))
-    assert(frameKind(back) == "DATA", "kind")
-    assert(frameInt(back, "s") == 7, "stream id")
-    assert(frameField(back, "d") == "aGk=", "payload")
+    need(frameKind(back) == "DATA", "falhou")
+    need(frameInt(back, "s") == 7, "falhou")
+    need(frameField(back, "d") == "aGk=", "falhou")
 }
 
 
@@ -161,84 +162,84 @@ test "frame: inteiro do fio nao sofre wrap de Int", "frame-int" {
     // ja tratam como "ausente".
     var forged = newFrame("HELLO")
     forged.put("v", "4294967297")
-    assert(frameInt(forged, "v") == 0, "versao forjada nao vira 1")
+    need(frameInt(forged, "v") == 0, "falhou")
     var hb = newFrame("WELCOME")
     hb.put("heartbeatMs", "4294968796")
-    assert(frameInt(hb, "heartbeatMs") == 0, "heartbeat forjado nao vira 1500")
+    need(frameInt(hb, "heartbeatMs") == 0, "falhou")
     var big = newFrame("X")
     big.put("n", "2147483648")
-    assert(frameInt(big, "n") == 0, "acima de Int.MAX")
+    need(frameInt(big, "n") == 0, "falhou")
     var top = newFrame("X")
     top.put("n", "2147483647")
-    assert(frameInt(top, "n") == 2147483647, "Int.MAX cabe")
+    need(frameInt(top, "n") == 2147483647, "falhou")
     var neg = newFrame("X")
     neg.put("n", "-1")
-    assert(frameInt(neg, "n") == 0, "negativo = 0")
+    need(frameInt(neg, "n") == 0, "falhou")
     var missing = newFrame("X")
-    assert(frameInt(missing, "n") == 0, "ausente = 0")
+    need(frameInt(missing, "n") == 0, "falhou")
     var normal = newFrame("DATA")
     normal.put("s", "7")
-    assert(frameInt(normal, "s") == 7, "stream id normal")
+    need(frameInt(normal, "s") == 7, "falhou")
 }
 
 test "tunnel: hello carrega versao e identidade" {
     var frame = helloFrame("dev-1", "tok-1", "pub-1")
-    assert(frameKind(frame) == "HELLO", "kind")
-    assert(frameInt(frame, "v") == protocolVersion(), "versao")
-    assert(frameField(frame, "deviceId") == "dev-1", "device")
-    assert(frameField(frame, "token") == "tok-1", "token")
+    need(frameKind(frame) == "HELLO", "falhou")
+    need(frameInt(frame, "v") == protocolVersion(), "falhou")
+    need(frameField(frame, "deviceId") == "dev-1", "falhou")
+    need(frameField(frame, "token") == "tok-1", "falhou")
 }
 
 test "tunnel: welcome distingue aceito de recusado", "welcome-reasons" {
     var ok = welcomeFrame(true, "", "sess-1", "srv-pub", 15000)
-    assert(frameBool(ok, "ok") == true, "aceito")
-    assert(frameField(ok, "sessionId") == "sess-1", "sessao")
+    need(frameBool(ok, "ok") == true, "falhou")
+    need(frameField(ok, "sessionId") == "sess-1", "falhou")
     var no = welcomeFrame(false, "DEVICE_REVOKED", "", "", 0)
-    assert(frameBool(no, "ok") == false, "recusado")
-    assert(frameField(no, "reason") == "DEVICE_REVOKED", "motivo")
+    need(frameBool(no, "ok") == false, "falhou")
+    need(frameField(no, "reason") == "DEVICE_REVOKED", "falhou")
     // Todos os motivos de recusa do handshake viajam no mesmo campo
     // (Edge recusa em Tunnel.kf; Agent decide fatal em isFatal).
     for (var reason in listOf("VERSION_UNSUPPORTED", "DEVICE_UNKNOWN", "AUTH_FAILED", "DEVICE_SUSPENDED")) {
         var refused = welcomeFrame(false, reason, "", "", 0)
-        assert(frameField(refused, "reason") == reason, reason + " preservado")
+        need(frameField(refused, "reason") == reason, "falhou")
     }
 }
 
 test "session: abre stream e roteia payload" {
     var session = TunnelSession("s1", "d1", "a1", "")
     var streamId = session.openStream()
-    assert(session.streamCount() == 1, "um stream")
+    need(session.streamCount() == 1, "falhou")
     session.deliver(streamId, "payload-a")
-    assert(session.nextFromStream(streamId) == "payload-a", "entregue")
+    need(session.nextFromStream(streamId) == "payload-a", "falhou")
     session.closeStream(streamId)
-    assert(session.streamCount() == 0, "fechado")
+    need(session.streamCount() == 0, "falhou")
 }
 
 test "session: streams sao independentes" {
     var session = TunnelSession("s1", "d1", "a1", "")
     var a = session.openStream()
     var b = session.openStream()
-    assert(a != b, "ids distintos")
+    need(a != b, "falhou")
     session.deliver(b, "para-b")
     session.deliver(a, "para-a")
-    assert(session.nextFromStream(a) == "para-a", "a recebe o seu")
-    assert(session.nextFromStream(b) == "para-b", "b recebe o seu")
+    need(session.nextFromStream(a) == "para-a", "falhou")
+    need(session.nextFromStream(b) == "para-b", "falhou")
 }
 
 test "opened: handshake por stream distingue aceito de recusado", "opened-reasons" {
     var ok = openedFrame("7", true, "")
-    assert(frameKind(ok) == "OPENED", "tipo")
-    assert(openedAccepted(openedMarker(ok)), "aceito")
+    need(frameKind(ok) == "OPENED", "falhou")
+    need(openedAccepted(openedMarker(ok)), "falhou")
     var no = openedFrame("7", false, "SERVICE_UNKNOWN")
-    assert(openedAccepted(openedMarker(no)) == false, "recusado")
-    assert(openedReason(openedMarker(no)) == "SERVICE_UNKNOWN", "motivo preservado")
-    assert(openedReason("!OPEN:ok") == "", "aceito nao tem motivo")
+    need(openedAccepted(openedMarker(no)) == false, "falhou")
+    need(openedReason(openedMarker(no)) == "SERVICE_UNKNOWN", "falhou")
+    need(openedReason("!OPEN:ok") == "", "falhou")
     // Códigos de erro de stream/sessao viajam nos mesmos campos
     // (RESET.code no relay/idle; GOAWAY.code no encerramento).
     var reset = resetFrame("3", "IDLE_TIMEOUT")
-    assert(frameKind(reset) == "RESET", "tipo reset")
-    assert(frameField(reset, "code") == "IDLE_TIMEOUT", "codigo preservado")
+    need(frameKind(reset) == "RESET", "falhou")
+    need(frameField(reset, "code") == "IDLE_TIMEOUT", "falhou")
     var goaway = goawayFrame("SHUTDOWN")
-    assert(frameKind(goaway) == "GOAWAY", "tipo goaway")
-    assert(frameField(goaway, "code") == "SHUTDOWN", "codigo goaway")
+    need(frameKind(goaway) == "GOAWAY", "falhou")
+    need(frameField(goaway, "code") == "SHUTDOWN", "falhou")
 }

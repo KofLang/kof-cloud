@@ -46,7 +46,7 @@ o run total imprime `73 passed, 0 failed`. Falha = nome do teste + assert
 | Suite | Arquivo | Testes |
 |---|---|---|
 | framing/bytes/protocolo/sessao/OPENED | `tests/protocol_test.kf` | 16 |
-| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls/audit-sbom/host-normalize/u-matrix/u-counts/prova-counts/limits-docs/lacunas-docs | `tests/hosts_test.kf` | 35 |
+| hostnames/exposicao/texto/log/loopback/status/publish/ttl/serve/flag/dup/extra/zero/domain-list/custom-for/service-name-match/login-trim/serve-state/serve-waf/serve-tls/audit-sbom/host-normalize/u-matrix/u-counts/prova-counts/limits-docs/lacunas-docs/http-tls-policy | `tests/hosts_test.kf` | 36 |
 | identidade/cifra/tokens | `tests/identity_test.kf` | 6 |
 | forca bruta no login (F5) | `tests/login_limit_test.kf` | 3 |
 | vocabulario fechado do status (F5) | `tests/status_report_test.kf` | 2 |
@@ -120,7 +120,7 @@ o run total imprime `73 passed, 0 failed`. Falha = nome do teste + assert
 | aviso de PEM vencido × expirando (F9 s3) | `tests/serve_tls_expired_test.kf` | 3 |
 | backup automático do estado (F16 s1) | `tests/backup_dir_test.kf` | 3 |
 
-Total: 518 testes. Ver `15-tests.md` para a matriz.
+Total: 519 testes. Ver `15-tests.md` para a matriz.
 
 ## Desempenho medido
 

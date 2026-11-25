@@ -20,34 +20,34 @@ test "scan: ambiente sensivel e detectado sem vazar valor", "scan-env-unit" {
         "VAZIA="
     )
     var findings = scanEnvSecrets(pairs)
-    assert(findings.size == 4, "quatro achados (token, dns-webhook, github, kfs_ embutido)")
+    need(findings.size == 4, "falhou")
     var joined = ""
     for (var finding in findings) {
         joined = joined + finding + "\n"
     }
-    assert(joined.indexOf("KOFCLOUD_TOKEN") >= 0, "nomeia o token")
-    assert(joined.indexOf("KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN") >= 0, "nomeia o token do webhook DNS (propria plataforma)")
-    assert(joined.indexOf("GITHUB_TOKEN") >= 0, "nomeia o github")
-    assert(joined.indexOf("MINHA_VAR") >= 0, "nomeia a var com kfs_")
+    need(joined.indexOf("KOFCLOUD_TOKEN") >= 0, "falhou")
+    need(joined.indexOf("KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN") >= 0, "falhou")
+    need(joined.indexOf("GITHUB_TOKEN") >= 0, "falhou")
+    need(joined.indexOf("MINHA_VAR") >= 0, "falhou")
     // Nunca o valor.
-    assert(joined.indexOf("abc123") < 0, "nao vaza o valor do token")
-    assert(joined.indexOf("ghp_xxx") < 0, "nao vaza o valor do github")
-    assert(joined.indexOf("PATH") < 0, "PATH nao e achado")
-    assert(joined.indexOf("VAZIA") < 0, "variavel vazia nao e achado")
+    need(joined.indexOf("abc123") < 0, "falhou")
+    need(joined.indexOf("ghp_xxx") < 0, "falhou")
+    need(joined.indexOf("PATH") < 0, "falhou")
+    need(joined.indexOf("VAZIA") < 0, "falhou")
 }
 
 test "scan: lista de nomes sensiveis e curada e estavel", "scan-env-unit" {
     var names = sensitiveEnvNames()
-    assert(names.contains("KOFCLOUD_TOKEN"), "token do kofcloud")
-    assert(names.contains("KOFCLOUD_TUNNEL_SECRET"), "segredo do tunel")
-    assert(names.contains("KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN"), "token do webhook DNS (propria plataforma)")
-    assert(names.contains("AWS_SECRET_ACCESS_KEY"), "aws")
-    assert(names.contains("DATABASE_URL"), "banco")
-    assert(names.size >= 10, "lista util")
+    need(names.contains("KOFCLOUD_TOKEN"), "falhou")
+    need(names.contains("KOFCLOUD_TUNNEL_SECRET"), "falhou")
+    need(names.contains("KOF_KOFCLOUD_DNS_WEBHOOK_TOKEN"), "falhou")
+    need(names.contains("AWS_SECRET_ACCESS_KEY"), "falhou")
+    need(names.contains("DATABASE_URL"), "falhou")
+    need(names.size >= 10, "falhou")
     // Sem duplicata.
     var seen = listOf<String>()
     for (var name in names) {
-        assert(seen.contains(name) == false, "sem duplicata: " + name)
+        need(seen.contains(name) == false, "falhou")
         seen.add(name)
     }
 }
@@ -59,22 +59,22 @@ test "scan: PEM expirado/expirando e detectado com openssl", "scan-tls" {
     var keyPath = dir + "/key.pem"
     // Certificado valido por 1 dia: expira em menos de 30 -> achado.
     var gen = process.run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", keyPath, "-out", certPath, "-days", "1", "-nodes", "-subj", "/CN=localhost")
-    assert(gen.exitCode == 0, "openssl gerou o par")
+    need(gen.exitCode == 0, "falhou")
     var check = process.run("openssl", "x509", "-in", certPath, "-noout", "-checkend", tlsCheckendWindowSec())
-    assert(tlsCertExpiringSoon(check.exitCode), "1 dia expira em 30")
+    need(tlsCertExpiringSoon(check.exitCode), "falhou")
     // Valido por 365 dias: nao expira em 30.
     var longPath = dir + "/long.pem"
     var longKey = dir + "/long.key"
     var gen2 = process.run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", longKey, "-out", longPath, "-days", "365", "-nodes", "-subj", "/CN=localhost")
-    assert(gen2.exitCode == 0, "segundo par")
+    need(gen2.exitCode == 0, "falhou")
     var check2 = process.run("openssl", "x509", "-in", longPath, "-noout", "-checkend", tlsCheckendWindowSec())
-    assert(tlsCertExpiringSoon(check2.exitCode) == false, "365 dias nao expira em 30")
+    need(tlsCertExpiringSoon(check2.exitCode) == false, "falhou")
 }
 
 test "scan: usage documenta --tls-cert", "scan-usage" {
     var help = usageText()
-    assert(help.indexOf("scan [--file") >= 0, "scan documentado")
-    assert(help.indexOf("--tls-cert") >= 0, "scan anuncia --tls-cert")
+    need(help.indexOf("scan [--file") >= 0, "falhou")
+    need(help.indexOf("--tls-cert") >= 0, "falhou")
 }
 test "scan: credencial .kfs commitada no repo e achado (e2e com git real)", "scan-kfs" {
     // Medido: o `rotate --all` grava `<nome>.kfs` com o valor em claro; se o
@@ -85,27 +85,27 @@ test "scan: credencial .kfs commitada no repo e achado (e2e com git real)", "sca
     var repo = "/tmp/kofcloud-scan-repo-" + crypto.randomHex(4)
     Directory(repo).createDirectories()
     var setup = process.run("git", "-C", repo, "init", "-q")
-    assert(setup.exitCode == 0, "repo de teste iniciado")
+    need(setup.exitCode == 0, "falhou")
     writeTextTo(repo + "/kofcloud.json", "{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
     writeTextTo(repo + "/site.kfs", "kfs_NUNCA-imprima-isto-0123456789abcdef")
 
     // O scan roda com o caminho ABSOLUTO do manifesto: `git -C <dir>` acha o
     // repo a partir do diretorio do manifesto.
     var withLeak = cmdScan(listOf("--file", repo + "/kofcloud.json"))
-    assert(withLeak == 1, "kfs commitado -> exit 1")
+    need(withLeak == 1, "falhou")
 
     // A linha de achado: nome do arquivo, dica de rotacao pelo stem, sem valor.
     var finding = scanKfsFinding("site.kfs")
-    assert(finding.indexOf("site.kfs") >= 0, "nomeia o arquivo")
-    assert(finding.indexOf("kfs_") < 0, "nunca carrega o valor")
-    assert(finding.indexOf("rotate site --ttl 24") >= 0, "dica com o stem")
+    need(finding.indexOf("site.kfs") >= 0, "falhou")
+    need(finding.indexOf("kfs_") < 0, "falhou")
+    need(finding.indexOf("rotate site --ttl 24") >= 0, "falhou")
 
     // Limpo: sem .kfs rastreado, scan segue os passos de sempre.
     var cleanDir = "/tmp/kofcloud-scan-clean-" + crypto.randomHex(4)
     Directory(cleanDir).createDirectories()
     process.run("git", "-C", cleanDir, "init", "-q")
     writeTextTo(cleanDir + "/kofcloud.json", "{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
-    assert(cmdScan(listOf("--file", cleanDir + "/kofcloud.json")) == 0, "repo sem kfs passa")
+    need(cmdScan(listOf("--file", cleanDir + "/kofcloud.json")) == 0, "falhou")
 }
 
 test "scan: dependencias — pin aberto e pin antigo com data (puras + e2e offline)", "scan-deps" {
@@ -135,7 +135,7 @@ test "scan: dependencias — pin aberto e pin antigo com data (puras + e2e offli
     if (!(scanDependencyPins("kof.toml", "[deps]\nmoda = \"3.1.0\"\n", now, 365).size == 0)) { assert(false, "E10") }
     // go.mod: versao exata passa, `indirect` fica fora.
     var gomod = scanDependencyPins("go.mod", "module exemplo\n\ngo 1.22\n\nrequire (\n\tgithub.com/x/y v1.2.3\n\tgithub.com/a/b v0.0.0-20200101000000-deadbeef // indirect\n)\n", now, 365)
-    if (!(gomod.size == 0)) { assert(false, "D11 g=" + intToString(gomod.size)) }
+    need(gomod.size == 0, "falhou")
     // requirements: `==` e pin exato; sem versao e pin aberto.
     var req = scanDependencyPins("requirements.txt", "flask==3.0.0\nrequests\n", now, 365)
     if (!(req.size == 1)) { assert(false, "E11") }
@@ -176,14 +176,14 @@ test "scan: e2e — nome com caixa errada no comando rejeita e aponta o certo", 
     var port = 19741
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control no ar")
+    need(waitForPort(port, 60), "falhou")
     var url = "http://127.0.0.1:" + intToString(port)
     var token = loginOrCreate(url, "mel", "segredo")
     var priorSession = readTextOr(sessionPath(), "")
     saveSession(LocalSession("", "mel", token, url))
-    assert(cmdUnpublish(listOf("Site")) == 1, "caixa errada recusa")
-    assert(cmdServiceSuspend(listOf("SITE")) == 1, "suspend com caixa errada recusa")
-    assert(registry.servicesForAccount(account.id).size == 1, "nada foi removido nem suspenso")
+    need(cmdUnpublish(listOf("Site")) == 1, "falhou")
+    need(cmdServiceSuspend(listOf("SITE")) == 1, "falhou")
+    need(registry.servicesForAccount(account.id).size == 1, "falhou")
     if (priorSession.length == 0) {
         File(sessionPath()).delete()
     } else {
@@ -197,11 +197,11 @@ test "scan: --summary resume o achado em uma linha (exit 1 mantido)", "scan-summ
     var dir = "/tmp/kofcloud-scan-summary-" + crypto.randomHex(4)
     Directory(dir).createDirectories()
     writeTextTo(dir + "/kofcloud.json", "{\"services\":[{\"name\":\"site\",\"port\":8080,\"password\":\"x\"}]}")
-    assert(cmdScan(listOf("--file", dir + "/kofcloud.json", "--summary")) == 1, "achado com --summary segue exit 1")
-    assert(cmdScan(listOf("--file", dir + "/kofcloud.json")) == 1, "sem --summary: mesmo exit")
+    need(cmdScan(listOf("--file", dir + "/kofcloud.json", "--summary")) == 1, "falhou")
+    need(cmdScan(listOf("--file", dir + "/kofcloud.json")) == 1, "falhou")
     var clean = "/tmp/kofcloud-scan-summary-clean-" + crypto.randomHex(4)
     Directory(clean).createDirectories()
     writeTextTo(clean + "/kofcloud.json", "{\"services\":[{\"name\":\"site\",\"port\":8080}]}")
-    assert(cmdScan(listOf("--file", clean + "/kofcloud.json", "--summary")) == 0, "limpo segue 0")
-    assert(cmdScan(listOf("--file", clean + "/kofcloud.json", "--summary", "--summary")) == 1, "--summary repetido barra no uso")
+    need(cmdScan(listOf("--file", clean + "/kofcloud.json", "--summary")) == 0, "falhou")
+    need(cmdScan(listOf("--file", clean + "/kofcloud.json", "--summary", "--summary")) == 1, "falhou")
 }

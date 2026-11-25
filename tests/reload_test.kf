@@ -21,7 +21,7 @@ test "hot-reload: servico publicado depois do connect roteia sem reconnect", "re
     var app = web.app()
     app.get("/") { return "svc-reload" }
     var server = spawn { app.listen(localSvc) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-reload-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -33,9 +33,9 @@ test "hot-reload: servico publicado depois do connect roteia sem reconnect", "re
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -56,12 +56,12 @@ test "hot-reload: servico publicado depois do connect roteia sem reconnect", "re
             attempts = attempts - 1
         }
     }
-    assert(online, "agent registrado no edge")
+    need(online, "falhou")
 
     // Publica DEPOIS: sem reconnect, o proximo OPEN ja deve rotear.
     // (healthMs=100 -> refresh a cada 600 ms; poll com teto.)
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"late\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "publicado depois")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "falhou")
     var served = false
     var waits = 60
     while (waits > 0 && served == false) {
@@ -73,7 +73,7 @@ test "hot-reload: servico publicado depois do connect roteia sem reconnect", "re
             waits = waits - 1
         }
     }
-    assert(served, "novo servico roteia sem reconnect")
+    need(served, "falhou")
 
     // Servico removido sai do mapa: OPEN vira 502 sem derrubar o tunel.
     // (O Edge ainda tem a rota ate a poda? Nao — removeService poda na hora;
@@ -85,9 +85,9 @@ test "hot-reload: servico publicado depois do connect roteia sem reconnect", "re
             target = service.id
         }
     }
-    assert(target.length > 0, "alvo existe")
+    need(target.length > 0, "falhou")
     var removeBody = "{\"serviceId\":\"" + target + "\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services/remove", removeBody, accountToken)) == 200, "removido")
+    need(statusOf(httpPostJson(controlPort, "/v1/services/remove", removeBody, accountToken)) == 200, "falhou")
     var gone = false
     var waits2 = 40
     while (waits2 > 0 && gone == false) {
@@ -98,11 +98,11 @@ test "hot-reload: servico publicado depois do connect roteia sem reconnect", "re
             waits2 = waits2 - 1
         }
     }
-    assert(gone, "rota removida")
+    need(gone, "falhou")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
-    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    need(edgeState.isOnline(deviceId) == false, "falhou")
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)
     File(agentStop).delete()

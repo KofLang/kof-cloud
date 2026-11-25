@@ -21,7 +21,7 @@ test "presenca: tunel vivo aparece em /v1/presence; morto some", "presence" {
     var app = web.app()
     app.get("/") { return "svc-presence" }
     var server = spawn { app.listen(localSvc) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-pres-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -33,9 +33,9 @@ test "presenca: tunel vivo aparece em /v1/presence; morto some", "presence" {
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -46,11 +46,11 @@ test "presenca: tunel vivo aparece em /v1/presence; morto some", "presence" {
 
     // Sem tunel: lista vazia (200, nao 404 — ausencia, nao erro).
     var empty = httpGetToken(controlPort, "/v1/presence", accountToken)
-    assert(statusOf(empty) == 200, "presence 200 sem tunel")
-    assert(bodyOf(empty).indexOf(deviceId) < 0, "device offline nao listado")
+    need(statusOf(empty) == 200, "falhou")
+    need(bodyOf(empty).indexOf(deviceId) < 0, "falhou")
 
     // Sem token: 401 igual as demais rotas autenticadas.
-    assert(statusOf(httpGetRaw(controlPort, "/v1/presence", "127.0.0.1")) == 401, "sem token -> 401")
+    need(statusOf(httpGetRaw(controlPort, "/v1/presence", "127.0.0.1")) == 401, "falhou")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
     var agentTask = spawn { runAgent(config, true) }
@@ -63,18 +63,18 @@ test "presenca: tunel vivo aparece em /v1/presence; morto some", "presence" {
             attempts = attempts - 1
         }
     }
-    assert(online, "agent registrado no edge")
+    need(online, "falhou")
 
     var present = httpGetToken(controlPort, "/v1/presence", accountToken)
-    assert(statusOf(present) == 200, "presence 200 com tunel")
-    assert(bodyOf(present).indexOf("\"" + deviceId + "\"") >= 0, "device listado com sessao viva")
+    need(statusOf(present) == 200, "falhou")
+    need(bodyOf(present).indexOf("\"" + deviceId + "\"") >= 0, "falhou")
 
     // Conta alheia nao ve device de outra conta (mesmo sabendo o id).
     var anaCreated = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"ana\",\"email\":\"a@e.com\",\"password\":\"segredo\"}", "")
     var anaToken = mapField(json.decode<Map<String, String>>(bodyOf(anaCreated)), "token")
     var anaView = httpGetToken(controlPort, "/v1/presence", anaToken)
-    assert(statusOf(anaView) == 200, "alheia lista a propria (vazia)")
-    assert(bodyOf(anaView).indexOf(deviceId) < 0, "device de mel nao vaza para ana")
+    need(statusOf(anaView) == 200, "falhou")
+    need(bodyOf(anaView).indexOf(deviceId) < 0, "falhou")
 
     // Tunel cai: sai da lista (poll com teto, sem dormir fixo).
     writeTextTo(agentStop, "stop")
@@ -88,7 +88,7 @@ test "presenca: tunel vivo aparece em /v1/presence; morto some", "presence" {
             waits = waits - 1
         }
     }
-    assert(drained, "sessao encerrada some da presenca")
+    need(drained, "falhou")
 
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)

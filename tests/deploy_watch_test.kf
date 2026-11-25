@@ -22,43 +22,43 @@ test "watch: decisao pura — stop, vazio, igual e mudou", "deploy-watch" {
     File(stop).delete()
     // Sem sentinela e manifesto igual ao visto: nada a fazer.
     var d = watchDecision(stop, "{\"services\":[]}", "{\"services\":[]}")
-    assert(d.apply == false && d.stop == false, "igual = nada a fazer")
+    need(d.apply == false && d.stop == false, "falhou")
     // Manifesto mudou: aplica.
     d = watchDecision(stop, "{\"services\":[{\"name\":\"a\",\"port\":1}]}", "{\"services\":[]}")
-    assert(d.apply && d.stop == false, "texto mudou = aplica")
+    need(d.apply && d.stop == false, "falhou")
     // Arquivo esvaziado (editor gravando pela metade): NAO aplica — o
     // parse aplicaria lixo e a remocao nunca e automatica. Tambem nao
     // encerra: o ciclo seguinte rele.
     d = watchDecision(stop, "", "{\"services\":[{\"name\":\"a\",\"port\":1}]}")
-    assert(d.apply == false && d.stop == false, "vazio = espera (nunca destrutivo)")
+    need(d.apply == false && d.stop == false, "falhou")
     // Sentinela presente: para, mesmo com mudanca pendente.
     writeTextTo(stop, "stop")
     d = watchDecision(stop, "{\"services\":[], {", "{\"services\":[]}")
-    assert(d.stop, "sentinela vence")
+    need(d.stop, "falhou")
     File(stop).delete()
     // Sentinela vazia no caminho (defesa em profundidade): sem sentinela
     // configurada o watch nunca para sozinho.
     d = watchDecision("", "x", "y")
-    assert(d.apply, "sem caminho de stop: segue")
+    need(d.apply, "falhou")
 }
 
 test "watch: limits do passo com recuo seguro", "deploy-watch" {
-    assert(deployWatchMsFrom(0) == 2000, "zero recai no default")
-    assert(deployWatchMsFrom(-1) == 2000, "negativo recai no default")
-    assert(deployWatchMsFrom(500) == 500, "positivo passa")
-    assert(limitDeployWatchMs() == 2000, "default travado em 2 s")
+    need(deployWatchMsFrom(0) == 2000, "falhou")
+    need(deployWatchMsFrom(-1) == 2000, "falhou")
+    need(deployWatchMsFrom(500) == 500, "falhou")
+    need(limitDeployWatchMs() == 2000, "falhou")
     // A pura mora em `util/Limits.kf` junto dos outros passos de laco (import
     // `kofcloud.util.Limits`): sem ela la, este assert nem compila.
-    assert(limitDeployWatchMs() == deployWatchMsFrom(0), "default = recuo de 0")
+    need(limitDeployWatchMs() == deployWatchMsFrom(0), "falhou")
 }
 
 test "watch: uso/help documentam --watch e a combinacao proibida", "deploy-watch" {
     // Precedente deploy-usage (daemon_test): flag nova sem trava apodrece
     // README e help em silencio.
     var help = usageText()
-    assert(help.indexOf("[--watch]") >= 0, "help anuncia --watch")
-    assert(help.indexOf("nunca remove") >= 0, "help diz que watch nunca remove")
-    assert(usageText().indexOf("--watch observa") >= 0, "watch descrito")
+    need(help.indexOf("[--watch]") >= 0, "falhou")
+    need(help.indexOf("nunca remove") >= 0, "falhou")
+    need(usageText().indexOf("--watch observa") >= 0, "falhou")
 }
 
 test "watch: e2e — edita o manifesto e o watch publica; removedor nunca roda sozinho", "deploy-watch" {
@@ -70,7 +70,7 @@ test "watch: e2e — edita o manifesto e o watch publica; removedor nunca roda s
     var app = web.app()
     app.get("/") { return "svc-watch" }
     var server = spawn { app.listen(localSvc) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-watch-reg-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -82,9 +82,9 @@ test "watch: e2e — edita o manifesto e o watch publica; removedor nunca roda s
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -106,14 +106,14 @@ test "watch: e2e — edita o manifesto e o watch publica; removedor nunca roda s
             attempts = attempts - 1
         }
     }
-    assert(online, "agent no ar")
+    need(online, "falhou")
 
     // Ciclo 1: watchApplyOnce com manifesto de 1 servico (rota saida via tunel).
     var manifest = watchManifestPath("m1")
     var body1 = "{\"services\":[{\"name\":\"site\",\"port\":" + intToString(localSvc) + "}]}"
     writeTextTo(manifest, body1)
     var f1 = watchApplyOnce("http://127.0.0.1:" + intToString(controlPort), accountToken, deviceId, body1)
-    assert(f1 == 0, "apply 1 sem falha")
+    need(f1 == 0, "falhou")
     var served = false
     var waits = 60
     while (waits > 0 && served == false) {
@@ -125,47 +125,47 @@ test "watch: e2e — edita o manifesto e o watch publica; removedor nunca roda s
             waits = waits - 1
         }
     }
-    assert(served, "servico do manifesto no ar pelo tunel")
+    need(served, "falhou")
 
     // Ciclo 2: MESMO texto = idempotente (nada muda, nada quebra).
     var f2 = watchApplyOnce("http://127.0.0.1:" + intToString(controlPort), accountToken, deviceId, body1)
-    assert(f2 == 0, "re-apply idempotente")
+    need(f2 == 0, "falhou")
 
     // Ciclo 3: manifest EDITADO (nova porta não; novo servico) — publica o
     // segundo SEM remover o primeiro (o watch nunca remove).
     var body2 = "{\"services\":[{\"name\":\"site\",\"port\":" + intToString(localSvc) + "},{\"name\":\"api\",\"port\":" + intToString(localSvc) + "}]}"
     var f3 = watchApplyOnce("http://127.0.0.1:" + intToString(controlPort), accountToken, deviceId, body2)
-    assert(f3 == 0, "apply 2 sem falha")
+    need(f3 == 0, "falhou")
     var services = registry.servicesForAccount(accountId)
     var names = listOf<String>()
     for (var svc in services) {
         names.add(svc.name)
     }
-    assert(names.contains("site") && names.contains("api"), "watch publica o novo: " + names.size)
-    assert(names.size == 2, "nada removido de proposito")
+    need(names.contains("site") && names.contains("api"), "falhou")
+    need(names.size == 2, "falhou")
 
     // Manifesto esvaziado: watchDecision ja recusa aplicar (teste puro);
     // aqui prova o apply direto tambem recusa texto vazio.
     var f4 = watchApplyOnce("http://127.0.0.1:" + intToString(controlPort), accountToken, deviceId, "")
-    assert(f4 == 0, "texto vazio nao aplica nem falha")
+    need(f4 == 0, "falhou")
 
     // Cruzamento watch × freeze: o watch re-publica em lote a cada mudanca
     // do manifesto — republicar um serviço CONGELADO (SUSPENDED) nao pode
     // ressuscita-lo. O freeze mata as kfs_ e suspende; o apply seguinte
     // republica a mesma config e o servico segue fora da rota.
     var site = registry.serviceByName(accountId, "site")
-    assert(site != null, "site existe antes do freeze")
+    need(site != null, "falhou")
     if (site != null) {
-        assert(registry.freezeService(accountId, site.id).ok, "freeze do site")
+        need(registry.freezeService(accountId, site.id).ok, "falhou")
     }
     var f5 = watchApplyOnce("http://127.0.0.1:" + intToString(controlPort), accountToken, deviceId, body2)
-    assert(f5 == 0, "apply apos o freeze sem falha")
+    need(f5 == 0, "falhou")
     if (site != null) {
         var kept = registry.serviceById(site.id)
-        assert(kept != null, "site segue existindo apos o apply")
+        need(kept != null, "falhou")
         if (kept != null) {
-            assert(kept.status == "SUSPENDED", "watch nao dessuspende o congelado")
-            assert(registry.resolveRoute(kept.hostname) == null, "congelado segue fora da rota apos o apply")
+            need(kept.status == "SUSPENDED", "falhou")
+            need(registry.resolveRoute(kept.hostname) == null, "falhou")
         }
     }
 

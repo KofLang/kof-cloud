@@ -11,6 +11,7 @@ import kofcloud.protocol.Version
 // Helpers compartilhados pelos testes.
 
 String httpGetRaw(Int port, String path, String host) {
+    http.insecure()
     var conn = net.connect("127.0.0.1", port)
     var req = "GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n"
     conn.send(bytesFromString(req))
@@ -31,6 +32,7 @@ String httpGetRaw(Int port, String path, String host) {
 // GET autenticado no control plane (token da conta em X-KofCloud-Token,
 // mesmo header do httpPostJson — ver Local.kf sobre o Authorization).
 String httpGetToken(Int port, String path, String token) {
+    http.insecure()
     var conn = net.connect("127.0.0.1", port)
     var req = "GET " + path + " HTTP/1.1\r\nHost: 127.0.0.1\r\n"
     req = req + "X-KofCloud-Token: " + token + "\r\n"
@@ -51,6 +53,7 @@ String httpGetToken(Int port, String path, String token) {
 }
 
 String httpPostJson(Int port, String path, String body, String token) {
+    http.insecure()
     var conn = net.connect("127.0.0.1", port)
     var req = "POST " + path + " HTTP/1.1\r\nHost: 127.0.0.1\r\n"
     req = req + "Content-Type: application/json\r\n"
@@ -119,6 +122,7 @@ Bool waitForPort(Int port, Int attempts) {
 // Aqui o header e mesmo Authorization: quem responde e o parser proprio do
 // Edge, nao o web.app() (que reservaria o header para JWT).
 String httpGetRawAuth(Int port, String path, String host, String token) {
+    http.insecure()
     var conn = net.connect("127.0.0.1", port)
     var req = "GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\n"
     if (token.length > 0) {
@@ -186,6 +190,7 @@ String httpPostRaw(Int port, String path, String host, List<String> extraHeaders
 // Mesma forma de httpGetRaw; usado para exercitar a inspecao de headers do
 // Edge sem inventar um helper por cenario.
 String httpGetRawHeaders(Int port, String path, String host, List<String> extraHeaders) {
+    http.insecure()
     var conn = net.connect("127.0.0.1", port)
     var req = "GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\n"
     for (var line in extraHeaders) {
@@ -205,4 +210,20 @@ String httpGetRawHeaders(Int port, String path, String host, List<String> extraH
     }
     conn.close()
     return bytesToString(acc)
+}
+
+// O `http.*` do Kof 0.8 verifica TLS por padrao e o control plane de teste
+// usa PEM autoassinado (F9). Os testes que falam com control HTTPS chamam
+// este opt-in explicito (mesma regra do `applyHttpTlsPolicy`: loopback).
+void trustLocalhostTls() {
+    http.insecure()
+}
+
+// Diferenca literal, por linha: a gramatica do Kof 0.8 exige mensagem
+// LITERAL no `assert` (PARSE087) e `assert(cond)` sem rotulo imprime so
+// "assertion failed". `need(cond, <literal>)` roda a mensagem do ponto exato.
+void need(Bool ok, String message) {
+    if (ok == false) {
+        throw message
+    }
 }

@@ -25,44 +25,44 @@ test "credencial de conta: TTL, expiracao e poda preguicosa", "atok-unit" {
 
     // Sem TTL: vale para sempre (comportamento historico preservado).
     var forever = registry.issueToken(account.id)
-    assert(registry.accountByToken(forever) != null, "sem TTL vale")
-    assert(registry.accountTokensFor(account.id).size == 1, "listada")
+    need(registry.accountByToken(forever) != null, "falhou")
+    need(registry.accountTokensFor(account.id).size == 1, "falhou")
 
     // Com TTL: vale agora.
     var shortLived = registry.issueToken(account.id, 1)
-    assert(registry.accountByToken(shortLived) != null, "TTL futuro vale")
-    assert(registry.accountTokensFor(account.id).size == 2, "duas validas")
+    need(registry.accountByToken(shortLived) != null, "falhou")
+    need(registry.accountTokensFor(account.id).size == 2, "falhou")
 
     // Expiracao: o registro vencido nao autoriza nem aparece.
     var expired = TokenEntry(account.id, tokenHash("kfc_vencido"), time.now() - 10000, time.now() - 1)
     registry.tokens.add(expired)
-    assert(registry.accountByToken("kfc_vencido") == null, "vencido nao autoriza")
-    assert(registry.accountTokensFor(account.id).size == 2, "vencido nao e listado")
+    need(registry.accountByToken("kfc_vencido") == null, "falhou")
+    need(registry.accountTokensFor(account.id).size == 2, "falhou")
     // A validacao podou o vencido do estado (nao acumula lixo).
-    assert(registry.tokens.size == 2, "vencido podado na validacao")
+    need(registry.tokens.size == 2, "falhou")
 
     // Estado antigo (sem o campo expiresAt) continua valido: o campo e
     // nulavel justamente para isso (JSN004 medido).
     var legacy = TokenEntry(account.id, tokenHash("kfc_antigo"), time.now(), null)
     registry.tokens.add(legacy)
-    assert(registry.accountByToken("kfc_antigo") != null, "credencial legada vale")
-    assert(registry.accountTokenExpired(legacy, time.now()) == false, "sem campo = sem expiracao")
+    need(registry.accountByToken("kfc_antigo") != null, "falhou")
+    need(registry.accountTokenExpired(legacy, time.now()) == false, "falhou")
 
     // TTL longo nao pode estourar: `ttlHours * 3600000` em Int (32 bits)
     // estourava acima de 596 h e `--ttl 720` (30 dias) virava um instante no
     // PASSADO — a credencial nascia vencida. Medido com o CLI 0.6.3:
     // 720 * 3600000 = -1702967296 em Int; em Long = 2592000000.
     var now = time.now()
-    assert(tokenExpiryAt(now, 0) == 0, "sem TTL = 0")
-    assert(tokenExpiryAt(now, -3) == 0, "TTL negativo = 0")
-    assert(tokenExpiryAt(now, 1) == now + 3600000, "1 h em ms")
-    assert(tokenExpiryAt(now, 720) == now + 2592000000, "720 h (30 dias) em ms")
-    assert(tokenExpiryAt(now, 720) > now, "TTL longo continua no futuro")
+    need(tokenExpiryAt(now, 0) == 0, "falhou")
+    need(tokenExpiryAt(now, -3) == 0, "falhou")
+    need(tokenExpiryAt(now, 1) == now + 3600000, "falhou")
+    need(tokenExpiryAt(now, 720) == now + 2592000000, "falhou")
+    need(tokenExpiryAt(now, 720) > now, "falhou")
     // Fonte unica: os dois caminhos (kfc_/kfs_) delegam na mesma funcao.
-    assert(registry.accountTokenExpiry(now, 720) == tokenExpiryAt(now, 720), "kfc_ delega")
-    assert(registry.serviceTokenExpiry(now, 720) == tokenExpiryAt(now, 720), "kfs_ delega")
+    need(registry.accountTokenExpiry(now, 720) == tokenExpiryAt(now, 720), "falhou")
+    need(registry.serviceTokenExpiry(now, 720) == tokenExpiryAt(now, 720), "falhou")
     var longLived = registry.issueToken(account.id, 720)
-    assert(registry.accountByToken(longLived) != null, "kfc_ de 30 dias nasce valido")
+    need(registry.accountByToken(longLived) != null, "falhou")
 }
 
 test "credencial de conta: aviso de expiracao proxima so para valida na janela", "atok-unit" {
@@ -75,32 +75,32 @@ test "credencial de conta: aviso de expiracao proxima so para valida na janela",
     var account = registry.createAccount("mel", "m@e.com", "segredo")
     var window = limitTokenExpiryWarnMs()
     var now = time.now()
-    assert(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h1", now, null), now) == false, "sem TTL nunca avisa")
-    assert(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h2", now, 0L), now) == false, "expira 0 nunca avisa")
-    assert(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h3", now, now + window - 1), now), "dentro da janela avisa")
-    assert(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h4", now, now + window), now), "na borda avisa")
-    assert(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h5", now, now + window + 1), now) == false, "fora da janela nao avisa")
+    need(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h1", now, null), now) == false, "falhou")
+    need(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h2", now, 0L), now) == false, "falhou")
+    need(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h3", now, now + window - 1), now), "falhou")
+    need(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h4", now, now + window), now), "falhou")
+    need(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h5", now, now + window + 1), now) == false, "falhou")
     // Vencida nao avisa: ela ja saiu do inventario — o aviso e para "ainda
     // da tempo". Delega no MESMO predicado da expiracao (fonte unica); se a
     // dedup um dia divergir, este assert quebra antes do operador ver lixo.
-    assert(registry.accountTokenExpired(TokenEntry(account.id, "h6", now, now - 1), now), "pre-condicao: vencida expira")
-    assert(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h6", now, now - 1), now) == false, "vencida nao avisa")
+    need(registry.accountTokenExpired(TokenEntry(account.id, "h6", now, now - 1), now), "falhou")
+    need(registry.nearAccountTokenExpiry(TokenEntry(account.id, "h6", now, now - 1), now) == false, "falhou")
     // Janela em fonte unica com recuo seguro (mesma familia de Limits):
     // zerada/negativa recai no default — janela zerada nunca avisaria.
-    assert(window == tokenExpiryWarnMsFrom(0), "default = recuo de 0")
-    assert(tokenExpiryWarnMsFrom(-5) == window, "negativo recai no default")
-    assert(tokenExpiryWarnMsFrom(123) == 123, "valor configurado vale")
-    assert(limitTokenExpiryWarnMs() == tokenExpiryWarnMsFrom(0), "default = recuo de 0")
-    assert(limitTokenExpiryWarnMs() == 604800000L, "janela travada em 7 dias (Long)")
+    need(window == tokenExpiryWarnMsFrom(0), "falhou")
+    need(tokenExpiryWarnMsFrom(-5) == window, "falhou")
+    need(tokenExpiryWarnMsFrom(123) == 123, "falhou")
+    need(limitTokenExpiryWarnMs() == tokenExpiryWarnMsFrom(0), "falhou")
+    need(limitTokenExpiryWarnMs() == 604800000L, "falhou")
     // A linha do CLI: sem campo/sem TTL/vencida/fora = silencio; dentro =
     // orientacao acionavel com a mesma janela do fio.
-    assert(tokenAccountWarningLine("", "0") == "", "sem campo: silencio")
-    assert(tokenAccountWarningLine("0", "0") == "", "sem TTL: silencio")
-    assert(tokenAccountWarningLine(longToString(now - 1), longToString(now)) == "", "vencida: silencio")
-    assert(tokenAccountWarningLine(longToString(now + window + 1000), longToString(now)) == "", "fora: silencio")
+    need(tokenAccountWarningLine("", "0") == "", "falhou")
+    need(tokenAccountWarningLine("0", "0") == "", "falhou")
+    need(tokenAccountWarningLine(longToString(now - 1), longToString(now)) == "", "falhou")
+    need(tokenAccountWarningLine(longToString(now + window + 1000), longToString(now)) == "", "falhou")
     var inside = tokenAccountWarningLine(longToString(now + 3600000), longToString(now))
-    assert(inside.indexOf("token rotate") >= 0, "dentro: orienta o rotate")
-    assert(inside.indexOf(intToString((window / 3600000L) as Int) + "h") >= 0, "dentro: janela em horas legiveis")
+    need(inside.indexOf("token rotate") >= 0, "falhou")
+    need(inside.indexOf(intToString((window / 3600000L) as Int) + "h") >= 0, "falhou")
 }
 
 test "credencial de conta: revogar por valor e por id curto, escopo por conta", "atok-unit" {
@@ -112,19 +112,19 @@ test "credencial de conta: revogar por valor e por id curto, escopo por conta", 
 
     // Id curto do inventario revoga (unico na conta).
     var shortId = shortTokenId(tokenHash(melToken))
-    assert(registry.revokeAccountTokenResult(mel.id, shortId) == "revoked", "id curto revoga")
-    assert(registry.accountByToken(melToken) == null, "valor revogado nao autoriza")
+    need(registry.revokeAccountTokenResult(mel.id, shortId) == "revoked", "falhou")
+    need(registry.accountByToken(melToken) == null, "falhou")
 
     // A credencial da outra conta nao e tocada por um revoke de mel.
-    assert(registry.accountByToken(anaToken) != null, "credencial de ana intacta")
+    need(registry.accountByToken(anaToken) != null, "falhou")
     // E mel nao consegue revogar a credencial de ana nem pelo valor.
-    assert(registry.revokeAccountTokenResult(mel.id, anaToken) == "", "alheia nao encontrada")
-    assert(registry.accountByToken(anaToken) != null, "ana continua valida")
+    need(registry.revokeAccountTokenResult(mel.id, anaToken) == "", "falhou")
+    need(registry.accountByToken(anaToken) != null, "falhou")
 
     // Inexistente: "" (o handler responde 404 KCF064 opaco).
-    assert(registry.revokeAccountTokenResult(mel.id, "kfc_naoexiste") == "", "inexistente")
-    assert(errAccountTokenNotFound().indexOf("KCF064") >= 0, "codigo KCF064")
-    assert(errHint(errAccountTokenNotFound()).length > 0, "tem Hint")
+    need(registry.revokeAccountTokenResult(mel.id, "kfc_naoexiste") == "", "falhou")
+    need(errAccountTokenNotFound().indexOf("KCF064") >= 0, "falhou")
+    need(errHint(errAccountTokenNotFound()).length > 0, "falhou")
 }
 
 test "credencial de conta: id curto ambiguo pede o valor completo", "atok-unit" {
@@ -136,11 +136,11 @@ test "credencial de conta: id curto ambiguo pede o valor completo", "atok-unit" 
     registry.tokens.add(TokenEntry(account.id, hash, time.now(), null))
     registry.tokens.add(TokenEntry(account.id, hash, time.now(), null))
     var shortId = shortTokenId(hash)
-    assert(registry.revokeAccountTokenResult(account.id, shortId) == "ambiguous", "ambiguo")
-    assert(registry.tokens.size == 2, "nada revogado no ambiguo")
+    need(registry.revokeAccountTokenResult(account.id, shortId) == "ambiguous", "falhou")
+    need(registry.tokens.size == 2, "falhou")
     // O valor completo resolve a ambiguidade (revoga as duas ocorrencias).
-    assert(registry.revokeAccountTokenResult(account.id, "kfc_repetido") == "revoked", "valor completo")
-    assert(registry.tokens.size == 0, "ambas sairam")
+    need(registry.revokeAccountTokenResult(account.id, "kfc_repetido") == "revoked", "falhou")
+    need(registry.tokens.size == 0, "falhou")
 }
 
 test "credencial de conta: rotacao com overlap nao derruba a antiga antes do TTL", "atok-unit" {
@@ -151,20 +151,20 @@ test "credencial de conta: rotacao com overlap nao derruba a antiga antes do TTL
     // Rotacao com TTL: a nova vale, a antiga (sem expiracao) NAO e revogada
     // em silencio — fica pendente.
     var result = registry.rotateAccountTokens(account.id, 24)
-    assert(result.token.length > 0, "token novo emitido")
-    assert(result.revoked == 0, "nada revogado antes do prazo")
-    assert(result.pending == 1, "a antiga ainda vale")
-    assert(registry.accountByToken(old) != null, "antiga continua valendo (overlap)")
-    assert(registry.accountByToken(result.token) != null, "nova vale")
-    assert(registry.pendingAccountRotationCount(account.id) == 2, "duas validas")
+    need(result.token.length > 0, "falhou")
+    need(result.revoked == 0, "falhou")
+    need(result.pending == 1, "falhou")
+    need(registry.accountByToken(old) != null, "falhou")
+    need(registry.accountByToken(result.token) != null, "falhou")
+    need(registry.pendingAccountRotationCount(account.id) == 2, "falhou")
 
     // Depois do prazo, a proxima rotacao revoga as vencidas.
     var expiredOld = TokenEntry(account.id, tokenHash("kfc_velho"), time.now() - 10000, time.now() - 1)
     registry.tokens.add(expiredOld)
     var second = registry.rotateAccountTokens(account.id, 24)
-    assert(second.revoked == 1, "vencida revogada na rotacao seguinte")
-    assert(registry.accountByToken("kfc_velho") == null, "vencida nao autoriza")
-    assert(registry.accountByToken(second.token) != null, "nova da segunda rotacao vale")
+    need(second.revoked == 1, "falhou")
+    need(registry.accountByToken("kfc_velho") == null, "falhou")
+    need(registry.accountByToken(second.token) != null, "falhou")
 }
 
 test "credencial de conta: HTTP lista sem valores, revoga e rotaciona", "atok" {
@@ -172,52 +172,52 @@ test "credencial de conta: HTTP lista sem valores, revoga e rotaciona", "atok" {
     var registry = Registry(accountTokenPath("http"))
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 20012)
     var controlTask = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
     var token = mapField(account, "token")
-    assert(token.startsWith("kfc_"), "token da conta")
+    need(token.startsWith("kfc_"), "falhou")
 
     // Inventario: id curto + emissao, NUNCA o valor.
     var listed = httpGetToken(controlPort, "/v1/tokens", token)
-    assert(statusOf(listed) == 200, "lista 200")
-    assert(bodyOf(listed).indexOf("kfc_") < 0, "inventario nao vaza o valor")
-    assert(bodyOf(listed).indexOf("\"id\"") >= 0, "tem id curto")
+    need(statusOf(listed) == 200, "falhou")
+    need(bodyOf(listed).indexOf("kfc_") < 0, "falhou")
+    need(bodyOf(listed).indexOf("\"id\"") >= 0, "falhou")
 
     // Sem token: 401.
-    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", "")) == 401, "401 sem token")
+    need(statusOf(httpGetToken(controlPort, "/v1/tokens", "")) == 401, "falhou")
 
     // Rotacao: devolve a nova UMA vez e mantem a antiga valida (overlap).
     var rotated = httpPostJson(controlPort, "/v1/tokens/rotate", "{\"ttlHours\":\"24\"}", token)
-    assert(statusOf(rotated) == 200, "rotate 200")
+    need(statusOf(rotated) == 200, "falhou")
     var fresh = mapField(json.decode<Map<String, String>>(bodyOf(rotated)), "token")
-    assert(fresh.startsWith("kfc_"), "nova credencial")
-    assert(fresh != token, "valor diferente")
-    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", token)) == 200, "antiga ainda vale")
-    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", fresh)) == 200, "nova vale")
+    need(fresh.startsWith("kfc_"), "falhou")
+    need(fresh != token, "falhou")
+    need(statusOf(httpGetToken(controlPort, "/v1/tokens", token)) == 200, "falhou")
+    need(statusOf(httpGetToken(controlPort, "/v1/tokens", fresh)) == 200, "falhou")
 
     // TTL invalido: 400 KCF062.
     var badTtl = httpPostJson(controlPort, "/v1/tokens/rotate", "{\"ttlHours\":\"0\"}", fresh)
-    assert(statusOf(badTtl) == 400, "ttl zero recusado")
-    assert(bodyOf(badTtl).indexOf("KCF062") >= 0, "KCF062")
+    need(statusOf(badTtl) == 400, "falhou")
+    need(bodyOf(badTtl).indexOf("KCF062") >= 0, "falhou")
 
     // Revogar a antiga pelo id curto: 200; ela deixa de autorizar.
     var oldId = shortTokenId(tokenHash(token))
     var revoked = httpPostJson(controlPort, "/v1/tokens/revoke", "{\"token\":\"" + oldId + "\"}", fresh)
-    assert(statusOf(revoked) == 200, "revoke 200")
-    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", token)) == 401, "antiga nao autoriza mais")
-    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", fresh)) == 200, "nova segue valida")
+    need(statusOf(revoked) == 200, "falhou")
+    need(statusOf(httpGetToken(controlPort, "/v1/tokens", token)) == 401, "falhou")
+    need(statusOf(httpGetToken(controlPort, "/v1/tokens", fresh)) == 200, "falhou")
 
     // Revogar inexistente: 404 KCF064 opaco.
     var missing = httpPostJson(controlPort, "/v1/tokens/revoke", "{\"token\":\"kfc_naoexiste\"}", fresh)
-    assert(statusOf(missing) == 404, "404 opaco")
-    assert(bodyOf(missing).indexOf("KCF064") >= 0, "KCF064")
+    need(statusOf(missing) == 404, "falhou")
+    need(bodyOf(missing).indexOf("KCF064") >= 0, "falhou")
 
     // Rotation status: so a nova vale.
     var status = httpPostJson(controlPort, "/v1/tokens/rotation", "{}", fresh)
-    assert(statusOf(status) == 200, "rotation 200")
-    assert(bodyOf(status).indexOf("\"pending\":\"1\"") >= 0, "uma credencial valida")
+    need(statusOf(status) == 200, "falhou")
+    need(bodyOf(status).indexOf("\"pending\":\"1\"") >= 0, "falhou")
 
     // Aviso de expiracao proxima no FIO: a nova (TTL 24 h) cai dentro da
     // janela (7 d) e o inventario traz o campo ADITIVO `expiring`; a sem TTL
@@ -226,14 +226,14 @@ test "credencial de conta: HTTP lista sem valores, revoga e rotaciona", "atok" {
     // worm-privacy); cliente antigo que le id/createdAt/expiresAt continua
     // decodificando.
     var rotatedForever = httpPostJson(controlPort, "/v1/tokens/rotate", "{}", fresh)
-    assert(statusOf(rotatedForever) == 200, "rotate sem ttl 200")
+    need(statusOf(rotatedForever) == 200, "falhou")
     var forever = mapField(json.decode<Map<String, String>>(bodyOf(rotatedForever)), "token")
-    assert(fresh != forever, "valor diferente")
+    need(fresh != forever, "falhou")
     var listed2 = httpGetToken(controlPort, "/v1/tokens", fresh)
-    assert(statusOf(listed2) == 200, "lista as duas")
+    need(statusOf(listed2) == 200, "falhou")
     var freshId = shortTokenId(tokenHash(fresh))
     var freshAt = bodyOf(listed2).indexOf(freshId)
-    assert(freshAt >= 0, "nova no inventario")
+    need(freshAt >= 0, "falhou")
     // O id e o ULTIMO campo do objeto (a serializacao ordena createdAt/
     // expiresAt/expiring antes): ande para tras ate o "{" da entrada — a
     // lista e plana (objetos sem aninhamento), entao o primeiro "}" depois
@@ -242,29 +242,29 @@ test "credencial de conta: HTTP lista sem valores, revoga e rotaciona", "atok" {
     while (freshStart > 0 && bodyOf(listed2).charAt(freshStart) != 123) {
         freshStart = freshStart - 1
     }
-    assert(freshStart < freshAt, "inicio do objeto da nova achado")
+    need(freshStart < freshAt, "falhou")
     var freshEnd = bodyOf(listed2).indexOf("}", freshStart)
-    assert(freshEnd > freshAt, "objeto da nova fecha")
+    need(freshEnd > freshAt, "falhou")
     var freshChunk = bodyOf(listed2).substring(freshStart, freshEnd + 1)
-    assert(freshChunk.indexOf("\"expiring\":\"true\"") >= 0, "nova (TTL 24h) marcada expiring")
-    assert(freshChunk.indexOf("kfc_") < 0, "fatia da nova nao vaza valor")
+    need(freshChunk.indexOf("\"expiring\":\"true\"") >= 0, "falhou")
+    need(freshChunk.indexOf("kfc_") < 0, "falhou")
     var foreverId = shortTokenId(tokenHash(forever))
     var foreverAt = bodyOf(listed2).indexOf(foreverId)
-    assert(foreverAt >= 0, "sem-ttl no inventario")
+    need(foreverAt >= 0, "falhou")
     var foreverStart = foreverAt
     while (foreverStart > 0 && bodyOf(listed2).charAt(foreverStart) != 123) {
         foreverStart = foreverStart - 1
     }
     var foreverEnd = bodyOf(listed2).indexOf("}", foreverStart)
     var foreverChunk = bodyOf(listed2).substring(foreverStart, foreverEnd + 1)
-    assert(foreverChunk.indexOf("expiring") < 0, "sem TTL nao e marcada")
+    need(foreverChunk.indexOf("expiring") < 0, "falhou")
 
     // Auto-revogacao do `logout` POR ULTIMO (a sessao morre aqui): revogar
     // o proprio token da sessao pelo valor completo — e o que o logout faz
     // antes de apagar os arquivos locais (fresh deixa de autorizar).
     var selfRevoked = httpPostJson(controlPort, "/v1/tokens/revoke", "{\"token\":\"" + fresh + "\"}", fresh)
-    assert(statusOf(selfRevoked) == 200, "auto-revoke 200")
-    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", fresh)) == 401, "credencial da sessao morreu")
+    need(statusOf(selfRevoked) == 200, "falhou")
+    need(statusOf(httpGetToken(controlPort, "/v1/tokens", fresh)) == 401, "falhou")
 }
 
 test "credencial de conta: logoutDisposition trava as quatro saidas", "atok-unit" {
@@ -273,13 +273,13 @@ test "credencial de conta: logoutDisposition trava as quatro saidas", "atok-unit
     // sem sessao ("local"), confirmado ("revoked"), KCF004 = ja vencida/
     // revogada ("dead" — nada vivo, nao e falha), outra falha de rede
     // ("warn" — a credencial sobreviveu e o operador precisa saber).
-    assert(logoutDisposition(false, false, "") == "local", "sem sessao: local")
-    assert(logoutDisposition(true, true, "") == "revoked", "confirmado: revoked")
-    assert(logoutDisposition(true, false, "KCF004: missing or invalid account token") == "dead", "KCF004: dead")
-    assert(logoutDisposition(true, false, "conexao recusada") == "warn", "rede: warn")
+    need(logoutDisposition(false, false, "") == "local", "falhou")
+    need(logoutDisposition(true, true, "") == "revoked", "falhou")
+    need(logoutDisposition(true, false, "KCF004: missing or invalid account token") == "dead", "falhou")
+    need(logoutDisposition(true, false, "conexao recusada") == "warn", "falhou")
     // O body de 401 do control plane passa pelo requireOk como texto de erro;
     // qualquer texto com KCF004 conta como "credencial ja morta".
-    assert(logoutDisposition(true, false, "KCF004") == "dead", "KCF004 curto: dead")
+    need(logoutDisposition(true, false, "KCF004") == "dead", "falhou")
 
     // Cruzamento logout × sessão vencida (o aviso `expiring` avisou, o
     // operador demorou): no FIO, um token vencido não autoriza o endpoint
@@ -290,12 +290,12 @@ test "credencial de conta: logoutDisposition trava as quatro saidas", "atok-unit
     var mel = registry.createAccount("mel", "m@e.com", "segredo")
     registry.tokens.add(TokenEntry(mel.id, tokenHash("kfc_venceu-ontem"), time.now() - 90000, time.now() - 60000))
     var expiredAuth = handleRevokeAccountToken(registry, "Bearer kfc_venceu-ontem", "{\"token\":\"kfc_venceu-ontem\"}")
-    assert(expiredAuth.code == 401, "vencida não autoriza o revoke")
-    assert(expiredAuth.body.indexOf("KCF004") >= 0, "401 com KCF004: " + expiredAuth.body)
-    assert(logoutDisposition(true, false, expiredAuth.body) == "dead", "vencida: dead, não warn")
+    need(expiredAuth.code == 401, "falhou")
+    need(expiredAuth.body.indexOf("KCF004") >= 0, "falhou")
+    need(logoutDisposition(true, false, expiredAuth.body) == "dead", "falhou")
     var prunedExpired = handlePruneAccountTokens(registry, "Bearer kfc_venceu-ontem")
-    assert(prunedExpired.code == 401, "vencida não autoriza o prune")
-    assert(prunedExpired.body.indexOf("KCF004") >= 0, "prune: mesmo 401 KCF004")
+    need(prunedExpired.code == 401, "falhou")
+    need(prunedExpired.body.indexOf("KCF004") >= 0, "falhou")
 }
 
 test "credencial de conta: prune preserva a da sessao e revoga as antigas", "atok-unit" {
@@ -311,23 +311,23 @@ test "credencial de conta: prune preserva a da sessao e revoga as antigas", "ato
     var t2 = registry.issueToken(mel.id)
     var t3 = registry.issueToken(mel.id)
     var anaToken = registry.issueToken(ana.id)
-    assert(registry.accountTokensFor(mel.id).size == 3, "tres credenciais acumuladas")
+    need(registry.accountTokensFor(mel.id).size == 3, "falhou")
 
     var removed = registry.pruneAccountTokensExcept(mel.id, t3)
-    assert(removed == 2, "duas revogadas")
-    assert(registry.accountTokensFor(mel.id).size == 1, "so a da sessao vale")
-    assert(registry.accountByToken(t3) != null, "a atual continua valendo")
-    assert(registry.accountByToken(t1) == null, "antiga 1 caiu")
-    assert(registry.accountByToken(t2) == null, "antiga 2 caiu")
+    need(removed == 2, "falhou")
+    need(registry.accountTokensFor(mel.id).size == 1, "falhou")
+    need(registry.accountByToken(t3) != null, "falhou")
+    need(registry.accountByToken(t1) == null, "falhou")
+    need(registry.accountByToken(t2) == null, "falhou")
     // Credencial de outra conta nunca e tocada.
-    assert(registry.accountByToken(anaToken) != null, "ana intacta")
+    need(registry.accountByToken(anaToken) != null, "falhou")
 
     // Token vazio nao e "prune tudo" silencioso: nao ha sessao a preservar.
-    assert(registry.pruneAccountTokensExcept(mel.id, "") == 0, "sem token nao poda")
-    assert(registry.accountTokensFor(mel.id).size == 1, "nada mudou")
+    need(registry.pruneAccountTokensExcept(mel.id, "") == 0, "falhou")
+    need(registry.accountTokensFor(mel.id).size == 1, "falhou")
 
     // Nada a podar: zero, sem efeito.
-    assert(registry.pruneAccountTokensExcept(mel.id, t3) == 0, "idempotente")
+    need(registry.pruneAccountTokensExcept(mel.id, t3) == 0, "falhou")
 
     // Cruzamento prune (kfc_) x credencial de servico (kfs_): a poda so
     // toca o inventario da conta (this.tokens) — as kfs_ validas de servicos
@@ -336,11 +336,11 @@ test "credencial de conta: prune preserva a da sessao e revoga as antigas", "ato
     var device = registry.registerDevice(mel, "nb", "pk")
     var svc = registry.publishService(mel, device.id, "site", "127.0.0.1", 8080, "http", "AUTHENTICATED", "", "")
     var kfs = registry.issueServiceToken(mel.id, svc.id)
-    assert(registry.serviceByServiceToken(kfs) != null, "kfs_ autentica antes do prune")
-    assert(registry.pruneAccountTokensExcept(mel.id, t3) == 0, "prune nao podou nada novo")
-    assert(registry.serviceByServiceToken(kfs) != null, "kfs_ sobrevive ao prune da conta")
-    assert(registry.tokensWithoutExpiry(mel.id).size == 1, "higiene de kfs_ intacta")
-    assert(registry.accountByToken(t3) != null, "a sessao da conta segue valendo")
+    need(registry.serviceByServiceToken(kfs) != null, "falhou")
+    need(registry.pruneAccountTokensExcept(mel.id, t3) == 0, "falhou")
+    need(registry.serviceByServiceToken(kfs) != null, "falhou")
+    need(registry.tokensWithoutExpiry(mel.id).size == 1, "falhou")
+    need(registry.accountByToken(t3) != null, "falhou")
 }
 
 test "credencial de conta: HTTP prune revoga as antigas e mantem a sessao", "atok" {
@@ -348,7 +348,7 @@ test "credencial de conta: HTTP prune revoga as antigas e mantem a sessao", "ato
     var registry = Registry(accountTokenPath("prune-http"))
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 20114)
     var controlTask = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var first = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
@@ -357,22 +357,22 @@ test "credencial de conta: HTTP prune revoga as antigas e mantem a sessao", "ato
     var third = mapField(json.decode<Map<String, String>>(bodyOf(httpPostJson(controlPort, "/v1/login", "{\"handle\":\"mel\",\"password\":\"segredo\"}", ""))), "token")
 
     var listed = bodyOf(httpGetToken(controlPort, "/v1/tokens", third))
-    assert(listed.indexOf("\"id\"") >= 0, "inventario acessivel com a credencial atual")
+    need(listed.indexOf("\"id\"") >= 0, "falhou")
 
     // Sem token: 401.
-    assert(statusOf(httpPostJson(controlPort, "/v1/tokens/prune", "{}", "")) == 401, "401 sem token")
+    need(statusOf(httpPostJson(controlPort, "/v1/tokens/prune", "{}", "")) == 401, "falhou")
 
     var pruned = httpPostJson(controlPort, "/v1/tokens/prune", "{}", third)
-    assert(statusOf(pruned) == 200, "prune 200")
-    assert(bodyOf(pruned).indexOf("\"revoked\":\"2\"") >= 0, "duas revogadas")
-    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", third)) == 200, "a da sessao segue valida")
-    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", first)) == 401, "a primeira caiu")
-    assert(statusOf(httpGetToken(controlPort, "/v1/tokens", second)) == 401, "a segunda caiu")
+    need(statusOf(pruned) == 200, "falhou")
+    need(bodyOf(pruned).indexOf("\"revoked\":\"2\"") >= 0, "falhou")
+    need(statusOf(httpGetToken(controlPort, "/v1/tokens", third)) == 200, "falhou")
+    need(statusOf(httpGetToken(controlPort, "/v1/tokens", first)) == 401, "falhou")
+    need(statusOf(httpGetToken(controlPort, "/v1/tokens", second)) == 401, "falhou")
 
     // De novo: nada a fazer.
     var again = httpPostJson(controlPort, "/v1/tokens/prune", "{}", third)
-    assert(statusOf(again) == 200, "idempotente")
-    assert(bodyOf(again).indexOf("\"revoked\":\"0\"") >= 0, "zero revogadas")
+    need(statusOf(again) == 200, "falhou")
+    need(bodyOf(again).indexOf("\"revoked\":\"0\"") >= 0, "falhou")
 }
 
 test "credencial de conta: o status mostra o aviso do mesmo sinal do fio", "atok-unit" {
@@ -386,22 +386,22 @@ test "credencial de conta: o status mostra o aviso do mesmo sinal do fio", "atok
     // corpo ilegivel, que o countTokenExpiring devolve -1).
     var window = limitTokenExpiryWarnMs()
     var hours = intToString((window / 3600000L) as Int)
-    assert(statusCredentialWarning("") == "", "corpo vazio: silencio")
-    assert(statusCredentialWarning("lixo {") == "", "ilegivel: silencio")
-    assert(statusCredentialWarning("[]") == "", "vazia: silencio")
-    assert(statusCredentialWarning("[{\"id\":\"a1\",\"createdAt\":\"1\"},{\"id\":\"b2\",\"createdAt\":\"1\",\"expiresAt\":\"9\"}]") == "", "sem expiring: silencio")
+    need(statusCredentialWarning("") == "", "falhou")
+    need(statusCredentialWarning("lixo {") == "", "falhou")
+    need(statusCredentialWarning("[]") == "", "falhou")
+    need(statusCredentialWarning("[{\"id\":\"a1\",\"createdAt\":\"1\"},{\"id\":\"b2\",\"createdAt\":\"1\",\"expiresAt\":\"9\"}]") == "", "falhou")
     // TTL longo fora da janela no corpo sem o sinal: o status segue o FIO
     // (campo aditivo), nao o epoch — re-derivar aqui divergiria do doctor.
-    assert(statusCredentialWarning("[{\"id\":\"a1\",\"createdAt\":\"1\",\"expiresAt\":\"2524608000000\"}]") == "", "longa sem sinal: silencio")
+    need(statusCredentialWarning("[{\"id\":\"a1\",\"createdAt\":\"1\",\"expiresAt\":\"2524608000000\"}]") == "", "falhou")
     var warn = statusCredentialWarning("[{\"id\":\"a1\",\"createdAt\":\"1\",\"expiresAt\":\"2\",\"expiring\":\"true\"}]")
-    assert(warn.indexOf("1 credencial") >= 0, "uma expirando: conta: " + warn)
-    assert(warn.indexOf("token rotate") >= 0, "uma expirando: orienta o rotate: " + warn)
-    assert(warn.indexOf(hours + "h") >= 0, "janela derivada da fonte unica: " + warn)
-    assert(warn.indexOf("kfc_") < 0, "aviso nunca vaza valor")
+    need(warn.indexOf("1 credencial") >= 0, "falhou")
+    need(warn.indexOf("token rotate") >= 0, "falhou")
+    need(warn.indexOf(hours + "h") >= 0, "falhou")
+    need(warn.indexOf("kfc_") < 0, "falhou")
     var two = statusCredentialWarning("[{\"id\":\"a\",\"createdAt\":\"1\",\"expiring\":\"true\"},{\"id\":\"b\",\"createdAt\":\"1\",\"expiring\":\"true\"}]")
-    assert(two.indexOf("2 credencial") >= 0, "conta as duas: " + two)
+    need(two.indexOf("2 credencial") >= 0, "falhou")
     var mixed = statusCredentialWarning("[{\"id\":\"a\",\"createdAt\":\"1\"},{\"id\":\"b\",\"createdAt\":\"1\",\"expiresAt\":\"2\",\"expiring\":\"true\"}]")
-    assert(mixed.indexOf("1 credencial") >= 0, "conta so a expirando: " + mixed)
+    need(mixed.indexOf("1 credencial") >= 0, "falhou")
 
     // Trava de fonte: o cmdStatus busca /v1/tokens e delega na funcao (sem
     // captura de stdout no runner). Best-effort: a chamada vive em try e a
@@ -417,9 +417,9 @@ test "credencial de conta: o status mostra o aviso do mesmo sinal do fio", "atok
         end = text.length
     }
     var body = text.substring(start, end)
-    assert(body.indexOf("/v1/tokens") >= 0, "status busca o inventario")
-    assert(body.indexOf("statusCredentialWarning(tokensRaw)") >= 0, "status delega na funcao pura")
-    assert(body.indexOf("credWarn.length > 0") >= 0, "status so imprime quando ha aviso")
+    need(body.indexOf("/v1/tokens") >= 0, "falhou")
+    need(body.indexOf("statusCredentialWarning(tokensRaw)") >= 0, "falhou")
+    need(body.indexOf("credWarn.length > 0") >= 0, "falhou")
 }
 
 test "credencial de conta: aviso do status contra o fio real", "atok" {
@@ -430,24 +430,24 @@ test "credencial de conta: aviso do status contra o fio real", "atok" {
     var registry = Registry(accountTokenPath("status"))
     var control = ControlPlane(registry, controlPort, "127.0.0.1", 20178)
     var controlTask = spawn { control.start() }
-    assert(waitForPort(controlPort, 60), "control plane no ar")
+    need(waitForPort(controlPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var accountToken = mapField(json.decode<Map<String, String>>(bodyOf(created)), "token")
     var before = bodyOf(httpGetToken(controlPort, "/v1/tokens", accountToken))
-    assert(statusCredentialWarning(before) == "", "sem TTL: status calmo")
+    need(statusCredentialWarning(before) == "", "falhou")
 
     var rotated = httpPostJson(controlPort, "/v1/tokens/rotate", "{\"ttlHours\":\"24\"}", accountToken)
-    assert(statusOf(rotated) == 200, "rotate 200")
+    need(statusOf(rotated) == 200, "falhou")
     var fresh = mapField(json.decode<Map<String, String>>(bodyOf(rotated)), "token")
     // Apos o rotate (TTL 24h < janela de 7 dias) o inventario da conta
     // carrega o sinal na entrada nova — qualquer credencial valida da
     // conta le o mesmo aviso (o sinal e por conta, como no doctor).
     var listedOld = bodyOf(httpGetToken(controlPort, "/v1/tokens", accountToken))
     var listedNew = bodyOf(httpGetToken(controlPort, "/v1/tokens", fresh))
-    assert(statusCredentialWarning(listedOld).indexOf("1 credencial") >= 0, "antiga ve o aviso da conta")
+    need(statusCredentialWarning(listedOld).indexOf("1 credencial") >= 0, "falhou")
     var warn = statusCredentialWarning(listedNew)
-    assert(warn.indexOf("1 credencial") >= 0, "nova ve o aviso: " + warn)
-    assert(warn.indexOf("token rotate") >= 0, "orienta o rotate")
-    assert(warn.indexOf("kfc_") < 0, "aviso nao vaza valor")
+    need(warn.indexOf("1 credencial") >= 0, "falhou")
+    need(warn.indexOf("token rotate") >= 0, "falhou")
+    need(warn.indexOf("kfc_") < 0, "falhou")
 }

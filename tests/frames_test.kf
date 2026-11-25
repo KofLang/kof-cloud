@@ -19,48 +19,48 @@ import testkit.Support
 // lado acumulava sem poder recusar.
 
 test "frames: encodeChunks fatia e recompoe", "frames" {
-    assert(limitFrameBytes() == 1048576, "default 1 MiB")
-    assert(maxTunnelLineBytes() == 1048576 * 2 + 4096, "teto com margem UTF-8+JSON")
+    need(limitFrameBytes() == 1048576, "falhou")
+    need(maxTunnelLineBytes() == 1048576 * 2 + 4096, "falhou")
     // Recuo seguro do teto (fonte pura `frameLimitFrom`): zero/negativo
     // recaem no default 1 MiB — com 0 o remetente continua mandando blocos
     // de sendChunkBytes (o clamp so age com cap > 0) enquanto o receptor
     // recusa linha acima de 4096: dessincronia silenciosa no meio do relay.
-    assert(frameLimitFrom(0) == 1048576, "zero recai no default")
-    assert(frameLimitFrom(-1) == 1048576, "negativo recai no default")
-    assert(frameLimitFrom(10) == 10, "valor positivo passa")
-    assert(frameLimitFrom(1) == 1, "limite apertado passa")
+    need(frameLimitFrom(0) == 1048576, "falhou")
+    need(frameLimitFrom(-1) == 1048576, "falhou")
+    need(frameLimitFrom(10) == 10, "falhou")
+    need(frameLimitFrom(1) == 1, "falhou")
     // Fonte unica do teto de corpo do relay: o serve passa ao
     // HttpFront/relay a partir daqui.
-    assert(limitMaxBodyBytes() == 16777216, "teto de corpo 16 MiB")
+    need(limitMaxBodyBytes() == 16777216, "falhou")
     // Recuo seguro (fonte pura `maxBodyLimitFrom`): zero/negativo recaem no
     // default 16 MiB — com 0 todo pedido com corpo viraria 413 KCF110.
-    assert(maxBodyLimitFrom(0) == 16777216, "corpo zero recai no default")
-    assert(maxBodyLimitFrom(-5) == 16777216, "corpo negativo recai no default")
-    assert(maxBodyLimitFrom(1024) == 1024, "corpo positivo passa direto")
+    need(maxBodyLimitFrom(0) == 16777216, "falhou")
+    need(maxBodyLimitFrom(-5) == 16777216, "falhou")
+    need(maxBodyLimitFrom(1024) == 1024, "falhou")
     // Fonte unica do bloco de leitura crua do socket do TUNEL e do HTTP
     // publico: os 6 `receive(n)` do fio (HELLO + loop no Edge, WELCOME +
     // loop no Agent, headers + corpo no readRequestBytes) leem daqui —
     // `receive` nao respeita fronteira de frame, entao o bloco so muda o
     // numero de chamadas por linha, nunca a corretude. O relay local
     // (16384, socket do servico) fica de fora de proposito.
-    assert(receiveChunkBytes() == 8192, "bloco de leitura 8 KiB")
+    need(receiveChunkBytes() == 8192, "falhou")
     // Recuo em fonte pura: o bloco alimenta os 7 `conn.receive(n)` do fio.
     // Com 0/negativo o comportamento do receive com teto nao-positivo nao e
     // contrato do runtime — e a LEITURA DO TUNEL inteira que depende dele.
     // Zerado recai no default; positivo passa.
-    assert(receiveChunkBytesFrom(0) == 8192, "bloco zero recai no default")
-    assert(receiveChunkBytesFrom(-1) == 8192, "bloco negativo recai no default")
-    assert(receiveChunkBytesFrom(16384) == 16384, "bloco positivo passa")
+    need(receiveChunkBytesFrom(0) == 8192, "falhou")
+    need(receiveChunkBytesFrom(-1) == 8192, "falhou")
+    need(receiveChunkBytesFrom(16384) == 16384, "falhou")
     // Fonte unica do bloco de ENVIO de cada DATA (`Payload.encodeChunks`):
     // mesmo recuo do receive (0/negativo = sem bloco nenhum, relay parado
     // em silencio) + clamp ao teto do frame (cap > 0 so age acima dele —
     // com cap 0 o remetente seguiria sem clamp e o receptor recusaria:
     // dessincronia, comentario do frameLimitFrom).
-    assert(sendChunkBytesFrom(0, 1048576) == 16384, "bloco de envio zero recai no default")
-    assert(sendChunkBytesFrom(-1, 1048576) == 16384, "bloco de envio negativo recai no default")
-    assert(sendChunkBytesFrom(16384, 1048576) == 16384, "bloco de envio dentro do teto passa")
-    assert(sendChunkBytesFrom(2097152, 1048576) == 1048576, "bloco de envio acima do teto e clampado")
-    assert(sendChunkBytesFrom(2097152, 0) == 2097152, "cap zero nao clampa (so o default recai)")
+    need(sendChunkBytesFrom(0, 1048576) == 16384, "falhou")
+    need(sendChunkBytesFrom(-1, 1048576) == 16384, "falhou")
+    need(sendChunkBytesFrom(16384, 1048576) == 16384, "falhou")
+    need(sendChunkBytesFrom(2097152, 1048576) == 1048576, "falhou")
+    need(sendChunkBytesFrom(2097152, 0) == 2097152, "falhou")
     // Trava de honestidade docs×codigo (padrao das travas de docs): os dois
     // planos (`16-plan`, debito de limites; `18-implemented`, linha do
     // frame) devem citar a fonte unica do bloco de envio pelo nome — sem
@@ -77,8 +77,8 @@ test "frames: encodeChunks fatia e recompoe", "frames" {
         shipped = shippedRaw
     }
     if (plan.length > 0 && shipped.length > 0) {
-        assert(plan.indexOf("sendChunkBytesFrom") >= 0, "16-plan cita a pura do bloco de envio")
-        assert(shipped.indexOf("sendChunkBytesFrom") >= 0, "18-implemented cita a pura do bloco de envio")
+        need(plan.indexOf("sendChunkBytesFrom") >= 0, "falhou")
+        need(shipped.indexOf("sendChunkBytesFrom") >= 0, "falhou")
     }
 
     // 1.5 MiB = 2 chunks (1 MiB + 0.5 MiB). O base64 proprio e linear em
@@ -89,14 +89,14 @@ test "frames: encodeChunks fatia e recompoe", "frames" {
         big[i] = (i * 7 + 13) as Byte
     }
     var chunks = encodeChunks(big, "")
-    assert(chunks.size >= 2, "1.5 MiB em varios frames (blocos de 64 KiB)")
+    need(chunks.size >= 2, "falhou")
     var acc = bytesEmpty()
     for (var chunk in chunks) {
         // Cada chunk cabe numa linha do tunel com folga.
-        assert(chunk.length <= maxTunnelLineBytes(), "chunk dentro do teto")
+        need(chunk.length <= maxTunnelLineBytes(), "falhou")
         acc = bytesConcat(acc, bytesFromBase64(chunk))
     }
-    assert(acc.length == big.length, "tamanho recomposto")
+    need(acc.length == big.length, "falhou")
     for (var j = 0; j < big.length; j++) {
         if (acc[j] != big[j]) {
             assert(false, "byte diverge")
@@ -104,14 +104,14 @@ test "frames: encodeChunks fatia e recompoe", "frames" {
     }
 
     var empty = encodeChunks(bytesEmpty(), "")
-    assert(empty.size == 1, "vazio gera um DATA (o END sozinho nao carrega nada)")
+    need(empty.size == 1, "falhou")
 }
 
 test "frames: LineCodec recusa linha gigante sem acumular", "frames-codec" {
     var codec = LineCodec()
     codec.feed(bytesFromString("{\"t\":\"PING\"}\n"))
-    assert(codec.overflowed() == false, "linha normal ok")
-    assert(codec.nextLine() == "{\"t\":\"PING\"}", "linha normal passa")
+    need(codec.overflowed() == false, "falhou")
+    need(codec.nextLine() == "{\"t\":\"PING\"}", "falhou")
 
     // 25 blocos de 100 KiB sem \n (2.5 MiB > teto de ~2.1 MiB): feeds
     // grandes e poucos — O(n) no total, sem o O(n^2) de milhares de
@@ -128,11 +128,11 @@ test "frames: LineCodec recusa linha gigante sem acumular", "frames-codec" {
         flood.feed(bytesFromString(block))
         f = f + 1
     }
-    assert(flood.overflowed(), "2.5 MiB sem \n estoura")
-    assert(flood.remainder() == "", "buffer descartado, sem acumular")
+    need(flood.overflowed(), "falhou")
+    need(flood.remainder() == "", "falhou")
     flood.feed(bytesFromString("{\"t\":\"PING\"}\n"))
-    assert(flood.overflowed(), "travado em overflow (nao ressuscita)")
-    assert(flood.hasLine() == false, "nada vaza depois do overflow")
+    need(flood.overflowed(), "falhou")
+    need(flood.hasLine() == false, "falhou")
 }
 
 test "frames: Edge fecha tunel com HELLO gigante (fail-closed)", "frames-edge" {
@@ -148,8 +148,8 @@ test "frames: Edge fecha tunel com HELLO gigante (fail-closed)", "frames-edge" {
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
 
     // HELLO com 2.5 MiB sem \n (25 sends de 100 KiB): o Edge acumula ate o
     // teto (~2.1 MiB), fecha sem WELCOME e conta o motivo. Sem \n, nenhum
@@ -179,12 +179,14 @@ test "frames: Edge fecha tunel com HELLO gigante (fail-closed)", "frames-edge" {
         tries = tries - 1
     }
     conn.close()
-    assert(closed, "Edge fechou a conexao sem responder HELLO gigante")
-    assert(acc.length == 0, "nenhum WELCOME para HELLO gigante")
-    // O note roda na worker task do tunel: poll curto ate aparecer (race
-    // entre o close observado e o counter).
+    need(closed, "falhou")
+    need(acc.length == 0, "falhou")
+    // O note roda na worker task do tunel: poll ate aparecer (race entre o
+    // close observado e o counter). A janela era 5 s e a suite inteira
+    // (maquina carregada pela suíte completa) estourava; 30 s e folga sem
+    // mascarar uma regressao real (o counter vem do mesmo caminho do close).
     var counted = false
-    var waits = 50
+    var waits = 300
     while (waits > 0 && counted == false) {
         if (metricValue(observability.metrics(), "kofcloud_edge_tunnel_refused_total_line_overflow") >= 1) {
             counted = true
@@ -193,7 +195,7 @@ test "frames: Edge fecha tunel com HELLO gigante (fail-closed)", "frames-edge" {
             waits = waits - 1
         }
     }
-    assert(counted, "recusa contada")
+    need(counted, "falhou")
 
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)
@@ -223,7 +225,7 @@ test "frames: resposta grande atravessa fatiada fim a fim", "frames-e2e" {
             }
         }
     }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-framee2e-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -235,9 +237,9 @@ test "frames: resposta grande atravessa fatiada fim a fim", "frames-e2e" {
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -246,7 +248,7 @@ test "frames: resposta grande atravessa fatiada fim a fim", "frames-e2e" {
     var deviceResponse = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"notebook\",\"publicKey\":\"pubkey\"}", accountToken)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(deviceResponse)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "PUBLIC publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, accountToken)) == 200, "falhou")
 
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, accountToken, "", agentStop, "127.0.0.1", tunnelPort, 100)
     var agentTask = spawn { runAgent(config, true) }
@@ -259,7 +261,7 @@ test "frames: resposta grande atravessa fatiada fim a fim", "frames-e2e" {
             attempts = attempts - 1
         }
     }
-    assert(online, "agent registrado no edge")
+    need(online, "falhou")
 
     // Leitura sem materializar 1.5 MiB em String: bytesToString e O(n^2) e
     // httpGetRaw o usa no fim (ver 17-limitations). Aqui somamos tamanhos e
@@ -301,14 +303,14 @@ test "frames: resposta grande atravessa fatiada fim a fim", "frames-e2e" {
         }
     }
     conn.close()
-    assert(status == 200, "resposta grande passa")
-    assert(total == 1500000, "1.5 MiB intactos apos fatiar e recompor")
-    assert(first == "0123456789", "prefixo certo")
-    assert(tail.endsWith("0123456789"), "sufixo certo")
+    need(status == 200, "falhou")
+    need(total == 1500000, "falhou")
+    need(first == "0123456789", "falhou")
+    need(tail.endsWith("0123456789"), "falhou")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1500)
-    assert(edgeState.isOnline(deviceId) == false, "agente encerrou a sessao")
+    need(edgeState.isOnline(deviceId) == false, "falhou")
     writeTextTo(edgeStop, "stop")
     time.sleep(1000)
     File(agentStop).delete()

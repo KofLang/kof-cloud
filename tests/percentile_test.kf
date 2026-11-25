@@ -23,66 +23,66 @@ test "percentil: nearest-rank sobre faixas (bordas, excedente, sem amostras)", "
     // 7 faixas de contagem (6 limites + excedente).
     // 10 amostras: 8 em <=50, 1 em <=100, 1 em <=500.
     var counts = listOf(8, 1, 0, 1, 0, 0, 0)
-    assert(percentileFromBuckets(limits, counts, 50) == "<=50 ms", "p50 na primeira faixa: " + percentileFromBuckets(limits, counts, 50))
-    assert(percentileFromBuckets(limits, counts, 80) == "<=50 ms", "p80 ainda em <=50 (9a amostra cabe)")
-    assert(percentileFromBuckets(limits, counts, 90) == "<=100 ms", "p90 cai na 9a amostra (<=100)")
-    assert(percentileFromBuckets(limits, counts, 100) == "<=500 ms", "p100 na ultima amostra")
+    need(percentileFromBuckets(limits, counts, 50) == "<=50 ms", "falhou")
+    need(percentileFromBuckets(limits, counts, 80) == "<=50 ms", "falhou")
+    need(percentileFromBuckets(limits, counts, 90) == "<=100 ms", "falhou")
+    need(percentileFromBuckets(limits, counts, 100) == "<=500 ms", "falhou")
     // Excedente: 1 em <=50 e 1 acima de 2000.
     // 1 em <=50 e 1 acima de 2000: o rank de p50 (ceil(0.5*2)=1) cabe na
     // primeira faixa; p51+ ja cai no excedente (rank 2).
     var over = listOf(1, 0, 0, 0, 0, 0, 1)
-    assert(percentileFromBuckets(limits, over, 50) == "<=50 ms", "p50 com metade na primeira faixa: " + percentileFromBuckets(limits, over, 50))
-    assert(percentileFromBuckets(limits, over, 51) == ">+2000 ms", "p51 no excedente: " + percentileFromBuckets(limits, over, 51))
+    need(percentileFromBuckets(limits, over, 50) == "<=50 ms", "falhou")
+    need(percentileFromBuckets(limits, over, 51) == ">+2000 ms", "falhou")
     // Sem amostras e contagens invalidas: mensagem honesta, nunca "0 ms".
     var zeros = listOf(0, 0, 0, 0, 0, 0, 0)
-    assert(percentileFromBuckets(limits, zeros, 50) == "sem amostras", "vazio = sem amostras")
-    assert(percentileFromBuckets(limits, listOf(1, 2), 50) == "sem amostras", "lista curta = sem amostras")
-    assert(percentileFromBuckets(listOf<Int>(), zeros, 50) == "sem amostras", "sem limites = sem amostras")
+    need(percentileFromBuckets(limits, zeros, 50) == "sem amostras", "falhou")
+    need(percentileFromBuckets(limits, listOf(1, 2), 50) == "sem amostras", "falhou")
+    need(percentileFromBuckets(listOf<Int>(), zeros, 50) == "sem amostras", "falhou")
     // Percentil fora da faixa e aparado (1..100), nunca divisao invalida.
-    assert(percentileFromBuckets(limits, counts, 0) == "<=50 ms", "percentil 0 vira 1")
-    assert(percentileFromBuckets(limits, counts, 1000) == "<=500 ms", "percentil 1000 vira 100")
+    need(percentileFromBuckets(limits, counts, 0) == "<=50 ms", "falhou")
+    need(percentileFromBuckets(limits, counts, 1000) == "<=500 ms", "falhou")
     // Uma amostra so: todos os percentis caem nela.
     var single = listOf(0, 0, 0, 0, 0, 1, 0)
-    assert(percentileFromBuckets(limits, single, 99) == "<=2000 ms", "uma amostra em <=2000")
+    need(percentileFromBuckets(limits, single, 99) == "<=2000 ms", "falhou")
     // O contador que o Edge incrementa e o MESMO nome que o parser le.
-    assert(latencyBucketCounter(10L) == metricRequestLatencyMs() + "_le_50", "contador da faixa: " + latencyBucketCounter(10L))
-    assert(latencyBucketCounter(5000L) == metricRequestLatencyMs() + "_gt_2000", "excedente")
+    need(latencyBucketCounter(10L) == metricRequestLatencyMs() + "_le_50", "falhou")
+    need(latencyBucketCounter(5000L) == metricRequestLatencyMs() + "_gt_2000", "falhou")
 }
 
 test "percentil: leitura da exposicao (faixa ausente = 0)", "percentile-unit" {
     // Formato real medido: a stdlib so exporta faixas NAO-ZERO.
     var exp = "kofcloud_edge_http_request_latency_ms_le_50 2\nkofcloud_edge_http_request_latency_ms_le_500 1\nkofcloud_edge_http_request_latency_ms_count 3\n"
     var counts = latencyBucketCounts(exp)
-    assert(counts.size == 7, "6 limites + excedente")
-    assert(counts.get(0) == 2, "<=50 = 2")
-    assert(counts.get(1) == 0, "<=100 ausente = 0")
-    assert(counts.get(3) == 1, "<=500 = 1")
-    assert(counts.get(6) == 0, "excedente ausente = 0")
+    need(counts.size == 7, "falhou")
+    need(counts.get(0) == 2, "falhou")
+    need(counts.get(1) == 0, "falhou")
+    need(counts.get(3) == 1, "falhou")
+    need(counts.get(6) == 0, "falhou")
     // Prefixo nao colide: `_le_5` nao casa `_le_50`.
-    assert(expositionCounter(exp, metricRequestLatencyMs() + "_le_5") == -1, "prefixo exato")
-    assert(expositionCounter(exp, "outra") == -1, "nome ausente = -1")
+    need(expositionCounter(exp, metricRequestLatencyMs() + "_le_5") == -1, "falhou")
+    need(expositionCounter(exp, "outra") == -1, "falhou")
     // HELP/TYPE ficam fora (linhas com #).
     var withHelp = "# TYPE x counter\n" + exp
-    assert(latencyBucketCounts(withHelp).get(0) == 2, "comentarios ignorados")
+    need(latencyBucketCounts(withHelp).get(0) == 2, "falhou")
     // Bloco de texto: tres linhas com o teto.
     var block = latencyPercentileLines(withHelp)
-    assert(block.indexOf("p50: <=50 ms") >= 0, "p50 no bloco: " + block)
-    assert(block.indexOf("p99: ") >= 0, "p99 no bloco")
-    assert(latencyPercentileLines("") == "  latencia p50: sem amostras\n  latencia p95: sem amostras\n  latencia p99: sem amostras", "vazio = sem amostras")
+    need(block.indexOf("p50: <=50 ms") >= 0, "falhou")
+    need(block.indexOf("p99: ") >= 0, "falhou")
+    need(latencyPercentileLines("") == "  latencia p50: sem amostras\n  latencia p95: sem amostras\n  latencia p99: sem amostras", "falhou")
     // Help anuncia a flag.
-    assert(usageText().indexOf("metrics [--grep <texto>] [--percentiles]") >= 0, "help anuncia --percentiles")
+    need(usageText().indexOf("metrics [--grep <texto>] [--percentiles]") >= 0, "falhou")
     // Drift medido na reconciliacao: o slice atualizou o help e deixou o
     // README preso na linha antiga (o operador lia `metrics [--grep]` e nao
     // descobria os percentis). Linha INTEIRA: o assert de prefixo passaria
     // com o --percentiles ausente (mesma licao do flag-drift).
     var readme = readTextOr("README.md", "")
-    assert(readme.indexOf("metrics [--grep <texto>] [--percentiles] [--control <url>]") >= 0, "README espelha --percentiles")
-    assert(readme.indexOf("metrics [--grep <texto>] [--percentiles]") >= 0, "percentis anunciados no README")
+    need(readme.indexOf("metrics [--grep <texto>] [--percentiles] [--control <url>]") >= 0, "falhou")
+    need(readme.indexOf("metrics [--grep <texto>] [--percentiles]") >= 0, "falhou")
     // Honestidade no doc de limitacoes: o teto de faixa e a ausencia de
     // percentil por hostname sao o que o operador NAO deve esperar.
     var limits = readTextOr("docs/17-limitations.md", "")
-    assert(limits.indexOf("teto da faixa, não o valor") >= 0, "17-limitations diz teto de faixa")
-    assert(limits.indexOf("percentil por hostname fica fora") >= 0, "17-limitations exclui hostname")
+    need(limits.indexOf("teto da faixa, não o valor") >= 0, "falhou")
+    need(limits.indexOf("percentil por hostname fica fora") >= 0, "falhou")
 }
 
 test "percentil: e2e — o fio real alimenta os percentis", "percentile-e2e" {
@@ -94,7 +94,7 @@ test "percentil: e2e — o fio real alimenta os percentis", "percentile-e2e" {
     var app = web.app()
     app.get("/") { return "svc-pct" }
     var server = spawn { app.listen(localSvc) }
-    assert(waitForPort(localSvc, 60), "servico local no ar")
+    need(waitForPort(localSvc, 60), "falhou")
 
     var registry = Registry("/tmp/kofcloud-pct-" + crypto.randomHex(4) + ".json")
     var edgeState = EdgeState(registry)
@@ -106,9 +106,9 @@ test "percentil: e2e — o fio real alimenta os percentis", "percentile-e2e" {
     var controlTask = spawn { control.start() }
     var tunnelTask = spawn { serveTunnel(edgeState, tunnelPort, "", edgeStop) }
     var httpTask = spawn { serveHttp(edgeState, httpPort, limitMaxBodyBytes(), edgeStop) }
-    assert(waitForPort(controlPort, 60), "control no ar")
-    assert(waitForPort(tunnelPort, 60), "tunel no ar")
-    assert(waitForPort(httpPort, 60), "http no ar")
+    need(waitForPort(controlPort, 60), "falhou")
+    need(waitForPort(tunnelPort, 60), "falhou")
+    need(waitForPort(httpPort, 60), "falhou")
 
     var created = httpPostJson(controlPort, "/v1/accounts", "{\"handle\":\"mel\",\"email\":\"m@e.com\",\"password\":\"segredo\"}", "")
     var account = json.decode<Map<String, String>>(bodyOf(created))
@@ -117,7 +117,7 @@ test "percentil: e2e — o fio real alimenta os percentis", "percentile-e2e" {
     var dev = httpPostJson(controlPort, "/v1/devices", "{\"name\":\"nb\",\"publicKey\":\"pk\"}", token)
     var deviceId = mapField(json.decode<Map<String, String>>(bodyOf(dev)), "deviceId")
     var pubBody = "{\"deviceId\":\"" + deviceId + "\",\"name\":\"site\",\"localAddress\":\"127.0.0.1\",\"localPort\":\"" + intToString(localSvc) + "\",\"protocol\":\"http\",\"exposure\":\"PUBLIC\"}"
-    assert(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "publicado")
+    need(statusOf(httpPostJson(controlPort, "/v1/services", pubBody, token)) == 200, "falhou")
     var config = AgentConfig("http://127.0.0.1:" + intToString(controlPort), deviceId, accountId, token, "", agentStop, "127.0.0.1", tunnelPort, 500)
     var agentTask = spawn { runAgent(config, true) }
     var online = false
@@ -129,7 +129,7 @@ test "percentil: e2e — o fio real alimenta os percentis", "percentile-e2e" {
             attempts = attempts - 1
         }
     }
-    assert(online, "agent no ar")
+    need(online, "falhou")
 
     // Semantica do histograma: le o que o Edge ja incrementou (observability
     // e por processo — o teste roda o Edge em task no mesmo processo).
@@ -137,7 +137,7 @@ test "percentil: e2e — o fio real alimenta os percentis", "percentile-e2e" {
     var countsBefore = latencyBucketCounts(observability.metrics())
     var waited = 0
     while (waited < 5) {
-        assert(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 200, "relay ok " + intToString(waited))
+        need(statusOf(httpGetRaw(httpPort, "/", "site.mel.kofcloud.io")) == 200, "falhou")
         waited = waited + 1
     }
     var exposition = observability.metrics()
@@ -146,12 +146,12 @@ test "percentil: e2e — o fio real alimenta os percentis", "percentile-e2e" {
     for (var c in counts) {
         total = total + c
     }
-    assert(total >= 5, "5 pedidos nas faixas agregadas: " + intToString(total))
+    need(total >= 5, "falhou")
     var p50 = percentileFromBuckets(latencyBucketLimitsMs(), counts, 50)
-    assert(p50.startsWith("<=") || p50.startsWith(">+"), "p50 e um teto de faixa: " + p50)
+    need(p50.startsWith("<=") || p50.startsWith(">+"), "falhou")
     // O bloco que a CLI imprime usa o MESMO parser sobre o MESMO fio.
     var block = latencyPercentileLines(exposition)
-    assert(block.indexOf("sem amostras") < 0, "com amostras nao diz vazio: " + block)
+    need(block.indexOf("sem amostras") < 0, "falhou")
 
     writeTextTo(agentStop, "stop")
     time.sleep(1200)

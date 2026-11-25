@@ -55,22 +55,22 @@ List<String> flagsReadWithFlagValue() {
 test "flags: toda flag com valor esta na lista e o valor nao conta como posicional", "valueflags-unit" {
     var known = valueFlags()
     for (var flag in flagsReadWithFlagValue()) {
-        assert(known.contains(flag), "flag com valor ausente da fonte unica: " + flag)
+        need(known.contains(flag), "falhou")
         // O valor da flag nunca vira posicional (com qualquer flag).
-        assert(extraPositional(listOf(flag, "valor"), 0) == false, "valor de " + flag + " virou posicional")
-        assert(extraPositional(listOf(flag, "valor"), 1) == false, "um posicional permitido")
+        need(extraPositional(listOf(flag, "valor"), 0) == false, "falhou")
+        need(extraPositional(listOf(flag, "valor"), 1) == false, "falhou")
         // O valor da flag tambem nao e capturado por first/secondPositional:
         // a flag antes do argumento nao corrompe o argumento (defeito real medido).
-        assert(firstPositional(listOf(flag, "valor", "alvo")) == "alvo", "primeiro posicional apos " + flag)
-        assert(secondPositional(listOf("um", flag, "valor", "dois")) == "dois", "segundo posicional apos " + flag)
+        need(firstPositional(listOf(flag, "valor", "alvo")) == "alvo", "falhou")
+        need(secondPositional(listOf("um", flag, "valor", "dois")) == "dois", "falhou")
     }
-    assert(known.size == 33, "33 flags com valor (+ --max-body, --backup-dir): " + intToString(known.size))
-    assert(flagsReadWithFlagValue().size >= 20, "lista derivada das fontes: " + intToString(flagsReadWithFlagValue().size))
+    need(known.size == 33, "falhou")
+    need(flagsReadWithFlagValue().size >= 20, "falhou")
 
     // Posicional de verdade continua barrando (a regra nao ficou frouxa).
-    assert(extraPositional(listOf("solto"), 0) == true, "posicional solto barra")
-    assert(extraPositional(listOf("--resolve", "id", "solto"), 0) == true, "posicional depois da flag barra")
-    assert(extraPositional(listOf<String>(), 0) == false, "nada, nada")
+    need(extraPositional(listOf("solto"), 0) == true, "falhou")
+    need(extraPositional(listOf("--resolve", "id", "solto"), 0) == true, "falhou")
+    need(extraPositional(listOf<String>(), 0) == false, "falhou")
 }
 
 test "flags: incidents --resolve chega ao control plane (antes barrava no uso)", "valueflags" {
@@ -78,7 +78,7 @@ test "flags: incidents --resolve chega ao control plane (antes barrava no uso)",
     var registry = Registry("/tmp/kofcloud-vf-" + crypto.randomHex(4) + ".json")
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control no ar")
+    need(waitForPort(port, 60), "falhou")
     var url = "http://127.0.0.1:" + intToString(port)
     var token = loginOrCreate(url, "mel", "segredo")
     // A sessao vive no HOME do processo, que e compartilhado entre suites:
@@ -90,10 +90,10 @@ test "flags: incidents --resolve chega ao control plane (antes barrava no uso)",
     // Id inexistente: a CLI passa do uso e o control plane responde 404
     // KCF125 (nao mais "uso: kof cloud incidents ...").
     var code = cmdIncidents(listOf("--resolve", "incidente-que-nao-existe"))
-    assert(code == 1, "id inexistente falha no control plane, nao no parse (exit " + intToString(code) + ")")
+    need(code == 1, "falhou")
 
     // --all sozinho tambem nao e posicional.
-    assert(extraPositional(listOf("--all"), 0) == false, "--all nao e posicional")
+    need(extraPositional(listOf("--all"), 0) == false, "falhou")
 
     if (priorSession.length == 0) {
         File(sessionPath()).delete()
@@ -169,17 +169,17 @@ test "flags: booleana repetida barra antes de qualquer efeito", "boolean-dup" {
     // 1) Trava derivada dos fontes: toda `hasFlag(args, ...)` tem
     // `flagDuplicated(args, ...)` no mesmo comando.
     var missing = booleanFlagsWithoutDupGuard()
-    assert(missing.size == 0, "booleana sem flagDuplicated: " + intToString(missing.size))
+    need(missing.size == 0, "falhou")
     var total = countHasFlagInCli()
-    assert(total >= 12, "pelo menos 12 leituras de hasFlag nos comandos: " + intToString(total))
+    need(total >= 12, "falhou")
 
     // 2) Comandos locais sem sessao nem rede: unico passa, repetida barra.
-    assert(cmdLogs(listOf("--runtime")) == 0, "--runtime unico passa")
-    assert(cmdLogs(listOf("--runtime", "--runtime")) == 1, "--runtime repetido barra")
-    assert(cmdLogs(listOf("--edge", "--edge")) == 1, "--edge repetido barra")
-    assert(cmdLogs(listOf("--runtime", "--edge")) == 1, "--runtime com --edge barra (mundos distintos)")
-    assert(cmdServe(listOf("--panel", "--panel")) == 1, "--panel repetido barra")
-    assert(cmdServe(listOf("--status-page", "--status-page")) == 1, "--status-page repetido barra")
+    need(cmdLogs(listOf("--runtime")) == 0, "falhou")
+    need(cmdLogs(listOf("--runtime", "--runtime")) == 1, "falhou")
+    need(cmdLogs(listOf("--edge", "--edge")) == 1, "falhou")
+    need(cmdLogs(listOf("--runtime", "--edge")) == 1, "falhou")
+    need(cmdServe(listOf("--panel", "--panel")) == 1, "falhou")
+    need(cmdServe(listOf("--status-page", "--status-page")) == 1, "falhou")
 
     // 3) Comandos com control plane (incidents --all, deploy --plan/--check,
     // down --prune): sem a guarda, cada repeticao devolveria 0 normalmente.
@@ -189,7 +189,7 @@ test "flags: booleana repetida barra antes de qualquer efeito", "boolean-dup" {
     var registry = Registry(dbPath)
     var control = ControlPlane(registry, port, "127.0.0.1", 0)
     var server = spawn { control.start() }
-    assert(waitForPort(port, 60), "control no ar")
+    need(waitForPort(port, 60), "falhou")
 
     var listener = net.listen(localPort)
     var svc = spawn {
@@ -207,7 +207,7 @@ test "flags: booleana repetida barra antes de qualquer efeito", "boolean-dup" {
             }
         }
     }
-    assert(waitForPort(localPort, 60), "servico local no ar")
+    need(waitForPort(localPort, 60), "falhou")
 
     var url = "http://127.0.0.1:" + intToString(port)
     var token = loginOrCreate(url, "mel", "segredo")
@@ -221,16 +221,16 @@ test "flags: booleana repetida barra antes de qualquer efeito", "boolean-dup" {
     saveSession(LocalSession("", "mel", token, url))
     saveIdentity(LocalIdentity(deviceId, "", "mel", "nb", "", "pk"))
 
-    assert(cmdIncidents(listOf("--all")) == 0, "--all unico passa")
-    assert(cmdIncidents(listOf("--all", "--all")) == 1, "--all duplicado barra")
-    assert(cmdDeploy(listOf("--file", mf, "--plan")) == 0, "--plan unico passa")
-    assert(cmdDeploy(listOf("--file", mf, "--plan", "--plan")) == 1, "--plan duplicado barra")
-    assert(cmdDeploy(listOf("--file", mf, "--check")) == 0, "--check unico passa")
-    assert(cmdDeploy(listOf("--file", mf, "--check", "--check")) == 1, "--check duplicado barra")
-    assert(cmdDown(listOf("--file", mf, "--prune", "--yes")) == 0, "--prune unico passa")
-    assert(cmdDown(listOf("--file", mf, "--prune", "--prune")) == 1, "--prune duplicado barra")
-    assert(cmdDown(listOf("--file", mf, "--yes")) == 0, "--yes unico passa")
-    assert(cmdDown(listOf("--file", mf, "--yes", "--yes")) == 1, "--yes duplicado barra")
+    need(cmdIncidents(listOf("--all")) == 0, "falhou")
+    need(cmdIncidents(listOf("--all", "--all")) == 1, "falhou")
+    need(cmdDeploy(listOf("--file", mf, "--plan")) == 0, "falhou")
+    need(cmdDeploy(listOf("--file", mf, "--plan", "--plan")) == 1, "falhou")
+    need(cmdDeploy(listOf("--file", mf, "--check")) == 0, "falhou")
+    need(cmdDeploy(listOf("--file", mf, "--check", "--check")) == 1, "falhou")
+    need(cmdDown(listOf("--file", mf, "--prune", "--yes")) == 0, "falhou")
+    need(cmdDown(listOf("--file", mf, "--prune", "--prune")) == 1, "falhou")
+    need(cmdDown(listOf("--file", mf, "--yes")) == 0, "falhou")
+    need(cmdDown(listOf("--file", mf, "--yes", "--yes")) == 1, "falhou")
 
     if (priorSession.length == 0) {
         File(sessionPath()).delete()
@@ -283,17 +283,17 @@ test "flags: todo comando da CLI barra posicional sobrando (trava de fonte)", "v
         }
         var body = text.substring(nameEnd, bodyEnd)
         if (delegating.contains(name) == false) {
-            assert(body.indexOf("extraPositional(") >= 0, "comando sem guarda de posicional: " + name)
+            need(body.indexOf("extraPositional(") >= 0, "falhou")
             checked = checked + 1
         }
         cursor = next
     }
-    assert(checked >= 30, "comandos conferidos: " + intToString(checked))
+    need(checked >= 30, "falhou")
     // O helper dos freeze tem a guarda (senao a delegacao seria mentira).
     var helperStart = text.indexOf("Int runContainment(")
-    assert(helperStart >= 0, "runContainment existe")
+    need(helperStart >= 0, "falhou")
     var helperBody = text.substring(helperStart, text.indexOf("Int cmdIncidents(", helperStart))
-    assert(helperBody.indexOf("extraPositional(") >= 0, "runContainment tem a guarda")
+    need(helperBody.indexOf("extraPositional(") >= 0, "falhou")
 }
 
 test "flags: device revoke exige --yes (destrutivo e irreversivel)", "device-revoke-guard" {
@@ -301,9 +301,9 @@ test "flags: device revoke exige --yes (destrutivo e irreversivel)", "device-rev
     // nenhuma, mas REVOGA o device e leva junto os servicos e credenciais
     // dele — irreversivel. Um typo ou uma linha colada de script derrubava
     // a maquina inteira. A guarda e pura; o fio aborta antes do control.
-    assert(deviceRevokeConfirmationRequired("notebook").indexOf("notebook") >= 0, "nomeia o device")
-    assert(deviceRevokeConfirmationRequired("notebook").indexOf("irreversivel") >= 0, "avisa irreversibilidade")
-    assert(deviceRevokeConfirmationRequired("notebook").indexOf("--yes") >= 0, "aponta como prosseguir")
+    need(deviceRevokeConfirmationRequired("notebook").indexOf("notebook") >= 0, "falhou")
+    need(deviceRevokeConfirmationRequired("notebook").indexOf("irreversivel") >= 0, "falhou")
+    need(deviceRevokeConfirmationRequired("notebook").indexOf("--yes") >= 0, "falhou")
     // --yes repetido barra no uso, sem sessao nem rede (como no down).
-    assert(cmdDeviceRevoke(listOf("notebook", "--yes", "--yes")) == 1, "--yes repetido barra")
+    need(cmdDeviceRevoke(listOf("notebook", "--yes", "--yes")) == 1, "falhou")
 }
