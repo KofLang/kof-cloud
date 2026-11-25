@@ -51,7 +51,7 @@ o run total imprime `73 passed, 0 failed`. Falha = nome do teste + assert
 | forca bruta no login (F5) | `tests/login_limit_test.kf` | 3 |
 | vocabulario fechado do status (F5) | `tests/status_report_test.kf` | 2 |
 | backoff + drift de Edge + retry offline + dica de credencial recusada | `tests/backoff_test.kf` | 6 |
-| registry + dica de caixa e domínios no `status` | `tests/registry_test.kf` | 15 |
+| registry + dica de caixa (serviço e device) e domínios no `status` | `tests/registry_test.kf` | 16 |
 | limites + varredura + push de SERVICES + trava de citação + família em fonte única | `tests/limits_test.kf` | 11 |
 | service token | `tests/service_token_test.kf` | 15 |
 | erros R6 | `tests/errors_test.kf` | 11 |
@@ -120,7 +120,7 @@ o run total imprime `73 passed, 0 failed`. Falha = nome do teste + assert
 | aviso de PEM vencido × expirando (F9 s3) | `tests/serve_tls_expired_test.kf` | 3 |
 | backup automático do estado (F16 s1) | `tests/backup_dir_test.kf` | 3 |
 
-Total: 517 testes. Ver `15-tests.md` para a matriz.
+Total: 518 testes. Ver `15-tests.md` para a matriz.
 
 ## Desempenho medido
 

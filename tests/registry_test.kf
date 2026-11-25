@@ -328,3 +328,16 @@ test "status: e2e — o comando mostra o dominio que leva ao servico publicado",
     assert(line.indexOf("site <-") >= 0, "linha nomeia o servico: " + line)
     assert(line.indexOf("www.example.com") >= 0, "linha mostra o hostname")
 }
+
+test "device: nome com caixa errada ganha aviso (irmao do servico)", "device-case-hint" {
+    var devices = listOf<Device>()
+    devices.add(Device("id-nb", "acc", "notebook", "pk", "ACTIVE", 0, 0))
+    devices.add(Device("id-pc", "acc", "desktop", "pk", "ACTIVE", 0, 0))
+    assert(deviceCaseHint(devices, "Notebook").indexOf("notebook") >= 0, "nomeia o existente")
+    assert(deviceCaseHint(devices, " Notebook ").indexOf("notebook") >= 0, "trim")
+    assert(deviceCaseHint(devices, "DESKTOP").indexOf("desktop") >= 0, "maiuscula tambem")
+    assert(deviceCaseHint(devices, "notbook") == "", "sem candidato, sem aviso")
+    assert(deviceCaseHint(devices, "") == "", "vazio sem aviso")
+    assert(deviceCaseHint(listOf<Device>(), "Notebook") == "", "sem devices, sem aviso")
+    assert(deviceCaseHint(devices, "id-nb") == "", "id nao vira sugestao de nome")
+}

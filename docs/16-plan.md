@@ -281,6 +281,13 @@ token-list, token-revoke, rotate, rotation e todo comando que passa pelo
 `resolveServiceOrReport` (suspend, unsuspend, tokens). Prova:
 `tests/registry_test.kf` (`service-case-hint`) + `tests/scan_extra_test.kf`
 (`service-case-e2e`: `unpublish Site` recusa e nada é removido).
+**Mesmo diagnóstico para o dispositivo ✅:** `device revoke Notebook` /
+`suspend Notebook` diziam só "dispositivo nao encontrado" — agora
+`deviceCaseHint`/`printDeviceNotFound` (puras, irmãs do serviço) nomeiam
+o device existente; `resolveDeviceByNameOrId` devolve a lista já buscada
+para o aviso não custar uma segunda viagem ao control plane. Wire em
+revoke/suspend/unsuspend/freeze/publish --device. Prova:
+`tests/registry_test.kf` (`device-case-hint`).
 **Fatia: artefato tem de ser arquivo
 legível** (`artifactProblem`): `File().exists()` aceita diretório, então
 `"artifact": "dist"` passava a checagem e o deploy publicava um serviço cujo

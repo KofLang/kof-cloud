@@ -973,9 +973,10 @@ Int cmdDeviceRevoke(List<String> args) {
     }
     var deviceId = deviceArg
     try {
-        deviceId = deviceIdByNameOrId(session, deviceArg)
+        var resolved = resolveDeviceByNameOrId(session, deviceArg)
+        deviceId = resolved.deviceId
         if (deviceId.length == 0) {
-            println(deviceNotFoundLine(deviceArg))
+            printDeviceNotFound(resolved.devices, deviceArg)
             return 1
         }
     } catch (String e) {
@@ -1016,9 +1017,10 @@ Int cmdDeviceSuspend(List<String> args) {
     }
     var deviceId = deviceArg
     try {
-        deviceId = deviceIdByNameOrId(session, deviceArg)
+        var resolved = resolveDeviceByNameOrId(session, deviceArg)
+        deviceId = resolved.deviceId
         if (deviceId.length == 0) {
-            println(deviceNotFoundLine(deviceArg))
+            printDeviceNotFound(resolved.devices, deviceArg)
             return 1
         }
     } catch (String e) {
@@ -1053,9 +1055,10 @@ Int cmdDeviceUnsuspend(List<String> args) {
     }
     var deviceId = deviceArg
     try {
-        deviceId = deviceIdByNameOrId(session, deviceArg)
+        var resolved = resolveDeviceByNameOrId(session, deviceArg)
+        deviceId = resolved.deviceId
         if (deviceId.length == 0) {
-            println(deviceNotFoundLine(deviceArg))
+            printDeviceNotFound(resolved.devices, deviceArg)
             return 1
         }
     } catch (String e) {
@@ -1158,9 +1161,10 @@ Int cmdPublish(List<String> args) {
         // Aceita NOME ou id: a ajuda documenta <nome>, mas ids tambem
         // funcionam (compat). Nome resolve pela lista da conta; id passa
         // direto e o control plane valida (404 opaco se alheio).
-        deviceId = deviceIdByNameOrId(session, overrideDevice)
+        var picked = resolveDeviceByNameOrId(session, overrideDevice)
+        deviceId = picked.deviceId
         if (deviceId.length == 0) {
-            println(deviceNotFoundLine(overrideDevice))
+            printDeviceNotFound(picked.devices, overrideDevice)
             return 1
         }
     }
@@ -1628,6 +1632,32 @@ String matchServiceName(List<Service> services, String name) {
 // derrubava a maquina inteira da plataforma. Pura, sem IO: o chamador ja
 // resolveu o nome para id antes de perguntar, entao a mensagem nomeia o
 // alvo real.
+// Dispositivo informado que nao existe mas casa com um da conta sem
+// distinguir maiusculas ("Notebook" x "notebook"). O nome e chave exata —
+// adivinhar escolheria a maquina errada —, mas "dispositivo nao encontrado"
+// sozinho nao da pista. Ponto unico das mensagens: o aviso nunca aparece
+// sem o "nao encontrado". Pura, sem IO (mesma regra da `serviceCaseHint`).
+String deviceCaseHint(List<Device> devices, String name) {
+    var wanted = name.trim()
+    if (wanted.length == 0) {
+        return ""
+    }
+    for (var device in devices) {
+        if (device.name != wanted && sameLettersIgnoringCase(device.name, wanted)) {
+            return "aviso: o nome importa a caixa — \"" + device.name + "\" existe (informado: \"" + wanted + "\")"
+        }
+    }
+    return ""
+}
+
+void printDeviceNotFound(List<Device> devices, String name) {
+    println(deviceNotFoundLine(name))
+    var hint = deviceCaseHint(devices, name)
+    if (hint.length > 0) {
+        println(hint)
+    }
+}
+
 String deviceRevokeConfirmationRequired(String name) {
     return "device revoke remove o dispositivo \"" + name + "\" da plataforma E os servicos/credenciais dele — a revogacao e irreversivel; confirme com `kof cloud device revoke " + name + " --yes`"
 }
@@ -1702,6 +1732,15 @@ String resolveServiceOrReport(LocalSession session, String name) {
 // plane valida depois (404 opaco se alheio/inexistente). "" so quando o
 // NOME nao existe — id cru nunca e recusado aqui.
 String deviceIdByNameOrId(LocalSession session, String nameOrId) {
+    return resolveDeviceByNameOrId(session, nameOrId).deviceId
+}
+
+// Mesma resolucao, devolvendo tambem a lista da conta — a dica de caixa
+// precisa dela e duas buscas seriam duas viagens ao control plane para o
+// caso de erro (o comum resolve sem dica e a lista nao e usada).
+record DeviceResolution(String deviceId, List<Device> devices)
+
+DeviceResolution resolveDeviceByNameOrId(LocalSession session, String nameOrId) {
     var trimmed = nameOrId.trim()
     var devices = fetchDevices(session.controlUrl, session.token)
     // Nome: prefere o device VIVO. Depois de um re-registro (revogar e depois
@@ -1710,20 +1749,20 @@ String deviceIdByNameOrId(LocalSession session, String nameOrId) {
     // <nome>` num revogado era no-op silencioso. Ids sao unicos e passam.
     for (var device in devices) {
         if (device.name == trimmed && deviceIsRevoked(device.status) == false) {
-            return device.id
+            return DeviceResolution(device.id, devices)
         }
     }
     for (var device in devices) {
         if (device.name == trimmed) {
-            return device.id
+            return DeviceResolution(device.id, devices)
         }
     }
     for (var device in devices) {
         if (device.id == trimmed) {
-            return device.id
+            return DeviceResolution(device.id, devices)
         }
     }
-    return ""
+    return DeviceResolution("", devices)
 }
 
 // TTL do `service token --ttl` valido? Vazio ou so-espacos = sem expiracao
@@ -2989,7 +3028,7 @@ Int runContainment(List<String> args, Bool freezing) {
                 }
             }
             if (matched.length == 0) {
-                println(deviceNotFoundLine(name))
+                printDeviceNotFound(devices, name)
                 return 1
             }
             targetId = matched
