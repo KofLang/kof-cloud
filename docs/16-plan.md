@@ -176,6 +176,16 @@ e o Registry aceita o AAAA do Edge pela mesma comparação. Saída: PENDING +
 testes novos; três mutações — AAAA ignorado, IPv6 sempre recusando, Registry
 sem IPv6 — quebram).
 
+**Domínios próprios no `status` ✅.** O `status` listava os serviços sem
+dizer quais hostnames externos levam a eles — o operador que mexeu no DNS
+de `api.example.com` não sabia qual serviço, nem onde ele roda. Agora, com
+serviços publicados, o status busca `/v1/domains` (best-effort) e imprime
+uma seção "Domínios: N apontando para esta maquina" com `<servico> <-
+custom <host> <PENDING|VERIFIED>`: `domainsPointingToServices` (pura —
+casa pelo nome do serviço alvo, custom sem serviço e de outra máquina
+ficam fora) e `statusDomainLine` (pura). Prova: `tests/registry_test.kf`
+(`status-domains` + `status-domains-e2e` com control real).
+
 Automação DNS específica de provedor ✅ (Cloudflare/Route53/qualquer CLI):
 `domain add --dns-webhook` (receptor HTTP do operador) e `--dns-cmd`
 (CLI do provedor via `sh -c`, sem SDK), ver Fase 18 slice 1.

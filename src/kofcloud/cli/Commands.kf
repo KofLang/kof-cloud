@@ -290,6 +290,40 @@ record DomainStatus(String hostname, String status, String instruction, String v
 // nem HOME — recebe a lista do GET /v1/domains e o nome do servico, devolve
 // so os customs daquele servico (precedente: tokenInventoryLine). Lista
 // vazia quando nada aponta para ele (servico novo, sem dominio proprio).
+// Dominios proprios cujo registro [CNAME] APONTA para um dos servicos desta
+// maquina. O `status` listava os servicos sem dizer quais hostnames externos
+// levam a eles: o operador que mexeu no DNS de `api.example.com` sabia o
+// hostname mas nao QUAL servico e onde ele roda (e vice-versa). Pura: casa
+// o alvo do registro (`service`) com os nomes publicados localmente, um por
+// linha; custom sem servico (ou com servico de outra maquina) fica fora.
+List<DomainEntry> domainsPointingToServices(List<DomainEntry> domains, List<Service> services) {
+    var out = listOf<DomainEntry>()
+    for (var domain in domains) {
+        if (domain.kind != "custom" || domain.service.length == 0) {
+            continue
+        }
+        for (var service in services) {
+            if (service.name == domain.service) {
+                out.add(domain)
+            }
+        }
+    }
+    return out
+}
+
+// Linha do `status` para um dominio proprio apontando para a maquina, com
+// o nome do servico alvo na frente (o `domainListLine` sozinho nao diz
+// para onde o CNAME leva). "" quando o servico nao esta na lista.
+String statusDomainLine(DomainEntry domain, List<Service> services) {
+    var serviceName = domain.service
+    for (var service in services) {
+        if (service.name == domain.service) {
+            serviceName = service.name
+        }
+    }
+    return "  " + serviceName + " <- " + domainListLine(domain)
+}
+
 List<DomainEntry> customDomainsFor(List<DomainEntry> domains, String serviceName) {
     var out = listOf<DomainEntry>()
     for (var domain in domains) {
@@ -760,8 +794,10 @@ Int cmdStatus(List<String> args) {
         println("Tunel:        desconhecido (" + e + ")")
     }
     println("Agente:       " + agentStatusLine(tunnelOnline, tunnelKnown, fileExists(stopPath())))
+    var statusServices = listOf<Service>()
     try {
         var services = fetchServices(session.controlUrl, session.token)
+        statusServices = services
         println("Servicos:     " + intToString(services.size))
         // Mesma linha do `service list` (device incluido): operador ve onde
         // cada servico roda sem cruzar comandos. Falha ao buscar devices nao
@@ -776,6 +812,21 @@ Int cmdStatus(List<String> args) {
         }
     } catch (String e) {
         println("Servicos:     indisponivel (" + e + ")")
+    }
+    // Dominios proprios que levam a ESTA maquina (best-effort): o operador
+    // ve, junto dos servicos, quais hostnames externos apontam para eles.
+    if (statusServices.size > 0) {
+        try {
+            var domainsRaw = requireOk(http.get(session.controlUrl + "/v1/domains", authHeader(session.token)))
+            var pointing = domainsPointingToServices(json.decode<List<DomainEntry>>(domainsRaw), statusServices)
+            if (pointing.size > 0) {
+                println("Dominios:     " + intToString(pointing.size) + " apontando para esta maquina")
+                for (var domain in pointing) {
+                    println(statusDomainLine(domain, statusServices))
+                }
+            }
+        } catch (String e) {
+        }
     }
     // Credencial da conta perto do fim (mesmo sinal do fio que o
     // `token list`/`doctor`/painel; detalhes no comentario da funcao).

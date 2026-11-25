@@ -1,4 +1,7 @@
 import kofcloud.cli.Commands
+import kofcloud.cli.Local
+import kofcloud.store.Store
+import testkit.Support
 
 import kofcloud.control.Registry
 import kofcloud.model.Account
@@ -273,4 +276,55 @@ test "registry: nome com caixa diferente nao resolve, mas o aviso nomeia o exist
     assert(loweredChar(65) == 97, "A vira a")
     assert(loweredChar(97) == 97, "a fica a")
     assert(loweredChar(45) == 45, "hifen intacto")
+}
+
+test "status: dominios proprios que apontam para os servicos desta maquina", "status-domains" {
+    // Puro (recebe as duas listas do fio). O `status` listava servicos sem
+    // dizer quais hostnames externos levam a eles.
+    var services = listOf<Service>()
+    services.add(Service("id-site", "acc", "devA", "site", "127.0.0.1", 8080, "http", "site.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
+    services.add(Service("id-api", "acc", "devA", "api", "127.0.0.1", 9000, "http", "api.mel.kofcloud.io", "PUBLIC", "UNKNOWN", 0, "", "", ""))
+    var domains = listOf<DomainEntry>()
+    domains.add(DomainEntry("www.example.com", "custom", "site", "VERIFIED"))
+    domains.add(DomainEntry("painel.example.com", "custom", "api", "PENDING"))
+    domains.add(DomainEntry("alheio.example.com", "custom", "outra-maquina", "VERIFIED"))
+    domains.add(DomainEntry("sem-servico.example.com", "custom", "", "VERIFIED"))
+    domains.add(DomainEntry("api.mel.kofcloud.io", "service", "api", ""))
+    var pointing = domainsPointingToServices(domains, services)
+    assert(pointing.size == 2, "so os dois da maquina: " + intToString(pointing.size))
+    var www = statusDomainLine(domains.get(0), services)
+    assert(www.indexOf("site <-") >= 0, "nomeia o servico alvo: " + www)
+    assert(www.indexOf("www.example.com") >= 0, "mostra o hostname")
+    assert(www.indexOf("VERIFIED") >= 0, "mostra o status do DNS")
+    var painel = statusDomainLine(domains.get(1), services)
+    assert(painel.indexOf("api <-") >= 0 && painel.indexOf("PENDING") >= 0, "PENDING visivel: " + painel)
+    // Maquina sem servicos: nada aponta.
+    assert(domainsPointingToServices(domains, listOf<Service>()).size == 0, "sem servicos: vazio")
+    assert(domainsPointingToServices(listOf<DomainEntry>(), services).size == 0, "sem dominios: vazio")
+}
+
+test "status: e2e — o comando mostra o dominio que leva ao servico publicado", "status-domains-e2e" {
+    var statePath = "/tmp/kofcloud-status-dom-" + crypto.randomHex(4) + ".json"
+    var registry = Registry(statePath)
+    var account = registry.createAccount("mel", "m@e.com", "segredo")
+    registry.registerDevice(account, "nb", "pk")
+    var deviceId = registry.devicesForAccount(account.id).get(0).id
+    registry.publishService(account, deviceId, "site", "127.0.0.1", 8080, "http", "PUBLIC", "", "")
+    var port = 19751
+    var control = ControlPlane(registry, port, "127.0.0.1", 0)
+    var server = spawn { control.start() }
+    assert(waitForPort(port, 60), "control no ar")
+    var url = "http://127.0.0.1:" + intToString(port)
+    var token = loginOrCreate(url, "mel", "segredo")
+    var addBody = "{\"service\":\"site\",\"hostname\":\"www.example.com\"}"
+    assert(statusOf(httpPostJson(port, "/v1/domains", addBody, token)) == 200, "dominio registrado")
+    // A lista do fio, decodificada como o status faz.
+    var domainsRaw = httpGetToken(port, "/v1/domains", token)
+    var domains = json.decode<List<DomainEntry>>(bodyOf(domainsRaw))
+    var services = json.decode<List<Service>>(bodyOf(httpGetToken(port, "/v1/services", token)))
+    var pointing = domainsPointingToServices(domains, services)
+    assert(pointing.size == 1, "um dominio aponta: " + intToString(pointing.size))
+    var line = statusDomainLine(pointing.get(0), services)
+    assert(line.indexOf("site <-") >= 0, "linha nomeia o servico: " + line)
+    assert(line.indexOf("www.example.com") >= 0, "linha mostra o hostname")
 }
