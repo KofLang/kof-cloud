@@ -93,7 +93,13 @@ test "control plane: HTTPS com PEM do operador (serve --tls-cert/--tls-key)", "c
     // docs prometa o que o fio nao entrega.
     var raw = process.run("sh", "-c", "printf 'GET /v1/health HTTP/1.0\r\n\r\n' | timeout 15 openssl s_client -connect 127.0.0.1:18082 -quiet 2>/dev/null")
     var hsts = responseHeader(raw.stdout, "strict-transport-security")
-    need(hsts.indexOf("max-age=") < 0, "runtime 0.8 sem HSTS automatico: " + hsts)
+    // HSTS reimplementado no control plane (o runtime 0.8 deixou de emitir,
+    // §823): o header sai pelo middleware do listener TLS, com o valor da
+    // fonte unica, e so sob TLS.
+    need(hsts == hstsHeaderValue(), "hsts sob TLS: " + hsts)
+    need(hstsHeaderValue() == "max-age=31536000", "valor travado da fonte unica")
+    need(hstsHeaderName() == "Strict-Transport-Security", "nome travado da fonte unica")
+    need(hstsHeaderValue().indexOf("includeSubDomains") < 0, "sem includeSubDomains (escopo do Edge e outro)")
     // HTTP sem TLS nao anuncia HSTS (anunciar em claro seria mentir).
     var plain = ControlPlane(registry, 18083, "127.0.0.1", 0)
     var plainServer = spawn { plain.start() }

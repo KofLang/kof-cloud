@@ -269,5 +269,8 @@ de restabilizacao):
   helper de `Support.kf`) e a CLI/Agent aplicam `applyHttpTlsPolicy`
   (`model/Webhook.kf`: `http.insecure()` so com control plane em loopback;
   remoto continua verificado). O runtime 0.8 **nao emite mais**
-  `Strict-Transport-Security` por default — a trava do `control-tls`
-  verifica isso no fio (HSTS passou a exigir implementacao propria).
+  `Strict-Transport-Security` por default (§823: sem `app.security()`, sem
+  headers) — o KofCloud passou a emiti-lo por middleware no listener TLS
+  (`hstsHeaderValue` em `control/ControlPlane.kf`), provado no fio. Nota
+  medida: o `web.app()` precisa viver numa funcao (nao no corpo do teste)
+  quando se usa `app.use` + `app.listen` dentro de `kof test`.

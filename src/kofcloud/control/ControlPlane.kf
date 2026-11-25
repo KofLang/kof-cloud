@@ -1758,10 +1758,33 @@ class ControlPlane {
             return status(result.code, result.body)
         }
 
+        // HSTS (Fase 9 slice 2): o Kof 0.8 deixou de emitir
+        // `Strict-Transport-Security` sozinho (§823 do runtime). O control
+        // plane o emite aqui, SO quando o listener e TLS — anunciar HSTS em
+        // HTTP em claro seria mentir (nenhum navegador aplica). O valor vem
+        // de fonte unica (`hstsHeaderValue`), e a rota nao muda: e um header
+        // de resposta a mais.
         if (this.tlsCertPem.length > 0 && this.tlsKeyPem.length > 0) {
+            app.use {
+                headerSet(hstsHeaderName(), hstsHeaderValue())
+                return null
+            }
             app.listenSecure(this.port, this.tlsCertPem, this.tlsKeyPem)
         } else {
             app.listen(this.port)
         }
     }
+}
+
+// HSTS do control plane (Fase 9 slice 2): nome e valor em fonte unica, para
+// a trava do `control-tls` e o listener TLS nunca divergirem. Sem `includeSubDomains`
+// de proposito: o control plane nao controla os subdominios da conta (os
+// servicos publicados vivem no Edge, outro certificado e outro escopo) —
+// anunciar cobertura que nao se tem impediria o operador de servir HTTP la.
+String hstsHeaderName() {
+    return "Strict-Transport-Security"
+}
+
+String hstsHeaderValue() {
+    return "max-age=31536000"
 }

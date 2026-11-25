@@ -559,6 +559,16 @@ entre cliente e Edge. Cloud robusta de verdade exige HTTPS ponta a ponta
   ausente). Tentar `app.use` com `headerSet` seria redundante — e o
   redirecionamento 301 HTTP→HTTPS fica fora (o `serve` sobe um control
   por porta: com TLS não há listener HTTP para redirecionar).
+
+  **Kof 0.8 — HSTS implementado pelo KofCloud ✅.** O runtime deixou de
+  emitir o header (§823 do Kof: sem `app.security()`, nada é enviado). O
+  control plane o emite por middleware no listener TLS (e só nele):
+  `Strict-Transport-Security: max-age=31536000`, valor em fonte única
+  (`hstsHeaderValue`) e sem `includeSubDomains` — os subdomínios da conta
+  são servidos pelo Edge (outro certificado e escopo), e prometer cobertura
+  que não se tem impediria o operador de servir HTTP lá. A trava
+  `control-tls` confere o header no fio e a ausência dele em HTTP. Prova:
+  `tests/control_test.kf` (`control-tls`).
 * **Slice 3 — SNI por hostname + renovação assistida (parcial: expiração visível ✅).**
   O `serve` com `--tls-cert/--tls-key` roda `openssl x509 -checkend 30d`
   e avisa (nunca bloqueia) quando o PEM expira em menos de 30 dias;
