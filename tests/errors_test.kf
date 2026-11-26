@@ -646,3 +646,46 @@ test "device: nome resolve para o device VIVO apos re-registro", "device-name-li
     need(deviceIdByNameOrId(session, "notebook") == secondId, "falhou")
     need(deviceIdByNameOrId(session, firstId) == firstId, "falhou")
 }
+
+test "credencial trocada: kfs_ como senha/token/chave e recusado localmente", "cred-mixup" {
+    // Medido no uso real: publish/rotate/login com `$(cat api.kfs)` mandavam
+    // a credencial de SERVICO para a conta (ou para a chave do dispositivo)
+    // e o control plane respondia "unauthorized"/handshake quebrado sem
+    // dizer que o arquivo era o errado.
+    need(credentialMixupError("--password", "kfs_abc123") != "", "o kfs_ como senha e recusado")
+    need(credentialMixupError("--password", "segredo-bom") == "", "senha normal passa")
+    need(credentialMixupError("--password", "") == "", "senha vazia nao e mixup (validada antes)")
+    need(credentialMixupError("--password", "  kfs_abc123  ").indexOf("--password") >= 0, "a mensagem nomeia o campo (com trim)")
+    need(credentialMixupError("--password", "kfs_abc").indexOf("kfs_") >= 0, "a mensagem nomeia o kfs_")
+    need(credentialMixupError("--password", "kfs_abc").indexOf("servico AUTHENTICATED") >= 0, "a mensagem explica o que o kfs_ autentica")
+    // O valor nunca entra na mensagem.
+    var mixDevice = credentialMixupError("--device", "kfs_SEGREDO123")
+    need(mixDevice != "", "kfs_ como --device e recusado")
+    need(mixDevice.indexOf("SEGREDO") < 0, "o valor nunca entra na mensagem")
+    need(credentialMixupError("--device", "notebook") == "", "nome de device normal passa")
+    need(credentialMixupError("--device", "kfc_abc") == "", "kfc_ NAO e mixup (e a credencial da conta)")
+}
+
+test "credencial trocada: login recusa antes de qualquer rede", "cred-mixup-e2e" {
+    var priorSession = readTextOr(sessionPath(), "")
+    var priorIdentity = readTextOr(identityPath(), "")
+    File(sessionPath()).delete()
+    File(identityPath()).delete()
+    // Control inalcancavel de proposito: a recusa tem de vir ANTES da rede
+    // (se tentasse conectar, o teste quebraria por erro de conexao, nao 0/1
+    // deterministico).
+    var code = cmdLogin(listOf("mel", "--password", "kfs_nao-e-senha", "--control", "http://127.0.0.1:1"))
+    need(code == 1, "login com kfs_ como senha recusa (exit 1)")
+    var stored = readTextOr(sessionPath(), "")
+    need(stored.length == 0, "nada foi gravado na sessao")
+    // Senha normal segue para a rede (e falha por conexao): prova que a
+    // guarda so pega o mixup.
+    var normal = cmdLogin(listOf("mel", "--password", "segredo", "--control", "http://127.0.0.1:1"))
+    need(normal == 1, "senha normal tenta a rede e falha")
+    if (priorSession.length > 0) {
+        writeTextTo(sessionPath(), priorSession)
+    }
+    if (priorIdentity.length > 0) {
+        writeTextTo(identityPath(), priorIdentity)
+    }
+}

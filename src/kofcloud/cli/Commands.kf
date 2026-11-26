@@ -30,6 +30,19 @@ record IncidentEntry(String id, String kind, String severity, String accountId, 
 
 record DomainEntry(String hostname, String kind, String service, String status)
 
+// Recusa local antes de rodar comando que EU MESMO me trancaria fora: usar
+// como token da conta (`kfc_`) ou como chave publica do dispositivo um valor
+// que comeca com `kfs_` (credencial de servico). Medido: publish/rotate com
+// `$(cat api.kfs)` mandava o `kfs_` para a conta ou para a chave do device e
+// o control plane so respondia "unauthorized"/handshake quebrado — o
+// operador nao sabia qual arquivo havia colado. Pura: devolve o motivo ou "".
+String credentialMixupError(String label, String value) {
+    if (value.trim().startsWith("kfs_")) {
+        return label + " recebeu uma credencial de SERVICO (kfs_) — ela autentica um servico AUTHENTICATED na borda; nao use como token da conta nem como chave do dispositivo"
+    }
+    return ""
+}
+
 // Mensagens "nao encontrado" da CLI (fonte unica): 7 pontos de servico e 4
 // de dispositivo imprimiam o mesmo literal. Helpers puros para travar o
 // formato em teste (precedente: domainListLine/tokenInventoryLine).
@@ -546,6 +559,24 @@ Int cmdLogin(List<String> args) {
     }
     if (handle.length == 0 || password.length == 0 || extraPositional(args, 1) || flagMissingValue(args, "--password") || flagMissingValue(args, "--control") || flagMissingValue(args, "--device") || flagDuplicated(args, "--password") || flagDuplicated(args, "--control") || flagDuplicated(args, "--device")) {
         println("uso: kof cloud login <handle> --password <senha> [--control <url>] [--device <nome>]")
+        return 1
+    }
+    // Colar o kfs_ no lugar da senha ou no arquivo de sessao e erro de
+    // arquivo trocado, nao de credencial: recusa antes de qualquer rede.
+    var mixLogin = credentialMixupError("--password", password)
+    if (mixLogin.length == 0) {
+        var priorSessionRaw = readTextOr(sessionPath(), "")
+        if (priorSessionRaw.length > 0) {
+            // Sessao ilegivel nao bloqueia o login (o login a reescreve).
+            try {
+                var priorSession = json.decode<LocalSession>(priorSessionRaw)
+                mixLogin = credentialMixupError("token da sessao local (use `kof cloud logout` para limpar)", priorSession.token)
+            } catch (String e) {
+            }
+        }
+    }
+    if (mixLogin.length > 0) {
+        println(mixLogin)
         return 1
     }
 
@@ -1158,6 +1189,14 @@ Int cmdPublish(List<String> args) {
     var deviceId = identity.deviceId
     var overrideDevice = flagValue(args, "--device")
     if (overrideDevice.length > 0) {
+        // `--device` identifica a MAQUINA, nunca uma credencial: colar o
+        // kfs_ ali (o `$(cat api.kfs)` do publish por script) e arquivo
+        // trocado e vira 404 opaco — recusa nomeando o problema.
+        var mixDevice = credentialMixupError("--device", overrideDevice)
+        if (mixDevice.length > 0) {
+            println(mixDevice)
+            return 1
+        }
         // Aceita NOME ou id: a ajuda documenta <nome>, mas ids tambem
         // funcionam (compat). Nome resolve pela lista da conta; id passa
         // direto e o control plane valida (404 opaco se alheio).

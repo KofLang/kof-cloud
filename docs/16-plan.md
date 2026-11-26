@@ -132,7 +132,7 @@ opaco entre contas (existente-alheio indistinguível de inexistente);
 owner-gate em `POST /v1/services/status` (só a conta dona altera); CLI com
 `Hint:` humana (`printFail`); validação de `publish` devolve o HTTP certo por
 família (400 validação, 404 dono/recurso, 429 limite). Prova:
-`tests/errors_test.kf` (11 testes: códigos do control plane, 404 opaco,
+`tests/errors_test.kf` (13 testes: códigos do control plane, 404 opaco,
 limites/owner-gate no registry, códigos do Edge, Hint + trava de regressao
 100% + revoke/TTL + nome|id + fail-fast de flags).
 
@@ -631,6 +631,15 @@ handler do `web.app()` devolve `String` e corrompe bytes altos (UTF-8:
 socket cru (capacidade do Kof) ou API de resposta binária no `web.app()`.
 Enquanto isso, TLS no Edge segue no terminador externo (`12-tls.md`) —
 o que o slice parcial acima resolve é o control plane (login/token).
+
+**Credencial trocada recusada localmente ✅.** O `kfs_` (credencial de
+serviço) colado no lugar da senha, no token da sessão local ou em
+`--device` virava "unauthorized"/handshake quebrado sem dizer qual arquivo
+era o errado — o caso típico é `publish --device "$(cat api.kfs)"`.
+`credentialMixupError` (pura) nomeia o campo e explica o que o `kfs_`
+autentica, sem nunca ecoar o valor; `login` e `publish --device` recusam
+antes de qualquer rede. `kfc_` não é mixup (é a credencial da conta).
+Prova: `tests/errors_test.kf` (`cred-mixup`, pura, e `cred-mixup-e2e`, com control inalcancavel provando a recusa antes da rede).
 
 **Dica (Hint) obrigatória para todo código KCF ✅.** A `Hint:` é o caminho do
 operador quando um erro chega à CLI, mas nada garantia que todo código
