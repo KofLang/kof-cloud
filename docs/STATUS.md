@@ -106,7 +106,7 @@ o run total imprime `73 passed, 0 failed`. Falha = nome do teste + assert
 | teto de conexões públicas (F4) | `tests/conn_limit_test.kf` | 2 |
 | enquadramento HTTP nos dois sentidos (F10/F14) | `tests/framing_test.kf` | 15 |
 | presença no `device list` (F4) | `tests/device_presence_test.kf` | 5 |
-| origem do serviço + presença no `service status` (F4) | `tests/service_device_test.kf` | 6 |
+| origem do serviço + presença no `service status` + nota do device (F4) | `tests/service_device_test.kf` | 7 |
 | PEM visível no `service status` (F9 s3) | `tests/status_cert_test.kf` | 3 |
 | erro do login com cadastro implícito (F5) | `tests/login_error_test.kf` | 2 |
 | flags com valor, booleanas sem duplicação, posicional sobrando e guarda do `device revoke` (CLI) | `tests/value_flags_test.kf` | 5 |
@@ -120,7 +120,7 @@ o run total imprime `73 passed, 0 failed`. Falha = nome do teste + assert
 | aviso de PEM vencido × expirando (F9 s3) | `tests/serve_tls_expired_test.kf` | 3 |
 | backup automático do estado (F16 s1) | `tests/backup_dir_test.kf` | 3 |
 
-Total: 525 testes. Ver `15-tests.md` para a matriz.
+Total: 526 testes. Ver `15-tests.md` para a matriz.
 
 ## Desempenho medido
 

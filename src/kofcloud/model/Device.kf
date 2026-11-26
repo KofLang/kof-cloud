@@ -8,6 +8,13 @@ String deviceActive() {
     return "ACTIVE"
 }
 
+// Marcador honesto do registro reservado pelo painel: a chave verdadeira
+// nasce na maquina, entao o corpo do fio leva este nome ate o `login
+// --device` regravar com a chave real. Nunca e verificado no handshake.
+String deviceMuted() {
+    return "aguardando-maquina"
+}
+
 String deviceRevoked() {
     return "REVOKED"
 }

@@ -916,7 +916,11 @@ String deviceListJsonFor(List<Device> devices, String presenceRaw, String presen
         entry.put("deviceId", device.id)
         entry.put("name", device.name)
         entry.put("status", device.status)
-        entry.put("tunnel", presenceOf(device.id, presenceRaw, presenceError))
+        var tunnelText = presenceOf(device.id, presenceRaw, presenceError)
+        entry.put("tunnel", tunnelText)
+        // Nota aditiva (mesma regra da linha de texto): REVOKED/registro
+        // reservado nao podem ser lidos como "dispositivo vivo".
+        entry.put("note", devicePresenceNote(device.status, tunnelText))
         parts.add(json.encode(entry))
     }
     return "[" + joinStrings(parts, ",") + "]"
@@ -939,7 +943,24 @@ String domainListJsonFor(List<DomainEntry> domains) {
 }
 
 String deviceListLine(Device device, String presenceRaw, String presenceError) {
-    return device.name + "  " + device.id + "  " + device.status + "  tunel: " + presenceOf(device.id, presenceRaw, presenceError)
+    return device.name + "  " + device.id + "  " + device.status + "  tunel: " + presenceOf(device.id, presenceRaw, presenceError) + devicePresenceNote(device.status, presenceOf(device.id, presenceRaw, presenceError))
+}
+
+// Contradicao visivel na lista: um dispositivo REVOKED nao volta (o tunel e
+// recusado com DEVICE_REVOKED), mas a linha mostrava o status e a presenca
+// lado a lado sem dizer que o "tunel: ONLINE" ali e o resto de uma sessao
+// aberta antes da revogacao — o operador lia o dispositivo como vivo.
+// MUTED = registro reservado pelo painel (chave `aguardando-maquina`): nunca
+// conectou, entao "tunel: OFFLINE" nao e conta dele. Pura; "" quando nao ha
+// nada a esclarecer.
+String devicePresenceNote(String status, String tunnelText) {
+    if (status == deviceRevoked()) {
+        return "  (revogado: nao reconecta — registre de novo para voltar)"
+    }
+    if (status == deviceMuted()) {
+        return "  (nome reservado: a maquina ainda nao fez `login --device`)"
+    }
+    return ""
 }
 
 Int cmdDeviceList(List<String> args) {

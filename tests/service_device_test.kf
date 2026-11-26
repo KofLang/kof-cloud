@@ -2,6 +2,7 @@ import kofcloud.cli.Commands
 import kofcloud.cli.Local
 import kofcloud.control.ControlPlane
 import kofcloud.control.Registry
+import kofcloud.control.Panel
 import kofcloud.model.Device
 import kofcloud.model.Service
 import kofcloud.store.Store
@@ -192,4 +193,29 @@ test "service status: cmdServiceStatus deriva o tunel da presenca (trava de font
     need(body.indexOf("/v1/presence") >= 0, "falhou")
     need(body.indexOf("serviceTunnelLine(") >= 0, "falhou")
     need(body.indexOf("serviceReachabilityNote(") >= 0, "falhou")
+}
+
+test "device list: contradicao explicada (REVOKED com sessao, nome reservado)", "device-note" {
+    // Medido: um REVOKED com sessao ainda aberta no Edge aparecia como
+    // "SUSPENDED/REVOKED ... tunel: ONLINE" e o operador lia o dispositivo
+    // como vivo (ele nao reconecta — o HELLO e recusado com DEVICE_REVOKED).
+    need(devicePresenceNote("REVOKED", "ONLINE").indexOf("revogado") >= 0, "REVOKED com sessao diz revogado")
+    need(devicePresenceNote("REVOKED", "OFFLINE").indexOf("registre de novo") >= 0, "REVOKED diz registre de novo")
+    need(devicePresenceNote("ACTIVE", "ONLINE") == "", "ACTIVE sem nota")
+    need(devicePresenceNote("OFFLINE", "OFFLINE") == "", "OFFLINE sem nota")
+    need(devicePresenceNote("SUSPENDED", "OFFLINE") == "", "SUSPENDED sem nota")
+    // Nome reservado pelo painel (chave `aguardando-maquina`): nao e
+    // dispositivo caido, e um registro esperando a maquina.
+    need(devicePresenceNote(deviceMuted(), "OFFLINE").indexOf("login --device") >= 0, "reservado diz login --device")
+    need(devicePresenceNote("ACTIVE", "ONLINE") == "", "ACTIVE segue sem nota")
+    // A linha de texto e o --json usam a MESMA nota.
+    var revoked = Device("d1", "a1", "nb", "pk", "REVOKED", 0L, 1L)
+    var line = deviceListLine(revoked, "[\"d1\"]", "")
+    need(line.indexOf("tunel: ONLINE") >= 0 && line.indexOf("revogado") >= 0, "linha de texto tem a nota")
+    var asJson = deviceListJsonFor(listOf(revoked), "[\"d1\"]", "")
+    need(asJson.indexOf("\"note\":\"") >= 0 && asJson.indexOf("revogado") >= 0, "json tem a nota")
+    var muted = Device("d2", "a1", "novo", "pk", deviceMuted(), 0L, 1L)
+    need(deviceListLine(muted, "[]", "").indexOf("login --device") >= 0, "reservado na linha de texto")
+    // O painel compartilha o marcador com o modelo (um rename obriga os dois).
+    need(panelPendingDeviceKey() == deviceMuted(), "painel compartilha o marcador")
 }

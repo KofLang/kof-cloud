@@ -600,6 +600,12 @@ String panelTargetRefusal(String label, String acao) {
     return "alvo de " + acao + " nao encontrado: informe o " + label + " exato (veja a lista acima)"
 }
 
+// O painel e o modelo compartilham o marcador do registro reservado
+// (`deviceMuted`), entao um rename no modelo obriga o painel a acompanhar.
+String panelPendingDeviceKey() {
+    return deviceMuted()
+}
+
 // Espelho puro do `statusDe` do JS: estado do alvo pelo id nas listas que a
 // pagina ja carregou. A guarda de idempotencia do painel usa a MESMA
 // decisao (ver `panelNoopNotice`), entao o e2e prova a regra fora do DOM.
