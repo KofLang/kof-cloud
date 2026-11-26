@@ -3409,7 +3409,57 @@ List<AuditEntry> auditTail(List<AuditEntry> events, Int n) {
 // Linha do evento para o `audit`: mesmo formato de sempre, com o ator —
 // sem ele, "quem revogou?" exigia cruzar com a resposta crua da API.
 String auditLine(AuditEntry event) {
-    return event.at + "  " + event.actor + "  " + event.action + "  " + event.target
+    return formatAuditAt(event.at) + "  " + event.actor + "  " + event.action + "  " + event.target
+}
+
+// Instante do evento legivel (F19 s4): o fio manda epoch em ms e a linha
+// imprimia "1795563212345  account:mel  ..." — o operador tinha de converter
+// de cabeca para saber QUANDO um revoke aconteceu. Formato fixo em UTC
+// (fonte unica para a CLI; o macho do /v1/audit continua cru). Invalido
+// devolve o texto original, nunca uma data inventada. Puro.
+String formatAuditAt(String epochMsText) {
+    if (epochMsText.length == 0) {
+        return epochMsText
+    }
+    var ms = parseLongSafe(epochMsText, -1L)
+    if (ms < 0L) {
+        return epochMsText
+    }
+    var secs = ms / 1000L
+    var days = secs / 86400L
+    var rem = secs - days * 86400L
+    var hh = rem / 3600L
+    var mm = (rem - hh * 3600L) / 60L
+    var ss = rem - hh * 3600L - mm * 60L
+    var ymd = civilFromDays(days)
+    return auditPad2(ymd.get(2)) + "-" + auditPad2(ymd.get(0)) + "-" + auditPad2(ymd.get(1)) + "T" + auditPad2(hh as Int) + ":" + auditPad2(mm as Int) + ":" + auditPad2(ss as Int) + "Z"
+}
+
+String auditPad2(Int value) {
+    if (value < 10) {
+        return "0" + intToString(value)
+    }
+    return intToString(value)
+}
+
+// Dias desde 1970-01-01 -> (mes, dia, ano) — inversa da formula civil de
+// Hinnant (`civil_from_days`: era/yoe/doy/mp/d), na ordem em que ela e
+// derivada. Pura.
+List<Int> civilFromDays(Long days) {
+    var z = days + 719468L
+    var era = z / 146097L
+    var doe = z - era * 146097L
+    var yoe = (doe - doe / 1460L + doe / 36524L - doe / 146096L) / 365L
+    var y = yoe + era * 400L
+    var doy = doe - (365L * yoe + yoe / 4L - yoe / 100L)
+    var mp = (5L * doy + 2L) / 153L
+    var d = doy - (153L * mp + 2L) / 5L + 1L
+    var m = mp + 3L
+    if (m > 12L) {
+        m = m - 12L
+        y = y + 1L
+    }
+    return listOf(m as Int, d as Int, y as Int)
 }
 
 Int cmdAudit(List<String> args) {

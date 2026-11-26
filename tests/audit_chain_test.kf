@@ -578,3 +578,23 @@ test "worm: o espelho nunca carrega segredo (sem kfs_/kfc_/password no jsonl)", 
     need(wireBody.indexOf(token) < 0, "falhou")
 
 }
+
+test "audit: instante do evento legivel (UTC), nunca data inventada", "audit-time" {
+    // O fio manda epoch em ms; a linha imprimia "1795563212345".
+    need(formatAuditAt("0") == "1970-01-01T00:00:00Z", "epoch zero")
+    need(formatAuditAt("1700000000000") == "2023-11-14T22:13:20Z", "2023-11-14")
+    need(formatAuditAt("1795563212345") == "2026-11-24T23:33:32Z", "2026-11-24 (conferido em calendario, nao no codigo)")
+    // Conhecidos (calendario, independentes do codigo): 2000-03-01 e um ano
+    // bissexto, e o virada de mes no fim de fevereiro.
+    need(formatAuditAt("951782400000") == "2000-02-29T00:00:00Z", "29 de fevereiro (bissexto)")
+    need(formatAuditAt("951868800000") == "2000-03-01T00:00:00Z", "1 de marco")
+    // Invalido devolve o texto original: nunca inventa data.
+    need(formatAuditAt("lixo") == "lixo", "ilegivel preservado")
+    need(formatAuditAt("") == "", "vazio preservado")
+    need(formatAuditAt("-5") == "-5", "negativo preservado (parse so aceita digitos)")
+    // A linha junta o instante legivel com ator/acao/alvo.
+    var e = AuditEntry("1700000000000", "account:mel", "device.revoked", "acc/dev", "p", "h")
+    var line = auditLine(e)
+    need(line.startsWith("2023-11-14T22:13:20Z  account:mel  device.revoked"), "linha com data legivel")
+    need(line.indexOf("1700000000000") < 0, "sem epoch cru na linha")
+}

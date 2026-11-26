@@ -2242,7 +2242,10 @@ revisão, game-day, auditoria). Esta fase é o metrônomo.
   revogação real de `kfs_`, nem o arquivo nem o FIO `/v1/audit` contêm
   `kfs_`/`kfc_`/senha — o anel guarda só metadados e o fio é a mesma
   serialização do espelho; se um dia vazasse, o `scan` do CI pega. Prova:
-  `tests/audit_chain_test.kf` (21).
+  `tests/audit_chain_test.kf` (22, incluindo `audit-time`: o instante do
+  evento sai legível em UTC — `formatAuditAt`/`civilFromDays` puras,
+  inversa da fórmula civil, com datas de calendário conferidas fora do
+  código; valor ilegível fica como veio, nunca uma data inventada).
 **Regras:** segurança por default em todo slice novo (a pergunta "o que
 pode vazar aqui?" entra no template de teste); nenhum dado de cliente
 em log/métrica/audit — sem exceção, sem "só dessa vez".
