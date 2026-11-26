@@ -1436,6 +1436,16 @@ String serviceReachabilityNote(String status, Bool tunnelOnline, Bool tunnelKnow
     if (status == "ONLINE") {
         return "Aviso:   health diz ONLINE mas o tunel esta OFFLINE — o site esta fora do ar (health e a ultima foto do Agent)."
     }
+    if (status == statusSuspended()) {
+        // O health pode ter dito ONLINE antes da suspensao; com o tunel
+        // caido a lista nao diz por que a rota sumiu. Suspensao e acao do
+        // operador e tem reversao.
+        return "Aviso:   servico SUSPENDED (fora da rota de proposito) — libere com: kof cloud service unsuspend"
+    }
+    if (status == "OFFLINE") {
+        // Dois OFFLINE nao explicam: o local esta fora E a maquina tambem.
+        return "Aviso:   o servico local esta fora (health OFFLINE) e a maquina nao esta conectada — suba o servico e rode: kof cloud connect"
+    }
     return ""
 }
 

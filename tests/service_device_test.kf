@@ -145,31 +145,43 @@ test "service status: tunel do device e aviso de contradicao (puros)", "svcdevic
     var presence = "[\"dev-1\"]"
 
     var online = serviceTunnelLine("dev-1", presence, "")
-    need(online.indexOf("ONLINE") >= 0, "falhou")
-    need(online.indexOf("device no ar") >= 0, "falhou")
+    need(online.indexOf("ONLINE") >= 0, "tunel online diz device no ar")
+    need(online.indexOf("device no ar") >= 0, "online tem o rotulo")
 
     var offline = serviceTunnelLine("dev-2", presence, "")
-    need(offline.indexOf("OFFLINE") >= 0, "falhou")
-    need(offline.indexOf("kof cloud connect") >= 0, "falhou")
+    need(offline.indexOf("OFFLINE") >= 0, "offline tem o estado")
+    need(offline.indexOf("kof cloud connect") >= 0, "offline aponta o connect")
 
     // Falha na consulta nunca vira OFFLINE inventado.
     var unknown = serviceTunnelLine("dev-1", "", "falha de rede")
-    need(unknown.indexOf("desconhecido") >= 0, "falhou")
-    need(unknown.indexOf("OFFLINE") < 0, "falhou")
-    need(unknown.indexOf("ONLINE") < 0, "falhou")
+    need(unknown.indexOf("desconhecido") >= 0, "desconhecido nomeado")
+    need(unknown.indexOf("OFFLINE") < 0, "desconhecido nao inventa offline")
+    need(unknown.indexOf("ONLINE") < 0, "desconhecido nao inventa online")
 
     // Id vazio nunca casa por engano (bodyContainsId("") = false).
-    need(serviceTunnelLine("", "[\"\"]", "").indexOf("OFFLINE") >= 0, "falhou")
+    need(serviceTunnelLine("", "[\"\"]", "").indexOf("OFFLINE") >= 0, "Id vazio vira offline")
 
     // Contradicao: health ONLINE + tunel OFFLINE = aviso explicito.
     var note = serviceReachabilityNote("ONLINE", false, true)
-    need(note.indexOf("Aviso") >= 0, "falhou")
-    need(note.indexOf("fora do ar") >= 0, "falhou")
+    need(note.indexOf("Aviso") >= 0, "nota tem Aviso")
+    need(note.indexOf("fora do ar") >= 0, "nota diz fora do ar")
     // Sem contradicao nao ha aviso.
-    need(serviceReachabilityNote("ONLINE", true, true) == "", "falhou")
-    need(serviceReachabilityNote("ONLINE", false, false) == "", "falhou")
-    need(serviceReachabilityNote("OFFLINE", false, true) == "", "falhou")
-    need(serviceReachabilityNote("DEGRADED", false, true) == "", "falhou")
+    need(serviceReachabilityNote("ONLINE", true, true) == "", "online e vivo cala")
+    need(serviceReachabilityNote("ONLINE", false, false) == "", "online sem presenca conhecida cala")
+    // OFFLINE + tunel caido: dois problemas distintos, uma linha que diz os
+    // dois (antes era silencio e o operador achava que so faltava conectar).
+    need(serviceReachabilityNote("OFFLINE", false, true).indexOf("kof cloud connect") >= 0, "offline com tunel caido diz os dois")
+    // SUSPENDED com o tunel caido: a rota sumiu de proposito e o operador
+    // precisa da reversao na propria linha.
+    var susp = serviceReachabilityNote(statusSuspended(), false, true)
+    need(susp.indexOf("SUSPENDED") >= 0, "SUSPENDED e nomeado")
+    need(susp.indexOf("unsuspend") >= 0, "SUSPENDED aponta a reversao")
+    need(serviceReachabilityNote(statusSuspended(), true, true).indexOf("unsuspend") < 0, "SUSPENDED com tunel vivo nao pede nada")
+    // Dois OFFLINE nao explicam: sobe o servico E conecta.
+    var both = serviceReachabilityNote(statusOffline(), false, true)
+    need(both.indexOf("kof cloud connect") >= 0, "OFFLINE aponta o connect")
+    need(both.indexOf("suba o servico") >= 0, "OFFLINE pede o servico local")
+    need(serviceReachabilityNote(statusOffline(), false, false).length == 0, "presenca desconhecida nao inventa")
 }
 
 test "service status: cmdServiceStatus deriva o tunel da presenca (trava de fonte)", "svcdevice-unit" {

@@ -632,6 +632,17 @@ socket cru (capacidade do Kof) ou API de resposta binária no `web.app()`.
 Enquanto isso, TLS no Edge segue no terminador externo (`12-tls.md`) —
 o que o slice parcial acima resolve é o control plane (login/token).
 
+**`service status` explica as duas contradições restantes ✅.** A nota de
+relevância só cobria "health ONLINE com túnel caído". Dois casos ficavam
+mudos: serviço `SUSPENDED` com túnel caído (a rota sumiu **de propósito** e
+o operador não via a reversão) e `OFFLINE` com túnel caído (dois problemas
+distintos — serviço local fora e máquina desconectada — lidos como um só).
+Agora `serviceReachabilityNote` aponta `kof cloud service unsuspend` no
+primeiro e "suba o servico e rode `kof cloud connect`" no segundo; presença
+desconhecida continua silenciosa. A trava antiga que fixava o silêncio em
+`OFFLINE` foi ajustada (o comportamento mudou de propósito). Prova:
+`tests/service_device_test.kf` (`svcdevice-unit`).
+
 **`device list` explica a contradição ✅.** Um `REVOKED` com sessão ainda
 aberta no Edge aparecia como "REVOKED … tunel: ONLINE" e o operador lia o
 dispositivo como vivo — ele não reconecta (o HELLO é recusado com
