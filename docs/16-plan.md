@@ -1023,7 +1023,7 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   campo após configurar, remover pede `confirm()`, e o carregamento é
   separado do Carregar porque `show` sem nada é `404 KCF130` por desenho
   (vira placeholder, nunca erro que impediria as listas). Prova:
-  `tests/panel_actions_test.kf` (21: o HTML expõe cada ação, o e2e
+  `tests/panel_actions_test.kf` (22: o HTML expõe cada ação, o e2e
   publica/suspende/emite/remove pelas rotas que o painel usa, o contrato do
   "Adicionar domínio", o "Criar conta"/registrar device pela mesma rota da
   CLI, o webhook com entrega real num receptor, o Diagnóstico, o banner, o
@@ -1083,6 +1083,18 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   HTML + e2e do contrato de adoção — re-registro com a chave da máquina
   devolve o mesmo id, publish no pré-registrado funciona, nome vazio é 400;
   mutação da rota quebra).
+**Recusa de alvo inexistente ✅.** Na leitura do JS do painel, os botões que
+resolvem o alvo por NOME (suspender/reativar serviço, emitir e revogar
+`kfs_`, remover serviço, suspender/reativar/revogar dispositivo) mandavam
+`id: idPorNome(...)`, que é `""` quando o nome digitado não bate com a
+lista — o control plane respondia 404/500 com corpo opaco e o operador não
+sabia qual campo estava errado. Agora o botão recusa localmente com
+`alvoAusente()` ("alvo de suspender nao encontrado: informe o nome do
+servico exato (veja a lista acima)") sem chamar a API; as puras
+`panelTargetName`/`panelTargetRefusal` guardam o veredito fora do DOM.
+Prova: `tests/panel_actions_test.kf` (`panel-gate`: puras + trava de fonte
+de cada chamada protegida).
+
 * **Slice 3 — onboarding guiado.** Criar conta → baixar desktop client →
   publish do primeiro serviço em 3 telas, com diagnóstico embutido
   (reaproveita a lógica do `doctor`, camada por camada). Prova: fluxo
@@ -1173,7 +1185,7 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   restaura o status, nunca as credenciais — a página diz "emita novas com
   `service rotate`"); o rodapé (`panelRoutes`) ganha as duas rotas e a
   trava bidirecional as exige. Prova: `panel-freeze` em
-  `tests/panel_actions_test.kf` (21: freeze 200 com incidente, inventário
+  `tests/panel_actions_test.kf` (22: freeze 200 com incidente, inventário
   de kfs_ fica `[]`, serviço SUSPENDED fora da rota, unfreeze restaura com
   `restored:"1"`, segundo unfreeze 409 KCF141, incidente listado na
   `/v1/incidents`).

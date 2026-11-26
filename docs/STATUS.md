@@ -88,7 +88,7 @@ o run total imprime `73 passed, 0 failed`. Falha = nome do teste + assert
 | cadeia de auditoria (F19 s4) | `tests/audit_chain_test.kf` | 21 |
 | scan de ambiente, PEM, dependências, aviso de caixa e --summary (F19 s2/F7) | `tests/scan_extra_test.kf` | 8 |
 | higiene de credenciais (F19 s2) | `tests/token_hygiene_test.kf` | 5 |
-| painel de gestão completa (F12 s2) + webhook, diagnóstico, onboarding, fluxo guiado e contenção (F12 s2/s3) | `tests/panel_actions_test.kf` | 21 |
+| painel de gestão completa (F12 s2) + webhook, diagnóstico, onboarding, fluxo guiado, contenção e recusa de alvo inexistente (F12 s2/s3) | `tests/panel_actions_test.kf` | 22 |
 | ranking de Edges (F14 s2) | `tests/edge_select_test.kf` | 5 |
 | porta do Edge sem wrap (F14 s2) | `tests/edge_select_test.kf` + `tests/webhook_test.kf` | +13 asserts |
 | carga explícita + migrate (F16 s1) | `tests/migrate_test.kf` | 5 |
@@ -120,7 +120,7 @@ o run total imprime `73 passed, 0 failed`. Falha = nome do teste + assert
 | aviso de PEM vencido × expirando (F9 s3) | `tests/serve_tls_expired_test.kf` | 3 |
 | backup automático do estado (F16 s1) | `tests/backup_dir_test.kf` | 3 |
 
-Total: 519 testes. Ver `15-tests.md` para a matriz.
+Total: 520 testes. Ver `15-tests.md` para a matriz.
 
 ## Desempenho medido
 

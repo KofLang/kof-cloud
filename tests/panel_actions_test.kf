@@ -841,3 +841,35 @@ test "painel: contencao (freeze/unfreeze) pelas rotas que o botao chama", "panel
     var incidents = httpPostJson(port, "/v1/incidents", "{}", token)
     need(bodyOf(incidents).indexOf(incidentId) >= 0, "falhou")
 }
+
+test "painel: alvo inexistente e recusado antes de chamar a API", "panel-gate" {
+    // Medido na leitura do JS: os botoes de suspender/reativar/remover/
+    // emitir/revogar mandavam `id: idPorNome(...)`, que e "" quando o nome
+    // digitado nao bate com a lista — o control plane respondia 404/500 com
+    // corpo opaco e o operador nao sabia qual campo estava errado.
+    var names = listOf("site", "api")
+    if (!(panelTargetName(names, "site") == "site")) { assert(false, "A1") }
+    if (!(panelTargetName(names, " site ") == "site")) { assert(false, "A2") }
+    if (!(panelTargetName(names, "Site") == "")) { assert(false, "A3") }
+    if (!(panelTargetName(names, "") == "")) { assert(false, "A4") }
+    if (!(panelTargetName(names, "nao-existe") == "")) { assert(false, "A5") }
+    if (!(panelTargetName(listOf<String>(), "site") == "")) { assert(false, "A6") }
+    var msg = panelTargetRefusal("nome do servico", "suspender")
+    if (!(msg.indexOf("nome do servico") >= 0)) { assert(false, "A7") }
+    if (!(msg.indexOf("suspender") >= 0)) { assert(false, "A8") }
+    if (!(msg.indexOf("lista acima") >= 0)) { assert(false, "A9") }
+    // Trava de fonte: cada acao que resolve id por nome consulta antes.
+    var html = panelHtml()
+    var gated = 0
+    for (var needle in listOf("alvoAusente('nome do servico'", "alvoAusente('nome do dispositivo'")) {
+        var cursor = html.indexOf(needle)
+        while (cursor >= 0) {
+            gated = gated + 1
+            cursor = html.indexOf(needle, cursor + 1)
+        }
+    }
+    // 5 chamadas de recusa: servico (suspender/reativar, emitir, remover,
+    // revogar) x4 + dispositivo x1.
+    if (gated < 5) { assert(false, "A10") }
+    if (!(html.indexOf("function alvoAusente(") >= 0)) { assert(false, "A11") }
+}

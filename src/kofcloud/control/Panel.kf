@@ -147,6 +147,13 @@ function idPorNome(lista, nome){
   for(var i=0;i<lista.length;i++){ if(lista[i].name === nome) return lista[i].id || lista[i].deviceId; }
   return '';
 }
+// Recusa local quando o nome digitado nao esta na lista que a pagina ja
+// carregou: sem isto o botao mandava id vazio e o operador recebia um 404/500
+// opaco sem saber qual campo estava errado.
+function alvoAusente(label, acao){
+  erro('alvo de ' + acao + ' nao encontrado: informe o ' + label + ' exato (veja a lista acima)');
+  return true;
+}
 function ok(m){ var el=document.getElementById('msg'); el.className='on'; el.textContent=m; }
 function erro(m){ var el=document.getElementById('msg'); el.className='err'; el.textContent=m; }
 // Select da Contencao: servicos e dispositivos por NOME (as rotas /v1/freeze
@@ -371,15 +378,21 @@ function acao(tipo){
   } else if(tipo === 'unpublish'){
     var alvo=document.getElementById('svcname').value.trim();
     if(!alvo){ erro('informe o nome do servico'); return; }
+    var remSvc = idPorNome(STATE.svcs, alvo);
+    if(!remSvc){ if(alvoAusente('nome do servico', 'remover')) return; }
     if(!confirm('Remover o servico \"' + alvo + '\"? A rota publica cai na hora.')) return;
-    p = api('/v1/services/remove','POST',{serviceId: idPorNome(STATE.svcs, alvo)});
+    p = api('/v1/services/remove','POST',{serviceId: remSvc});
   } else if(tipo === 'service-suspend' || tipo === 'service-unsuspend'){
     var n=document.getElementById('svctarget').value.trim();
+    var svcId = idPorNome(STATE.svcs, n);
+    if(!svcId){ if(alvoAusente('nome do servico', tipo === 'service-suspend' ? 'suspender' : 'reativar')) return; }
     var rota = tipo === 'service-suspend' ? '/v1/services/suspend' : '/v1/services/unsuspend';
-    p = api(rota,'POST',{serviceId: idPorNome(STATE.svcs, n)});
+    p = api(rota,'POST',{serviceId: svcId});
   } else if(tipo === 'token'){
     var n2=document.getElementById('svctarget').value.trim();
-    p = api('/v1/services/token','POST',{serviceId: idPorNome(STATE.svcs, n2)}).then(function(j){
+    var tokSvc = idPorNome(STATE.svcs, n2);
+    if(!tokSvc){ if(alvoAusente('nome do servico', 'emitir credencial')) return; }
+    p = api('/v1/services/token','POST',{serviceId: tokSvc}).then(function(j){
       var el=document.getElementById('secret');
       el.innerHTML = '<p class=\"muted\">Credencial emitida — aparece UMA vez; copie agora:</p>' +
                      '<div class=\"secret\">' + esc(j.token) + '</div>';
@@ -387,6 +400,8 @@ function acao(tipo){
     });
   } else if(tipo === 'token-revoke-all'){
     var n3=document.getElementById('svctarget').value.trim();
+    var revSvc = idPorNome(STATE.svcs, n3);
+    if(!revSvc){ if(alvoAusente('nome do servico', 'revogar credenciais')) return; }
     if(!confirm('Revogar TODAS as credenciais de \"' + n3 + '\"?')) return;
     p = api('/v1/services/tokens','POST',{serviceId: idPorNome(STATE.svcs, n3)}).then(function(j){
       var chain = Promise.resolve({ok: 'credenciais revogadas'});
@@ -408,6 +423,7 @@ function acao(tipo){
   } else if(tipo === 'device-suspend' || tipo === 'device-unsuspend' || tipo === 'device-revoke'){
     var dn=document.getElementById('devname').value.trim();
     var devId = idPorNome(STATE.devs, dn);
+    if(!devId){ if(alvoAusente('nome do dispositivo', tipo === 'device-revoke' ? 'revogar' : (tipo === 'device-suspend' ? 'suspender' : 'reativar'))) return; }
     if(tipo === 'device-revoke' && !confirm('Revogar \"' + dn + '\"? Permanente — o dispositivo precisa ser registrado de novo.')) return;
     var rotaD = tipo === 'device-revoke' ? '/v1/devices/revoke' : (tipo === 'device-suspend' ? '/v1/devices/suspend' : '/v1/devices/unsuspend');
     p = api(rotaD,'POST',{deviceId: devId});
@@ -541,4 +557,30 @@ function diagnostico(){
 // pagina (a pagina so chama /v1, entao isto e so preguica de rota).
 String panelContentType() {
     return "text/html; charset=utf-8"
+}
+
+// Nome/indicador que a acao do painel vai alcançar, ou "" quando o alvo nao
+// existe nas listas que a pagina ja carregou. Puro (mesma forma de
+// `idPorNome`, mas sem DOM): o e2e da trava `panel-gate` usa esta funcao
+// para cobrir as duas pontas — o HTML consulta antes de chamar a API e o
+// teste prova que a mesma lista devolve o mesmo veredito.
+String panelTargetName(List<String> names, String wanted) {
+    var alvo = wanted.trim()
+    if (alvo.length == 0) {
+        return ""
+    }
+    for (var name in names) {
+        if (name == alvo) {
+            return name
+        }
+    }
+    return ""
+}
+
+// Mensagem de recusa quando o alvo do painel nao existe. Nomeia o campo e a
+// lista onde o operador confere — sem isso o JS mandava `id:''` e o
+// control plane respondia 404/500 com corpo opaco, que o painel mostrava
+// como um erro cru (o operador nao sabia qual campo estava errado).
+String panelTargetRefusal(String label, String acao) {
+    return "alvo de " + acao + " nao encontrado: informe o " + label + " exato (veja a lista acima)"
 }

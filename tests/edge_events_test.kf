@@ -99,9 +99,20 @@ test "edge-eventos: e2e — recusa de tunel real cai no arquivo", "edge-events" 
     hello.put("deviceId", "dev-inexistente")
     hello.put("token", "kfc_nao")
     hello.put("clientPub", "")
-    conn.send(bytesFromString(json.encode(hello) + "\n"))
+    // O Edge fecha a conexao ao recusar (fail-closed). Um send que cai no
+    // pipe ja fechado ("Pipe quebrado", medido sob maquina carregada) e o
+    // MESMO desfecho: o evento no arquivo e o veredito abaixo.
+    var sent = true
+    try {
+        conn.send(bytesFromString(json.encode(hello) + "\n"))
+    } catch (String e) {
+        sent = false
+    }
     time.sleep(300)
-    conn.close()
+    try {
+        conn.close()
+    } catch (String e) {
+    }
 
     need(waitForPort(httpPort, 60), "falhou")
     // O mesmo evento que o Tunnel emitiu: a linha com o motivo do protocolo.
