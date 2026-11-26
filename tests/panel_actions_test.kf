@@ -9,6 +9,17 @@ import testkit.Support
 // MESMA rota /v1 da CLI. O teste prova (a) que o HTML expoe cada acao e a
 // confirmacao das destrutivas, e (b) que as rotas que ele chama funcionam.
 
+// Quantas vezes `needle` aparece em `text` (contagem, nunca posicao).
+Int countOf(String text, String needle) {
+    var n = 0
+    var at = text.indexOf(needle)
+    while (at >= 0) {
+        n = n + 1
+        at = text.indexOf(needle, at + 1)
+    }
+    return n
+}
+
 test "painel: rodape anuncia exatamente as rotas que a pagina usa (fonte unica)", "panel-actions-unit" {
     // O rodape era escrito a mao e estava em drift nos dois sentidos: 5
     // rotas reais nao constavam (services/remove, services/token/revoke,
@@ -108,7 +119,10 @@ test "painel: status do dominio usa o vocabulario da API (VERIFIED/PENDING)", "p
     // operador nao distinguia verificado de pendente na tabela.
     var html = panelHtml()
     need(html.indexOf("'VERIFIED'") >= 0, "falhou")
-    need(html.indexOf("ACTIVE") < 0, "falhou")
+    // A tabela de dominios nunca usa o vocabulario de dispositivo (a regra
+    // original). A guarda de clique sem efeito do REATIVAR dispositivo
+    // compara com ACTIVE — um uso legitimo, contado e travado aqui.
+    need(countOf(html, "ACTIVE") == 1, "falhou")
     // Entradas sem status (zona wildcard, hostname de servico) viram '-'
     // sem herdar cor de pendencia.
     need(html.indexOf("d.status ?") >= 0, "falhou")
@@ -372,7 +386,9 @@ test "painel: secao Diagnostico usa as camadas do doctor pela API (F12 s3)", "pa
     // token embutido, nada persistido, vocabulario velho fora.
     need(html.indexOf("kfc_") < 0, "falhou")
     need(html.indexOf("localStorage") < 0, "falhou")
-    need(html.indexOf("ACTIVE") < 0, "falhou")
+    // O vocabulario de dispositivo so aparece na guarda de clique sem efeito
+    // do Reativar (uma vez); nenhuma outra parte da pagina o usa.
+    need(countOf(html, "ACTIVE") == 1, "falhou")
 }
 
 test "painel: banner de onboarding aponta o proximo passo (F12 s3)", "panel-actions-unit" {
@@ -437,7 +453,9 @@ test "painel: fluxo guiado de 3 telas deriva a tela do estado real (F12 s3)", "p
     // token embutido, nada persistido, vocabulario velho fora.
     need(html.indexOf("kfc_") < 0, "falhou")
     need(html.indexOf("localStorage") < 0, "falhou")
-    need(html.indexOf("ACTIVE") < 0, "falhou")
+    // O vocabulario de dispositivo so aparece na guarda de clique sem efeito
+    // do Reativar (uma vez); nenhuma outra parte da pagina o usa.
+    need(countOf(html, "ACTIVE") == 1, "falhou")
 }
 
 test "painel s2: registrar device funciona pela rota e a maquina adota", "panel-actions" {
@@ -872,4 +890,34 @@ test "painel: alvo inexistente e recusado antes de chamar a API", "panel-gate" {
     // revogar) x4 + dispositivo x1.
     if (gated < 5) { assert(false, "A10") }
     if (!(html.indexOf("function alvoAusente(") >= 0)) { assert(false, "A11") }
+}
+
+test "painel: clique sem efeito avisa em vez de dizer 'feito'", "panel-noop" {
+    // Idempotente por desenho: suspender o que ja esta SUSPENDED responde
+    // 200. Mas o painel dizia "feito" sem que nada mudasse — o operador
+    // clicava repetido para ver se tinha pegado.
+    var ids = listOf("s1", "d1")
+    var st = listOf("SUSPENDED", "ACTIVE")
+    need(panelStatusOf(ids, st, "s1") == "SUSPENDED", "falhou")
+    need(panelStatusOf(ids, st, "d1") == "ACTIVE", "falhou")
+    need(panelStatusOf(ids, st, "x") == "", "falhou")
+    need(panelStatusOf(listOf<String>(), listOf<String>(), "s1") == "", "falhou")
+    need(panelNoopNotice("service-suspend", "SUSPENDED").indexOf("nada a fazer") >= 0, "falhou")
+    need(panelNoopNotice("device-suspend", "SUSPENDED").indexOf("nada a fazer") >= 0, "falhou")
+    need(panelNoopNotice("service-unsuspend", "ONLINE") == "ja esta na rota (estado ONLINE)", "falhou")
+    need(panelNoopNotice("service-unsuspend", "SUSPENDED") == "", "falhou")
+    need(panelNoopNotice("device-unsuspend", "ACTIVE") == "ja esta ACTIVE", "falhou")
+    need(panelNoopNotice("device-unsuspend", "OFFLINE") == "", "falhou")
+    need(panelNoopNotice("device-revoke", "REVOKED") == "ja esta REVOKED (permanente)", "falhou")
+    need(panelNoopNotice("device-revoke", "ACTIVE") == "", "falhou")
+    need(panelNoopNotice("service-suspend", "ONLINE") == "", "falhou")
+    need(panelNoopNotice("service-suspend", "") == "", "falhou")
+    // Trava de fonte: o JS consulta o estado antes de chamar a rota.
+    var html = panelHtml()
+    need(html.indexOf("function statusDe(") >= 0, "falhou")
+    need(html.indexOf("var svcAtual = statusDe(STATE.svcs, svcId)") >= 0, "falhou")
+    need(html.indexOf("var devAtual = statusDe(STATE.devs, devId)") >= 0, "falhou")
+    // E o aviso nao mente: so as acoes com estado alvo tem a guarda.
+    need(html.indexOf("ja esta SUSPENDED - nada a fazer") >= 0, "falhou")
+    need(html.indexOf("ja esta REVOKED (permanente)") >= 0, "falhou")
 }

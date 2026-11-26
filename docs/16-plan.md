@@ -1033,7 +1033,7 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   campo após configurar, remover pede `confirm()`, e o carregamento é
   separado do Carregar porque `show` sem nada é `404 KCF130` por desenho
   (vira placeholder, nunca erro que impediria as listas). Prova:
-  `tests/panel_actions_test.kf` (22: o HTML expõe cada ação, o e2e
+  `tests/panel_actions_test.kf` (23: o HTML expõe cada ação, o e2e
   publica/suspende/emite/remove pelas rotas que o painel usa, o contrato do
   "Adicionar domínio", o "Criar conta"/registrar device pela mesma rota da
   CLI, o webhook com entrega real num receptor, o Diagnóstico, o banner, o
@@ -1093,6 +1093,14 @@ endpoint novo privilegiado, mesma auth `X-KofCloud-Token`).
   HTML + e2e do contrato de adoção — re-registro com a chave da máquina
   devolve o mesmo id, publish no pré-registrado funciona, nome vazio é 400;
   mutação da rota quebra).
+**Clique sem efeito avisa ✅.** Suspender o que já está `SUSPENDED` (ou
+reativar um `ONLINE`, revogar um `REVOKED`) é idempotente e responde 200 —
+mas o painel dizia só "feito", sem que nada tivesse mudado, e o operador
+clicava repetido. Agora o botão lê o estado do alvo na lista que a página
+já carregou (`statusDe`) e avisa ("X ja esta SUSPENDED - nada a fazer")
+SEM chamar a rota; as puras `panelStatusOf`/`panelNoopNotice` guardam o
+veredito. Prova: `tests/panel_actions_test.kf` (`panel-noop`).
+
 **Recusa de alvo inexistente ✅.** Na leitura do JS do painel, os botões que
 resolvem o alvo por NOME (suspender/reativar serviço, emitir e revogar
 `kfs_`, remover serviço, suspender/reativar/revogar dispositivo) mandavam
@@ -1195,7 +1203,7 @@ de cada chamada protegida).
   restaura o status, nunca as credenciais — a página diz "emita novas com
   `service rotate`"); o rodapé (`panelRoutes`) ganha as duas rotas e a
   trava bidirecional as exige. Prova: `panel-freeze` em
-  `tests/panel_actions_test.kf` (22: freeze 200 com incidente, inventário
+  `tests/panel_actions_test.kf` (23: freeze 200 com incidente, inventário
   de kfs_ fica `[]`, serviço SUSPENDED fora da rota, unfreeze restaura com
   `restored:"1"`, segundo unfreeze 409 KCF141, incidente listado na
   `/v1/incidents`).

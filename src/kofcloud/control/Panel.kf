@@ -150,6 +150,11 @@ function idPorNome(lista, nome){
 // Recusa local quando o nome digitado nao esta na lista que a pagina ja
 // carregou: sem isto o botao mandava id vazio e o operador recebia um 404/500
 // opaco sem saber qual campo estava errado.
+function deviceActiveLabel(){ return 'ACTIVE'; }
+function statusDe(lista, id){
+  for(var i=0;i<lista.length;i++){ if((lista[i].id || lista[i].deviceId) === id) return lista[i].status || ''; }
+  return '';
+}
 function alvoAusente(label, acao){
   erro('alvo de ' + acao + ' nao encontrado: informe o ' + label + ' exato (veja a lista acima)');
   return true;
@@ -387,6 +392,12 @@ function acao(tipo){
     var svcId = idPorNome(STATE.svcs, n);
     if(!svcId){ if(alvoAusente('nome do servico', tipo === 'service-suspend' ? 'suspender' : 'reativar')) return; }
     var rota = tipo === 'service-suspend' ? '/v1/services/suspend' : '/v1/services/unsuspend';
+    // Idempotente por desenho: suspender o que ja esta SUSPENDED (ou reativar
+    // um ONLINE) nao muda nada e a API responde 200 — mas o operador clicava
+    // repetido sem saber se tinha feito efeito. Avisa sem chamar a rota.
+    var svcAtual = statusDe(STATE.svcs, svcId);
+    if(tipo === 'service-suspend' && svcAtual === 'SUSPENDED'){ ok(n + ' ja esta SUSPENDED - nada a fazer'); return; }
+    if(tipo === 'service-unsuspend' && (svcAtual === 'ONLINE' || svcAtual === 'DEGRADED' || svcAtual === 'UNKNOWN')){ ok(n + ' ja esta na rota (estado ' + svcAtual + ')'); return; }
     p = api(rota,'POST',{serviceId: svcId});
   } else if(tipo === 'token'){
     var n2=document.getElementById('svctarget').value.trim();
@@ -424,6 +435,10 @@ function acao(tipo){
     var dn=document.getElementById('devname').value.trim();
     var devId = idPorNome(STATE.devs, dn);
     if(!devId){ if(alvoAusente('nome do dispositivo', tipo === 'device-revoke' ? 'revogar' : (tipo === 'device-suspend' ? 'suspender' : 'reativar'))) return; }
+    var devAtual = statusDe(STATE.devs, devId);
+    if(tipo === 'device-suspend' && devAtual === 'SUSPENDED'){ ok(dn + ' ja esta SUSPENDED - nada a fazer'); return; }
+    if(tipo === 'device-unsuspend' && devAtual === deviceActiveLabel()){ ok(dn + ' ja esta ' + devAtual); return; }
+    if(tipo === 'device-revoke' && devAtual === 'REVOKED'){ ok(dn + ' ja esta REVOKED (permanente)'); return; }
     if(tipo === 'device-revoke' && !confirm('Revogar \"' + dn + '\"? Permanente — o dispositivo precisa ser registrado de novo.')) return;
     var rotaD = tipo === 'device-revoke' ? '/v1/devices/revoke' : (tipo === 'device-suspend' ? '/v1/devices/suspend' : '/v1/devices/unsuspend');
     p = api(rotaD,'POST',{deviceId: devId});
@@ -583,4 +598,46 @@ String panelTargetName(List<String> names, String wanted) {
 // como um erro cru (o operador nao sabia qual campo estava errado).
 String panelTargetRefusal(String label, String acao) {
     return "alvo de " + acao + " nao encontrado: informe o " + label + " exato (veja a lista acima)"
+}
+
+// Espelho puro do `statusDe` do JS: estado do alvo pelo id nas listas que a
+// pagina ja carregou. A guarda de idempotencia do painel usa a MESMA
+// decisao (ver `panelNoopNotice`), entao o e2e prova a regra fora do DOM.
+String panelStatusOf(List<String> ids, List<String> statuses, String id) {
+    var i = 0
+    while (i < ids.size && i < statuses.size) {
+        if (ids.get(i) == id) {
+            return statuses.get(i)
+        }
+        i = i + 1
+    }
+    return ""
+}
+
+// O clique no painel nao muda nada? Devolve a linha para o operador ("" =
+// ha efeito, chame a rota). Idempotencia NAO e erro: suspender o que ja
+// esta suspenso responde 200 — mas o operador precisa saber que o clique
+// nao mudou nada (antes o painel dizia so "feito").
+String panelNoopNotice(String action, String currentStatus) {
+    if (action == "service-suspend" || action == "device-suspend") {
+        if (currentStatus == "SUSPENDED") {
+            return "ja esta SUSPENDED — nada a fazer"
+        }
+    }
+    if (action == "service-unsuspend") {
+        if (currentStatus == "ONLINE" || currentStatus == "DEGRADED" || currentStatus == "UNKNOWN") {
+            return "ja esta na rota (estado " + currentStatus + ")"
+        }
+    }
+    if (action == "device-unsuspend") {
+        if (currentStatus == "ACTIVE") {
+            return "ja esta " + currentStatus
+        }
+    }
+    if (action == "device-revoke") {
+        if (currentStatus == "REVOKED") {
+            return "ja esta REVOKED (permanente)"
+        }
+    }
+    return ""
 }
