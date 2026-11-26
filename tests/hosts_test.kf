@@ -1053,3 +1053,82 @@ test "http: TLS verificado so cede o loopback do control (Kof 0.8)", "http-tls-p
     need(applyHttpTlsPolicy("http://10.0.0.5:8080") == false, "nao-loopback: verificado")
     need(applyHttpTlsPolicy("") == false, "vazio: verificado")
 }
+
+// A Hint cita o PREFIXO de uma credencial (`kfs_...`) como nome de argumento
+// ou como "copie o kfs_ completo" — nunca um VALOR. Um valor de `kfs_`/`kfc_`
+// tem dezenas de caracteres depois do prefixo; a Hint tem so `...`, `<` ou
+// espaco/fim logo apos. Pura: a trava `hint-coverage` usa esta regra.
+Bool hasCredentialValue(String hint) {
+    var prefixes = listOf("kfs_", "kfc_")
+    for (var prefix in prefixes) {
+        var at = hint.indexOf(prefix)
+        while (at >= 0) {
+            var after = at + prefix.length
+            if (after < hint.length) {
+                var c = hint.charAt(after) as Int
+                var okAfter = c == 46 || c == 60 || c == 62 || c == 32 || c == 41
+                if (okAfter == false) {
+                    return true
+                }
+            }
+            at = hint.indexOf(prefix, after)
+        }
+    }
+    return false
+}
+
+test "dica: erro do control plane tem acao humana por familia (KofCloud)", "hint-coverage" {
+    // A Hint passa a ser o caminho do operador: cada codigo que o control
+    // plane/Edge devolve nas rotas /v1 precisa dizer o que fazer. A trava
+    // cobre TODOS os construtores do Errors.kf (fonte unica): um codigo
+    // novo sem Hint quebra aqui, em vez de aparecer como erro cru na CLI.
+    var src = readTextOr("src/kofcloud/model/Errors.kf", "")
+    var codes = listOf<String>()
+    var rest = src
+    var at = rest.indexOf("return \"KCF")
+    while (at >= 0) {
+        var start = at + 8
+        var end = rest.indexOf("\"", start)
+        var code = rest.substring(start, end)
+        if (code.indexOf(":") > 0) {
+            code = code.substring(0, code.indexOf(":"))
+        }
+        if (codes.contains(code) == false) {
+            codes.add(code)
+        }
+        rest = rest.substring(end)
+        at = rest.indexOf("return \"KCF")
+    }
+    need(codes.size >= 40, "falhou")
+    var missing = listOf<String>()
+    for (var code in codes) {
+        if (errHint(code + ": x").length == 0) {
+            missing.add(code)
+        }
+    }
+    if (missing.size > 0) {
+        throw "codigos sem Hint: " + joinStrings(missing, ",")
+    }
+    // A dica nunca carrega um VALOR de credencial nem conteudo do cliente:
+    // so o prefixo "kfs_..." como nome de ARGUMENTO e permitido (o `service
+    // token revoke <nome> <kfs_...>`).
+    for (var code in codes) {
+        var hint = errHint(code + ": x")
+        if (hasCredentialValue(hint)) {
+            throw "hint com valor de credencial: " + code
+        }
+        if (hint.indexOf("password:") >= 0) {
+            throw "hint ecoa senha: " + code
+        }
+    }
+}
+
+test "dica: regra de valor de credencial e estrita (pura)", "hint-coverage" {
+    need(hasCredentialValue("copie o kfs_ab12cd34 completo") == true, "falhou")
+    need(hasCredentialValue("token kfc_deadbeef0123") == true, "falhou")
+    need(hasCredentialValue("use: service token revoke <nome> <kfs_...>") == false, "falhou")
+    need(hasCredentialValue("o kfs_ completo do token-list") == false, "falhou")
+    need(hasCredentialValue("prefixo kfs_") == false, "falhou")
+    need(hasCredentialValue("sem credencial") == false, "falhou")
+    need(hasCredentialValue("kfc_)") == false, "falhou")
+}

@@ -632,6 +632,16 @@ socket cru (capacidade do Kof) ou API de resposta binária no `web.app()`.
 Enquanto isso, TLS no Edge segue no terminador externo (`12-tls.md`) —
 o que o slice parcial acima resolve é o control plane (login/token).
 
+**Dica (Hint) obrigatória para todo código KCF ✅.** A `Hint:` é o caminho do
+operador quando um erro chega à CLI, mas nada garantia que todo código
+devolvido pelo control plane/Edge tivesse uma: um construtor novo sem
+`errHint` aparecia como erro cru. A trava `hint-coverage` percorre os
+construtores de `model/Errors.kf` (fonte única) e exige Hint para **todos**
+(≥40 códigos), proíbe qualquer Hint que **ecoе um valor** de `kfs_`/`kfc_`
+ou senha — só o prefixo como nome de argumento (`<kfs_...>`) ou a palavra
+"kfs_ completo" passam (`hasCredentialValue`, pura e estritamente testada).
+Prova: `tests/hosts_test.kf` (`hint-coverage` ×2).
+
 **Migração ao Kof 0.8.1 ✅ (restabilização).** O toolchain do host mudou e
 o repositório inteiro parou de compilar/rodar (`PARSE087`, `split` literal,
 `JSN006` estrito, TLS verificado por padrão, HSTS não automático — ver L21
